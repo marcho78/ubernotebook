@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+# Makes Omanote's paper sounds (the .wav files here) from noise and sine waves, so
+# no recordings are needed. Run it again only to change them.
+#
+#   page.wav   a page turning: a swish that sweeps up, and a soft flap
+#   open.wav   a cover swinging open: a rustle, then a low bump on the desk
+#   close.wav  a cover closing: a quick rustle and a firmer thud
+import math
+import os
+import random
+import struct
+import wave
+
+RATE = 44100
+here = os.path.dirname(os.path.abspath(__file__))
+out_dir = here
+
+
+def envelope(t, attack, decay):
+    if t < attack:
+        return (t / attack) ** 1.6
+    return math.exp(-(t - attack) / decay)
+
+
+class BandPass:
+    # Chamberlin state-variable filter; returns the band-pass output.
+    def __init__(self):
+        self.low = 0.0
+        self.band = 0.0
+
+    def step(self, x, cutoff, q):
+        f = 2.0 * math.sin(math.pi * min(cutoff, RATE / 6) / RATE)
+        self.low += f * self.band
+        high = x - self.low - q * self.band
+        self.band += f * high
+        return self.band
+
+
+def noise_swish(length, start_hz, end_hz, attack, decay, q=0.9, seed=1):
+    rng = random.Random(seed)
+    bp = BandPass()
+    out = []
+    n = int(length * RATE)
+    for i in range(n):
+        t = i / RATE
+        k = i / n
+        cutoff = start_hz * (end_hz / start_hz) ** k
+        # A little flutter, like paper catching the air.
+        flutter = 1.0 + 0.25 * math.sin(2 * math.pi * 23 * t) * math.sin(math.pi * k)
+        x = rng.uniform(-1, 1)
+        out.append(bp.step(x, cutoff, q) * envelope(t, attack, decay) * flutter)
+    return out
+
+
+def thump(length, hz, decay, drop=0.35):
+    out = []
+    n = int(length * RATE)
+    phase = 0.0
+    for i in range(n):
+        t = i / RATE
+        f = hz * (1.0 - drop * min(1.0, t / 0.08))
+        phase += 2 * math.pi * f / RATE
+        out.append(math.sin(phase) * math.exp(-t / decay) * min(1.0, t / 0.004))
+    return out
+
+
+def mix(*parts):
+    length = max(offset + len(sig) for offset, sig, _ in parts)
+    out = [0.0] * length
+    for offset, sig, gain in parts:
+        for i, v in enumerate(sig):
+            out[offset + i] += v * gain
+    return out
+
+
+def normalize(sig, peak=0.5):
+    top = max(1e-9, max(abs(v) for v in sig))
+    fade = int(0.01 * RATE)
+    out = [v / top * peak for v in sig]
+    for i in range(min(fade, len(out))):
+        out[-1 - i] *= i / fade
+    return out
+
+
+def write(name, sig):
+    path = os.path.join(out_dir, name)
+    with wave.open(path, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(b"".join(struct.pack("<h", int(max(-1, min(1, v)) * 32767)) for v in sig))
+    print("wrote", os.path.relpath(path, os.path.join(here, "..")), f"{len(sig) / RATE:.2f}s")
+
+
+os.makedirs(out_dir, exist_ok=True)
+
+page = mix(
+    (0, noise_swish(0.42, 900, 5200, 0.11, 0.09, q=0.8, seed=3), 1.0),
+    (0, noise_swish(0.42, 300, 1400, 0.14, 0.1, q=1.2, seed=7), 0.45),
+    (int(0.30 * RATE), thump(0.12, 150, 0.025), 0.35),
+)
+write("page.wav", normalize(page, 0.55))
+
+opening = mix(
+    (0, noise_swish(0.55, 500, 3800, 0.16, 0.14, q=0.9, seed=11), 0.9),
+    (int(0.42 * RATE), thump(0.25, 92, 0.06), 0.9),
+    (int(0.42 * RATE), noise_swish(0.12, 2000, 900, 0.004, 0.03, q=1.4, seed=5), 0.3),
+)
+write("open.wav", normalize(opening, 0.6))
+
+closing = mix(
+    (0, noise_swish(0.3, 2600, 700, 0.06, 0.08, q=0.9, seed=13), 0.8),
+    (int(0.22 * RATE), thump(0.22, 78, 0.05), 1.0),
+    (int(0.22 * RATE), noise_swish(0.08, 1800, 600, 0.002, 0.02, q=1.4, seed=17), 0.35),
+)
+write("close.wav", normalize(closing, 0.62))

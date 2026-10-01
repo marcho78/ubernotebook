@@ -1,0 +1,178 @@
+import QtQuick
+import QtQuick.Controls
+import "../Agent.js" as Agent
+
+// Ask your agent (Ctrl+J, "/agent", a block's menu, the toolbar over selected
+// words, the page's ⋯ menu): what you'd like done with this page, the blocks
+// you picked, the words you selected, or the line you're on. Omarchy's
+// default coding agent does it (whichever `omarchy default agent` chose), in
+// its own terminal, through Omanote's commands, so what it changes shows up
+// here as it goes.
+Pop {
+  id: pop
+
+  // Store.qml: defaultAgent, pickAgent.
+  property var files: null
+  // The default agent's name as Omarchy keeps it ("claude"...), "" for none,
+  // once `known`.
+  property string agent: ""
+  property bool known: false
+  // What it's asked about: { scope, blocks, words, line } (Agent.prompt).
+  property var ask: ({ scope: "page", blocks: [], words: "", line: "" })
+
+  signal sent(string request)
+
+  width: Math.min(560, (parent ? parent.width : 560) - 40)
+  padding: 14
+  modal: true
+  Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, pop.theme && pop.theme.dark ? 0.4 : 0.2) }
+
+  function start(context) {
+    ask = context
+    x = ((parent ? parent.width : width) - width) / 2
+    y = 70
+    field.text = ""
+    known = false
+    agent = ""
+    if (files) files.defaultAgent(function(name) { pop.agent = name; pop.known = true })
+    open()
+    field.focusField()
+  }
+
+  // With no default agent yet, Omarchy's menu comes up to choose one first.
+  function send(request) {
+    var r = String(request || "").trim()
+    if (!r) return
+    if (known && !agent) { files.pickAgent(); return }
+    close()
+    sent(r)
+  }
+
+  contentItem: Column {
+    spacing: 10
+
+    Item {
+      width: parent.width
+      height: 28
+      Icon {
+        id: headIcon
+        theme: pop.theme
+        text: pop.theme.icons.agent
+        size: 18
+        color: pop.theme.accent
+        anchors.verticalCenter: parent.verticalCenter
+      }
+      Text {
+        textFormat: Text.PlainText
+        anchors.left: headIcon.right
+        anchors.leftMargin: 8
+        anchors.verticalCenter: parent.verticalCenter
+        text: "Ask your agent"
+        font.family: pop.theme.uiFont
+        font.pixelSize: 15
+        font.weight: Font.DemiBold
+        color: pop.theme.text
+      }
+      Rectangle {
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: scopeText.implicitWidth + 18
+        height: 24
+        radius: 12
+        color: Qt.alpha(pop.theme.accent, 0.14)
+        Text {
+          id: scopeText
+          textFormat: Text.PlainText
+          anchors.centerIn: parent
+          text: Agent.scopeLabel(pop.ask.scope, (pop.ask.blocks || []).length)
+          font.family: pop.theme.uiFont
+          font.pixelSize: 12
+          color: pop.theme.accent
+        }
+      }
+    }
+
+    Field {
+      id: field
+      theme: pop.theme
+      width: parent.width
+      height: 40
+      fontSize: 15
+      maximumLength: 4000
+      placeholder: "What would you like it to do?"
+      onAccepted: pop.send(field.text)
+      onEscaped: pop.close()
+    }
+
+    Column {
+      width: parent.width
+      spacing: 2
+      Repeater {
+        model: Agent.suggestions(pop.ask.scope)
+        delegate: MenuRow {
+          required property var modelData
+          width: parent.width
+          theme: pop.theme
+          icon: pop.theme.icons.agent
+          text: modelData
+          onClicked: pop.send(modelData)
+        }
+      }
+    }
+
+    Rectangle { width: parent.width; height: 1; color: pop.theme.line }
+
+    Item {
+      width: parent.width
+      height: 30
+      Row {
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 6
+        Text {
+          textFormat: Text.PlainText
+          anchors.verticalCenter: parent.verticalCenter
+          text: !pop.known ? "Asking Omarchy for your agent\u2026"
+            : pop.agent ? Agent.name(pop.agent) + " \u00b7 your default agent"
+            : "No default agent yet"
+          font.family: pop.theme.uiFont
+          font.pixelSize: 12
+          color: pop.theme.muted
+        }
+        Text {
+          visible: pop.known
+          textFormat: Text.PlainText
+          anchors.verticalCenter: parent.verticalCenter
+          text: pop.agent ? "Change" : "Choose one"
+          font.family: pop.theme.uiFont
+          font.pixelSize: 12
+          font.underline: changeHover.hovered
+          color: pop.theme.accent
+          HoverHandler { id: changeHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: { pop.close(); pop.files.pickAgent() } }
+        }
+      }
+      IconButton {
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        theme: pop.theme
+        icon: pop.theme.icons.agent
+        label: "Ask  \u23ce"
+        size: 30
+        iconSize: 14
+        active: field.text.trim() !== ""
+        onClicked: pop.send(field.text)
+      }
+    }
+
+    Text {
+      width: parent.width
+      wrapMode: Text.Wrap
+      textFormat: Text.PlainText
+      text: "It opens in a terminal and works through Omanote's commands: what it changes shows up here, each change a step you can undo."
+      font.family: pop.theme.uiFont
+      font.pixelSize: 11
+      color: pop.theme.faint
+    }
+  }
+}

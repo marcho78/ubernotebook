@@ -1,0 +1,35 @@
+#!/bin/bash
+# Runs every test suite. Needs node and lua; the editor tests need Qt's
+# qmltestrunner (qt6-declarative) and run offscreen.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# A raw line or paragraph separator in JavaScript ends the line it's on.
+if grep -rlP '[\x{2028}\x{2029}]' --include='*.js' --include='*.qml' . >/dev/null; then
+  echo "raw U+2028/U+2029 in:" >&2
+  grep -rlP '[\x{2028}\x{2029}]' --include='*.js' --include='*.qml' . >&2
+  exit 1
+fi
+
+node tests/settings.test.cjs
+node tests/html.test.cjs
+node tests/blocks.test.cjs
+node tests/papers.test.cjs
+node tests/library.test.cjs
+node tests/markdown.test.cjs
+node tests/templates.test.cjs
+node tests/workspace.test.cjs
+node tests/dates.test.cjs
+node tests/import.test.cjs
+node tests/emoji.test.cjs
+node tests/highlight.test.cjs
+node tests/agent.test.cjs
+lua tests/hypr.test.lua
+
+runner=/usr/lib/qt6/bin/qmltestrunner
+if [[ -x $runner ]]; then
+  out=$(QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 "$runner" -input tests/qml 2>&1) || { echo "$out" | grep -v '^QDEBUG' >&2; exit 1; }
+  echo "qml: $(echo "$out" | grep -o 'Totals: [0-9]* passed, [0-9]* failed' | tail -1)"
+else
+  echo "qml: skipped (no qmltestrunner)"
+fi

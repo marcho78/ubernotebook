@@ -1,0 +1,10 @@
+#!/bin/bash
+# Compiles the shaders with Qt's qsb (package qt6-shadertools). The compiled
+# .qsb files are committed, so nobody needs this unless they change a shader.
+set -euo pipefail
+cd "$(/usr/bin/dirname "$0")"
+qsb=/usr/lib/qt6/bin/qsb
+for shader in *.frag; do
+  "$qsb" --glsl "100 es,120,150,300 es,330" --hlsl 50 --msl 12 -o "$shader.qsb" "$shader"
+  echo "built $shader.qsb"
+done
