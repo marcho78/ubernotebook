@@ -98,6 +98,9 @@ QtObject {
     colLeft: "\u{f04ed}", colRight: "\u{f04ec}", colRemove: "\u{f04ee}", header: "\u{f121d}",
     arrowUp: "\u{f005d}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}",
     sketch: "\u{f0f49}", eraser: "\u{f01fe}",
-    archive: "\u{f120e}", unarchive: "\u{f125c}", briefcase: "\u{f0814}"
+    archive: "\u{f120e}", unarchive: "\u{f125c}", briefcase: "\u{f0814}",
+    // Audio notes and dictation.
+    mic: "\u{f036c}", dictate: "\u{f036c}", micOff: "\u{f036d}", play: "\u{f040a}", pause: "\u{f03e4}",
+    stop: "\u{f04db}", record: "\u{f044a}", waveform: "\u{f147d}", transcript: "\u{f09ed}"
   })
 }

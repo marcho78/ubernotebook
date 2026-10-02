@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import "../Audio.js" as Audio
 
 // The quick note: a sticky note that pops up wherever you are. Write, then
 // Ctrl+Enter (or Esc) keeps it as a page in the Quick notes notebook, or in
@@ -8,6 +9,10 @@ import QtQuick.Effects
 // its first line as the title; "- " lines become a list and "[] " lines
 // checkboxes (in Pages, the rest is Markdown too). Only the ✕ throws it
 // away, so nothing is lost by a stray Esc.
+//
+// The microphone at its top dictates (voxtype writes out what you say, where
+// the cursor is): click it, speak, click it again; or hold it while you
+// speak. Ctrl+Shift+D does the same.
 Item {
   id: note
 
@@ -15,6 +20,11 @@ Item {
   // Where it goes: "notebook" (Quick notes) or "pages" (the Pages Inbox).
   property string destination: "notebook"
   readonly property bool toPages: destination === "pages"
+  // The microphone (Recorder.qml), for dictation.
+  property var recorder: null
+  readonly property bool dictating: recorder !== null && recorder.busy && recorder.kind === "dictation" && recorder.owner === "quick"
+  // Something in the way of dictating ("Dictation needs voxtype").
+  property string problem: ""
 
   signal kept(string text)
   signal thrownAway()
@@ -22,6 +32,7 @@ Item {
   signal destinationPicked(string to)
 
   function start(text) {
+    problem = ""
     edit.text = text || ""
     edit.cursorPosition = edit.length
     edit.forceActiveFocus()
@@ -29,9 +40,29 @@ Item {
   }
 
   function keep() {
+    if (dictating) recorder.cancel()
     var text = edit.text.trim()
     if (text) kept(text)
     else thrownAway()
+  }
+
+  // Dictation on, or (on) done: what you said goes in where the cursor is.
+  function dictate() {
+    if (!recorder) return
+    if (dictating) { if (recorder.phase === "recording") recorder.stop(); return }
+    problem = recorder.start("dictation", "quick", "", function(ok, r) {
+      if (!ok) { if (!r.canceled) note.problem = r.problem || "Nothing was written down"; return }
+      var at = edit.cursorPosition
+      var words = Audio.joinAfter(edit.getText(Math.max(0, at - 1), at), r.text)
+      edit.insert(at, words)
+      edit.cursorPosition = at + words.length
+      edit.forceActiveFocus()
+    })
+    edit.forceActiveFocus()
+  }
+  function throwAway() {
+    if (dictating) recorder.cancel()
+    thrownAway()
   }
 
   SequentialAnimation {
@@ -82,11 +113,14 @@ Item {
       textFormat: Text.PlainText
       x: 22
       y: 7
-      text: "Quick note"
-      font.family: note.theme ? note.theme.markerFont : "sans-serif"
-      font.pixelSize: 15
-      color: "#7a6a1e"
+      width: parent.width - 120
+      elide: Text.ElideRight
+      text: note.problem || "Quick note"
+      font.family: note.problem ? (note.theme ? note.theme.uiFont : "sans-serif") : note.theme ? note.theme.markerFont : "sans-serif"
+      font.pixelSize: note.problem ? 12 : 15
+      color: note.problem ? "#b3261e" : "#7a6a1e"
     }
+    Timer { interval: 6000; running: note.problem !== ""; onTriggered: note.problem = "" }
 
     IconButton {
       anchors.right: parent.right
@@ -98,7 +132,64 @@ Item {
       tint: "#7a6a1e"
       icon: note.theme ? note.theme.icons.close : ""
       tip: "Throw it away"
-      onClicked: note.thrownAway()
+      onClicked: note.throwAway()
+    }
+
+    // Dictation: click to start and again to stop, or hold while you speak.
+    Rectangle {
+      id: mic
+      objectName: "quickMic"
+      visible: note.recorder !== null
+      anchors.right: parent.right
+      anchors.rightMargin: 38
+      y: 2
+      width: note.dictating ? micRow.implicitWidth + 16 : 28
+      height: 28
+      radius: 14
+      color: note.dictating ? "#e5484d" : micHover.hovered ? Qt.rgba(0.55, 0.45, 0.05, 0.16) : "transparent"
+      Behavior on width { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+      property real pressedAt: 0
+      property bool startedHere: false
+      Row {
+        id: micRow
+        anchors.centerIn: parent
+        spacing: 6
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: note.theme ? note.theme.icons.mic : ""
+          font.family: note.theme ? note.theme.iconFont : "monospace"
+          font.pixelSize: 15
+          color: note.dictating ? "white" : "#7a6a1e"
+        }
+        Text {
+          visible: note.dictating
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: note.recorder && note.recorder.phase === "transcribing" ? "Writing it down\u2026" : Audio.clock(note.recorder ? note.recorder.elapsed : 0)
+          font.family: note.theme ? note.theme.uiFont : "sans-serif"
+          font.pixelSize: 12
+          font.weight: Font.DemiBold
+          color: "white"
+        }
+      }
+      HoverHandler { id: micHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler {
+        gesturePolicy: TapHandler.WithinBounds
+        onPressedChanged: {
+          if (pressed) {
+            mic.pressedAt = Date.now()
+            mic.startedHere = !note.dictating
+            note.dictate()
+          } else if (mic.startedHere && note.dictating && Date.now() - mic.pressedAt > 450) {
+            // Held while you spoke: let go, and it's done.
+            note.dictate()
+          }
+        }
+      }
+      ToolTip.visible: micHover.hovered
+      ToolTip.delay: 500
+      ToolTip.text: note.dictating ? "Done (or let go, if you're holding it)" : "Dictate: click, speak, click again; or hold it while you speak  Ctrl+Shift+D"
     }
 
     Flickable {
@@ -129,6 +220,7 @@ Item {
         }
         Keys.onPressed: function(e) {
           var ctrl = (e.modifiers & Qt.ControlModifier) !== 0
+          if (ctrl && (e.modifiers & Qt.ShiftModifier) && e.key === Qt.Key_D) { e.accepted = true; note.dictate(); return }
           if ((ctrl && (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_S)) || e.key === Qt.Key_Escape) {
             e.accepted = true
             note.keep()
@@ -138,7 +230,7 @@ Item {
         Text {
           textFormat: Text.PlainText
           visible: edit.text === "" && !edit.inputMethodComposing
-          text: "What's on your mind?"
+          text: note.dictating ? "Listening\u2026" : "What's on your mind?"
           font: edit.font
           color: Qt.rgba(0.15, 0.14, 0.08, 0.35)
         }

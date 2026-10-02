@@ -123,6 +123,17 @@ type `sketch`, text `(a drawing)`, and `read` as `*(A sketch, drawn in
 Omanote)*`. You can't draw one or see what's in it; don't `replace` a sketch's
 block unless the user asks for the drawing to go.
 
+## Audio notes
+
+A page can have audio notes (recordings the user made in Omanote). `blocks`
+lists one as type `audio`, with `src` (its file in `Pages/assets`),
+`duration` (seconds) and `text`: what was said in it, as voxtype wrote it
+out, or `(an audio note, 1:42, not written out)`. `read` shows it as a link
+to the file with what was said quoted under it. That text is the note's
+transcript: use it to summarize a recording, pull out to-dos or answer what
+was said. You can't record or play one; don't `replace` an audio note's block
+unless the user asks for it to go.
+
 ## Projects
 
 A page can be a project: a status (planning, active, paused, done), a due

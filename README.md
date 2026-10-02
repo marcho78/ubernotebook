@@ -113,7 +113,9 @@ Omarchy 4 (Quattro): the Omarchy shell on Quickshell 0.3 with Qt 6.11, and
 Hyprland 0.56 or newer with its Lua configuration. Everything else it uses
 ships with Omarchy: `wl-copy` and `wl-paste`, `grep`, `bash`, `uwsm-app` and
 `xdg-open`, and the iA Writer and Noto fonts. Its own fonts come with it.
-Nothing to build.
+Nothing to build. Audio notes record with `ffmpeg`; dictation, and audio notes
+written out, use voxtype, Omarchy's dictation (`omarchy voxtype install` if
+you haven't set it up), with the model you picked for it.
 
 ## Install
 
@@ -138,7 +140,7 @@ things to try.
 | To | Do |
 |---|---|
 | Open or close your notebooks | **Super+N**, click the notebook in the top bar, or *Omanote* in the app launcher |
-| Jot a quick note from anywhere | **Super+Alt+N**, or right-click the notebook in the bar |
+| Jot a quick note from anywhere | **Super+Alt+N**, or right-click the notebook in the bar. The microphone on the note dictates: click it, speak, click it again (or hold it while you speak; **Ctrl+Shift+D**) |
 | Open a notebook | Click it on the shelf |
 | Back to the shelf | **Ctrl+W**, or *Notebooks* at the top left |
 | Turn the page | **Ctrl+PgDown** / **Ctrl+PgUp**, **Alt+→** / **Alt+←**, or click the page's bottom corner |
@@ -290,6 +292,9 @@ takes them along.
 | Start a page from a template | On a new, empty page: pick one under *Start with a template* (a daily, weekly or monthly planner, a journal, a habit tracker, meeting or lecture notes, a project plan, a to-do list, a reading log, a recipe, a packing list). Each is laid out as a page: sections side by side, a callout for the one thing that matters, the day hour by hour, habits to tick, the month's calendar, and on every empty line, faintly, what goes there. **Ctrl+Z** takes it back off |
 | A mind map | `/mindmap`, or *Turn into mind map* in a nested list's ⋮⋮ menu (the top item is the topic, the items inside it the ideas). Click an idea to write on it: **Enter** adds the next idea, **Tab** one branching from it, **Shift+Tab** moves it out a level, **↑ ↓** move between ideas, **Backspace** on an empty idea takes it away, **Ctrl+Backspace** an idea and its branch, **Esc** stops. The color button over the idea you're writing on gives it a text color and a background (a main idea's color is its whole branch's): one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, a color picker (saturation and brightness, hue, a hex to type or paste, and how well the idea's text reads on it) that shows the color on the map as you pick it; **Enter** or *Apply* keeps it, **Esc** or *Cancel* puts back what was there. Text on a background with no text color of its own is made readable. The circle at an idea's end folds its branch. The block's own ⋮⋮ *Color* puts a background behind the whole map, or sets the text color of ideas with none of their own. *Turn into list* (⋮⋮) makes it a nested list again |
 | A table | `/table` (or paste cells from a spreadsheet, or a Markdown table). Click a cell to write in it: **Tab** and **Shift+Tab** go to the next and previous cell (**Tab** in the last one makes a new row), **Enter** goes down a row (past the last, a new one), **Shift+Enter** is a new line in the cell, the arrows cross into the next cell at a cell's ends and leave the table at its top and bottom, **Esc** picks the whole table. **Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+Shift+X** and **Ctrl+E** format what's selected in a cell (the toolbar over selected words is for text blocks). Point at a cell: the handle on its row's left and on its column's top open their menus (insert above or below, left or right; move; delete; *Header row* on or off), the **+** bars along the bottom and the right add a row or a column, and the lines between columns drag to make them wider. Colors: the color button on the cell you're in, or *Color* in a row's or a column's menu, gives a text color and a background: one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, the color picker (shown in the table as you pick, with how well the text reads; **Enter** keeps it, **Esc** puts back what was there). Cells pasted from a spreadsheet into a cell fill the table from there, and it grows to take them |
+| An audio note | The red dot at the top right of a page (**Ctrl+Shift+R**), or `/audio`: a note where you are, recording at once (the time, your voice's level as you speak). **Enter** or the square stops it, **Esc** or ✕ throws it away. Then it's a player: play and pause, the waveform (the part played in its color; click or drag to go there), the time, the speed (1×, 1.25×, 1.5×, 2×). What you said is written out under it by voxtype as soon as it's recorded (Settings → *Write out audio notes*; else *Write it out*), to read, search, copy and correct; the button at its right hides and shows it. Its colors (the player's and the card's) are Pages' colors or your own (**Custom…**). Each change is a step **Ctrl+Z** takes back. The recording is an Opus file in `Pages/assets`; a page as Markdown links to it, with what was said quoted under it. Recording on another page, a bar at the foot says so, to stop it there. Your voice is evened out once it's recorded, so a quiet laptop microphone comes out loud and clear (Settings → Audio); a quiet note from before offers *Louder*, which makes a louder copy (Undo goes back to the first) |
+| The microphone | Settings → Audio: which microphone audio notes and dictation record from, *Make my voice louder*, and *Test the microphone* (a few seconds of your voice's level, then whether it's quiet, good or too loud) |
+| Dictate | **Ctrl+Shift+D**, the microphone at the top right, or `/dictate`: a bar at the foot listens (your voice's level as you speak). **Ctrl+Shift+D** again or *Done*, and what you said is written where your cursor is (on a new line at the end when it isn't in one); ✕ throws it away. voxtype writes it out, as its settings say (on your computer, the way Omarchy sets it up) |
 | A sketch | `/sketch`: a sheet to draw on, with your mouse, pen or tablet. Click it to draw; its tools come up under it: the pen, the highlighter (**P**, **M**), the eraser (**E**, which lifts whole strokes), the color (the page's ink, Pages' colors, which follow your light or dark theme, colors you picked recently, or **Custom…**, the color picker), three nibs, plain paper, dots or a grid, Undo, Redo, and clearing it. Every stroke is a step **Ctrl+Z** takes back. **Esc**, *Done* or a click elsewhere on the page stops drawing. Its bottom edge drags to make it taller or shorter. A drawing keeps its shape at any page width |
 | Go back to an earlier version | *Page history* in the page's ⋯ menu: the versions Omanote kept (every ten minutes while you write, and before an agent or a command changes the page), each shown as it was. *Restore this version* puts it back as one step **Ctrl+Z** takes back, and keeps the page as it was in the history too. Pages made inside the page since stay in it |
 | A habit to keep | `/habit`: its name, and a circle for each day of the week to click when it's done (today's is rimmed in your accent) |
@@ -317,8 +322,9 @@ calendar, mind maps (the topic in the middle, ideas branching out in a
 color for each branch, laid out by themselves), tables (rows and
 columns, a header row, columns as wide as you drag them, cells in a text
 color and a background of their own, and the cells' words formatted like
-any other), and sketches (pen and highlighter drawings on plain paper,
-dots or a grid). Nine text colors and nine backgrounds (Notion's), for a whole block
+any other), sketches (pen and highlighter drawings on plain paper,
+dots or a grid), and audio notes (a recording, a player, and what was said,
+written out by voxtype). Nine text colors and nine backgrounds (Notion's), for a whole block
 or a few words; a callout or a colored block keeps the blocks inside it in
 its color.
 
@@ -451,6 +457,9 @@ in `Defaults.js`.
 | `mirror` | `false` | keep a Markdown copy of every page (see [A Markdown copy](#a-markdown-copy)) |
 | `mirrorFolder` | `""` | where the copy goes: a full path or `~/…`; empty is `Markdown/` in your notes folder |
 | `tagSort` | `name` | how the sidebar lists tags: `name` (a tag inside another under it) or `color` |
+| `audioTranscribe` | `true` | write out an audio note (with voxtype) as soon as it's recorded; `false`: only with *Write it out* |
+| `audioInput` | `""` | the microphone audio notes and dictation record from: a PipeWire source's name (`pactl list sources short`); empty is the default one |
+| `audioBoost` | `true` | even out your voice once it's recorded (and before it's written out), so a quiet microphone comes out loud and clear without turning up the hiss |
 | `quickTo` | `notebook` | where a quick note goes: `notebook` (the Quick notes notebook) or `pages` (a page in the Pages Inbox, its text read as Markdown). The note's foot says which, and a click there changes it |
 | `barIcon` | `true` | show the notebook in the top bar |
 | `folder` | `""` | where the notebooks live (`""` is `~/Documents/Omanote`); `/path` or `~/path` |
@@ -668,7 +677,12 @@ quick-note card (`Notebook.qml`, `app/`), and the icon in the bar.
   `app/HistoryPanel.qml` shows them and puts one back. A sketch keeps its
   strokes in its own units (1000 wide), so it scales with the page;
   `Sketch.js` cleans it, finds what the eraser touches and writes it as SVG,
-  and `app/SketchBlock.qml` draws it and lets you draw on it.
+  and `app/SketchBlock.qml` draws it and lets you draw on it. An audio note
+  keeps its recording's file in `Pages/assets`, its length, its waveform and
+  what was said; `Audio.js` cleans it, reads ffmpeg's levels and voxtype's
+  output, `Recorder.qml` runs the microphone (one recording at a time) and
+  voxtype, `app/AudioBlock.qml` records and plays it, and
+  `app/RecordingBar.qml` is the bar at the foot while dictating.
 * **Blocks** (`Blocks.js`) know how Enter, Backspace and numbering work for
   each kind; **templates**, and the dates planners go on by, are in
   `Templates.js`; **papers, pens and inks** are in `Papers.js`, **covers** in
@@ -707,7 +721,10 @@ open in your browser; Omanote itself never connects anywhere.
 | `/usr/bin/omarchy-notification-send` | a reminder from Pages, as an Omarchy notification; clicking it runs `omarchy-shell omanote open <page id>` |
 | `/usr/bin/find`, `/usr/bin/unzip` | list the files in a folder you import; unpack a zipped export (into a folder of your own under `$XDG_RUNTIME_DIR`, removed afterwards with `/usr/bin/rm`) |
 | `/usr/bin/soffice` or `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown, in that same folder |
-| `/usr/bin/rm` | take Omanote's launcher entry out when it stops |
+| `/usr/bin/ffmpeg` | record from your microphone (PipeWire's, through its Pulse server) while an audio note, dictation or a test of the microphone records, printing its level ten times a second; even out a voice once it's recorded; make a recording a 16 kHz WAV for voxtype |
+| `/usr/bin/pactl` | list the microphones, for Settings |
+| `/usr/bin/voxtype` | `transcribe`: write out what was said in a recording, the way voxtype's settings say (its model, on your computer as Omarchy sets it up) |
+| `/usr/bin/rm` | take Omanote's launcher entry out when it stops; take away dictation's recordings (in a folder of Omanote's own under `$XDG_RUNTIME_DIR`) once they're written out |
 | `/usr/bin/setsid`, `/usr/bin/kill` | run each command in its own process group, with a deadline and an output budget, and end it if it overruns them |
 
 What you type reaches `grep` as a separate argument after `-e`, so it can

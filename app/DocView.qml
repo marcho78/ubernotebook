@@ -10,6 +10,7 @@ import "../Templates.js" as Templates
 import "../Agent.js" as Agent
 import "../Colors.js" as Colors
 import "../Tags.js" as Tags
+import "../Audio.js" as Audio
 
 // Pages: the other way to write in Omanote, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -715,6 +716,147 @@ FocusScope {
     if (!titleEdit.text.trim() && t.hint) { titleEdit.forceActiveFocus(); titleEdit.cursorPosition = 0 }
   }
 
+  // ---- audio notes and dictation -----------------------------------------------------------
+
+  // The microphone (Recorder.qml, through the service).
+  readonly property var recorder: service && service.recorder ? service.recorder : null
+  // The audio notes being worked on: { uid: "transcribe" or "louder" }.
+  property var audioWork: ({})
+  function setAudioWork(uid, what) {
+    var t = {}
+    for (var k in audioWork) if (k !== uid) t[k] = audioWork[k]
+    if (what) t[uid] = what
+    audioWork = t
+  }
+
+  // An audio note's file.
+  function audioPath(src) { return workspace && workspace.folder ? workspace.folder + "/" + src : "" }
+
+  // An audio note changed: on the page open (as a step to undo), or in its
+  // page's file. done(ok).
+  function updateAudio(pageId, uid, fn, done) {
+    if (page && page.id === pageId && editor.indexOf(uid) >= 0) {
+      var ok = editor.setAudio(uid, fn(editor.audioOf(uid) || Audio.make()))
+      if (done) done(ok)
+      return
+    }
+    if (!workspace || !workspace.index.pages[pageId]) { if (done) done(false); return }
+    workspace.editPage(pageId, function(p) {
+      var b = p.blocks ? p.blocks[uid] : null
+      if (!b || b.type !== "audio") return false
+      b.audio = Audio.clean(fn(Audio.clean(b.audio) || Audio.make()))
+      return true
+    }, function(ok) { if (done) done(ok) })
+  }
+
+  // Recording into an audio note (its button, or "/audio"). When it's done,
+  // it's written out, as Settings has it.
+  function recordAudio(uid) {
+    if (!recorder || !page || locked || !audioPath("assets")) return
+    var name = Audio.fileName(new Date())
+    var pageId = page.id
+    var problem = recorder.start("audio", uid, audioPath("assets/" + name), function(ok, r) {
+      if (!ok) { if (!r.canceled) view.toast(r.problem || "Nothing was recorded"); return }
+      view.updateAudio(pageId, uid, function(a) {
+        a.src = "assets/" + name
+        a.duration = r.duration
+        a.peaks = r.peaks
+        a.transcript = ""
+        a.open = true
+        return a
+      }, function(saved) {
+        if (!saved) { view.toast("Its note is gone: the recording is in Pages/assets/" + name); return }
+        if (view.settings.audioTranscribe !== false && view.recorder.canTranscribe) view.transcribeAudio(pageId, uid)
+      })
+    })
+    if (problem) { toast(problem); return }
+    var item = editor.items[uid]
+    if (item && item.audioView) item.audioView.takeKeys()
+  }
+
+  // What was said in an audio note, written out by voxtype.
+  function transcribeAudio(pageId, uid) {
+    var a = page && page.id === pageId ? editor.audioOf(uid) : null
+    if (!a || !a.src || !recorder || audioWork[uid]) return
+    setAudioWork(uid, "transcribe")
+    recorder.transcribe(audioPath(a.src), a.duration, function(ok, text, problem) {
+      view.setAudioWork(uid, "")
+      if (!ok) { view.toast(problem || "It couldn't be written out"); return }
+      view.updateAudio(pageId, uid, function(x) { x.transcript = text; x.open = true; return x })
+    })
+  }
+
+  // A quiet recording made louder, into a new file (the old one stays, so
+  // Undo takes it back to that).
+  function louderAudio(uid) {
+    var a = page && !locked ? editor.audioOf(uid) : null
+    if (!a || !a.src || !recorder || audioWork[uid]) return
+    var pageId = page.id
+    var name = Audio.fileName(new Date())
+    setAudioWork(uid, "louder")
+    recorder.louder(audioPath(a.src), audioPath("assets/" + name), function(ok, peaks) {
+      view.setAudioWork(uid, "")
+      if (!ok) { view.toast("It couldn't be made louder"); return }
+      view.updateAudio(pageId, uid, function(x) {
+        x.src = "assets/" + name
+        if (peaks.length) x.peaks = peaks
+        return x
+      })
+    })
+  }
+
+  // An audio note's buttons: "record", "stop", "cancel", "transcribe", "louder".
+  function audioAction(uid, what) {
+    if (what === "record") recordAudio(uid)
+    else if (what === "stop") { if (recorder && recorder.owner === uid) recorder.stop() }
+    else if (what === "cancel") { if (recorder && recorder.owner === uid) recorder.cancel() }
+    else if (what === "transcribe" && page) transcribeAudio(page.id, uid)
+    else if (what === "louder") louderAudio(uid)
+  }
+
+  // Its colors (the player's, the card's), beside its button.
+  function openAudioColors(uid, anchor) {
+    var a = editor.items[uid] ? editor.items[uid].audioView : null
+    if (!a) return
+    tableColorTarget = uid
+    colorAt = anchor.mapToItem(view, anchor.width - 250, anchor.height + 6)
+    var now = a.scopeColors()
+    tableColors.currentText = now.color
+    tableColors.currentBack = now.background
+    tableColors.x = Math.max(8, Math.min(view.width - tableColors.width - 8, colorAt.x))
+    tableColors.y = colorAt.y
+    tableColors.open()
+  }
+
+  // The voice button at the top (Ctrl+Shift+R): a new audio note where you
+  // are on the page, recording at once; again, it stops.
+  readonly property bool recordingNote: recorder !== null && recorder.busy && recorder.kind === "audio"
+  function newAudioNote() {
+    if (!recorder) { toast("Recording isn't here: Omanote runs without the shell"); return }
+    if (recordingNote) { if (recorder.phase === "recording") recorder.stop(); return }
+    if (recorder.busy) { toast("Already recording: stop that one first"); return }
+    if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to record on it" : "Open a page to record on it"); return }
+    if (!recorder.canRecord) { toast("Recording needs ffmpeg"); return }
+    var made = editor.placeBlock(editor.focusUid, { type: "audio" })
+    if (made) Qt.callLater(function() { view.recordAudio(made) })
+  }
+
+  // Dictation: what you say, written where you are on the page (Ctrl+Shift+D,
+  // the microphone at the top, or "/dictate"; again, or Done, to finish).
+  readonly property bool dictating: recorder !== null && recorder.busy && recorder.kind === "dictation" && recorder.owner === "page"
+  function dictate() {
+    if (!recorder) { toast("Dictation isn't here: Omanote runs without the shell"); return }
+    if (dictating) { if (recorder.phase === "recording") recorder.stop(); return }
+    if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to dictate into it" : "Open a page to dictate into it"); return }
+    var problem = recorder.start("dictation", "page", "", function(ok, r) {
+      if (!ok) { if (!r.canceled) view.toast(r.problem || "Nothing was written down"); return }
+      if (view.page && !view.locked && view.tagShown === "" && editor.dictated(r.text)) return
+      view.workspace.files.copyText(r.text)
+      view.toast("Copied what you said: paste it where you want it")
+    })
+    if (problem) toast(problem)
+  }
+
   // ---- projects and the archive ------------------------------------------------------------
 
   // The open page as a project ({ status, due }), or not (null), as a change to it.
@@ -1082,6 +1224,24 @@ FocusScope {
           tip: "Ask your agent  Ctrl+J"
           onClicked: view.openAgent("auto")
         }
+        IconButton {
+          objectName: "recordButton"
+          visible: view.page !== null && view.tagShown === "" && view.recorder !== null
+          theme: view.theme; icon: view.recordingNote ? view.theme.icons.stop : view.theme.icons.record; size: 30; iconSize: 17
+          tint: view.theme.dark ? "#ff6b6b" : "#e5484d"
+          checked: view.recordingNote
+          tip: view.recordingNote ? "Stop recording  Ctrl+Shift+R" : "Record an audio note here  Ctrl+Shift+R"
+          onClicked: view.newAudioNote()
+        }
+        IconButton {
+          objectName: "dictateButton"
+          visible: view.page !== null && view.tagShown === "" && view.recorder !== null
+          theme: view.theme; icon: view.theme.icons.mic; size: 30; iconSize: 16
+          tint: view.dictating ? (view.theme.dark ? "#ff6b6b" : "#e5484d") : view.theme.text
+          checked: view.dictating
+          tip: view.dictating ? "Done dictating  Ctrl+Shift+D" : view.recorder && view.recorder.checked && !view.recorder.canTranscribe ? "Dictation needs voxtype (Omarchy's dictation)" : "Dictate: say it, and it's written where you are  Ctrl+Shift+D"
+          onClicked: view.dictate()
+        }
         IconButton { visible: view.tagShown === ""; theme: view.theme; icon: view.theme.icons.search; size: 30; iconSize: 16; tip: "Find on this page  Ctrl+F"; checked: findBar.shown; onClicked: findBar.toggle() }
         IconButton {
           id: moreButton
@@ -1407,6 +1567,13 @@ FocusScope {
           onTableMenuRequested: function(uid, kind, index, anchor) { tableMenu.openFor(uid, kind, index, anchor, view) }
           onTableColorsRequested: function(uid, anchor) { view.openTableColors(uid, anchor) }
           onSketchColorsRequested: function(uid, anchor) { view.openSketchColors(uid, anchor) }
+          recorder: view.recorder
+          audioWork: view.audioWork
+          onAudioRequested: function(uid) { view.recordAudio(uid) }
+          onAudioAction: function(uid, what) { view.audioAction(uid, what) }
+          onAudioColorsRequested: function(uid, anchor) { view.openAudioColors(uid, anchor) }
+          onDictateRequested: view.dictate()
+          onRecordRequested: view.newAudioNote()
           onTagOpened: function(name) { view.openTag(name) }
           onAgentRequested: function(uid) {
             var i = editor.indexOf(uid)
@@ -1524,6 +1691,24 @@ FocusScope {
       y: at.y - height - 8 < topBar.height ? at.y + sel.height + 8 : at.y - height - 8
       onLinkRequested: function(anchor) { linkPop.openAt(anchor) }
       onAgentRequested: view.openAgent("words")
+    }
+
+    // The microphone on: dictating, or an audio note recording on another page.
+    RecordingBar {
+      id: recordingBar
+      objectName: "recordingBar"
+      z: 6
+      theme: view.theme
+      recorder: view.recorder
+      readonly property bool elsewhere: view.recorder !== null && view.recorder.busy && view.recorder.kind === "audio"
+        && !(view.page && editor.indexOf(view.recorder.owner) >= 0)
+      visible: view.dictating || elsewhere
+      label: view.dictating ? "Listening" : "Recording an audio note"
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 26
+      onDone: if (view.recorder) view.recorder.stop()
+      onCanceled: if (view.recorder) view.recorder.cancel()
     }
 
     FindBar {
@@ -1647,9 +1832,10 @@ FocusScope {
   // The table whose cells are being colored (its colorScope says which).
   property string tableColorTarget: ""
   property bool tableCustomOpen: false
+  // (An audio note's colors use them too.)
   function colorTable() {
     var item = editor.items[tableColorTarget]
-    return item && item.tableView ? item.tableView : null
+    return item ? item.tableView || item.audioView || null : null
   }
 
   // The colors for a table's cells, beside the button or handle they were
@@ -1669,7 +1855,7 @@ FocusScope {
 
   function openTableCustom(kind) {
     var t = colorTable()
-    if (!t || !t.colorScope) return
+    if (!t || t.colorScope === null) return
     tableCustomOpen = true
     tableCustom.recent = recentColors
     tableCustom.x = colorAt.x
@@ -2057,6 +2243,8 @@ FocusScope {
     if (ctrl && !shift && !alt && e.key === Qt.Key_Backslash) { sidebarShown = !sidebarShown; return true }
     if (ctrl && !shift && !alt && e.key === Qt.Key_F) { findBar.open(); return true }
     if (ctrl && !shift && !alt && e.key === Qt.Key_J) { openAgent("auto"); return true }
+    if (ctrl && shift && !alt && e.key === Qt.Key_D) { dictate(); return true }
+    if (ctrl && shift && !alt && e.key === Qt.Key_R) { newAudioNote(); return true }
     if (alt && !ctrl && e.key === Qt.Key_Left) { back(); return true }
     if (alt && !ctrl && e.key === Qt.Key_Right) { forward(); return true }
     return false

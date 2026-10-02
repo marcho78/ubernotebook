@@ -13,6 +13,7 @@
 .import "Mindmap.js" as Mindmap
 .import "Table.js" as Table
 .import "Sketch.js" as Sketch
+.import "Audio.js" as Audio
 
 // Every kind of block. `rows` is how many ruled lines one line of its text
 // takes (a big heading takes two, so the text below stays on the lines).
@@ -49,7 +50,9 @@ var KINDS = {
   // A table (Pages only): rows of cells (Table.js).
   table:   { label: "Table",       text: false, rows: 1 },
   // A drawing (Pages only): pen and highlighter strokes (Sketch.js).
-  sketch:  { label: "Sketch",      text: false, rows: 1 }
+  sketch:  { label: "Sketch",      text: false, rows: 1 },
+  // An audio note (Pages only): a recording, and what was said (Audio.js).
+  audio:   { label: "Audio",       text: false, rows: 1 }
 }
 
 // Colors a block (or its background) can have in Pages: "blue" is blue text,
@@ -237,6 +240,11 @@ function clean(raw, options) {
     // Only in Pages; a new one is empty.
     if (!nest) return null
     block.sketch = Sketch.clean(raw.sketch) || Sketch.make()
+  }
+  if (type === "audio") {
+    // Only in Pages; a new one has no recording yet.
+    if (!nest) return null
+    block.audio = Audio.clean(raw.audio) || Audio.make()
   }
   return block
 }

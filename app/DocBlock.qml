@@ -40,6 +40,7 @@ Item {
   required property string folds
   required property string table
   required property string sketch
+  required property string audio
 
   property var editor: null
 
@@ -118,6 +119,7 @@ Item {
     : type === "mindmap" ? (mapLoader.item ? mapLoader.item.height : st.lineHeight)
     : type === "table" ? (tableLoader.item ? tableLoader.item.height : st.lineHeight)
     : type === "sketch" ? (sketchLoader.item ? sketchLoader.item.height : st.lineHeight)
+    : type === "audio" ? (audioLoader.item ? audioLoader.item.height : 60)
     : st.lineHeight
 
   property alias edit: textEdit
@@ -155,8 +157,11 @@ Item {
   readonly property var sketchView: sketchLoader.item
   // A table or a sketch tells where the pointer is itself (the block's own
   // pointer zone would keep it from knowing).
-  readonly property bool ownHover: type === "table" || type === "sketch"
+  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio"
   readonly property bool contentHovered: (tableLoader.item !== null && tableLoader.item.pointerIn) || (sketchLoader.item !== null && sketchLoader.item.pointerIn)
+    || (audioLoader.item !== null && audioLoader.item.pointerIn)
+  // An audio note: recorded into, played, written out.
+  readonly property var audioView: audioLoader.item
 
   function reload() {
     if (!isText) return
@@ -560,6 +565,23 @@ Item {
       host: block
       uid: block.uid
       source: block.sketch
+      ink: block.inkColor
+      available: block.width - block.bx - block.boxRight
+    }
+  }
+
+  // ---- an audio note ---------------------------------------------------------------------------
+
+  Loader {
+    id: audioLoader
+    active: block.type === "audio"
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: AudioBlock {
+      editor: block.editor
+      host: block
+      uid: block.uid
+      source: block.audio
       ink: block.inkColor
       available: block.width - block.bx - block.boxRight
     }
@@ -1034,7 +1056,7 @@ Item {
   // Blocks that aren't text are picked with a click (a calendar picks
   // itself, away from its dates).
   TapHandler {
-    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch"
+    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch" && block.type !== "audio"
     onTapped: block.editor.selectBlocks(block.uid, block.uid)
     onDoubleTapped: if (block.type === "image") block.editor.openPicture(block.src)
   }

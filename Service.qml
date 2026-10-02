@@ -122,6 +122,16 @@ Item {
 
   property alias workspace: workspaceItem
 
+  // The microphone: dictation and audio notes (Recorder.qml).
+  Recorder {
+    id: recorderItem
+    files: storeItem
+    input: root.settings.audioInput || ""
+    boost: root.settings.audioBoost !== false
+  }
+
+  property alias recorder: recorderItem
+
   // The Markdown copy of every page, while Settings has it on (Mirror.qml).
   readonly property string mirrorPath: {
     var f = settings.mirrorFolder || ""

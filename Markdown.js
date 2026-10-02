@@ -17,6 +17,7 @@
 .import "Workspace.js" as Workspace
 .import "Table.js" as Table
 .import "Sketch.js" as Sketch
+.import "Audio.js" as Audio
 
 // Characters that would otherwise be read as Markdown.
 function escapeText(text) {
@@ -261,6 +262,12 @@ function fromDocPage(page, lookup, options) {
     else if (b.type === "sketch") {
       var file = typeof opts.sketchFile === "function" ? opts.sketchFile(b.id) : ""
       line = file ? "![Sketch](" + file + ")" : "*(A sketch, drawn in Omanote)*"
+    }
+    else if (b.type === "audio") {
+      // A link to the recording, and what was said in it, quoted.
+      var au = b.audio || {}
+      var head = au.src ? "[\u{1f399}\u{fe0f} Audio note, " + Audio.clock(au.duration) + "](" + (opts.assetPrefix || "") + au.src + ")" : "*(An audio note, not recorded)*"
+      line = au.transcript ? head + "\n\n" + quoted(au.transcript) : head
     }
     else if (b.type === "calendar") line = calendarTable(b)
     else line = text

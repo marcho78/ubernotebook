@@ -4,6 +4,7 @@ import "../../Settings.js" as Settings
 
 // The service's settings side, for tests and the dev harness.
 QtObject {
+  id: fake
   property var store: null
   property var user: ({})
   readonly property var settings: Settings.merge(Defaults.DEFAULTS, user, Defaults.SCHEMA)
@@ -22,4 +23,6 @@ QtObject {
   }
   function shortcutNote(event) { return event === "toggle" ? "Super + N" : "Super + Alt + N" }
   function pickPicture(done) { done("") }
+  // The microphone (FakeRecorder.qml).
+  property var recorder: FakeRecorder { input: fake.settings.audioInput || ""; boost: fake.settings.audioBoost !== false }
 }

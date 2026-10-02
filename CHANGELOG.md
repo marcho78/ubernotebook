@@ -94,6 +94,20 @@ The first version.
   Markdown); an Archive for pages that are done (out of the tree and the
   Projects, still there to open and search, with Undo); a page's menu in
   the sidebar makes it a project or archives it too;
+  audio notes (`/audio`): it records at once, with the time and your voice's
+  level, Enter stops it and Esc throws it away; then a player with its
+  waveform (click or drag to go there), the time and the speed, and what was
+  said written out under it by voxtype (as it's recorded, or with "Write it
+  out"), to read, search and correct; its colors, Pages' or your own; an
+  Opus file in Pages/assets, linked with what was said in Markdown; the
+  voice evened out once it's recorded, so a quiet laptop microphone comes
+  out loud and clear, and "Louder" for a quiet note from before; a red dot
+  at the top of a page (Ctrl+Shift+R) records one where you are; Settings →
+  Audio picks the microphone, makes the voice louder or not, and tests the
+  microphone;
+  dictation (Ctrl+Shift+D, the microphone at the top of a page, `/dictate`,
+  and the microphone on the quick note, clicked or held while you speak):
+  voxtype writes what you said where your cursor is;
   sketches (`/sketch`): a pen, a highlighter and an eraser that lifts whole
   strokes, in the page's ink, Pages' colors or any color from the color
   picker, three nibs, plain paper, dots or a grid, a height you drag, every

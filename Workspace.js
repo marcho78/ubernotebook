@@ -28,6 +28,7 @@
 .import "Mindmap.js" as Mindmap
 .import "Table.js" as Table
 .import "Tags.js" as Tags
+.import "Audio.js" as Audio
 
 var VERSION = 1
 var MAX_DEPTH = 12
@@ -59,7 +60,7 @@ function isUuid(value) {
 // ---- blocks ---------------------------------------------------------------------------
 
 // The kinds of block a page can have.
-var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch"]
+var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch", "audio"]
 
 function isKind(type) {
   return KINDS.indexOf(type) >= 0
@@ -444,6 +445,8 @@ function pageText(page) {
     if (Blocks.isText(b.type)) lines.push(Html.plainText(b.html || ""))
     else if (b.type === "mindmap") Mindmap.toList(b.outline).forEach(function(it) { lines.push(it.text) })
     else if (b.type === "table") lines.push(Table.text(b.table))
+    // What was said in an audio note.
+    else if (b.type === "audio" && b.audio && b.audio.transcript) lines.push(b.audio.transcript)
   })
   return lines.join("\n").trim()
 }
@@ -1043,6 +1046,11 @@ function blockList(page, md, titleOf) {
     if (b.type === "mindmap") out.text = b.outline
     if (b.type === "table") out.text = Table.toMarkdown(b.table, md)
     if (b.type === "sketch") { out.text = "(a drawing)"; out.strokes = b.sketch ? b.sketch.strokes.length : 0 }
+    if (b.type === "audio") {
+      var au = b.audio || Audio.make()
+      out.text = au.transcript || (au.src ? "(an audio note, " + Audio.clock(au.duration) + ", not written out)" : "(an audio note, not recorded yet)")
+      if (au.src) { out.src = au.src; out.duration = au.duration }
+    }
     if (b.type === "link") out.target = b.target
     if ((b.type === "page" || b.type === "link") && typeof titleOf === "function") out.title = titleOf(b.type === "page" ? b.uid : b.target)
     if (b.type === "image") out.src = b.src

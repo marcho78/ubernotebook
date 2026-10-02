@@ -256,6 +256,7 @@ Item {
       anchors.fill: parent
       theme: quickTheme
       destination: root.service ? (root.service.settings.quickTo || "notebook") : "notebook"
+      recorder: root.service ? root.service.recorder : null
       onDestinationPicked: function(to) { if (root.service) root.service.setSetting("quickTo", to) }
       onKept: function(text) {
         quickWindow.visible = false

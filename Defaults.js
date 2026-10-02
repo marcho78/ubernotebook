@@ -56,7 +56,14 @@ var DEFAULTS = {
   mirror: false,
   mirrorFolder: "",
   // How the sidebar lists tags: by name ("name") or by color ("color").
-  tagSort: "name"
+  tagSort: "name",
+  // An audio note written out (by voxtype) as soon as it's recorded.
+  audioTranscribe: true,
+  // The microphone audio notes and dictation record from: a PipeWire
+  // source's name ("" is the default one).
+  audioInput: "",
+  // A voice evened out and made loud enough (a quiet laptop microphone).
+  audioBoost: true
 }
 
 var SCHEMA = {
@@ -88,7 +95,10 @@ var SCHEMA = {
     quickTo: "string",
     mirror: "bool",
     mirrorFolder: "folder",
-    tagSort: "string"
+    tagSort: "string",
+    audioTranscribe: "bool",
+    audioInput: "string",
+    audioBoost: "bool"
   },
   choices: {
     pen: ["sans", "serif", "hand", "print", "typewriter", "mono", "duo"],

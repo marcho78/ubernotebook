@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import "../Audio.js" as Audio
 
 // Omanote's settings. They apply as you change them and are kept on
 // Omanote's entry in ~/.config/omarchy/shell.json.
@@ -11,6 +12,11 @@ Popup {
   // The service: settings, setSetting(), the shortcuts' state, the folder.
   property var service: null
   readonly property var s: service ? service.settings : ({})
+  // The microphone (Recorder.qml), and what its test heard: "" (not tested),
+  // "silent", "quiet", "good", "loud", or "failed: why".
+  readonly property var recorder: service && service.recorder ? service.recorder : null
+  readonly property bool testing: recorder !== null && recorder.busy && recorder.kind === "test"
+  property string heard: ""
 
   anchors.centerIn: Overlay.overlay
   width: Math.min(620, (parent ? parent.width : 620) - 40)
@@ -22,7 +28,10 @@ Popup {
 
   Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, panel.theme && panel.theme.dark ? 0.5 : 0.3) }
 
+  onClosed: if (testing) recorder.cancel()
   onOpened: {
+    heard = ""
+    if (recorder) recorder.listSources()
     toggleField.text = s.shortcut || ""
     quickField.text = s.quickShortcut || ""
     folderField.text = s.folder || ""
@@ -30,6 +39,31 @@ Popup {
   }
 
   function set(key, value) { if (service) service.setSetting(key, value) }
+
+  // A few seconds of the microphone, its level shown, then how it sounded.
+  function testMicrophone() {
+    if (!recorder) return
+    if (testing) { recorder.stop(); return }
+    heard = ""
+    var problem = recorder.start("test", "settings", "", function(ok, r) {
+      panel.heard = ok ? Audio.verdict(r.levels) : "failed: " + (r.problem || "the microphone couldn't be opened")
+    })
+    if (problem) heard = "failed: " + problem
+  }
+  readonly property string heardNote: heard === "silent" ? "Nothing heard. Is the right microphone picked, and is it on?"
+    : heard === "quiet" ? (s.audioBoost !== false ? "Quiet, even made louder: speak up, or come closer." : "Quiet. Turn on Make my voice louder, or come closer.")
+    : heard === "good" ? "Sounds good."
+    : heard === "loud" ? "Loud: it may distort. Move back a little."
+    : heard.indexOf("failed: ") === 0 ? heard.slice(8)
+    : testing ? "Say a few words\u2026"
+    : "Say a few words: the bars show how loud you come through" + (s.audioBoost !== false ? ", made louder." : ".")
+  readonly property string micLabel: {
+    var name = s.audioInput || ""
+    if (!name) return "The default one"
+    var list = recorder ? recorder.sources : []
+    for (var i = 0; i < list.length; i++) if (list[i].name === name) return list[i].label
+    return name
+  }
 
   background: Item {
     Rectangle { id: plate; anchors.fill: parent; radius: 16; color: panel.theme.surface; border.width: 1; border.color: panel.theme.line; visible: false }
@@ -241,6 +275,127 @@ Popup {
         Line {
           label: "Cross off checked items"
           Toggle { theme: panel.theme; checked: panel.s.strikeDone !== false; onToggled: function(on) { panel.set("strikeDone", on) } }
+        }
+
+
+        Heading { text: "Audio" }
+        Line {
+          label: "Microphone"
+          note: "What audio notes and dictation record from."
+          Rectangle {
+            id: micButton
+            objectName: "micPicker"
+            width: Math.min(230, micText.implicitWidth + 40)
+            height: 32
+            radius: 8
+            color: micHover.hovered ? panel.theme.hover : "transparent"
+            border.width: 1
+            border.color: panel.theme.line
+            Text {
+              id: micText
+              x: 12
+              anchors.verticalCenter: parent.verticalCenter
+              width: parent.width - 36
+              elide: Text.ElideRight
+              textFormat: Text.PlainText
+              text: panel.micLabel
+              font.family: panel.theme.uiFont
+              font.pixelSize: 13
+              color: panel.theme.text
+            }
+            Icon {
+              theme: panel.theme
+              anchors.right: parent.right
+              anchors.rightMargin: 8
+              anchors.verticalCenter: parent.verticalCenter
+              text: panel.theme.icons.down
+              size: 14
+              color: panel.theme.muted
+            }
+            HoverHandler { id: micHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: { if (panel.recorder) panel.recorder.listSources(); micMenu.open() } }
+            Pop {
+              id: micMenu
+              theme: panel.theme
+              width: 300
+              y: micButton.height + 6
+              x: micButton.width - width
+              contentItem: Column {
+                spacing: 2
+                Repeater {
+                  model: [{ name: "", label: "The default one" }].concat(panel.recorder ? panel.recorder.sources : [])
+                  delegate: MenuRow {
+                    required property var modelData
+                    objectName: "micChoice"
+                    width: parent.width
+                    theme: panel.theme
+                    icon: panel.theme.icons.mic
+                    text: modelData.label
+                    checked: (panel.s.audioInput || "") === modelData.name
+                    onClicked: { micMenu.close(); panel.set("audioInput", modelData.name); panel.heard = "" }
+                  }
+                }
+              }
+            }
+          }
+        }
+        Line {
+          label: "Make my voice louder"
+          note: "Evens out your voice once it's recorded, so a quiet microphone (a laptop's) comes out loud and clear without turning up the hiss. Dictation too."
+          Toggle { theme: panel.theme; checked: panel.s.audioBoost !== false; onToggled: function(on) { panel.set("audioBoost", on); panel.heard = "" } }
+        }
+        Line {
+          label: "Test the microphone"
+          note: panel.heardNote
+          Row {
+            spacing: 10
+            // The level as you speak, the newest at the right.
+            Item {
+              anchors.verticalCenter: parent.verticalCenter
+              width: 30 * 4
+              height: 24
+              Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 1
+                Repeater {
+                  model: panel.testing && panel.recorder ? panel.recorder.recent.slice(-30) : []
+                  delegate: Rectangle {
+                    required property var modelData
+                    anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+                    width: 3
+                    height: Math.max(3, 24 * modelData)
+                    radius: 1.5
+                    color: modelData > 0.97 ? "#e5484d" : panel.theme.accent
+                  }
+                }
+              }
+              Rectangle {
+                visible: !panel.testing
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                height: 2
+                radius: 1
+                color: panel.theme.line
+              }
+            }
+            Chip {
+              objectName: "micTest"
+              anchors.verticalCenter: parent.verticalCenter
+              theme: panel.theme
+              icon: panel.testing ? panel.theme.icons.stop : panel.theme.icons.mic
+              text: panel.testing ? "Stop" : "Test"
+              checked: panel.testing
+              onClicked: panel.testMicrophone()
+            }
+          }
+        }
+        Line {
+          label: "Write out audio notes"
+          note: panel.recorder && panel.recorder.checked && !panel.recorder.canTranscribe
+            ? "Needs voxtype, Omarchy's dictation (omarchy voxtype install). Audio notes still record and play without it."
+            : "What you say in an audio note, written out under it by voxtype as soon as it's recorded. Ctrl+Shift+D dictates into a page."
+          Toggle { theme: panel.theme; checked: panel.s.audioTranscribe !== false; onToggled: function(on) { panel.set("audioTranscribe", on) } }
         }
 
         Heading { text: "Sound and motion" }

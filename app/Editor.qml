@@ -7,6 +7,7 @@ import "../Workspace.js" as Workspace
 import "../Mindmap.js" as Mindmap
 import "../Table.js" as Table
 import "../Sketch.js" as Sketch
+import "../Audio.js" as Audio
 import "../Tags.js" as Tags
 import "../Dates.js" as Dates
 import "../Emoji.js" as Emoji
@@ -125,6 +126,13 @@ FocusScope {
   signal tableColorsRequested(string uid, var anchor)
   // A sketch's pen color to pick, beside `anchor`.
   signal sketchColorsRequested(string uid, var anchor)
+  // An audio note to record into (a new one), or its colors to pick.
+  signal audioRequested(string uid)
+  signal audioColorsRequested(string uid, var anchor)
+  // Dictation (Ctrl+Shift+D): what you say, written where you are.
+  signal dictateRequested()
+  // A new audio note where you are, recording (Ctrl+Shift+R).
+  signal recordRequested()
   // A tag clicked: every block with it.
   signal tagOpened(string name)
   // "/agent" typed on a block: ask your agent (Pages).
@@ -186,7 +194,8 @@ FocusScope {
       color: b.color || "", toggle: b.toggle === true, collapsed: b.collapsed === true, lang: b.lang || "",
       target: b.target || "", icon: b.icon || "", outline: b.outline || "", folds: b.folds || "",
       table: b.type === "table" && b.table ? JSON.stringify(b.table) : "",
-      sketch: b.type === "sketch" && b.sketch ? JSON.stringify(b.sketch) : ""
+      sketch: b.type === "sketch" && b.sketch ? JSON.stringify(b.sketch) : "",
+      audio: b.type === "audio" && b.audio ? JSON.stringify(b.audio) : ""
     }
   }
 
@@ -196,7 +205,8 @@ FocusScope {
       label: r.label, days: r.days, month: r.month, marks: r.marks, hint: r.hint,
       color: r.color, toggle: r.toggle, collapsed: r.collapsed, lang: r.lang, target: r.target, icon: r.icon,
       outline: r.outline, folds: r.folds, table: r.type === "table" && r.table ? JSON.parse(r.table) : undefined,
-      sketch: r.type === "sketch" && r.sketch ? JSON.parse(r.sketch) : undefined }
+      sketch: r.type === "sketch" && r.sketch ? JSON.parse(r.sketch) : undefined,
+      audio: r.type === "audio" && r.audio ? JSON.parse(r.audio) : undefined }
   }
 
   readonly property var cleanOptions: doc ? ({ nest: true }) : null
@@ -788,6 +798,67 @@ FocusScope {
     endOp()
   }
 
+  // ---- Pages: audio notes ----------------------------------------------------------------
+
+  // The audio note playing (one at a time).
+  property string playingUid: ""
+  // The microphone (Recorder.qml), and the audio notes being worked on:
+  // { uid: "transcribe" (written out) or "louder" (made louder) }.
+  property var recorder: null
+  property var audioWork: ({})
+  // An audio note's button: "record", "stop", "cancel", "transcribe", "louder".
+  signal audioAction(string uid, string what)
+
+  // An audio note changed (recorded, written out, its colors), as one step.
+  function setAudio(uid, audio) {
+    var i = indexOf(uid)
+    if (i < 0 || blocksModel.get(i).type !== "audio") return false
+    var clean = Audio.clean(audio)
+    if (!clean) return false
+    var json = JSON.stringify(clean)
+    if (json === blocksModel.get(i).audio) return true
+    beginOp()
+    blocksModel.setProperty(i, "audio", json)
+    endOp()
+    return true
+  }
+
+  // Words said (dictation), written where you are: at the cursor in the
+  // block you're in (a space before them when they need one), or on a new
+  // line at the end of the page.
+  function dictated(text) {
+    if (readOnly) return false
+    var words = String(text || "").replace(/\s+/g, " ").trim()
+    if (!words) return false
+    var item = items[focusUid]
+    if (item && item.isText && item.edit) {
+      var e = item.edit
+      var before = e.getText(Math.max(0, e.selectionStart - 1), e.selectionStart)
+      insertText(focusUid, Audio.joinAfter(before, words))
+      return true
+    }
+    // (An empty line at the end takes them.)
+    var last = blocksModel.count - 1
+    if (last >= 0 && Blocks.isText(blocksModel.get(last).type) && Html.plainText(htmls[uidAt(last)] || "") === "" && items[uidAt(last)]) {
+      var lastUid = uidAt(last)
+      focusBlock(lastUid, 0)
+      insertText(lastUid, words)
+      return true
+    }
+    beginOp()
+    var made = insertBlock(blocksModel.count, { type: "p", indent: 0 }, Html.escapeText(words))
+    endOp()
+    focusBlock(made, -1)
+    return true
+  }
+
+  // An audio note's data as the page has it now (or null).
+  function audioOf(uid) {
+    var i = indexOf(uid)
+    if (i < 0 || blocksModel.get(i).type !== "audio") return null
+    try { return Audio.clean(JSON.parse(blocksModel.get(i).audio)) } catch (e) { return Audio.make() }
+  }
+
   // Drawing on a sketch: it's where you are on the page.
   function sketchFocused(uid) {
     closeSlash()
@@ -915,7 +986,7 @@ FocusScope {
       }
     })
     // (Pages and drawings aren't ideas: they'd be lost.)
-    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" })) return ""
+    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" || b.type === "audio" })) return ""
     function words(b) { return Blocks.isText(b.type) ? Html.plainText(htmls[b.uid] || "").replace(/\s+/g, " ").trim() : "" }
     // A table's rows are ideas: their cells' words.
     function tableIdeas(b, depth) {
@@ -1608,6 +1679,7 @@ FocusScope {
       else if (command.action === "image") imageRequested(s.uid)
       else if (command.action === "columns") insertColumns(s.uid, command.count || 2)
       else if (command.action === "agent") agentRequested(s.uid)
+      else if (command.action === "dictate") dictateRequested()
       return
     }
     var props = command.props || {}
@@ -1627,6 +1699,8 @@ FocusScope {
     endOp()
     // A new mind map: you write its topic first.
     if (command.type === "mindmap") { Qt.callLater(function() { root.editMindMap(made) }); return }
+    // A new audio note: it records.
+    if (command.type === "audio") { Qt.callLater(function() { root.audioRequested(made) }); return }
     // A new sketch: you draw on it.
     if (command.type === "sketch") { Qt.callLater(function() { if (root.items[made] && root.items[made].sketchView) root.items[made].sketchView.startDrawing() }); return }
     // A new table: you write in its first cell.
@@ -2058,6 +2132,8 @@ FocusScope {
     if (ctrl && !shift && !alt && key === Qt.Key_U) { e.accepted = true; formatInline("underline"); return }
     if (ctrl && shift && !alt && key === Qt.Key_X) { e.accepted = true; formatInline("strike"); return }
     if (ctrl && shift && !alt && key === Qt.Key_H) { e.accepted = true; formatInline("highlight", Papers.HIGHLIGHTS[0].light); return }
+    if (doc && ctrl && shift && !alt && key === Qt.Key_D) { e.accepted = true; dictateRequested(); return }
+    if (doc && ctrl && shift && !alt && key === Qt.Key_R) { e.accepted = true; recordRequested(); return }
     if (ctrl && !shift && !alt && key === Qt.Key_E) { e.accepted = true; formatInline("code"); return }
     if (ctrl && !shift && !alt && key === Qt.Key_K) { e.accepted = true; linkRequested(); return }
     if (ctrl && shift && !alt && (key === Qt.Key_Greater || key === Qt.Key_Period)) { e.accepted = true; stepSize(1); return }
@@ -2367,7 +2443,7 @@ FocusScope {
     // The end of a column: the next column isn't something to delete.
     if (Workspace.isStructure(next.type)) return
     // A table, a mind map or a sketch below: pick it first, so it's never lost by accident.
-    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch")) {
+    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch" || next.type === "audio")) {
       selectBlocks(next.uid, next.uid)
       return
     }
@@ -3178,6 +3254,7 @@ FocusScope {
       else if (b.type === "divider") out += "<hr />"
       else if (b.type === "time") out += "<p>" + (b.label ? Html.escapeText(b.label) + " " : "") + inner + "</p>"
       else if (b.type === "table") out += tableHtml(b.table)
+      else if (b.type === "audio") out += b.audio && b.audio.transcript ? "<p>" + Html.escapeText(b.audio.transcript).replace(/\n/g, "<br />") + "</p>" : ""
       else if (b.type === "image" || b.type === "calendar" || b.type === "columns" || b.type === "column" || b.type === "sketch") out += ""
       else out += "<p>" + inner + "</p>"
     })
