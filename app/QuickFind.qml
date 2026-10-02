@@ -29,7 +29,7 @@ Pop {
     var r = workspace ? workspace.revision : 0
     if (!workspace) return []
     var ix = workspace.index
-    return Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) })
+    return Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) && !Workspace.inTemplates(ix, id) })
       .sort(function(a, b) { return ix.pages[a].modified < ix.pages[b].modified ? 1 : -1 })
       .slice(0, 12)
       .map(function(id) { return { id: id, title: ix.pages[id].title, icon: ix.pages[id].icon, snippet: null } })

@@ -41,6 +41,7 @@ Item {
   required property string table
   required property string sketch
   required property string audio
+  required property string meeting
 
   property var editor: null
 
@@ -120,6 +121,7 @@ Item {
     : type === "table" ? (tableLoader.item ? tableLoader.item.height : st.lineHeight)
     : type === "sketch" ? (sketchLoader.item ? sketchLoader.item.height : st.lineHeight)
     : type === "audio" ? (audioLoader.item ? audioLoader.item.height : 60)
+    : type === "meeting" ? (meetingLoader.item ? meetingLoader.item.height : 80)
     : st.lineHeight
 
   property alias edit: textEdit
@@ -157,11 +159,13 @@ Item {
   readonly property var sketchView: sketchLoader.item
   // A table or a sketch tells where the pointer is itself (the block's own
   // pointer zone would keep it from knowing).
-  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio"
+  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio" || type === "meeting"
   readonly property bool contentHovered: (tableLoader.item !== null && tableLoader.item.pointerIn) || (sketchLoader.item !== null && sketchLoader.item.pointerIn)
-    || (audioLoader.item !== null && audioLoader.item.pointerIn)
+    || (audioLoader.item !== null && audioLoader.item.pointerIn) || (meetingLoader.item !== null && meetingLoader.item.pointerIn)
   // An audio note: recorded into, played, written out.
   readonly property var audioView: audioLoader.item
+  // A meeting: started, stopped, written out.
+  readonly property var meetingView: meetingLoader.item
 
   function reload() {
     if (!isText) return
@@ -582,6 +586,22 @@ Item {
       host: block
       uid: block.uid
       source: block.audio
+      ink: block.inkColor
+      available: block.width - block.bx - block.boxRight
+    }
+  }
+
+  // ---- a meeting ---------------------------------------------------------------------------------
+
+  Loader {
+    id: meetingLoader
+    active: block.type === "meeting"
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: MeetingBlock {
+      editor: block.editor
+      uid: block.uid
+      source: block.meeting
       ink: block.inkColor
       available: block.width - block.bx - block.boxRight
     }
@@ -1056,7 +1076,7 @@ Item {
   // Blocks that aren't text are picked with a click (a calendar picks
   // itself, away from its dates).
   TapHandler {
-    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch" && block.type !== "audio"
+    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch" && block.type !== "audio" && block.type !== "meeting"
     onTapped: block.editor.selectBlocks(block.uid, block.uid)
     onDoubleTapped: if (block.type === "image") block.editor.openPicture(block.src)
   }

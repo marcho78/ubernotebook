@@ -108,6 +108,23 @@ Pop {
       onClicked: { menu.close(); menu.view.archivePage(menu.view.page.id, !inArchive) }
     }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.duplicate; text: "Duplicate"; onClicked: { menu.close(); menu.view.duplicatePage(menu.view.page.id) } }
+    // A template: saved from it; or it is one (a page again); and what new pages inside it start from.
+    MenuRow {
+      objectName: "saveTemplate"
+      readonly property string root: { var r = menu.view && menu.view.workspace ? menu.view.workspace.revision : 0; return menu.view && menu.view.page ? menu.view.templateRoot(menu.view.page.id) : "" }
+      width: parent.width; theme: menu.theme; icon: menu.theme.icons.templates
+      text: root === "" ? "Save as template" : root === (menu.view.page ? menu.view.page.id : "") ? "Not a template (a page again)" : "Save as template"
+      visible: root === "" || (menu.view.page && root === menu.view.page.id)
+      onClicked: { menu.close(); if (root === "") menu.view.saveAsTemplate(menu.view.page.id); else menu.view.untemplate(root) }
+    }
+    MenuRow {
+      objectName: "childTemplate"
+      width: parent.width; theme: menu.theme; icon: menu.theme.icons.newPage
+      readonly property string current: { var r = menu.view && menu.view.workspace ? menu.view.workspace.revision : 0; var e = menu.view && menu.view.page && menu.view.workspace ? menu.view.workspace.index.pages[menu.view.page.id] : null; return e && e.childTemplate && menu.view.workspace.index.pages[e.childTemplate] ? menu.view.workspace.index.pages[e.childTemplate].title || "Untitled" : "" }
+      text: "Pages inside start from\u2026"
+      hint: current
+      onClicked: { menu.close(); menu.view.openTemplatePick("child", menu.view.page.id, null) }
+    }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.copy; text: "Copy as Markdown"; onClicked: { menu.close(); menu.view.copyMarkdown() } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.export; text: "Export with its pages\u2026"; onClicked: { menu.close(); menu.view.exportPage() } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.move; text: "Move to\u2026"; onClicked: { menu.close(); menu.view.movePageAsk(menu.view.page ? menu.view.page.id : "") } }

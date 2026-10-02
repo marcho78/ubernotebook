@@ -14,6 +14,7 @@
 .import "Table.js" as Table
 .import "Sketch.js" as Sketch
 .import "Audio.js" as Audio
+.import "Meeting.js" as Meeting
 
 // Every kind of block. `rows` is how many ruled lines one line of its text
 // takes (a big heading takes two, so the text below stays on the lines).
@@ -52,7 +53,9 @@ var KINDS = {
   // A drawing (Pages only): pen and highlighter strokes (Sketch.js).
   sketch:  { label: "Sketch",      text: false, rows: 1 },
   // An audio note (Pages only): a recording, and what was said (Audio.js).
-  audio:   { label: "Audio",       text: false, rows: 1 }
+  audio:   { label: "Audio",       text: false, rows: 1 },
+  // A meeting (Pages only): recorded by voxtype, who said what (Meeting.js).
+  meeting: { label: "Meeting",     text: false, rows: 1 }
 }
 
 // Colors a block (or its background) can have in Pages: "blue" is blue text,
@@ -245,6 +248,11 @@ function clean(raw, options) {
     // Only in Pages; a new one has no recording yet.
     if (!nest) return null
     block.audio = Audio.clean(raw.audio) || Audio.make()
+  }
+  if (type === "meeting") {
+    // Only in Pages; a new one hasn't started.
+    if (!nest) return null
+    block.meeting = Meeting.clean(raw.meeting) || Meeting.make()
   }
   return block
 }

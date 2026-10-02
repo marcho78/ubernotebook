@@ -35,6 +35,7 @@ var STYLES = {
   table:   { size: 15, lh: 1.45, above: 8, below: 8 },
   sketch:  { size: 15, lh: 1.45, above: 8, below: 8 },
   audio:   { size: 15, lh: 1.45, above: 8, below: 8 },
+  meeting: { size: 15, lh: 1.45, above: 8, below: 8 },
   habit:   { size: 16, lh: 1.5, above: 3, below: 3 },
   calendar: { size: 15, lh: 1.5, above: 8, below: 8 }
 }
@@ -146,9 +147,11 @@ var COMMANDS = [
   { id: "habit", group: "Planning", label: "Habit", hint: "A habit, with a circle for each day of the week", icon: "habit", type: "habit", keys: "tracker streak routine week days" },
   { id: "calendar", group: "Planning", label: "Calendar", hint: "A month at a glance: click a date to circle it", icon: "calendarMonth", type: "calendar", keys: "month dates planner" },
   { id: "page", group: "Pages", label: "Page", hint: "A page inside this page", icon: "page", action: "page", keys: "subpage sub-page new document" },
+  { id: "template", group: "Pages", label: "Template", hint: "One of your templates, put in here", icon: "templates", action: "template", keys: "template snippet boilerplate reuse saved preset" },
   { id: "link", group: "Pages", label: "Link to page", hint: "Point to a page elsewhere", icon: "link", action: "link", keys: "mention reference goto" },
   { id: "image", group: "Media", label: "Image", hint: "A picture from a file", icon: "image", action: "image", keys: "picture photo png jpg" },
   { id: "audio", group: "Media", label: "Audio note", hint: "Record your voice; it's written out under it", icon: "mic", type: "audio", keys: "audio voice record recording memo microphone mic sound transcribe transcript voxtype" },
+  { id: "meeting", group: "Media", label: "Meeting", hint: "Record a meeting; voxtype writes out who said what", icon: "people", type: "meeting", keys: "meeting call zoom meet teams interview lecture transcript record voxtype minutes" },
   { id: "dictate", group: "Media", label: "Dictate", hint: "Say it, and it's written here  (Ctrl+Shift+D)", icon: "dictate", action: "dictate", keys: "dictation voice speak speech talk microphone mic voxtype type" },
   { id: "mindmap", group: "Advanced", label: "Mind map", hint: "Ideas branching out from one topic", icon: "mindmap", type: "mindmap", props: { outline: "Central topic\n  Main idea\n  Main idea\n  Main idea" }, keys: "mindmap brainstorm map tree ideas diagram" },
   { id: "toc", group: "Advanced", label: "Table of contents", hint: "The headings on this page", icon: "toc", type: "toc", keys: "contents outline index" },
@@ -212,7 +215,7 @@ function kindLabel(type, toggle) {
     var k = TURN_INTO[i]
     if (k.type === type && !!k.toggle === !!toggle) return k.label
   }
-  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : type === "sketch" ? "Sketch" : type === "audio" ? "Audio note" : "Text"
+  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : type === "sketch" ? "Sketch" : type === "audio" ? "Audio note" : type === "meeting" ? "Meeting" : "Text"
 }
 
 // Languages a code block can say it's in.

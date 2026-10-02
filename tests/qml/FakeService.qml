@@ -25,4 +25,6 @@ QtObject {
   function pickPicture(done) { done("") }
   // The microphone (FakeRecorder.qml).
   property var recorder: FakeRecorder { input: fake.settings.audioInput || ""; boost: fake.settings.audioBoost !== false }
+  // voxtype's meetings (FakeMeetings.qml).
+  property var meetings: FakeMeetings {}
 }

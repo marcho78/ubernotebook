@@ -1,5 +1,6 @@
 import QtQuick
 import "Workspace.js" as Workspace
+import "Templates.js" as Templates
 import "Import.js" as Import
 import "Markdown.js" as Markdown
 import "Tags.js" as Tags
@@ -105,6 +106,8 @@ QtObject {
         { use: "tagged <tag>", does: "every block with the tag: page id, page title, block id, type, text (Markdown), checked" },
         { use: "projects", does: "every project (not the archive's): id, title, status, due, progress (to-dos done of all, its pages' too), overdue" },
         { use: "project <id> <status> <due>", does: "makes the page a project, or changes it: status planning, active, paused or done (\"\" keeps it); due a date like 2026-10-12, \"\" for none, \"-\" to keep it; status \"none\" makes it a page again" },
+        { use: "templates", does: "lists the user's templates: [{ id, title, icon, pages }]" },
+        { use: "fromTemplate <template> <title> <parent>", does: "a new page from a template (its name or id), called title (\"\" for the template's), in parent (\"\" the Inbox, \"top\" the top of Pages); {{date}} and the like in it are filled in" },
         { use: "archive <id>", does: "puts the page (and the pages in it) away in the archive; unarchive <id> brings it back" },
         { use: "tagColor <tag> <color>", does: "the tag's color: gray, brown, orange, yellow, green, blue, purple, pink, red, a hex like #ff8800, or \"\" for none (a tag with none takes the color of the tag it's in: #work/acme, #work's)" },
         { use: "open <id>", does: "shows the page in Omanote's window" }
@@ -129,7 +132,7 @@ QtObject {
     var ix = workspace.index
     var found = []
     for (var id in ix.pages) {
-      if (Workspace.inTrash(ix, id)) continue
+      if (Workspace.inTrash(ix, id) || Workspace.inTemplates(ix, id)) continue
       var e = ix.pages[id]
       var text = workspace.texts[id] || e.title || ""
       var score = Workspace.score(e.title || "Untitled", text, query)
@@ -288,6 +291,38 @@ QtObject {
     if (!page) return fail("couldn't make the page")
     if (into) placeIn(into, page.id)
     return answer({ ok: true, id: page.id, title: page.title || "Untitled", path: where(page.id) })
+  }
+
+  // Your templates: [{ id, title, icon, pages }].
+  function templates() {
+    var not = unready()
+    if (not) return fail(not)
+    var ix = workspace.index
+    return answer(Workspace.templates(ix).map(function(t) {
+      return { id: t.id, title: t.title, icon: t.icon, pages: Workspace.withDescendants(ix, t.id).length }
+    }))
+  }
+
+  // A new page from a template (by name or id), in `parent` ("" the Inbox,
+  // "top" the top of Pages), called `title` (or the template's).
+  function fromTemplate(template, title, parent) {
+    var not = unready()
+    if (not) return fail(not)
+    var ix = workspace.index
+    var tpl = Workspace.templateNamed(ix, template)
+    if (!tpl) return fail("there's no template called that (templates lists them)")
+    var into = String(parent || "")
+    if (into === "top") into = ""
+    else if (!into) into = inboxPage()
+    if (into && !live(into)) return fail("there's no page with that id to put it in (\"\" is the Inbox, \"top\" the top of Pages)")
+    writeOpen()
+    var now = new Date()
+    var id = workspace.pageFromTemplateNow(tpl, into, Workspace.cleanTitle(String(title || "")), function(text, html) {
+      return Templates.fill(text, html, now, function(d, pattern) { return Qt.formatDate(Templates.parse(d), pattern) })
+    })
+    if (!id) return fail("couldn't make the page")
+    if (into) placeIn(into, id)
+    return answer({ ok: true, id: id, title: ix.pages[id].title || "Untitled", path: where(id) })
   }
 
   function append(id, path) {

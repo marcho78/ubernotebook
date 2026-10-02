@@ -119,6 +119,10 @@ Rectangle {
   }
   property bool tagsOpen: true
   property bool projectsOpen: true
+  readonly property int templateCount: {
+    var r = view.workspace ? view.workspace.revision : 0
+    return view.workspace ? Workspace.templates(view.workspace.index).length : 0
+  }
   readonly property int archiveCount: {
     var r = view.workspace ? view.workspace.revision : 0
     return view.workspace ? Workspace.archived(view.workspace.index).length : 0
@@ -770,6 +774,7 @@ Rectangle {
       text: bar.view.workspace && bar.view.workspace.importing ? "Importing\u2026 " + bar.view.workspace.importCount : "Import\u2026"
       onClicked: bar.view.openImport(importRow)
     }
+    Row2 { objectName: "templatesRow"; icon: bar.theme.icons.templates; text: "Templates"; hint: bar.templateCount > 0 ? String(bar.templateCount) : ""; onClicked: bar.view.openTemplates() }
     Row2 { objectName: "archiveRow"; icon: bar.theme.icons.archive; text: "Archive"; hint: bar.archiveCount > 0 ? String(bar.archiveCount) : ""; onClicked: bar.view.openArchive() }
     Row2 { icon: bar.theme.icons.trash; text: "Trash"; hint: bar.trashCount > 0 ? String(bar.trashCount) : ""; onClicked: bar.view.openTrash() }
     Row2 { icon: bar.theme.icons.cog; text: "Settings"; hint: "Ctrl+,"; onClicked: bar.view.settingsRequested() }

@@ -11,6 +11,7 @@ import "../Agent.js" as Agent
 import "../Colors.js" as Colors
 import "../Tags.js" as Tags
 import "../Audio.js" as Audio
+import "../Meeting.js" as Meeting
 
 // Pages: the other way to write in Omanote, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -356,6 +357,12 @@ FocusScope {
     if (!workspace) return
     commit()
     var parent = parentId && workspace.index.pages[parentId] ? parentId : ""
+    // The template new pages inside this one start from.
+    var start = parent ? workspace.index.pages[parent].childTemplate : ""
+    if (start && workspace.index.pages[start] && Workspace.inTemplates(workspace.index, start) && !Workspace.inTrash(workspace.index, start)) {
+      newPageFromTemplate(start, parent)
+      return
+    }
     var child = workspace.createPage({ parent: parent })
     if (!child) return
     if (parent) {
@@ -699,11 +706,138 @@ FocusScope {
   // ---- templates -----------------------------------------------------------------------------
 
   readonly property var templates: Templates.TEMPLATES.filter(function(t) { return t.id !== "blank" })
+  // Your own templates (pages kept apart): [{ id, title, icon }].
+  readonly property var userTemplates: { var r = workspace ? workspace.revision : 0; return workspace ? Workspace.templates(workspace.index) : [] }
+
+  // ---- your own templates ------------------------------------------------------------------
+
+  // What's written in a template, filled in now ({{date}}...).
+  function templateFill() {
+    var now = new Date()
+    return function(text, html) { return Templates.fill(text, html, now, function(d, pattern) { return Qt.formatDate(Templates.parse(d), pattern) }) }
+  }
+
+  // A template used on the page open: on a blank page, it's what the page
+  // is ("replace"); else its blocks go in after the block you're in
+  // ("insert"). The pages in it are made inside this one. Undo takes the
+  // blocks back off.
+  function useTemplateHere(template, mode) {
+    if (!page || locked || !workspace) return
+    commit()
+    var pageId = page.id
+    var atUid = editor.focusUid
+    workspace.useTemplate(template, pageId, templateFill(), function(top) {
+      if (!view.page || view.page.id !== pageId) return
+      if (mode === "replace") {
+        editor.replaceAll(top.blocks.length ? top.blocks : [{ type: "p", html: "", indent: 0 }])
+        if (!view.page.icon && top.icon) view.page.icon = Workspace.cleanIcon(top.icon)
+        if (!view.page.cover && top.cover) view.page.cover = Workspace.cleanCover(top.cover)
+        if (top.format) {
+          var f = {}
+          for (var k in view.page.format) f[k] = view.page.format[k]
+          var keys = ["font", "width", "size"]
+          keys.forEach(function(key) { if (top.format[key]) f[key] = top.format[key] })
+          view.page.format = Workspace.cleanFormat(f)
+        }
+        if (top.project && !view.page.project) view.page.project = Workspace.cleanProject(top.project)
+        if (!titleEdit.text.trim() && top.title) titleEdit.text = top.title
+      } else {
+        var i = editor.indexOf(atUid)
+        var at = i >= 0 ? editor.subtreeEnd(i) + 1 : editor.model.count
+        var base = i >= 0 ? editor.model.get(i).indent : 0
+        var list = top.blocks.slice()
+        // (Not the empty line a template ends with.)
+        var tail = list[list.length - 1]
+        if (list.length > 1 && tail && tail.type === "p" && Html.plainText(tail.html || "") === "") list.pop()
+        list.forEach(function(b) { b.indent = (b.indent || 0) + base })
+        editor.insertBlocksAt(at, list, false)
+      }
+      view.markDirty()
+      view.revision++
+    }, function(top) {
+      if (!top) { view.toast("That template isn't there any more"); return }
+      view.commit()
+    })
+  }
+
+  // A new page from a template, inside `parentId` ("" at the top), opened.
+  function newPageFromTemplate(template, parentId) {
+    if (!workspace) return
+    commit()
+    var parent = parentId && workspace.index.pages[parentId] ? parentId : ""
+    var openHere = page && page.id === parent ? parent : ""
+    workspace.pageFromTemplate(template, parent, "", templateFill(), function(id) {
+      if (!id) { view.toast("That template isn't there any more"); return }
+      if (openHere && view.page && view.page.id === openHere) {
+        editor.placeBlock(editor.uidAt(editor.model.count - 1), { type: "page", id: id })
+        view.markDirty()
+        view.commit()
+      }
+      view.open(id)
+    }, openHere)
+  }
+
+  // A page saved as a template (a copy of it, and the pages in it).
+  function saveAsTemplate(id) {
+    if (!workspace || !workspace.index.pages[id]) return
+    commit()
+    var title = workspace.index.pages[id].title || "Untitled"
+    workspace.saveAsTemplate(id, function(made) {
+      if (!made) { view.toast("It couldn't be saved as a template"); return }
+      view.toastUndo("\u201c" + title + "\u201d is a template: in Templates at the sidebar's foot", function() { view.workspace.trashPage(made, false) })
+    })
+  }
+
+  // A new, empty template, opened to write.
+  function newTemplate() {
+    if (!workspace) return
+    commit()
+    var p = workspace.newTemplate()
+    if (p) open(p.id, false, "title")
+  }
+
+  // The template a page is (or is in), or "".
+  function templateRoot(id) {
+    var ix = workspace ? workspace.index : null
+    var p = id
+    var seen = {}
+    while (ix && p && ix.pages[p] && !seen[p]) {
+      if (ix.pages[p].template) return p
+      seen[p] = true
+      p = ix.pages[p].parent
+    }
+    return ""
+  }
+
+  // A template, a page again (in the tree, at the top).
+  function untemplate(id) {
+    if (!workspace || !workspace.index.pages[id]) return
+    commit()
+    workspace.setTemplate(id, false)
+    revision++
+    toastUndo("\u201c" + (workspace.index.pages[id].title || "Untitled") + "\u201d is a page again, in Pages", function() { view.workspace.setTemplate(id, true); view.revision++ })
+  }
+
+  // Your templates to pick from: "insert" (here, after the block you're
+  // in), "newIn" (a new page inside `pageId`), "child" (what new pages
+  // inside `pageId` start from).
+  function openTemplatePick(mode, pageId, anchor) {
+    if (mode !== "child" && userTemplates.length === 0) { toast("No templates yet: Save as template, in a page's \u22ef menu"); return }
+    templatePick.mode = mode
+    templatePick.pageId = pageId || ""
+    var a = anchor || main
+    var at = a.mapToItem(view, a === main ? main.width / 2 - 160 : 0, a === main ? 120 : a.height + 4)
+    templatePick.x = Math.max(8, Math.min(view.width - templatePick.width - 8, at.x))
+    templatePick.y = Math.max(8, Math.min(view.height - 300, at.y))
+    templatePick.open()
+  }
 
   // A blank page made from a template: its blocks, and its title and icon
   // if it has none yet. Undo takes the blocks back off.
   function applyTemplate(id) {
     if (!page || locked || !pageBlank) return
+    // One of your own.
+    if (String(id).indexOf("tpl:") === 0) { useTemplateHere(String(id).slice(4), "replace"); return }
     var t = Templates.forPages(id, Templates.iso(new Date()), function(d, pattern) { return Qt.formatDate(Templates.parse(d), pattern) })
     editor.replaceAll(t.blocks)
     if (!page.icon && t.icon) page.icon = Workspace.cleanIcon(t.icon)
@@ -855,6 +989,190 @@ FocusScope {
       view.toast("Copied what you said: paste it where you want it")
     })
     if (problem) toast(problem)
+  }
+
+  // ---- meetings (voxtype's meeting mode) ------------------------------------------------------
+
+  readonly property var meetings: service && service.meetings ? service.meetings : null
+  // The meetings being fetched from voxtype: { uid: true }.
+  property var meetingWork: ({})
+  function setMeetingWork(uid, on) {
+    var t = {}
+    for (var k in meetingWork) if (k !== uid) t[k] = true
+    if (on) t[uid] = true
+    meetingWork = t
+  }
+  // Where the meetings started here are: { id: { pageId, uid, at } }; and the
+  // one just started, until voxtype says its id: { pageId, uid, title }.
+  property var meetingOwners: ({})
+  property var meetingPending: null
+  // The meetings fetched by themselves once (a block that ended unseen).
+  property var meetingTried: ({})
+
+  // A meeting changed: on the page open (as a step to undo), or in its page's file.
+  function updateMeeting(pageId, uid, fn, done) {
+    if (page && page.id === pageId && editor.indexOf(uid) >= 0) {
+      var ok = editor.setMeeting(uid, fn(editor.meetingOf(uid) || Meeting.make()))
+      if (done) done(ok)
+      return
+    }
+    if (!workspace || !workspace.index.pages[pageId]) { if (done) done(false); return }
+    workspace.editPage(pageId, function(p) {
+      var b = p.blocks ? p.blocks[uid] : null
+      if (!b || b.type !== "meeting") return false
+      b.meeting = Meeting.clean(fn(Meeting.clean(b.meeting) || Meeting.make()))
+      return true
+    }, function(ok) { if (done) done(ok) })
+  }
+
+  function meetingProblem() {
+    if (!meetings) return "Meetings aren't here: Omanote runs without the shell"
+    if (!meetings.available) return "Meetings need voxtype, Omarchy's dictation (omarchy voxtype install)"
+    if (!meetings.enabled) return "voxtype's meeting mode is off: turn it on in the meeting"
+    return ""
+  }
+
+  // A meeting started into a meeting block, named for the page.
+  function startMeeting(uid) {
+    if (!page || locked || !meetings || !meetings.available || !meetings.enabled) return
+    if (meetings.status !== "idle" || meetingPending) { toast("voxtype is recording a meeting already"); return }
+    var title = Workspace.cleanTitle(titleEdit.text) || page.title || ""
+    meetingPending = { pageId: page.id, uid: uid, title: title }
+    meetingWait.restart()
+    meetings.start(title, function(ok, problem) {
+      if (ok) return
+      view.meetingPending = null
+      view.toast(problem || "voxtype couldn't start the meeting")
+    })
+  }
+  // voxtype says nothing started: said so.
+  Timer {
+    id: meetingWait
+    interval: 12000
+    onTriggered: if (view.meetingPending) { view.meetingPending = null; view.toast("voxtype didn't start the meeting: is it running?") }
+  }
+
+  // A meeting's transcript, from voxtype, into its block.
+  function fetchMeeting(pageId, uid, id) {
+    if (!meetings || !id) return
+    setMeetingWork(uid, true)
+    meetings.fetch(id, function(ok, out) {
+      view.setMeetingWork(uid, false)
+      if (!ok) { view.toast("voxtype couldn't give the meeting: " + out); return }
+      view.updateMeeting(pageId, uid, function(m) { return Meeting.fromExport(out, m) || m })
+    })
+  }
+
+  Connections {
+    target: view.meetings
+    // The meeting just started here: its block is that meeting.
+    function onMeetingIdChanged() {
+      var id = view.meetings.meetingId
+      var p = view.meetingPending
+      if (!id || !p) return
+      view.meetingPending = null
+      meetingWait.stop()
+      var at = new Date()
+      var owners = {}
+      for (var k in view.meetingOwners) owners[k] = view.meetingOwners[k]
+      owners[id] = { pageId: p.pageId, uid: p.uid, at: at.getTime() }
+      view.meetingOwners = owners
+      view.updateMeeting(p.pageId, p.uid, function(m) { m.id = id; m.title = p.title; m.startedAt = at.toISOString(); return m })
+    }
+    // A meeting ended (here or elsewhere): its transcript, into its block.
+    function onFinished(id) {
+      var uid = view.page ? editor.meetingBlock(id) : ""
+      if (uid) { view.fetchMeeting(view.page.id, uid, id); return }
+      var o = view.meetingOwners[id]
+      if (o) view.fetchMeeting(o.pageId, o.uid, id)
+    }
+  }
+
+  // The meeting button at the top: a new meeting where you are, started;
+  // one voxtype's recording already (started elsewhere), put here.
+  function newMeeting() {
+    var problem = meetingProblem()
+    if (!meetings || !meetings.available) { toast(problem); return }
+    if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to record on it" : "Open a page to record on it"); return }
+    var running = meetings.status !== "idle" ? meetings.meetingId : ""
+    if (running) {
+      if (editor.meetingBlock(running)) { toast("It's recording, on this page"); return }
+      var o = meetingOwners[running]
+      if (o && workspace.index.pages[o.pageId]) { open(o.pageId, false, { block: o.uid }); return }
+      var here = editor.placeBlock(editor.focusUid, { type: "meeting", meeting: { id: running, title: "", startedAt: new Date().toISOString() } })
+      if (here) toast("voxtype's meeting, put here: it's written out when it ends")
+      return
+    }
+    var made = editor.placeBlock(editor.focusUid, { type: "meeting" })
+    if (made && meetings.enabled) Qt.callLater(function() { view.startMeeting(made) })
+  }
+
+  // A meeting voxtype recorded, put in a block: picked from its list.
+  function importMeeting(uid) {
+    if (!meetings) return
+    var item = editor.items[uid]
+    meetings.list(function(list) {
+      if (list.length === 0) { view.toast("voxtype hasn't recorded a meeting yet"); return }
+      meetingPick.uid = uid
+      meetingPick.choices = list
+      if (item) {
+        meetingPick.parent = item
+        meetingPick.x = Math.max(0, item.width - meetingPick.width - 8)
+        meetingPick.y = 70
+      }
+      meetingPick.open()
+    })
+  }
+
+  // The agent: the meeting summarized, under it.
+  function summarizeMeeting(uid) {
+    if (!page || !workspace) return
+    commit()
+    workspace.files.launchAgent(Agent.prompt({
+      request: "Summarize this meeting (the meeting block: who said what). Right after the meeting block, add a short summary of what it was about, the decisions made, and the action items as to-dos (who does what, by when, when it was said). Keep the meeting block as it is.",
+      page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
+      scope: "blocks", blocks: [uid], words: "", line: "",
+      skill: service && service.skillPath ? service.skillPath : ""
+    }))
+    toast("Asked your agent: it's working in a terminal, and the summary shows up here")
+  }
+
+  // A meeting's buttons.
+  function meetingAction(uid, what, arg) {
+    var m = page ? editor.meetingOf(uid) : null
+    if (!m || !meetings) return
+    if (what === "start") startMeeting(uid)
+    else if (what === "stop") meetings.stop(function(ok, problem) { if (!ok) view.toast(problem) })
+    else if (what === "pause") meetings.pause(function(ok, problem) { if (!ok) view.toast(problem) })
+    else if (what === "resume") meetings.resume(function(ok, problem) { if (!ok) view.toast(problem) })
+    else if (what === "fetch") fetchMeeting(page.id, uid, m.id)
+    else if (what === "autofetch") {
+      if (meetingTried[uid]) return
+      var t = {}
+      for (var k in meetingTried) t[k] = true
+      t[uid] = true
+      meetingTried = t
+      fetchMeeting(page.id, uid, m.id)
+    }
+    else if (what === "import") importMeeting(uid)
+    else if (what === "summarize") summarizeMeeting(uid)
+    else if (what === "enable") meetings.enable(function(ok, problem) {
+      view.toast(ok ? "voxtype's meeting mode is on" : "Meeting mode couldn't be turned on: " + problem)
+    })
+  }
+
+  // Its colors (its own, the card's), beside its button.
+  function openMeetingColors(uid, anchor) {
+    var v = editor.items[uid] ? editor.items[uid].meetingView : null
+    if (!v) return
+    tableColorTarget = uid
+    colorAt = anchor.mapToItem(view, anchor.width - 250, anchor.height + 6)
+    var now = v.scopeColors()
+    tableColors.currentText = now.color
+    tableColors.currentBack = now.background
+    tableColors.x = Math.max(8, Math.min(view.width - tableColors.width - 8, colorAt.x))
+    tableColors.y = colorAt.y
+    tableColors.open()
   }
 
   // ---- projects and the archive ------------------------------------------------------------
@@ -1034,7 +1352,7 @@ FocusScope {
     var ix = workspace.index
     var here = page ? page.id : ""
     var ids = String(query || "").trim() ? Workspace.findTitles(ix, query, 9)
-      : Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) })
+      : Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) && !Workspace.inTemplates(ix, id) })
           .sort(function(a, b) { return ix.pages[a].modified < ix.pages[b].modified ? 1 : -1 }).slice(0, 9)
     return ids.filter(function(id) { return id !== here }).slice(0, 8).map(function(id) {
       return { id: id, title: ix.pages[id].title, icon: ix.pages[id].icon,
@@ -1063,6 +1381,7 @@ FocusScope {
 
   function openFind() { quickFind.start() }
   function openTrash() { trashPop.x = 12; trashPop.y = view.height - trashPop.height - 60; trashPop.open() }
+  function openTemplates() { templatesPop.x = 12; templatesPop.y = view.height - templatesPop.height - 150; templatesPop.open() }
   function openArchive() { archivePop.x = 12; archivePop.y = view.height - archivePop.height - 90; archivePop.open() }
   function openRowMenu(id, anchor) {
     rowMenu.pageId = id
@@ -1232,6 +1551,16 @@ FocusScope {
           checked: view.recordingNote
           tip: view.recordingNote ? "Stop recording  Ctrl+Shift+R" : "Record an audio note here  Ctrl+Shift+R"
           onClicked: view.newAudioNote()
+        }
+        IconButton {
+          objectName: "meetingButton"
+          readonly property bool live: view.meetings !== null && view.meetings.status !== "idle"
+          visible: view.page !== null && view.tagShown === "" && view.meetings !== null && view.meetings.available
+          theme: view.theme; icon: view.theme.icons.people; size: 30; iconSize: 17
+          tint: live ? (view.theme.dark ? "#ff6b6b" : "#e5484d") : view.theme.text
+          checked: live
+          tip: live ? "A meeting is recording: go to it" : "Record a meeting (voxtype writes out who said what)"
+          onClicked: view.newMeeting()
         }
         IconButton {
           objectName: "dictateButton"
@@ -1434,6 +1763,37 @@ FocusScope {
           }
         }
 
+        // A template: it says so; a new page from it, or a page again.
+        Rectangle {
+          id: templateNote
+          objectName: "templateNote"
+          readonly property string root: { var r = view.workspace ? view.workspace.revision : 0; return view.page ? view.templateRoot(view.page.id) : "" }
+          visible: root !== ""
+          width: templateRow2.implicitWidth + 24
+          height: visible ? 32 : 0
+          radius: 8
+          color: Qt.alpha(view.theme.accent, 0.1)
+          Row {
+            id: templateRow2
+            anchors.centerIn: parent
+            spacing: 8
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: view.theme.icons.templates; font.family: view.theme.iconFont; font.pixelSize: 14; color: view.theme.accent }
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: "A template: new pages from it start like this"; font.family: view.theme.uiFont; font.pixelSize: 13; color: view.theme.text }
+            Text {
+              objectName: "templateUse"
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: "New page from it"
+              font.family: view.theme.uiFont
+              font.pixelSize: 13
+              font.weight: Font.DemiBold
+              color: view.theme.accent
+              HoverHandler { cursorShape: Qt.PointingHandCursor }
+              TapHandler { onTapped: view.newPageFromTemplate(templateNote.root, "") }
+            }
+          }
+        }
+
         // A project: its status, when it's due, how far along it is.
         ProjectBar {
           id: projectBar
@@ -1574,6 +1934,12 @@ FocusScope {
           onAudioColorsRequested: function(uid, anchor) { view.openAudioColors(uid, anchor) }
           onDictateRequested: view.dictate()
           onRecordRequested: view.newAudioNote()
+          onTemplateRequested: function(uid) { view.openTemplatePick("insert", "", editor.items[uid] || null) }
+          meetings: view.meetings
+          meetingWork: view.meetingWork
+          onMeetingAction: function(uid, what, arg) { view.meetingAction(uid, what, arg) }
+          onMeetingColorsRequested: function(uid, anchor) { view.openMeetingColors(uid, anchor) }
+          onMeetingRequested: function(uid) { view.startMeeting(uid) }
           onTagOpened: function(name) { view.openTag(name) }
           onAgentRequested: function(uid) {
             var i = editor.indexOf(uid)
@@ -1600,6 +1966,19 @@ FocusScope {
           Flow {
             width: parent.width
             spacing: 6
+            // Yours first.
+            Repeater {
+              model: view.page && view.templateRoot(view.page.id) === "" ? view.userTemplates : []
+              delegate: Chip {
+                required property var modelData
+                objectName: "userTemplateChip"
+                theme: view.theme
+                icon: modelData.icon ? "" : view.theme.icons.templates
+                text: (modelData.icon ? modelData.icon + "  " : "") + modelData.title
+                checked: true
+                onClicked: view.applyTemplate("tpl:" + modelData.id)
+              }
+            }
             Repeater {
               model: view.templates
               delegate: Chip {
@@ -1699,16 +2078,40 @@ FocusScope {
       objectName: "recordingBar"
       z: 6
       theme: view.theme
-      recorder: view.recorder
       readonly property bool elsewhere: view.recorder !== null && view.recorder.busy && view.recorder.kind === "audio"
         && !(view.page && editor.indexOf(view.recorder.owner) >= 0)
       visible: view.dictating || elsewhere
       label: view.dictating ? "Listening" : "Recording an audio note"
+      listening: view.recorder !== null && view.recorder.phase === "recording"
+      busyText: view.recorder && view.recorder.phase === "transcribing" ? "Writing it down\u2026" : "Saving\u2026"
+      seconds: view.recorder ? view.recorder.elapsed : 0
+      levels: view.recorder ? view.recorder.recent : []
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.bottom: parent.bottom
       anchors.bottomMargin: 26
       onDone: if (view.recorder) view.recorder.stop()
       onCanceled: if (view.recorder) view.recorder.cancel()
+    }
+    // A meeting started here, recording while another page is open.
+    RecordingBar {
+      id: meetingBar
+      objectName: "meetingBar"
+      z: 6
+      theme: view.theme
+      property real now: Date.now()
+      Timer { interval: 1000; repeat: true; running: meetingBar.visible; onTriggered: meetingBar.now = Date.now() }
+      readonly property var owner: view.meetings && view.meetings.meetingId ? view.meetingOwners[view.meetings.meetingId] || null : null
+      visible: !recordingBar.visible && owner !== null && !(view.page && view.page.id === owner.pageId)
+      label: view.meetings && view.meetings.status === "paused" ? "Meeting paused" : "Recording a meeting"
+      listening: view.meetings !== null && view.meetings.finishing === ""
+      busyText: "Writing it out\u2026"
+      seconds: owner ? (now - owner.at) / 1000 : 0
+      doneLabel: "Stop"
+      cancelable: false
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 26
+      onDone: if (view.meetings) view.meetings.stop(function(ok, problem) { if (!ok) view.toast(problem) })
     }
 
     FindBar {
@@ -1835,7 +2238,7 @@ FocusScope {
   // (An audio note's colors use them too.)
   function colorTable() {
     var item = editor.items[tableColorTarget]
-    return item ? item.tableView || item.audioView || null : null
+    return item ? item.tableView || item.audioView || item.meetingView || null : null
   }
 
   // The colors for a table's cells, beside the button or handle they were
@@ -2199,6 +2602,124 @@ FocusScope {
     }
   }
 
+  // Your templates (the sidebar's foot).
+  TemplatesPop {
+    id: templatesPop
+    objectName: "templatesPop"
+    theme: view.theme
+    workspace: view.workspace
+    parent: view
+    onOpenRequested: function(id) { view.open(id) }
+    onUseRequested: function(id) { view.newPageFromTemplate(id, "") }
+    onNewRequested: view.newTemplate()
+  }
+
+  // A template to pick: to put here, for a new page inside one, or what new pages inside one start from.
+  Pop {
+    id: templatePick
+    objectName: "templatePick"
+    theme: view.theme
+    property string mode: "insert"
+    property string pageId: ""
+    focus: false
+    width: 320
+    readonly property string current: { var r = view.workspace ? view.workspace.revision : 0; return mode === "child" && view.workspace && view.workspace.index.pages[pageId] ? view.workspace.index.pages[pageId].childTemplate || "" : "" }
+    contentItem: Column {
+      spacing: 2
+      Text {
+        textFormat: Text.PlainText
+        leftPadding: 8
+        bottomPadding: 4
+        width: parent.width
+        wrapMode: Text.Wrap
+        text: templatePick.mode === "child" ? "New pages inside it start from" : templatePick.mode === "newIn" ? "A new page inside it, from" : "Put a template here"
+        font.family: view.theme.uiFont
+        font.pixelSize: 12
+        color: view.theme.muted
+      }
+      MenuRow {
+        visible: templatePick.mode === "child"
+        width: parent.width; theme: view.theme; icon: view.theme.icons.page; text: "A blank page"
+        checked: templatePick.current === ""
+        onClicked: { templatePick.close(); view.workspace.setChildTemplate(templatePick.pageId, "") }
+      }
+      Repeater {
+        model: view.userTemplates
+        delegate: MenuRow {
+          required property var modelData
+          objectName: "templateChoice"
+          width: parent.width
+          theme: view.theme
+          icon: modelData.icon ? "" : view.theme.icons.templates
+          text: (modelData.icon ? modelData.icon + "  " : "") + modelData.title
+          checked: templatePick.mode === "child" && templatePick.current === modelData.id
+          onClicked: {
+            templatePick.close()
+            var id = modelData.id
+            if (templatePick.mode === "child") view.workspace.setChildTemplate(templatePick.pageId, id)
+            else if (templatePick.mode === "newIn") view.newPageFromTemplate(id, templatePick.pageId)
+            else view.useTemplateHere(id, "insert")
+          }
+        }
+      }
+      Text {
+        visible: templatePick.mode === "child" && view.userTemplates.length === 0
+        textFormat: Text.PlainText
+        leftPadding: 8
+        width: parent.width
+        wrapMode: Text.Wrap
+        text: "No templates yet: Save as template, in a page's \u22ef menu."
+        font.family: view.theme.uiFont
+        font.pixelSize: 12
+        color: view.theme.muted
+      }
+    }
+  }
+
+  // The meetings voxtype recorded, to put one in a meeting block.
+  Pop {
+    id: meetingPick
+    objectName: "meetingPick"
+    theme: view.theme
+    property string uid: ""
+    property var choices: []
+    focus: false
+    width: 340
+    contentItem: Column {
+      spacing: 2
+      Text {
+        textFormat: Text.PlainText
+        leftPadding: 8
+        bottomPadding: 4
+        text: "Meetings voxtype recorded"
+        font.family: view.theme.uiFont
+        font.pixelSize: 12
+        color: view.theme.muted
+      }
+      Repeater {
+        model: meetingPick.choices
+        delegate: MenuRow {
+          required property var modelData
+          objectName: "meetingChoice"
+          width: parent.width
+          theme: view.theme
+          icon: view.theme.icons.people
+          text: modelData.title || "Meeting"
+          hint: [modelData.date, modelData.duration].filter(function(x) { return x }).join("  \u00b7  ")
+          onClicked: {
+            meetingPick.close()
+            var id = modelData.id
+            var uid = meetingPick.uid
+            var title = modelData.title
+            if (!view.page) return
+            var pageId = view.page.id
+            view.updateMeeting(pageId, uid, function(m) { m.id = id; m.title = title; return m }, function() { view.fetchMeeting(pageId, uid, id) })
+          }
+        }
+      }
+    }
+  }
+
   // A page's menu in the sidebar.
   Pop {
     id: rowMenu
@@ -2209,6 +2730,11 @@ FocusScope {
     contentItem: Column {
       spacing: 2
       MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.newPage; text: "A page inside it"; onClicked: { rowMenu.close(); view.newPage(rowMenu.pageId) } }
+      MenuRow {
+        objectName: "rowFromTemplate"
+        width: parent.width; theme: view.theme; icon: view.theme.icons.templates; text: "A page inside it, from a template\u2026"
+        onClicked: { rowMenu.close(); view.openTemplatePick("newIn", rowMenu.pageId, rowMenu.parent) }
+      }
       MenuRow {
         width: parent.width; theme: view.theme
         icon: view.workspace && view.workspace.isFavorite(rowMenu.pageId) ? view.theme.icons.star : view.theme.icons.starOutline

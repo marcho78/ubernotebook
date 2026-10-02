@@ -17,6 +17,8 @@ Popup {
   readonly property var recorder: service && service.recorder ? service.recorder : null
   readonly property bool testing: recorder !== null && recorder.busy && recorder.kind === "test"
   property string heard: ""
+  // voxtype's meeting mode (Meetings.qml).
+  readonly property var meetings: service && service.meetings ? service.meetings : null
 
   anchors.centerIn: Overlay.overlay
   width: Math.min(620, (parent ? parent.width : 620) - 40)
@@ -396,6 +398,20 @@ Popup {
             ? "Needs voxtype, Omarchy's dictation (omarchy voxtype install). Audio notes still record and play without it."
             : "What you say in an audio note, written out under it by voxtype as soon as it's recorded. Ctrl+Shift+D dictates into a page."
           Toggle { theme: panel.theme; checked: panel.s.audioTranscribe !== false; onToggled: function(on) { panel.set("audioTranscribe", on) } }
+        }
+        Line {
+          label: "Meetings"
+          note: !panel.meetings || (panel.meetings.checked && !panel.meetings.available) ? "Need voxtype, Omarchy's dictation (omarchy voxtype install)."
+            : panel.meetings.enabled ? "On: /meeting, or the people at the top of a page, records one. voxtype writes out who said what (you, and the other side of a call)."
+            : "voxtype's meeting mode is off. Turning it on sets meeting.enabled in its settings and restarts it."
+          Chip {
+            objectName: "meetingsEnable"
+            visible: panel.meetings !== null && panel.meetings.available && !panel.meetings.enabled
+            theme: panel.theme
+            icon: panel.theme.icons.people
+            text: panel.meetings && panel.meetings.working === "enable" ? "Turning it on\u2026" : "Turn on"
+            onClicked: if (!panel.meetings.working) panel.meetings.enable(function() {})
+          }
         }
 
         Heading { text: "Sound and motion" }

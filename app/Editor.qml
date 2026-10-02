@@ -8,6 +8,7 @@ import "../Mindmap.js" as Mindmap
 import "../Table.js" as Table
 import "../Sketch.js" as Sketch
 import "../Audio.js" as Audio
+import "../Meeting.js" as Meeting
 import "../Tags.js" as Tags
 import "../Dates.js" as Dates
 import "../Emoji.js" as Emoji
@@ -133,6 +134,8 @@ FocusScope {
   signal dictateRequested()
   // A new audio note where you are, recording (Ctrl+Shift+R).
   signal recordRequested()
+  // One of your templates, put in after the block you're in ("/template").
+  signal templateRequested(string uid)
   // A tag clicked: every block with it.
   signal tagOpened(string name)
   // "/agent" typed on a block: ask your agent (Pages).
@@ -195,7 +198,8 @@ FocusScope {
       target: b.target || "", icon: b.icon || "", outline: b.outline || "", folds: b.folds || "",
       table: b.type === "table" && b.table ? JSON.stringify(b.table) : "",
       sketch: b.type === "sketch" && b.sketch ? JSON.stringify(b.sketch) : "",
-      audio: b.type === "audio" && b.audio ? JSON.stringify(b.audio) : ""
+      audio: b.type === "audio" && b.audio ? JSON.stringify(b.audio) : "",
+      meeting: b.type === "meeting" && b.meeting ? JSON.stringify(b.meeting) : ""
     }
   }
 
@@ -206,7 +210,8 @@ FocusScope {
       color: r.color, toggle: r.toggle, collapsed: r.collapsed, lang: r.lang, target: r.target, icon: r.icon,
       outline: r.outline, folds: r.folds, table: r.type === "table" && r.table ? JSON.parse(r.table) : undefined,
       sketch: r.type === "sketch" && r.sketch ? JSON.parse(r.sketch) : undefined,
-      audio: r.type === "audio" && r.audio ? JSON.parse(r.audio) : undefined }
+      audio: r.type === "audio" && r.audio ? JSON.parse(r.audio) : undefined,
+      meeting: r.type === "meeting" && r.meeting ? JSON.parse(r.meeting) : undefined }
   }
 
   readonly property var cleanOptions: doc ? ({ nest: true }) : null
@@ -852,6 +857,49 @@ FocusScope {
     return true
   }
 
+  // ---- Pages: meetings -------------------------------------------------------------------
+
+  // voxtype's meeting mode (Meetings.qml).
+  property var meetings: null
+  // The meetings being written out or brought in: { uid: true }.
+  property var meetingWork: ({})
+  // A meeting's button: "start", "stop", "pause", "resume", "enable", "import",
+  // "fetch", "summarize"; "name" with { speaker, name }.
+  signal meetingAction(string uid, string what, var arg)
+  signal meetingColorsRequested(string uid, var anchor)
+  // A new meeting, from "/meeting": it starts.
+  signal meetingRequested(string uid)
+
+  // A meeting changed (started, written out, a speaker named, its colors), as one step.
+  function setMeeting(uid, meeting) {
+    var i = indexOf(uid)
+    if (i < 0 || blocksModel.get(i).type !== "meeting") return false
+    var clean = Meeting.clean(meeting)
+    if (!clean) return false
+    var json = JSON.stringify(clean)
+    if (json === blocksModel.get(i).meeting) return true
+    beginOp()
+    blocksModel.setProperty(i, "meeting", json)
+    endOp()
+    return true
+  }
+
+  function meetingOf(uid) {
+    var i = indexOf(uid)
+    if (i < 0 || blocksModel.get(i).type !== "meeting") return null
+    try { return Meeting.clean(JSON.parse(blocksModel.get(i).meeting)) } catch (e) { return Meeting.make() }
+  }
+
+  // The meeting block on the page that's voxtype's meeting `id` ("" if none).
+  function meetingBlock(id) {
+    for (var i = 0; i < blocksModel.count; i++) {
+      var r = blocksModel.get(i)
+      if (r.type !== "meeting" || !r.meeting) continue
+      try { if (JSON.parse(r.meeting).id === id) return r.uid } catch (e) {}
+    }
+    return ""
+  }
+
   // An audio note's data as the page has it now (or null).
   function audioOf(uid) {
     var i = indexOf(uid)
@@ -986,7 +1034,7 @@ FocusScope {
       }
     })
     // (Pages and drawings aren't ideas: they'd be lost.)
-    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" || b.type === "audio" })) return ""
+    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" || b.type === "audio" || b.type === "meeting" })) return ""
     function words(b) { return Blocks.isText(b.type) ? Html.plainText(htmls[b.uid] || "").replace(/\s+/g, " ").trim() : "" }
     // A table's rows are ideas: their cells' words.
     function tableIdeas(b, depth) {
@@ -1680,6 +1728,7 @@ FocusScope {
       else if (command.action === "columns") insertColumns(s.uid, command.count || 2)
       else if (command.action === "agent") agentRequested(s.uid)
       else if (command.action === "dictate") dictateRequested()
+      else if (command.action === "template") templateRequested(s.uid)
       return
     }
     var props = command.props || {}
@@ -1699,6 +1748,8 @@ FocusScope {
     endOp()
     // A new mind map: you write its topic first.
     if (command.type === "mindmap") { Qt.callLater(function() { root.editMindMap(made) }); return }
+    // A new meeting: it starts.
+    if (command.type === "meeting") { Qt.callLater(function() { root.meetingRequested(made) }); return }
     // A new audio note: it records.
     if (command.type === "audio") { Qt.callLater(function() { root.audioRequested(made) }); return }
     // A new sketch: you draw on it.
@@ -2443,7 +2494,7 @@ FocusScope {
     // The end of a column: the next column isn't something to delete.
     if (Workspace.isStructure(next.type)) return
     // A table, a mind map or a sketch below: pick it first, so it's never lost by accident.
-    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch" || next.type === "audio")) {
+    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch" || next.type === "audio" || next.type === "meeting")) {
       selectBlocks(next.uid, next.uid)
       return
     }
@@ -3254,6 +3305,7 @@ FocusScope {
       else if (b.type === "divider") out += "<hr />"
       else if (b.type === "time") out += "<p>" + (b.label ? Html.escapeText(b.label) + " " : "") + inner + "</p>"
       else if (b.type === "table") out += tableHtml(b.table)
+      else if (b.type === "meeting") out += b.meeting && b.meeting.segments && b.meeting.segments.length ? "<p>" + Html.escapeText(Meeting.text(b.meeting)).replace(/\n/g, "<br />") + "</p>" : ""
       else if (b.type === "audio") out += b.audio && b.audio.transcript ? "<p>" + Html.escapeText(b.audio.transcript).replace(/\n/g, "<br />") + "</p>" : ""
       else if (b.type === "image" || b.type === "calendar" || b.type === "columns" || b.type === "column" || b.type === "sketch") out += ""
       else out += "<p>" + inner + "</p>"

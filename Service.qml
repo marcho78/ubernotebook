@@ -132,6 +132,14 @@ Item {
 
   property alias recorder: recorderItem
 
+  // Meetings, recorded by voxtype's meeting mode (Meetings.qml).
+  Meetings {
+    id: meetingsItem
+    files: storeItem
+  }
+
+  property alias meetings: meetingsItem
+
   // The Markdown copy of every page, while Settings has it on (Mirror.qml).
   readonly property string mirrorPath: {
     var f = settings.mirrorFolder || ""
@@ -489,6 +497,8 @@ Item {
     function tagged(tag: string): string { return apiItem.tagged(tag) }
     function tagColor(tag: string, color: string): string { return apiItem.tagColor(tag, color) }
     function projects(): string { return apiItem.projects() }
+    function templates(): string { return apiItem.templates() }
+    function fromTemplate(template: string, title: string, parent: string): string { return apiItem.fromTemplate(template, title, parent) }
     function project(id: string, status: string, due: string): string { return apiItem.project(id, status, due) }
     function archive(id: string): string { return apiItem.archive(id, true) }
     function unarchive(id: string): string { return apiItem.archive(id, false) }

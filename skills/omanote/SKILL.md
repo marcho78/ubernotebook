@@ -36,6 +36,8 @@ except `read`, which prints the page as Markdown.
 | `omarchy-shell omanote tagColor "#tag" <color>` | the tag's color: `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `red`, a hex like `#ff8800`, or `""` for none |
 | `omarchy-shell omanote projects` | every project (not the archive's): `[{id, title, status, due, progress, overdue, path}]` |
 | `omarchy-shell omanote project <id> <status> <due>` | makes the page a project or changes it: status `planning`, `active`, `paused`, `done` (`""` keeps it, `none` makes it a page again); due `2026-10-12`, `""` for none, `-` keeps it |
+| `omarchy-shell omanote templates` | the user's templates: `[{id, title, icon, pages}]` |
+| `omarchy-shell omanote fromTemplate <template> <title> <parent>` | a new page from one of the user's templates (its name or id): `title` (`""` for the template's), in `parent` (`""` the Inbox, `top` the top of Pages, or a page id); `{{date}}` and the like in it are filled in. Use it when the user asks for a page "from my <name> template" |
 | `omarchy-shell omanote archive <id>` | puts the page (and the pages in it) away in the archive; `unarchive <id>` brings it back |
 | `omarchy-shell omanote trash <id>` | the page (and the pages in it) to the trash, where it can be put back |
 | `omarchy-shell omanote open <id>` | shows the page in Omanote's window |
@@ -133,6 +135,18 @@ to the file with what was said quoted under it. That text is the note's
 transcript: use it to summarize a recording, pull out to-dos or answer what
 was said. You can't record or play one; don't `replace` an audio note's block
 unless the user asks for it to go.
+
+## Meetings
+
+A page can have meetings, recorded by voxtype's meeting mode. `blocks` lists
+one as type `meeting`, with `title`, `duration` (seconds) and `text`: who
+said what, a turn a line (`Sam (0:12): The notes are done.`; "You" is the
+user, "Remote" the other side of a call unless they named them), or
+`(a meeting recorded with voxtype, not written out yet)` while it's going.
+When the user asks you to summarize a meeting (Omanote's Summarize button
+asks you this way), read it and put right after its block: a short summary,
+the decisions, and the action items as to-dos (`- [ ] Sam: screenshots by
+Thursday`). Don't change or `replace` the meeting block itself.
 
 ## Projects
 

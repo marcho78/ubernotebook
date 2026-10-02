@@ -33,6 +33,8 @@ node tests/mirror.test.cjs
 node tests/tags.test.cjs
 node tests/drag.test.cjs
 node tests/audio.test.cjs
+node tests/meeting.test.cjs
+node tests/usertemplates.test.cjs
 lua tests/hypr.test.lua
 
 runner=/usr/lib/qt6/bin/qmltestrunner

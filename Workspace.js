@@ -29,6 +29,7 @@
 .import "Table.js" as Table
 .import "Tags.js" as Tags
 .import "Audio.js" as Audio
+.import "Meeting.js" as Meeting
 
 var VERSION = 1
 var MAX_DEPTH = 12
@@ -60,7 +61,7 @@ function isUuid(value) {
 // ---- blocks ---------------------------------------------------------------------------
 
 // The kinds of block a page can have.
-var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch", "audio"]
+var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch", "audio", "meeting"]
 
 function isKind(type) {
   return KINDS.indexOf(type) >= 0
@@ -447,6 +448,8 @@ function pageText(page) {
     else if (b.type === "table") lines.push(Table.text(b.table))
     // What was said in an audio note.
     else if (b.type === "audio" && b.audio && b.audio.transcript) lines.push(b.audio.transcript)
+    // And in a meeting.
+    else if (b.type === "meeting" && b.meeting) lines.push((b.meeting.title || "") + "\n" + Meeting.text(b.meeting))
   })
   return lines.join("\n").trim()
 }
@@ -521,6 +524,10 @@ function entry(raw) {
     checks: e.checks && typeof e.checks === "object" ? cleanChecks(e.checks) : null,
     // Put away in the archive (with the pages in it).
     archived: e.archived === true,
+    // A template (with the pages in it), and the template new pages inside
+    // this one start from.
+    template: e.template === true,
+    childTemplate: isUuid(e.childTemplate) ? e.childTemplate : "",
     reminders: Array.isArray(e.reminders) ? e.reminders.filter(function(r) {
       return r && isUuid(r.block) && Dates.fromIso(r.at) !== null && typeof r.text === "string"
     }).map(function(r) { return { block: r.block, at: r.at, text: r.text.slice(0, 200) } }).slice(0, 200) : null,
@@ -656,8 +663,8 @@ function rows(index, open) {
     ids.forEach(function(id) {
       var e = index.pages[id]
       // (The trash's and the archive's aren't in the tree.)
-      if (!e || e.trashed || e.archived) return
-      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived })
+      if (!e || e.trashed || e.archived || e.template) return
+      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived && !index.pages[c].template })
       out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
       if (open && open[id]) walk(kids, depth + 1)
     })
@@ -672,7 +679,7 @@ function rows(index, open) {
 // rest. So a page is in one of them, once. A project's row has isProject,
 // status, due, progress and overdue.
 function sidebarRows(index, open, now) {
-  function shown(id) { var e = index.pages[id]; return !!e && !e.trashed && !e.archived }
+  function shown(id) { var e = index.pages[id]; return !!e && !e.trashed && !e.archived && !e.template }
   function kidsOf(e) { return e.children.filter(function(c) { return shown(c) && !index.pages[c].project }) }
   function walk(ids, depth, out) {
     ids.forEach(function(id) {
@@ -784,7 +791,7 @@ function backlinks(index, id) {
   var out = []
   for (var pid in index.pages) {
     var e = index.pages[pid]
-    if (pid !== id && e.links && e.links.indexOf(id) >= 0 && !inTrash(index, pid)) out.push(pid)
+    if (pid !== id && e.links && e.links.indexOf(id) >= 0 && !inTrash(index, pid) && !inTemplates(index, pid)) out.push(pid)
   }
   return out.sort(function(a, b) { return (index.pages[a].title || "").localeCompare(index.pages[b].title || "") })
 }
@@ -799,7 +806,8 @@ function pendingReminders(index) {
   var out = []
   for (var pid in index.pages) {
     var e = index.pages[pid]
-    if (!e.reminders || inTrash(index, pid)) continue
+    // (A template's dates aren't reminders: the pages made from it have them.)
+    if (!e.reminders || inTrash(index, pid) || inTemplates(index, pid)) continue
     e.reminders.forEach(function(r) {
       var key = reminderKey(pid, r)
       if (index.fired && index.fired[key]) return
@@ -822,7 +830,7 @@ function findTitles(index, query, limit) {
   if (list.length === 0) return []
   var out = []
   for (var id in index.pages) {
-    if (inTrash(index, id)) continue
+    if (inTrash(index, id) || inTemplates(index, id)) continue
     var t = (index.pages[id].title || "Untitled").toLowerCase()
     var score = 0
     for (var i = 0; i < list.length; i++) {
@@ -917,6 +925,8 @@ function indexJson(index) {
     if (e.project) out.project = e.project
     if (e.checks) out.checks = e.checks
     if (e.archived) out.archived = true
+    if (e.template) out.template = true
+    if (e.childTemplate) out.childTemplate = e.childTemplate
     pages[id] = out
   }
   return stringify({ version: VERSION, top: index.top, pages: pages, fired: index.fired || {}, favorites: index.favorites || [], tagColors: index.tagColors || {} })
@@ -924,7 +934,7 @@ function indexJson(index) {
 
 // Favorites that are there, and not in the trash or the archive.
 function favorites(index) {
-  return (index.favorites || []).filter(function(id) { return index.pages[id] && !inTrash(index, id) && !inArchive(index, id) })
+  return (index.favorites || []).filter(function(id) { return index.pages[id] && !inTrash(index, id) && !inArchive(index, id) && !inTemplates(index, id) })
 }
 
 // A page (with the pages in it) copied: every block and page a new id, the
@@ -977,7 +987,7 @@ function pageNamed(index, name) {
   var best = ""
   for (var id in index.pages) {
     var e = index.pages[id]
-    if (inTrash(index, id) || String(e.title || "").trim().toLowerCase() !== n) continue
+    if (inTrash(index, id) || inTemplates(index, id) || String(e.title || "").trim().toLowerCase() !== n) continue
     if (!best || String(e.modified || "") > String(index.pages[best].modified || "")) best = id
   }
   return best
@@ -1050,6 +1060,12 @@ function blockList(page, md, titleOf) {
       var au = b.audio || Audio.make()
       out.text = au.transcript || (au.src ? "(an audio note, " + Audio.clock(au.duration) + ", not written out)" : "(an audio note, not recorded yet)")
       if (au.src) { out.src = au.src; out.duration = au.duration }
+    }
+    if (b.type === "meeting") {
+      var me = b.meeting || Meeting.make()
+      out.text = me.segments.length ? Meeting.text(me) : me.id ? "(a meeting recorded with voxtype, not written out yet)" : "(a meeting, not recorded yet)"
+      if (me.title) out.title = me.title
+      if (me.duration) out.duration = me.duration
     }
     if (b.type === "link") out.target = b.target
     if ((b.type === "page" || b.type === "link") && typeof titleOf === "function") out.title = titleOf(b.type === "page" ? b.uid : b.target)
@@ -1204,7 +1220,7 @@ function tagList(index) {
   var by = {}
   for (var id in index.pages) {
     var e = index.pages[id]
-    if (!e.tags || !e.tags.length || inTrash(index, id)) continue
+    if (!e.tags || !e.tags.length || inTrash(index, id) || inTemplates(index, id)) continue
     e.tags.forEach(function(t) {
       if (!by[t.name]) by[t.name] = { name: t.name, label: t.label, pages: 0, blocks: 0 }
       by[t.name].pages++
@@ -1264,7 +1280,7 @@ function sortTags(list, colors, by) {
 function pagesTagged(index, name) {
   return Object.keys(index.pages).filter(function(id) {
     var e = index.pages[id]
-    return e.tags && e.tags.some(function(t) { return t.name === name }) && !inTrash(index, id)
+    return e.tags && e.tags.some(function(t) { return t.name === name }) && !inTrash(index, id) && !inTemplates(index, id)
   }).sort(function(a, b) { return index.pages[a].modified < index.pages[b].modified ? 1 : -1 })
 }
 
@@ -1375,7 +1391,7 @@ function projectList(index, now) {
   var out = []
   for (var id in index.pages) {
     var e = index.pages[id]
-    if (!e.project || inTrash(index, id) || inArchive(index, id)) continue
+    if (!e.project || inTrash(index, id) || inArchive(index, id) || inTemplates(index, id)) continue
     var info = dueInfo(e.project.due, now)
     out.push({ id: id, title: e.title, icon: e.icon, status: e.project.status, due: e.project.due,
       progress: projectProgress(index, id), overdue: !!(info && info.overdue && e.project.status !== "done") })
@@ -1410,5 +1426,87 @@ function archived(index) {
     var e = index.pages[id]
     return e.archived && !inTrash(index, id) && !(e.parent && inArchive(index, e.parent))
   }).sort(function(a, b) { return index.pages[a].modified < index.pages[b].modified ? 1 : -1 })
+}
+
+// ---- templates -------------------------------------------------------------------------------
+
+// A template is a page (with the pages in it) kept apart: out of the tree,
+// search, tags, backlinks, reminders and the projects, listed in Templates.
+// Opened, it's written in like any page; used, it's copied: into a new page,
+// or into the page you're on.
+function inTemplates(index, id) {
+  var seen = {}
+  var p = id
+  while (p && index.pages[p] && !seen[p]) {
+    if (index.pages[p].template) return true
+    seen[p] = true
+    p = index.pages[p].parent
+  }
+  return false
+}
+
+// The templates (not the trash's): [{ id, title, icon }], by name.
+function templates(index) {
+  return Object.keys(index.pages).filter(function(id) {
+    var e = index.pages[id]
+    return e.template && !inTrash(index, id) && !(e.parent && inTemplates(index, e.parent))
+  }).map(function(id) {
+    return { id: id, title: index.pages[id].title || "Untitled", icon: index.pages[id].icon || "" }
+  }).sort(function(a, b) { return a.title.toLowerCase().localeCompare(b.title.toLowerCase()) })
+}
+
+// The template called (or with the id) `name`, or "".
+function templateNamed(index, name) {
+  var n = String(name || "").trim().toLowerCase()
+  if (!n) return ""
+  var list = templates(index)
+  for (var i = 0; i < list.length; i++) if (list[i].id === n || list[i].title.toLowerCase() === n) return list[i].id
+  return ""
+}
+
+// A template used: its pages (read; the top one `topId`) copied, the top
+// one's blocks for the page `into` (a new one, or the one you're on), the
+// pages inside it as new pages inside that one. Every block and page gets a
+// new id, page blocks pointing to the copies; `fill(text, html)` fills in
+// what's written in it ({{date}}...); a meeting starts over. Returns
+// { top: { title, icon, cover, format, project, blocks }, pages: [copies] }.
+function fromTemplate(pages, topId, into, fill, date, random) {
+  var ids = {}
+  pages.forEach(function(p) { ids[p.id] = p.id === topId ? into : uuid4(random) })
+  var f = typeof fill === "function" ? fill : function(t) { return t }
+  var now = (date || new Date()).toISOString()
+  function copyBlocks(p) {
+    return flatten(p).map(function(b) {
+      var c = JSON.parse(JSON.stringify(b))
+      c.uid = b.type === "page" && ids[b.uid] ? ids[b.uid] : uuid4(random)
+      if (typeof c.html === "string" && c.html) c.html = f(c.html, true)
+      if (c.type === "table" && c.table && Array.isArray(c.table.rows)) c.table.rows = c.table.rows.map(function(r) { return r.map(function(cell) { return f(String(cell || ""), true) }) })
+      if (c.type === "mindmap" && c.outline) c.outline = f(c.outline, false)
+      // A meeting in a template is one to record, each time.
+      if (c.type === "meeting" && c.meeting) c.meeting = { color: c.meeting.color || "", background: c.meeting.background || "" }
+      return c
+    })
+  }
+  var top = null
+  var out = []
+  pages.forEach(function(p) {
+    if (p.id === topId) {
+      top = { title: f(p.title || "", false), icon: p.icon || "", cover: p.cover || "", format: p.format, project: p.project, blocks: copyBlocks(p) }
+      return
+    }
+    var copy = newPage({ id: ids[p.id], parent: ids[p.parent] || into, title: f(p.title || "", false), icon: p.icon, cover: p.cover,
+      format: p.format, project: p.project, blocks: copyBlocks(p) }, date, random)
+    copy.created = now
+    copy.modified = now
+    out.push(copy)
+  })
+  // Parents before the pages inside them.
+  var order = withDescendants({ pages: (function() {
+    var m = {}
+    pages.forEach(function(p) { m[p.id] = { children: childPages(p) } })
+    return m
+  })() }, topId).map(function(id) { return ids[id] })
+  out.sort(function(a, b) { return order.indexOf(a.id) - order.indexOf(b.id) })
+  return { top: top, pages: out }
 }
 

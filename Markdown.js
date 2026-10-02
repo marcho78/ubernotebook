@@ -18,6 +18,7 @@
 .import "Table.js" as Table
 .import "Sketch.js" as Sketch
 .import "Audio.js" as Audio
+.import "Meeting.js" as Meeting
 
 // Characters that would otherwise be read as Markdown.
 function escapeText(text) {
@@ -269,6 +270,7 @@ function fromDocPage(page, lookup, options) {
       var head = au.src ? "[\u{1f399}\u{fe0f} Audio note, " + Audio.clock(au.duration) + "](" + (opts.assetPrefix || "") + au.src + ")" : "*(An audio note, not recorded)*"
       line = au.transcript ? head + "\n\n" + quoted(au.transcript) : head
     }
+    else if (b.type === "meeting") line = Meeting.toMarkdown(b.meeting)
     else if (b.type === "calendar") line = calendarTable(b)
     else line = text
     if (!kids) return line

@@ -433,7 +433,7 @@ Item {
   // format, blocks }. Returns it.
   function createPage(options) {
     var o = options || {}
-    var page = Workspace.newPage({ parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format, project: o.project, blocks: o.blocks || [{ type: "p", html: "", indent: 0 }] })
+    var page = Workspace.newPage({ id: o.id, parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format, project: o.project, blocks: o.blocks || [{ type: "p", html: "", indent: 0 }] })
     if (!page) return null
     index.pages[page.id] = { title: page.title, icon: page.icon, parent: "", children: [], trashed: false, created: page.created, modified: page.modified }
     Workspace.attach(index, page.id, o.parent && index.pages[o.parent] ? o.parent : "", typeof o.at === "number" ? o.at : -1)
@@ -528,6 +528,117 @@ Item {
     one()
   }
 
+  // ---- templates ---------------------------------------------------------------------------------
+
+  // A page (and the pages in it) a template, or a page again.
+  function setTemplate(id, on) {
+    var e = index.pages[id]
+    if (!e || e.template === !!on) return
+    e.template = !!on
+    e.modified = new Date().toISOString()
+    touched()
+  }
+
+  // The template new pages inside a page start from ("" for none).
+  function setChildTemplate(id, template) {
+    var e = index.pages[id]
+    if (!e) return
+    e.childTemplate = Workspace.isUuid(template) ? template : ""
+    touched()
+  }
+
+  // A template made of a page (a copy of it and the pages in it, its name
+  // the page's): done(the template's id, or "").
+  function saveAsTemplate(id, done) {
+    var e = index.pages[id]
+    if (!e) { done(""); return }
+    var ids = Workspace.withDescendants(index, id).filter(function(pid) { return pid === id || !Workspace.inTrash(ws.index, pid) })
+    readPages(ids, function(pages) {
+      if (!pages.length) { done(""); return }
+      var copies = Workspace.duplicate(pages, id, new Date())
+      var top = copies[0]
+      top.title = e.title || ""
+      top.parent = ""
+      // (A template isn't locked: the pages made from it would be.)
+      if (top.format) delete top.format.locked
+      copies.forEach(function(c) {
+        ws.index.pages[c.id] = { title: c.title, icon: c.icon, parent: "", children: [], trashed: false, created: c.created, modified: c.modified, links: null, reminders: null }
+      })
+      copies.forEach(function(c) {
+        var parent = c.id === top.id ? "" : c.parent
+        Workspace.attach(ws.index, c.id, parent, -1)
+        c.parent = parent
+        ws.savePage(c)
+      })
+      ws.index.pages[top.id].template = true
+      ws.touched()
+      done(top.id)
+    })
+  }
+
+  // A new, empty template.
+  function newTemplate() {
+    var p = createPage({ parent: "", title: "" })
+    if (p) setTemplate(p.id, true)
+    return p
+  }
+
+  // A template used: its pages read and copied for the page `into` (its
+  // blocks, given to place(top), which puts them on it or makes it), then
+  // the pages in it made inside that page. `fill(text, html)` fills it in.
+  // done(top), or done(null) if it's gone.
+  function useTemplate(template, into, fill, place, done) {
+    if (!index.pages[template] || !Workspace.inTemplates(index, template)) { if (done) done(null); return }
+    var ids = Workspace.withDescendants(index, template).filter(function(pid) { return pid === template || !Workspace.inTrash(ws.index, pid) })
+    readPages(ids, function(pages) {
+      if (!pages.length) { if (done) done(null); return }
+      if (done) done(ws.placeTemplate(pages, template, into, fill, place))
+    })
+  }
+
+  // A template's pages (read) copied for `into`: place(top), then the pages
+  // in it made. Returns the top one's copy.
+  function placeTemplate(pages, template, into, fill, place) {
+    var made = Workspace.fromTemplate(pages, template, into, fill, new Date())
+    if (made.top.format) delete made.top.format.locked
+    // (Page blocks point to their pages by their own ids.)
+    made.top.blocks.forEach(function(b) { if (b.type === "page") b.id = b.uid })
+    place(made.top)
+    made.pages.forEach(function(c) {
+      ws.index.pages[c.id] = { title: c.title, icon: c.icon, parent: "", children: [], trashed: false, created: c.created, modified: c.modified, links: null, reminders: null }
+      Workspace.attach(ws.index, c.id, c.parent, -1)
+      ws.savePage(c)
+    })
+    ws.touched()
+    return made.top
+  }
+
+  // A new page from a template at once (for commands): its id, or "".
+  function pageFromTemplateNow(template, parent, title, fill) {
+    if (!index.pages[template] || !Workspace.inTemplates(index, template)) return ""
+    var pages = Workspace.withDescendants(index, template).filter(function(pid) { return pid === template || !Workspace.inTrash(ws.index, pid) })
+      .map(function(pid) { var p = ws.readPageNow(pid); if (p) p.id = pid; return p }).filter(function(p) { return p !== null })
+    if (!pages.length) return ""
+    var id = Workspace.uuid4()
+    placeTemplate(pages, template, id, fill, function(top) {
+      ws.createPage({ id: id, parent: parent, title: title || top.title, icon: top.icon, cover: top.cover, format: top.format, project: top.project,
+        blocks: top.blocks.length ? top.blocks : undefined })
+    })
+    return index.pages[id] ? id : ""
+  }
+
+  // A new page from a template, inside `parent` ("" at the top), `title`
+  // (or the template's, filled in): done(its id, or ""). `openId`: the page
+  // open in the view, which puts the new page's block on itself.
+  function pageFromTemplate(template, parent, title, fill, done, openId) {
+    var id = Workspace.uuid4()
+    useTemplate(template, id, fill, function(top) {
+      ws.createPage({ id: id, parent: parent, title: title || top.title, icon: top.icon, cover: top.cover, format: top.format, project: top.project,
+        blocks: top.blocks.length ? top.blocks : undefined })
+      if (parent && parent !== openId) ws.editPage(parent, function(p) { return Workspace.appendPageBlock(p, id) })
+    }, function(top) { done(top ? id : "") })
+  }
+
   // In Favorites, or not.
   function toggleFavorite(id) {
     if (!index.pages[id]) return
@@ -583,7 +694,7 @@ Item {
     if (words.length === 0 || !folder) { done([]); return }
     var longest = words.slice().sort(function(a, b) { return b.length - a.length })[0]
     files.exec(["/usr/bin/grep", "-rliF", "--include=*.json", "-e", longest, "--", folder], function(ok, output) {
-      var ids = String(output || "").split("\n").map(function(p) { return p.slice(p.lastIndexOf("/") + 1).replace(/\.json$/, "") }).filter(function(id) { return Workspace.isUuid(id) && ws.index.pages[id] && !Workspace.inTrash(ws.index, id) })
+      var ids = String(output || "").split("\n").map(function(p) { return p.slice(p.lastIndexOf("/") + 1).replace(/\.json$/, "") }).filter(function(id) { return Workspace.isUuid(id) && ws.index.pages[id] && !Workspace.inTrash(ws.index, id) && !Workspace.inTemplates(ws.index, id) })
       // And pages whose titles match, whether or not grep found them.
       Workspace.findTitles(ws.index, query, 40).forEach(function(id) { if (ids.indexOf(id) < 0) ids.push(id) })
       ws.readPages(ids.slice(0, 300), function(pages) {

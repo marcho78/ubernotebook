@@ -105,6 +105,19 @@ The first version.
   at the top of a page (Ctrl+Shift+R) records one where you are; Settings →
   Audio picks the microphone, makes the voice louder or not, and tests the
   microphone;
+  your own templates: Save as template (a copy of a page and the pages in
+  it) or New template, kept apart in Templates at the sidebar's foot and
+  changed like any page; used on a blank page (yours first), with
+  `/template` where you are, as a new page, or for every new page inside a
+  page; `{{date}}`, `{{weekday}}`, `{{time}}`, `{{month}}`, `{{year}}` and
+  `{{week}}` filled in; `templates` and `fromTemplate` for agents;
+  meetings (`/meeting`, or the people at the top of a page): voxtype's
+  meeting mode records your microphone and the other side of a call, with
+  Pause and Stop (and a bar on other pages); when it ends, who said what is
+  in the meeting, turn by turn, each speaker in a color and named with a
+  click; Summarize asks your agent for the summary, decisions and to-dos;
+  a meeting voxtype recorded on its own can be brought in; meeting mode
+  turned on from the meeting or Settings → Audio;
   dictation (Ctrl+Shift+D, the microphone at the top of a page, `/dictate`,
   and the microphone on the quick note, clicked or held while you speak):
   voxtype writes what you said where your cursor is;
@@ -133,7 +146,8 @@ The first version.
   the app doing every write; `blocks`, `replace` and `insertAfter` change a
   page block by block; `tags`, `tagged` and `tagColor` list tags, the blocks
   with one, and color them; `projects`, `project`, `archive` and `unarchive`
-  for projects and the archive; `mirror` brings the Markdown copy up to date. A
+  for projects and the archive; `templates` and `fromTemplate` for the
+  user's templates; `mirror` brings the Markdown copy up to date. A
   version of a page is kept in its history before a command changes it. A skill (`skills/omanote/SKILL.md`), linked into the
   skill folders of the agents Omarchy supports while Omanote runs, teaches them
   how to use the commands.

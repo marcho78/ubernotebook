@@ -129,7 +129,8 @@ Item {
   // read, read again. done({ id: page }).
   function readPages(done) {
     var ix = workspace.index
-    var ids = Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) })
+    // (Not the templates: they're no one's notes.)
+    var ids = Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) && !Workspace.inTemplates(ix, id) })
     var need = ids.filter(function(id) { var c = pageCache[id]; return !c || c.modified !== ix.pages[id].modified || workspace.written[id] })
     workspace.readPages(need, function(list) {
       var cache = {}

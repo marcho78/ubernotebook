@@ -448,6 +448,32 @@ function pageBlocks(id, d, f, today) {
   return [blk("p", "")]
 }
 
+// ---- your own templates (Pages) -------------------------------------------------------------
+
+// What's written in a template of your own, filled in as it's used:
+// {{date}} (in a line, a date in Pages, "@Fri 2 Oct"; in a title, "Fri 2
+// Oct"), {{weekday}} ("Friday"), {{time}} ("14:05"), {{month}} ("October
+// 2026"), {{year}}, {{week}} ("Week 40"). `html`: it's a block's text.
+var FILLS = /\{\{\s*(date|weekday|time|month|year|week)\s*\}\}/gi
+
+function fill(text, html, now, fmt) {
+  var s = String(text || "")
+  if (s.indexOf("{{") < 0) return s
+  var d = now || new Date()
+  var day = iso(d)
+  var f = typeof fmt === "function" ? fmt : function(x) { return x }
+  function out(t) { return html ? esc(t) : t }
+  return s.replace(FILLS, function(all, name) {
+    var n = name.toLowerCase()
+    if (n === "date") return html ? "<a href=\"omanote://date/" + day + "\">@" + esc(f(day, "ddd d MMM")) + "</a>" : f(day, "ddd d MMM")
+    if (n === "weekday") return out(f(day, "dddd"))
+    if (n === "time") return pad(d.getHours()) + ":" + pad(d.getMinutes())
+    if (n === "month") return out(f(day, "MMMM yyyy"))
+    if (n === "year") return String(d.getFullYear())
+    return "Week " + isoWeek(day)
+  })
+}
+
 // A page of a template for Pages: { title, hint, icon, blocks }, hint the
 // faint title of a page you name ("What's the meeting?"). `day` is today.
 function forPages(id, day, fmt) {
