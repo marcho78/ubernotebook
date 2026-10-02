@@ -2,8 +2,9 @@
 //
 // Headings, lists, checklists, quotes, code, dividers and pictures become
 // their Markdown; bold, italics, strikethrough, code and links too. Time
-// slots are a list with the times in bold, habits a table of the week, and a
-// calendar a table of the month (with marked days in bold).
+// slots are a list with the times in bold, habits a table of the week, a
+// calendar a table of the month (with marked days in bold), and tables
+// Markdown's tables.
 // Highlights are ==marked== (as Obsidian and Typora write them), underlines
 // <u>underlined</u>, and sticky notes GitHub's "> [!NOTE]" callouts. Ink
 // colors and fonts have no Markdown and are left out.
@@ -14,6 +15,7 @@
 .import "Html.js" as Html
 .import "Blocks.js" as Blocks
 .import "Workspace.js" as Workspace
+.import "Table.js" as Table
 
 // Characters that would otherwise be read as Markdown.
 function escapeText(text) {
@@ -247,6 +249,8 @@ function fromDocPage(page, lookup) {
     else if (b.type === "page") line = pageLink(b.id, false)
     else if (b.type === "link") line = pageLink(b.target, true)
     else if (b.type === "toc") line = ""
+    else if (b.type === "mindmap") line = "```mindmap\n" + (b.outline || "") + "\n```"
+    else if (b.type === "table") line = Table.toMarkdown(b.table, inline)
     else if (b.type === "calendar") line = calendarTable(b)
     else line = text
     if (!kids) return line

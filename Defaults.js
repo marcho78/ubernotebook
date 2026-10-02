@@ -41,7 +41,12 @@ var DEFAULTS = {
   space: "notebooks",
   lastPage: "",
   // The Inbox in Pages: where pages agents and scripts add go (Api.qml).
-  inbox: ""
+  inbox: "",
+  // Where an export goes: "ask" (a folder picker each time) or "folder"
+  // (the Exports folder in the notebooks folder).
+  exportTo: "ask",
+  // Colors of your own you picked last, newest first ("#ff8800,#1e66f5").
+  recentColors: ""
 }
 
 var SCHEMA = {
@@ -67,7 +72,9 @@ var SCHEMA = {
     zoom: "int",
     space: "string",
     lastPage: "id",
-    inbox: "id"
+    inbox: "id",
+    exportTo: "string",
+    recentColors: "string"
   },
   choices: {
     pen: ["sans", "serif", "hand", "print", "typewriter", "mono", "duo"],
@@ -77,7 +84,8 @@ var SCHEMA = {
     cover: ["navy", "black", "forest", "burgundy", "mustard", "sky", "coral", "lavender", "sage", "sand", "charcoal", "accent"],
     material: ["leather", "linen", "kraft", "plain", "composition"],
     binding: ["spiral", "stitched", "hardcover"],
-    space: ["notebooks", "pages"]
+    space: ["notebooks", "pages"],
+    exportTo: ["ask", "folder"]
   },
   ranges: {
     width: [640, 5000],

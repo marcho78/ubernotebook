@@ -11,8 +11,10 @@ import "../Agent.js" as Agent
 Pop {
   id: pop
 
-  // Store.qml: defaultAgent, pickAgent.
+  // Store.qml: defaultAgent, listAgents, setDefaultAgent.
   property var files: null
+  // The agents installed here, Omarchy's: [{ name, label }].
+  property var agents: []
   // The default agent's name as Omarchy keeps it ("claude"...), "" for none,
   // once `known`.
   property string agent: ""
@@ -34,16 +36,35 @@ Pop {
     field.text = ""
     known = false
     agent = ""
-    if (files) files.defaultAgent(function(name) { pop.agent = name; pop.known = true })
+    if (files) {
+      files.defaultAgent(function(name) { pop.agent = name; pop.known = true })
+      files.listAgents(function(list) { pop.agents = list })
+    }
     open()
     field.focusField()
   }
 
-  // With no default agent yet, Omarchy's menu comes up to choose one first.
+  function labelOf(name) {
+    for (var i = 0; i < agents.length; i++) if (agents[i].name === name) return agents[i].label
+    return Agent.name(name)
+  }
+
+  // Your agent, chosen here: Omarchy's default from now on (nothing opens).
+  function choose(name) {
+    chooser.close()
+    files.setDefaultAgent(name, function(ok) {
+      if (ok) { pop.agent = name; pop.known = true }
+    })
+    field.focusField()
+  }
+
+  function openChooser() { chooser.open() }
+
+  // With no agent chosen yet, the chooser comes up first.
   function send(request) {
     var r = String(request || "").trim()
     if (!r) return
-    if (known && !agent) { files.pickAgent(); return }
+    if (known && !agent) { chooser.open(); return }
     close()
     sent(r)
   }
@@ -132,24 +153,92 @@ Pop {
         Text {
           textFormat: Text.PlainText
           anchors.verticalCenter: parent.verticalCenter
-          text: !pop.known ? "Asking Omarchy for your agent\u2026"
-            : pop.agent ? Agent.name(pop.agent) + " \u00b7 your default agent"
-            : "No default agent yet"
+          text: "Agent"
           font.family: pop.theme.uiFont
           font.pixelSize: 12
           color: pop.theme.muted
         }
-        Text {
-          visible: pop.known
-          textFormat: Text.PlainText
+        // Your agent: click to choose another.
+        Rectangle {
+          id: agentButton
           anchors.verticalCenter: parent.verticalCenter
-          text: pop.agent ? "Change" : "Choose one"
-          font.family: pop.theme.uiFont
-          font.pixelSize: 12
-          font.underline: changeHover.hovered
-          color: pop.theme.accent
-          HoverHandler { id: changeHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: { pop.close(); pop.files.pickAgent() } }
+          width: agentRow.implicitWidth + 20
+          height: 28
+          radius: 14
+          color: agentHover.hovered || chooser.opened ? pop.theme.hover : "transparent"
+          border.width: 1
+          border.color: pop.theme.line
+          Row {
+            id: agentRow
+            anchors.centerIn: parent
+            spacing: 6
+            Icon { theme: pop.theme; text: pop.theme.icons.agent; size: 13; color: pop.theme.accent; anchors.verticalCenter: parent.verticalCenter }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: !pop.known ? "\u2026" : pop.agent ? pop.labelOf(pop.agent) : "Choose one"
+              font.family: pop.theme.uiFont
+              font.pixelSize: 12
+              font.weight: Font.DemiBold
+              color: pop.theme.text
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: "\u25be"
+              font.pixelSize: 11
+              color: pop.theme.muted
+            }
+          }
+          HoverHandler { id: agentHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: chooser.opened ? chooser.close() : chooser.open() }
+
+          // The agents installed here.
+          Pop {
+            id: chooser
+            theme: pop.theme
+            focus: false
+            y: agentButton.height + 6
+            width: 240
+            contentItem: Column {
+              spacing: 2
+              Text {
+                textFormat: Text.PlainText
+                leftPadding: 10
+                topPadding: 2
+                bottomPadding: 4
+                text: "Your agent (Omarchy's default too)"
+                font.family: pop.theme.uiFont
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+                color: pop.theme.muted
+              }
+              Repeater {
+                model: pop.agents
+                delegate: MenuRow {
+                  required property var modelData
+                  width: parent.width
+                  theme: pop.theme
+                  icon: pop.theme.icons.agent
+                  text: modelData.label
+                  checked: modelData.name === pop.agent
+                  onClicked: pop.choose(modelData.name)
+                }
+              }
+              Text {
+                visible: pop.agents.length === 0
+                width: parent.width
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                leftPadding: 10
+                rightPadding: 10
+                text: "No coding agent is installed. Omarchy installs one: omarchy default agent <name>."
+                font.family: pop.theme.uiFont
+                font.pixelSize: 12
+                color: pop.theme.muted
+              }
+            }
+          }
         }
       }
       IconButton {

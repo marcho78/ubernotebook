@@ -7,6 +7,7 @@ const { load, plain } = require("./load.cjs");
 
 const Import = load("Import.js");
 const Html = load("Html.js");
+const Blocks = load("Blocks.js");
 let passed = 0;
 function check(name, fn) { fn(); passed++; }
 
@@ -62,11 +63,11 @@ check("quotes and callouts", () => {
   assert.deepEqual(shape(md("> a quote\n> goes on\n>\n> - with a list").blocks), ["quote:0:a quote goes on", "bullet:1:with a list"]);
   const c = md("> [!WARNING]\n> Careful **now**\n> more").blocks;
   assert.equal(c[0].type, "callout");
-  assert.equal(c[0].icon, "⚠️");
+  assert.equal(c[0].icon, "\u26a0\ufe0f");
   assert.equal(c[0].color, "yellow_background");
   assert.equal(Html.plainText(c[0].html), "Careful now more");
-  const aside = md("<aside>\n💡 Notion callout\n\nwith more\n\n</aside>").blocks;
-  assert.deepEqual([aside[0].type, aside[0].icon, Html.plainText(aside[0].html)], ["callout", "💡", "Notion callout"]);
+  const aside = md("<aside>\n\u{1f4a1} Notion callout\n\nwith more\n\n</aside>").blocks;
+  assert.deepEqual([aside[0].type, aside[0].icon, Html.plainText(aside[0].html)], ["callout", "\u{1f4a1}", "Notion callout"]);
   assert.deepEqual(shape(aside.slice(1)), ["p:1:with more"]);
   const det = md("<details>\n<summary>More</summary>\n\nHidden **text**\n</details>").blocks;
   assert.deepEqual(shape(det), ["toggle:0:More", "p:1:Hidden text"]);
@@ -79,12 +80,16 @@ check("code, tables, pictures", () => {
   assert.equal(code[1].type, "code");
   assert.equal(Html.plainText(code[1].html), "indented\ncode");
   assert.equal(md("```weirdlang\nx\n```").blocks[0].lang, "weirdlang", "a language Pages doesn't know is kept");
-  const table = md("| Name | Qty |\n|---|:-:|\n| Apples | 3 |\n| Pears | 10 |").blocks;
+  const table = md("| Name | Qty |\n|---|:-:|\n| **Apples** | 3 |\n| Pears \\| plums | 10<br>more |").blocks;
   assert.equal(table.length, 1);
-  assert.equal(table[0].lang, "Table");
-  const rows = Html.plainText(table[0].html).split("\n");
-  assert.equal(rows.length, 4, "every row, and a line under the header");
-  assert.ok(rows[0].startsWith("Name") && rows[2].startsWith("Apples") && rows[3].includes("10"));
+  assert.equal(table[0].type, "table", "a table, not its text");
+  const t = table[0].table;
+  assert.equal(t.header, true);
+  assert.deepEqual(t.rows.map((r) => r.map((c) => Html.plainText(c))), [["Name", "Qty"], ["Apples", "3"], ["Pears | plums", "10\nmore"]]);
+  assert.match(t.rows[1][0], /font-weight:700/, "a cell keeps its bold");
+  const kept = plain(Blocks.clean(table[0], { nest: true }));
+  assert.deepEqual(kept.table.rows, t.rows, "and it's kept as it is");
+  assert.equal(Blocks.clean(table[0], null), null, "only in Pages");
   const ctx = { image: (src) => (src === "img/a.png" ? "assets/a.png" : "") };
   const pics = md("![A](img/a.png)\n\n![Web](https://x.org/b.png)", ctx).blocks;
   assert.deepEqual([pics[0].type, pics[0].src], ["image", "assets/a.png"]);
@@ -97,7 +102,7 @@ check("code keeps every tab and space", () => {
   const code = r.blocks.find((b) => b.type === "code");
   assert.equal(Html.plainText(code.html), "all:\n\tgcc -o app  main.c\n\n  done");
   assert.equal(code.lang, "Makefile");
-  assert.ok(!/&nbsp;| /.test(code.html), "plain spaces, as Pages keeps code");
+  assert.ok(!/&nbsp;|\u00a0/.test(code.html), "plain spaces, as Pages keeps code");
   const html = plain(Import.fromHtml('<pre><code class="language-go">func main() {\n\tx  := 1\n}</code></pre>', null, {}));
   assert.equal(Html.plainText(html.blocks[0].html), "func main() {\n\tx  := 1\n}");
   assert.equal(html.blocks[0].lang, "Go");
@@ -119,14 +124,14 @@ check("titles: front matter, a first heading", () => {
 check("HTML, and what Notion's export has in it", () => {
   const page = "6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b";
   const html = `<html><head><title>Plans</title></head><body><article class="page">
-    <header><div class="page-header-icon"><span class="icon">🗺️</span></div><h1 class="page-title">Plans</h1></header>
+    <header><div class="page-header-icon"><span class="icon">\u{1f5fa}\ufe0f</span></div><h1 class="page-title">Plans</h1></header>
     <div class="page-body">
       <h2>Trip</h2>
       <p>Book <strong>flights</strong> and <mark class="highlight-red">hotel</mark>.</p>
       <p class="block-color-blue_background">A blue block</p>
       <ul class="to-do-list"><li><div class="checkbox checkbox-on"></div> <span class="to-do-children-checked">Passport</span></li><li><div class="checkbox checkbox-off"></div> <span>Tickets</span></li></ul>
       <ul class="toggle"><li><details open=""><summary>More</summary><p>Inside</p></details></li></ul>
-      <figure class="block-color-gray_background callout" style="white-space:pre-wrap;display:flex"><div style="font-size:1.5em"><span class="icon">💡</span></div><div style="width:100%"><p>Note this</p></div></figure>
+      <figure class="block-color-gray_background callout" style="white-space:pre-wrap;display:flex"><div style="font-size:1.5em"><span class="icon">\u{1f4a1}</span></div><div style="width:100%"><p>Note this</p></div></figure>
       <div class="column-list"><div style="width:50%" class="column"><p>Left</p></div><div style="width:50%" class="column"><p>Right</p></div></div>
       <pre class="code"><code class="language-JavaScript">let a = 1
   let b = 2</code></pre>
@@ -143,7 +148,7 @@ check("HTML, and what Notion's export has in it", () => {
   };
   const r = plain(Import.fromHtml(html, ctx));
   assert.equal(r.title, "Plans");
-  assert.equal(r.icon, "🗺️");
+  assert.equal(r.icon, "\u{1f5fa}\ufe0f");
   assert.deepEqual(shape(r.blocks), [
     "h2:0:Trip", "p:0:Book flights and hotel.", "p:0:A blue block",
     "check:0x:Passport", "check:0:Tickets",
@@ -153,14 +158,15 @@ check("HTML, and what Notion's export has in it", () => {
     "code:0:let a = 1\n  let b = 2",
     "quote:0:Quoted",
     "number:0:One", "bullet:1:Nested", "number:0:Two",
-    "code:0:A  │  B\n───┼───\n1  │  2",
+    "table:0:",
     "link:0:", "divider:0:", "image:0:",
   ]);
   const byType = (t) => r.blocks.find((b) => b.type === t);
+  assert.deepEqual(byType("table").table, { rows: [["A", "B"], ["1", "2"]], header: true }, "a table, its <th> row the header");
   assert.ok(r.blocks[1].html.includes("color:#d44c47"), "Notion's red words stay red");
   assert.equal(r.blocks[2].color, "blue_background", "and its colored blocks colored");
   assert.ok(!byType("toggle").collapsed, "an open toggle stays open");
-  assert.equal(byType("callout").icon, "💡");
+  assert.equal(byType("callout").icon, "\u{1f4a1}");
   assert.equal(byType("code").lang, "JavaScript");
   assert.equal(byType("column").width, 0.5);
   assert.equal(byType("link").target, page);

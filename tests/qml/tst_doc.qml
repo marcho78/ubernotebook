@@ -495,6 +495,96 @@ Item {
       compare(editor.numbers[editor.uidAt(6)], "a.", "inside a numbered item, letters")
     }
 
+    // A mind map's idea, clicked where it's drawn.
+    function clickIdea(map, text) {
+      var L = map.lay
+      var n = L.nodes.filter(function(x) { return x.node.text === text })[0]
+      verify(n !== undefined, "an idea called " + text)
+      var left = Math.max(0, (map.width - L.width * L.scale) / 2)
+      mouseClick(map, left + (n.x + n.w / 2) * L.scale, (n.y + n.h / 2) * L.scale)
+    }
+    function outline() { return blocks().filter(function(b) { return b.type === "mindmap" })[0].outline }
+
+    function test_21_mind_maps() {
+      page([""])
+      focusAt(0, 0)
+      type("/mindmap")
+      wait(0)
+      compare(editor.slashItems[0].id, "mindmap")
+      keyClick(Qt.Key_Return)
+      compare(types(), "mindmap,p")
+      var map = item(0).mindMap
+      tryVerify(function() { return map.editing }, 1000, "you write the topic first")
+      type("Launch")
+      keyClick(Qt.Key_Tab)
+      type("Marketing")
+      keyClick(Qt.Key_Return)
+      type("Engineering")
+      keyClick(Qt.Key_Escape)
+      verify(!map.editing)
+      compare(outline(), "Launch\n  Main idea\n  Main idea\n  Main idea\n  Marketing\n  Engineering")
+      verify(map.lay.nodes.length === 6 && map.height > 100, "drawn")
+      editor.undo()
+      compare(outline(), "Central topic\n  Main idea\n  Main idea\n  Main idea", "all that writing is one step")
+      editor.redo()
+      // Click an idea to write on it; Backspace on an empty one takes it away.
+      clickIdea(map, "Marketing")
+      verify(map.editing)
+      keyClick(Qt.Key_Tab)
+      type("Blog")
+      keyClick(Qt.Key_Tab)
+      keyClick(Qt.Key_Backspace)
+      compare(map.current.text, "Blog", "back on the idea it branched from")
+      type(" post")
+      keyClick(Qt.Key_Up)
+      compare(map.current.text, "Marketing", "\u2191: the idea above")
+      keyClick(Qt.Key_Escape)
+      compare(outline(), "Launch\n  Main idea\n  Main idea\n  Main idea\n  Marketing\n    Blog post\n  Engineering")
+      // Ctrl+Backspace takes an idea and its branch; empty ideas don't stay.
+      clickIdea(map, "Marketing")
+      keyClick(Qt.Key_Backspace, Qt.ControlModifier)
+      keyClick(Qt.Key_Return)
+      keyClick(Qt.Key_Escape)
+      compare(outline(), "Launch\n  Main idea\n  Main idea\n  Main idea\n  Engineering")
+      // Folding a branch.
+      clickIdea(map, "Engineering")
+      keyClick(Qt.Key_Tab)
+      type("Release")
+      keyClick(Qt.Key_Escape)
+      var eng = map.lay.nodes.filter(function(x) { return x.node.text === "Engineering" })[0].node
+      map.toggleFold(eng)
+      compare(blocks()[0].folds, "4")
+      verify(map.lay.nodes.every(function(x) { return x.node.text !== "Release" }), "its branch isn't drawn")
+      // A locked page's map only folds.
+      editor.readOnly = true
+      clickIdea(map, "Launch")
+      verify(!map.editing)
+      map.toggleFold(map.lay.nodes.filter(function(x) { return x.node.text === "Engineering" })[0].node)
+      compare(blocks()[0].folds, "")
+      editor.readOnly = false
+    }
+
+    function test_22_lists_and_mind_maps() {
+      page([{ type: "bullet", html: "Trip" }, { type: "bullet", html: "Pack", indent: 1 }, { type: "check", html: "Passport", indent: 2 },
+        { type: "bullet", html: "Book <b>hotel</b>", indent: 1 }, "after"])
+      var made = editor.toMindMap([editor.uidAt(0)])
+      verify(made !== "")
+      compare(types(), "mindmap,p")
+      compare(outline(), "Trip\n  Pack\n    Passport\n  Book hotel")
+      compare(texts(), "|after")
+      editor.mindMapToList(made)
+      compare(types(), "bullet,bullet,bullet,bullet,p")
+      compare(depths(), "0,1,2,1,0")
+      compare(texts(), "Trip|Pack|Passport|Book hotel|after")
+      editor.undo()
+      compare(types(), "mindmap,p", "both are steps to undo")
+      // Several blocks: the ideas of a "Mind map".
+      page(["one", "two", "three"])
+      editor.toMindMap([editor.uidAt(0), editor.uidAt(2)])
+      compare(outline(), "Mind map\n  one\n  three")
+      compare(texts(), "|two")
+    }
+
     function test_10_placeholders_and_empty_toggles() {
       page([{ type: "h1", html: "" }, { type: "toggle", html: "Empty" }])
       verify(item(1).emptyToggle, "an open toggle with nothing in it says so")

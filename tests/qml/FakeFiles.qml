@@ -28,6 +28,7 @@ QtObject {
     trashed = []
     notified = []
     agent = "claude"
+    agentList = [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
     launched = []
     picked = 0
   }
@@ -35,6 +36,9 @@ QtObject {
   function parseJson(text) {
     try { return JSON.parse(text) } catch (e) { return null }
   }
+
+  // Where exports go (Store.qml's exportBase): null is the Exports folder.
+  property var exportBase: null
 
   function mkdirs(paths, done) { if (done) done(true) }
 
@@ -85,6 +89,11 @@ QtObject {
       done(true, names.join("\n") + (names.length ? "\n" : ""))
       return
     }
+    if (argv[0] === "/usr/bin/rm") {
+      argv.slice(3).forEach(function(p) { delete disk[p] })
+      if (done) done(true, "")
+      return
+    }
     if (argv[0] === "/usr/bin/grep") {
       var term = argv[argv.indexOf("-e") + 1].toLowerCase()
       var root = argv[argv.length - 1]
@@ -92,7 +101,7 @@ QtObject {
       done(hits.length > 0, hits.join("\n"))
       return
     }
-    done(true, "")
+    if (done) done(true, "")
   }
 
   function isImagePath(path) { return Library.isImagePath(path) }
@@ -101,6 +110,10 @@ QtObject {
   function copyText(text) { copied = String(text) }
   function openUrl(url) { console.log("open:", url) }
   function openPath(path) { console.log("open:", path) }
+  // The agents installed (Store.qml: listAgents), and choosing one.
+  property var agentList: [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
+  function listAgents(done) { done(agentList) }
+  function setDefaultAgent(name, done) { agent = name; done(true) }
   function defaultAgent(done) { done(agent) }
   function launchAgent(prompt) { launched = launched.concat([String(prompt)]) }
   function pickAgent() { picked++ }

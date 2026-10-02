@@ -54,6 +54,13 @@ QtObject {
     if (ui && typeof ui.saveNow === "function") ui.saveNow()
   }
 
+  // The page as it is, kept in its history before a command changes it
+  // (what's being written in the window too).
+  function keep(id) {
+    writeOpen()
+    workspace.keepVersion(id, "command", true)
+  }
+
   function viewDoes(what, a, b) {
     return ui && typeof ui[what] === "function" ? ui[what](a, b) : false
   }
@@ -175,6 +182,7 @@ QtObject {
     if (md.error) return fail(md.error)
     var blocks = blocksOf(md.text, false).blocks
     if (blocks.length === 0) return fail("there's nothing in that file to add")
+    keep(id)
     // Open in the window: it adds them itself.
     var took = viewDoes("appendToOpenPage", id, blocks)
     if (took === "locked") return fail("that page is locked: unlock it in Omanote first")
@@ -230,6 +238,7 @@ QtObject {
         if (spot.list[k].type === "page") return fail("there's a page inside that block, which would go with it: change the blocks around it instead")
       }
     }
+    keep(id)
     // Open in the window: it changes the page itself, as a step you can undo.
     var took = viewDoes(how === "replace" ? "replaceInOpenPage" : "insertInOpenPage", id, { block: spot.block.uid, blocks: list })
     if (took === "locked") return fail("that page is locked: unlock it in Omanote first")

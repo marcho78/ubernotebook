@@ -65,7 +65,24 @@ The first version.
   page; templates on an empty page, laid out for Pages (columns, callouts,
   the day hour by hour, habits, the month's calendar, and what goes on each
   line); habits and a month's calendar as blocks in Pages too; numbered
-  lists in columns counting 1, 2, 3;
+  lists in columns counting 1, 2, 3; mind maps (`/mindmap`, or a nested list
+  turned into one), drawn with a color for each branch, written on in place,
+  with folding branches, a text color and a background for any idea (a main
+  idea's coloring its branch): Pages' colors, or any color from a color
+  picker (saturation, brightness and hue, a hex field, recent colors, a
+  contrast reading, shown on the map as you pick), with text kept readable
+  on any background; and made by agents from a `mindmap` (or Mermaid) code
+  block, colors and all; tables (`/table`, pasted from a spreadsheet, or
+  imported and written as Markdown tables): a header row, cells with
+  formatting, Tab, Enter and the arrows between cells, row and column
+  handles with their menus, + bars for a new row or column, columns resized
+  by dragging, a text color and a background for a cell, a row or a column
+  (Pages' colors, recent ones, or the color picker), and spreadsheet cells
+  pasted into a cell filling the table;
+  page history (*Page history* in a page's ⋯ menu): a version kept every ten
+  minutes while you write and before an agent or a command changes the page,
+  each shown as it was, and put back as a step Undo takes back, without
+  losing the pages made inside it since;
   emoji by name (`:rocket:`); and code colored for its language (30 of them,
   light and dark), kept as plain text, with pasted lines staying in the
   block.
@@ -99,7 +116,8 @@ The first version.
   `omarchy-shell omanote quick "text"`) puts a sticky note up anywhere; kept,
   it becomes a page in the Quick notes notebook.
 - **Files**: a folder per notebook, a JSON file per page, pictures beside
-  them, written atomically; trash instead of deleting; Markdown export.
+  them, written atomically; trash instead of deleting; Markdown export, to a
+  folder you pick or to the Exports folder (a setting).
 - **Omarchy**: follows your theme, a bar icon, an app-launcher entry with
   its own icon, Super+N and Super+Alt+N
   registered with Hyprland at runtime (never in your config), window rules

@@ -25,6 +25,8 @@
 .import "Blocks.js" as Blocks
 .import "Html.js" as Html
 .import "Dates.js" as Dates
+.import "Mindmap.js" as Mindmap
+.import "Table.js" as Table
 
 var VERSION = 1
 var MAX_DEPTH = 12
@@ -56,7 +58,7 @@ function isUuid(value) {
 // ---- blocks ---------------------------------------------------------------------------
 
 // The kinds of block a page can have.
-var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar"]
+var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table"]
 
 function isKind(type) {
   return KINDS.indexOf(type) >= 0
@@ -429,7 +431,11 @@ function pageReminders(page) {
 
 function pageText(page) {
   var lines = [page.title || ""]
-  flatten(page).forEach(function(b) { if (Blocks.isText(b.type)) lines.push(Html.plainText(b.html || "")) })
+  flatten(page).forEach(function(b) {
+    if (Blocks.isText(b.type)) lines.push(Html.plainText(b.html || ""))
+    else if (b.type === "mindmap") Mindmap.toList(b.outline).forEach(function(it) { lines.push(it.text) })
+    else if (b.type === "table") lines.push(Table.text(b.table))
+  })
   return lines.join("\n").trim()
 }
 
@@ -765,6 +771,8 @@ function snippet(text, query, radius) {
 // ---- files --------------------------------------------------------------------------------
 
 function pagesDir(root) { return root + "/Pages" }
+// Earlier versions of a page: a file each, named for when it was kept.
+function historyDir(root, id) { return root + "/Pages/history/" + id }
 function pageFile(root, id) { return root + "/Pages/" + id + ".json" }
 function indexFile(root) { return root + "/Pages/index.json" }
 function assetsDir(root) { return root + "/Pages/assets" }
@@ -925,9 +933,108 @@ function blockList(page, md, titleOf) {
     if ((b.type === "toggle" || b.toggle) && b.collapsed) out.folded = true
     if (b.type === "habit") out.days = b.days
     if (b.type === "calendar") out.month = b.month
+    if (b.type === "mindmap") out.text = b.outline
+    if (b.type === "table") out.text = Table.toMarkdown(b.table, md)
     if (b.type === "link") out.target = b.target
     if ((b.type === "page" || b.type === "link") && typeof titleOf === "function") out.title = titleOf(b.type === "page" ? b.uid : b.target)
     if (b.type === "image") out.src = b.src
     return out
   })
 }
+
+// ---- page history ---------------------------------------------------------------------------
+
+var HISTORY_KEEP = 100
+
+// A version's file name, for when it was kept (they sort oldest first), and
+// back: "2026-10-02T09-41-05-120Z.json" <-> the date.
+function versionName(date) {
+  return date.toISOString().replace(/[:.]/g, "-") + ".json"
+}
+function versionDate(name) {
+  var m = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/.exec(String(name || ""))
+  if (!m) return null
+  var d = new Date(m[1] + "T" + m[2] + ":" + m[3] + ":" + m[4] + "." + m[5] + "Z")
+  return isNaN(d.getTime()) ? null : d
+}
+
+// The versions in a folder's listing, newest first: [{ name, date }].
+function versionList(names) {
+  return (names || []).map(function(n) { return { name: n, date: versionDate(n) } })
+    .filter(function(v) { return v.date !== null })
+    .sort(function(a, b) { return b.date.getTime() - a.date.getTime() })
+}
+
+// The files past the newest HISTORY_KEEP (to go).
+function versionsPast(names, keep) {
+  return versionList(names).slice(keep || HISTORY_KEEP).map(function(v) { return v.name })
+}
+
+// The versions' labels (newest first, as versionList gives them), with the
+// seconds where two are in the same minute.
+function versionLabels(list, now) {
+  var plain = list.map(function(v) { return versionLabel(v.date, now) })
+  return list.map(function(v, i) {
+    var same = (i > 0 && plain[i - 1] === plain[i]) || (i + 1 < plain.length && plain[i + 1] === plain[i])
+    return same ? versionLabel(v.date, now, true) : plain[i]
+  })
+}
+
+// Why a version was kept, as the history says it.
+var VERSION_WHY = {
+  edit: "",
+  command: "Before an agent or command changed it",
+  restore: "Before an older version was put back"
+}
+function versionWhy(why) { return VERSION_WHY[why] || "" }
+
+// When, as the history says it: "Today 09:41", "Yesterday 18:02",
+// "Mon 28 Sep 14:03", "28 Sep 2025 14:03" (and the seconds, `seconds`).
+function versionLabel(date, now, seconds) {
+  var d = date
+  var n = now || new Date()
+  function pad(x) { return (x < 10 ? "0" : "") + x }
+  var time = pad(d.getHours()) + ":" + pad(d.getMinutes()) + (seconds ? ":" + pad(d.getSeconds()) : "")
+  var day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  var today = new Date(n.getFullYear(), n.getMonth(), n.getDate())
+  var diff = Math.round((today.getTime() - day.getTime()) / 86400000)
+  var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  if (diff === 0) return "Today " + time
+  if (diff === 1) return "Yesterday " + time
+  var date = d.getDate() + " " + MONTHS[d.getMonth()]
+  if (diff > 1 && diff < 7) return DAYS[d.getDay()] + " " + date + " " + time
+  return date + (d.getFullYear() !== n.getFullYear() ? " " + d.getFullYear() : "") + " " + time
+}
+
+// An earlier version of a page, made ready to put back over the page as it
+// is now: its blocks (a flat list, as the editor has them), title and icon.
+// Pages in the page now that the version doesn't have stay, at its end (they
+// aren't thrown away); pages it had that are somewhere else now are links
+// to them; pages gone for good are left out.
+function versionToRestore(version, current, index) {
+  var id = current.id
+  var pages = (index && index.pages) || {}
+  var taken = {}
+  var list = []
+  flatten(version).forEach(function(b) {
+    var c = JSON.parse(JSON.stringify(b))
+    delete c.content
+    if (c.type === "page") {
+      var e = pages[c.uid]
+      if (!e) return
+      if (e.parent !== id) c = { uid: uuid4(), type: "link", target: c.uid, indent: c.indent }
+    }
+    taken[c.uid] = true
+    list.push(c)
+  })
+  childPages(current).forEach(function(pid) {
+    var e = pages[pid]
+    if (!taken[pid] && e && e.parent === id && !e.trashed) {
+      list.push({ uid: pid, type: "page", indent: 0 })
+      taken[pid] = true
+    }
+  })
+  return { title: version.title || "", icon: version.icon || "", blocks: list }
+}
+

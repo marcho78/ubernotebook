@@ -163,6 +163,56 @@ Item {
         onHideRequested: root.requestClose()
       }
     }
+
+    // The file pickers: Qt's own, drawn in this window (declared in it, so
+    // it's theirs). The desktop's (GTK's) would run inside the Omarchy shell,
+    // and its folder watching can bring the whole shell down.
+    FileDialog {
+      id: importFiles
+      title: "Import notes"
+      options: FileDialog.DontUseNativeDialog
+      fileMode: FileDialog.OpenFiles
+      nameFilters: ["Notes (*.md *.markdown *.txt *.html *.htm *.enex *.zip *.docx *.doc *.odt *.rtf *.epub *.org *.rst)", "All files (*)"]
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
+      onAccepted: root.importPicked(selectedFiles.map(function(f) { return decodeURIComponent(String(f).replace(/^file:\/\//, "")) }))
+      onRejected: root.importPicked([])
+    }
+
+    FolderDialog {
+      id: importFolder
+      title: "Import a folder of notes"
+      options: FolderDialog.DontUseNativeDialog
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
+      onAccepted: root.importPicked([decodeURIComponent(String(selectedFolder).replace(/^file:\/\//, ""))])
+      onRejected: root.importPicked([])
+    }
+
+    FolderDialog {
+      id: exportPicker
+      title: "Export to"
+      options: FolderDialog.DontUseNativeDialog
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
+      onAccepted: root.exportPicked(decodeURIComponent(String(selectedFolder).replace(/^file:\/\//, "")))
+      onRejected: root.exportPicked("")
+    }
+
+    FileDialog {
+      id: picker
+      title: "Choose a picture"
+      options: FileDialog.DontUseNativeDialog
+      nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.svg)"]
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Pictures"
+      onAccepted: {
+        var done = root.pictureDone
+        root.pictureDone = null
+        if (done) done(decodeURIComponent(String(selectedFile).replace(/^file:\/\//, "")))
+      }
+      onRejected: {
+        var done = root.pictureDone
+        root.pictureDone = null
+        if (done) done("")
+      }
+    }
   }
 
   // A page added from outside (a quick note) shows up in the open notebook.
@@ -221,6 +271,20 @@ Item {
     picker.open()
   }
 
+  // Where an export goes, when Settings says to ask.
+  property var exportDone: null
+
+  function pickExportFolder(done) {
+    exportDone = done
+    exportPicker.open()
+  }
+
+  function exportPicked(path) {
+    var done = root.exportDone
+    root.exportDone = null
+    if (done) done(path)
+  }
+
   // Notes to import into Pages: files, or a folder (a Notion or Obsidian export).
   property var importDone: null
 
@@ -236,38 +300,4 @@ Item {
     if (done) done(paths)
   }
 
-  FileDialog {
-    id: importFiles
-    title: "Import notes"
-    fileMode: FileDialog.OpenFiles
-    nameFilters: ["Notes (*.md *.markdown *.txt *.html *.htm *.enex *.zip *.docx *.doc *.odt *.rtf *.epub *.org *.rst)", "All files (*)"]
-    currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
-    onAccepted: root.importPicked(selectedFiles.map(function(f) { return decodeURIComponent(String(f).replace(/^file:\/\//, "")) }))
-    onRejected: root.importPicked([])
-  }
-
-  FolderDialog {
-    id: importFolder
-    title: "Import a folder of notes"
-    currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
-    onAccepted: root.importPicked([decodeURIComponent(String(selectedFolder).replace(/^file:\/\//, ""))])
-    onRejected: root.importPicked([])
-  }
-
-  FileDialog {
-    id: picker
-    title: "Choose a picture"
-    nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.svg)"]
-    currentFolder: "file://" + Quickshell.env("HOME") + "/Pictures"
-    onAccepted: {
-      var done = root.pictureDone
-      root.pictureDone = null
-      if (done) done(decodeURIComponent(String(selectedFile).replace(/^file:\/\//, "")))
-    }
-    onRejected: {
-      var done = root.pictureDone
-      root.pictureDone = null
-      if (done) done("")
-    }
-  }
 }

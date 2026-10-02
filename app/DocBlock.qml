@@ -36,6 +36,9 @@ Item {
   required property string days
   required property string month
   required property string marks
+  required property string outline
+  required property string folds
+  required property string table
 
   property var editor: null
 
@@ -111,6 +114,8 @@ Item {
     : type === "page" || type === "link" ? st.lineHeight + 4
     : type === "toc" ? Math.max(1, tocList.length) * st.lineHeight
     : type === "calendar" ? calHead + calWeekdays + cal.weeks * calRow + 4
+    : type === "mindmap" ? (mapLoader.item ? mapLoader.item.height : st.lineHeight)
+    : type === "table" ? (tableLoader.item ? tableLoader.item.height : st.lineHeight)
     : st.lineHeight
 
   property alias edit: textEdit
@@ -133,6 +138,16 @@ Item {
   function measure(inner) {
     maxPx = Html.maxSize(inner || "")
   }
+
+  // "/mindmap": you write the new map's topic first.
+  readonly property var mindMap: mapLoader.item
+  function startMindMap() { if (mapLoader.item) mapLoader.item.start(0) }
+
+  // A table: what's written in it (Editor.syncTable), and the cursor into
+  // it from above (dir 1) or below, `x` across the block.
+  readonly property var tableView: tableLoader.item
+  function tableJson() { return tableLoader.item ? tableLoader.item.json() : "" }
+  function enter(dir, x) { if (tableLoader.item) tableLoader.item.enter(dir, x - tableLoader.x) }
 
   function reload() {
     if (!isText) return
@@ -485,6 +500,42 @@ Item {
     color: Qt.alpha(block.editor.ink, 0.35)
     HoverHandler { cursorShape: Qt.PointingHandCursor }
     TapHandler { onTapped: block.editor.addChild(block.uid) }
+  }
+
+  // ---- a mind map ------------------------------------------------------------------------------
+
+  Loader {
+    id: mapLoader
+    active: block.type === "mindmap"
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: MindMap {
+      editor: block.editor
+      uid: block.uid
+      outline: block.outline
+      folds: block.folds
+      ink: block.inkColor
+      available: block.width - block.bx - block.boxRight
+    }
+  }
+
+  // ---- a table ----------------------------------------------------------------------------------
+
+  Loader {
+    id: tableLoader
+    active: block.type === "table"
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: TableBlock {
+      editor: block.editor
+      host: block
+      uid: block.uid
+      source: block.table
+      ink: block.inkColor
+      fontPx: block.st.size
+      lineH: Math.round(block.st.size * 1.45)
+      available: block.width - block.bx - block.boxRight
+    }
   }
 
   // ---- a habit's week --------------------------------------------------------------------------
@@ -956,7 +1007,7 @@ Item {
   // Blocks that aren't text are picked with a click (a calendar picks
   // itself, away from its dates).
   TapHandler {
-    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar"
+    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table"
     onTapped: block.editor.selectBlocks(block.uid, block.uid)
     onDoubleTapped: if (block.type === "image") block.editor.openPicture(block.src)
   }
@@ -965,17 +1016,19 @@ Item {
 
   // While the pointer is over the block (or the room left of it): + for a
   // new block below it, and ⋮⋮ to drag it or, clicked, for its menu.
+  // (A table's own pointer handling takes the table: only the topmost thing
+  // under the pointer knows it's there.)
   Item {
     id: hoverZone
     x: block.bx - 56
-    width: block.width - x
+    width: block.type === "table" ? 56 : block.width - x
     height: block.height
     HoverHandler { id: zoneHover }
   }
 
   Row {
     id: handles
-    visible: (zoneHover.hovered || grip.active) && !block.editor.readOnly && block.editor.dragUid === "" || block.dragged
+    visible: (zoneHover.hovered || grip.active || (tableLoader.item !== null && (tableLoader.item.pointerIn || plusHover.hovered || gripHover.hovered))) && !block.editor.readOnly && block.editor.dragUid === "" || block.dragged
     x: block.bx - 48
     y: (block.isText ? block.markY : block.st.above + block.boxTop + Math.min(block.contentH, 30) / 2) - height / 2
     spacing: 0

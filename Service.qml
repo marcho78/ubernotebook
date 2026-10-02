@@ -108,6 +108,7 @@ Item {
   Store {
     id: storeItem
     folder: root.settings.folder
+    exportFolder: function(done) { root.exportFolder(done) }
   }
 
   property alias store: storeItem
@@ -299,6 +300,13 @@ Item {
   function pickImport(folder, done) {
     if (ui && typeof ui.pickImport === "function") ui.pickImport(folder, done)
     else done([])
+  }
+
+  // Where an export goes, as Settings says: a folder you pick (done("") if
+  // you don't), or the Exports folder in the notebooks folder.
+  function exportFolder(done) {
+    if (settings.exportTo === "folder" || !ui || typeof ui.pickExportFolder !== "function") done(storeItem.rootPath + "/Exports")
+    else ui.pickExportFolder(done)
   }
 
   // The desktop's file picker, for a picture (the window shows it).

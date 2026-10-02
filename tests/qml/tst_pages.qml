@@ -4,6 +4,8 @@ import "../.." as Omanote
 import "../../app"
 import "../../Workspace.js" as Workspace
 import "../../Html.js" as Html
+import "../../Mindmap.js" as Mindmap
+import "../../Colors.js" as Colors
 
 // Pages end to end: the view, the real workspace store, and files in memory.
 Item {
@@ -366,6 +368,168 @@ Item {
       keyClick("x")
       view.applyTemplate("todo")
       compare(view.pageTitleText(), Qt.formatDate(new Date(), "MMMM yyyy"), "only a blank page takes one")
+    }
+
+    function test_17_export_where_settings_say() {
+      fresh()
+      function written(prefix) { return Object.keys(files.disk).filter(function(k) { return k.indexOf(prefix) === 0 }) }
+      // Asked, and a folder picked: in a folder of its own there.
+      files.exportBase = function(done) { done("/tmp/picked") }
+      view.exportPage()
+      tryVerify(function() { return written("/tmp/picked/Getting started ").length === 2 }, 2000)
+      var mine = written("/tmp/picked/Getting started ")
+      verify(mine.some(function(k) { return /\/Getting started\.md$/.test(k) }), mine.join(", "))
+      verify(mine.some(function(k) { return /\/A page inside a page\.md$/.test(k) }), "with the pages in it")
+      // Asked, and nothing picked: no export.
+      var before = Object.keys(files.disk).length
+      files.exportBase = function(done) { done("") }
+      view.exportPage()
+      wait(100)
+      compare(Object.keys(files.disk).length, before)
+      // The Exports folder.
+      files.exportBase = null
+      view.exportPage()
+      tryVerify(function() { return written(files.rootPath + "/Exports/Getting started ").length === 2 }, 2000)
+    }
+
+    // A visible item anywhere in the window (popups too) that `test` likes.
+    function findItem(item, test) {
+      if (!item || !item.visible) return null
+      if (test(item)) return item
+      for (var i = 0; i < item.children.length; i++) {
+        var hit = findItem(item.children[i], test)
+        if (hit) return hit
+      }
+      return null
+    }
+    function clickIdea(map, text) {
+      var L = map.lay
+      var n = L.nodes.filter(function(x) { return x.node.text === text })[0]
+      verify(n !== undefined, "an idea called " + text)
+      var left = Math.max(0, (map.width - L.width * L.scale) / 2)
+      mouseClick(map, left + (n.x + n.w / 2) * L.scale, (n.y + n.h / 2) * L.scale)
+    }
+    function pickColor(id, background) {
+      var tile = null
+      tryVerify(function() {
+        tile = findItem(root.Window.window.contentItem, function(it) { return it.entry !== undefined && it.entry && it.entry.id === id && it.back === background })
+        return tile !== null
+      }, 1000, "the " + id + (background ? " background" : "") + " color is on screen")
+      wait(250)
+      mouseClick(tile)
+    }
+
+    function test_18_mind_map_colors() {
+      fresh()
+      var e = view.editor
+      e.insertBlocksAt(0, [{ type: "mindmap", outline: "Trip\n  Lisbon\n    Trams\n  Packing", indent: 0 }])
+      var map = e.items[e.uidAt(0)].mindMap
+      clickIdea(map, "Lisbon")
+      verify(map.editing)
+      // (Found again each time: the map is drawn again when a color changes.)
+      function button() { return findItem(map, function(it) { return it.text === "\u{f0e0c}" }) }
+      verify(button() !== null, "a color button over the idea you're on")
+      mouseClick(button())
+      pickColor("red", true)
+      tryVerify(function() { return map.current && map.current.background === "red" }, 1000)
+      mouseClick(button())
+      pickColor("yellow", false)
+      tryVerify(function() { return map.current && map.current.color === "yellow" }, 1000)
+      verify(map.editing, "still writing on it")
+      keyClick(Qt.Key_Escape)
+      var b = e.blockAt(0)
+      compare(b.outline, "Trip\n  Lisbon {yellow, red background}\n    Trams\n  Packing")
+      // How it looks: its own colors, and its branch in its color.
+      var lisbon = map.lay.nodes.filter(function(x) { return x.node.text === "Lisbon" })[0]
+      compare(String(map.fillOf(lisbon, false, false)), String(Qt.color(map.backOf("red"))))
+      compare(String(map.inkOf(lisbon.node, 1)), String(Qt.color(map.textOf("yellow"))))
+      compare(String(map.tint(lisbon.branch)), String(Qt.color(map.textOf("red"))), "the branch takes the main idea's background")
+      var trams = map.lay.nodes.filter(function(x) { return x.node.text === "Trams" })[0]
+      compare(trams.branch, lisbon.branch)
+      // Default takes them off again; all of it one step to undo.
+      e.undo()
+      compare(e.blockAt(0).outline, "Trip\n  Lisbon\n    Trams\n  Packing")
+      e.redo()
+      clickIdea(map, "Lisbon")
+      mouseClick(button())
+      var none = null
+      tryVerify(function() {
+        none = findItem(root.Window.window.contentItem, function(it) { return it.entry === null && it.back === true })
+        return none !== null
+      }, 1000)
+      wait(250)
+      mouseClick(none)
+      keyClick(Qt.Key_Escape)
+      compare(e.blockAt(0).outline, "Trip\n  Lisbon {yellow}\n    Trams\n  Packing")
+      view.commit()
+      var saved = fileOf(view.page.id)
+      verify(Object.keys(saved.blocks).some(function(id) { return saved.blocks[id].outline === "Trip\n  Lisbon {yellow}\n    Trams\n  Packing" }), "saved with the page")
+    }
+
+    function test_19_mind_map_colors_of_your_own() {
+      fresh()
+      var e = view.editor
+      e.insertBlocksAt(0, [{ type: "mindmap", outline: "Trip\n  Lisbon\n    Trams\n  Packing", indent: 0 }])
+      var map = e.items[e.uidAt(0)].mindMap
+      var win = root.Window.window.contentItem
+      function button() { return findItem(map, function(it) { return it.text === "\u{f0e0c}" }) }
+      function tile(test) {
+        var t = null
+        tryVerify(function() { t = findItem(win, test); return t !== null }, 1000)
+        wait(250)
+        return findItem(win, test)
+      }
+      // Custom… for the background: a hex typed in shows on the map as it's typed.
+      clickIdea(map, "Lisbon")
+      mouseClick(button())
+      mouseClick(tile(function(it) { return it.plus === true && it.back === true }))
+      tryVerify(function() { return findItem(win, function(it) { return it.text === "Background of your own" }) !== null }, 1000, "the color picker")
+      wait(200)
+      for (var i = 0; i < "#ff8800".length; i++) keyClick("#ff8800".charAt(i))
+      tryCompare(map.current, "background", "#ff8800", 1000, "it shows on the map as you pick it")
+      verify(findItem(win, function(it) { return typeof it.text === "string" && it.text.indexOf("Contrast ") === 0 }) !== null, "with how well the idea reads")
+      keyClick(Qt.Key_Return)
+      tryVerify(function() { return findItem(win, function(it) { return it.text === "Background of your own" }) === null }, 1000, "Enter applies, and the picker closes")
+      verify(map.editing, "writing goes on")
+      keyClick(Qt.Key_Escape)
+      compare(e.blockAt(0).outline, "Trip\n  Lisbon {#ff8800 background}\n    Trams\n  Packing")
+      compare(service.settings.recentColors, "#ff8800", "kept among the colors you picked last")
+      var lisbon = map.lay.nodes.filter(function(x) { return x.node.text === "Lisbon" })[0]
+      compare(String(map.fillOf(lisbon, false, false)), "#ff8800")
+      // Custom… for the text, dragged in the square, then Esc: put back.
+      clickIdea(map, "Packing")
+      mouseClick(button())
+      mouseClick(tile(function(it) { return it.plus === true && it.back === false }))
+      var square = tile(function(it) { return it.cursorShape === Qt.CrossCursor })
+      mousePress(square, 20, 20)
+      mouseMove(square, square.width - 10, 30)
+      tryVerify(function() { return /^#[0-9a-f]{6}$/.test(map.current.color) }, 1000, "dragging shows on the map")
+      mouseRelease(square, square.width - 10, 30)
+      keyClick(Qt.Key_Escape)
+      tryCompare(map.current, "color", "", 1000, "Esc puts back what was there")
+      wait(200)
+      verify(map.editing)
+      // Opened and applied with nothing picked: nothing changes (a color of
+      // Pages stays one).
+      mouseClick(button())
+      mouseClick(tile(function(it) { return it.plus === true && it.back === true }))
+      tryVerify(function() { return findItem(win, function(it) { return it.text === "Background of your own" }) !== null }, 1000)
+      wait(200)
+      compare(map.current.background, "", "opening it changes nothing")
+      keyClick(Qt.Key_Return)
+      wait(200)
+      compare(map.current.background, "")
+      // A recent color, from the menu.
+      mouseClick(button())
+      mouseClick(tile(function(it) { return it.custom === "#ff8800" && it.back === false }))
+      tryCompare(map.current, "color", "#ff8800", 1000)
+      keyClick(Qt.Key_Escape)
+      compare(e.blockAt(0).outline, "Trip\n  Lisbon {#ff8800 background}\n    Trams\n  Packing {#ff8800}")
+      // Text on a background of your own reads, dark or light.
+      ;["#1e1e2e", "#ffe680", "#ff8800", "#3584e4"].forEach(function(bg) {
+        var ink = map.inkOf(Mindmap.parse("A {" + bg + " background}"), 1)
+        verify(Colors.contrast(ink, bg) >= 4.5, "text on " + bg + " reads: " + ink)
+      })
     }
 
     function test_8_the_open_page_reloads_after_the_store_changes_it() {

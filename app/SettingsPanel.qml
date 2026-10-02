@@ -175,6 +175,23 @@ Popup {
             IconButton { theme: panel.theme; icon: panel.theme.icons.folder; tip: "Open the folder"; onClicked: panel.service.store.openFolder() }
           }
         }
+        Line {
+          label: "Exports"
+          note: panel.s.exportTo === "folder" ? (panel.service ? panel.service.rootPath + "/Exports" : "The Exports folder") : "A folder picker asks where, each time."
+          Row {
+            spacing: 6
+            Repeater {
+              model: [{ label: "Ask where", value: "ask" }, { label: "Exports folder", value: "folder" }]
+              delegate: Chip {
+                required property var modelData
+                theme: panel.theme
+                text: modelData.label
+                checked: (panel.s.exportTo || "ask") === modelData.value
+                onClicked: panel.set("exportTo", modelData.value)
+              }
+            }
+          }
+        }
 
         Heading { text: "Writing" }
         Line {

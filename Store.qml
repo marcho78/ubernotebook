@@ -6,6 +6,7 @@ import "Blocks.js" as Blocks
 import "Html.js" as Html
 import "Markdown.js" as Markdown
 import "Settings.js" as Settings
+import "Agent.js" as Agent
 
 // The notebooks on disk. Each notebook is a folder in the notebooks folder
 // (~/Documents/Omanote by default):
@@ -142,6 +143,30 @@ Item {
   // nothing here waits for it.
   function launchAgent(prompt) {
     Quickshell.execDetached(["/usr/bin/omarchy-agent-prompt", String(prompt)])
+  }
+
+  // The agents Omarchy offers (its menu file says which, and what each is
+  // called) that are installed here: done([{ name, label }]).
+  readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"
+  function listAgents(done) {
+    var all = Agent.menuAgents(readNow(omarchyPath + "/default/omarchy/omarchy-menu.jsonc", 1024 * 1024) || "")
+    if (all.length === 0) { done([]); return }
+    exec(["/usr/bin/bash", "-c", "for a in \"$@\"; do command -v -- \"$a\" >/dev/null && printf '%s\\n' \"$a\"; done; exit 0", "omanote-agents"]
+      .concat(all.map(function(a) { return a.name })), function(ok, output) {
+      var here = String(output || "").split("\n")
+      done(all.filter(function(a) { return here.indexOf(a.name) >= 0 }))
+    }, { timeoutMs: 4000, maxBytes: 16384 })
+  }
+
+  // Your agent made Omarchy's default: the file `omarchy default agent`
+  // writes, without launching the agent as that command does. done(ok).
+  function setDefaultAgent(name, done) {
+    if (!/^[a-z][a-z0-9-]{0,30}$/.test(String(name || ""))) { done(false); return }
+    var dir = home + "/.config/omarchy/defaults"
+    mkdirs([dir], function(ok) {
+      if (!ok) { done(false); return }
+      writeFile(dir + "/agent", name + "\n", done)
+    })
   }
 
   // Omarchy's menu for choosing the default agent.
@@ -693,12 +718,25 @@ Item {
 
   // Every page as a Markdown file, and its pictures, in a folder beside the
   // notebooks: "<notebooks>/Exports/<title> <date>/".
+  // Where an export goes: done(folder), or done("") for none (Service.qml
+  // asks you, or says the Exports folder, as Settings says).
+  property var exportFolder: null
+
+  function exportBase(done) {
+    if (typeof exportFolder === "function") exportFolder(done)
+    else done(rootPath + "/Exports")
+  }
+
   function exportNotebook(id) {
+    exportBase(function(base) { if (base) store.exportNotebookTo(id, base) })
+  }
+
+  function exportNotebookTo(id, base) {
     openNotebook(id, function(nb) {
       if (!nb) return
       var stamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm")
       var name = (nb.title.replace(/[\/\\:*?"<>|\u0000-\u001f]+/g, " ").trim() || "Notebook") + " " + stamp
-      var dir = store.rootPath + "/Exports/" + name
+      var dir = base + "/" + name
       store.mkdirs([dir], function(ok) {
         if (!ok) return
         var used = {}

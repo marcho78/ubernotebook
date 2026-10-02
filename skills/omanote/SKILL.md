@@ -61,6 +61,55 @@ quotes, `> [!NOTE]` callouts, **bold**, *italic*, ~~struck~~, `code`, links, and
 - `[⏰ Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30)`: a reminder, in the
   user's local time. Omarchy shows a notification then; clicking it opens the page.
 
+## Mind maps
+
+When the user asks for a mind map, write it as a `mindmap` code block and
+Omanote draws it as one: the topic on the first line, each idea on a line of
+its own, indented two spaces under the idea it branches from.
+
+````markdown
+```mindmap
+Launch plan
+  Marketing
+    Blog post
+    Newsletter
+  Engineering
+    Release notes
+```
+````
+
+Keep each idea to a few words. A map holds up to 300 ideas, 8 levels deep.
+
+An idea can have a text color and a background, in braces at the end of its
+line: `Marketing {red}`, `Marketing {blue background}`, or both,
+`Marketing {red, yellow background}`. The colors are gray, brown, orange,
+yellow, green, blue, purple, pink and red, which follow the user's light or
+dark theme, or any hex color (`{#ff8800}`, `{#1e66f5 background}`), which
+stays as it is; Omanote makes text readable on any background that has no
+text color of its own. A main idea's color (its
+background's, else its text's) colors its whole branch, so color the main
+ideas when the user asks for a colored map; with none, each branch gets a
+color of its own.
+Mermaid's `mindmap` syntax (in a `mermaid` block) is read too. `read` and
+`blocks` give a map back the same way (`blocks`: its `text`); to change one,
+`replace` its block with a new `mindmap` block.
+
+## Tables
+
+A Markdown table is a table in Omanote, its first row the header row. A
+cell can have **bold**, *italic*, links and `<br>` for a new line in it.
+`read` and `blocks` give a table back as Markdown (`blocks`: its `text`); to
+change one, `replace` its block with the whole table as you want it. Cell
+colors are set in Omanote and aren't in the Markdown, so replacing a colored
+table takes its colors off: say so when you do.
+
+```markdown
+| Item    | Planned | Spent |
+|---------|---------|-------|
+| Flights | €420    | €398  |
+| Hotel   | €360    |       |
+```
+
 ## Changing blocks on a page
 
 `blocks <id>` gives each block's id. `replace` puts your Markdown in place of a
@@ -85,5 +134,7 @@ writing goes (`replace` that block). Read what you need with `blocks` or
 - Tell the user the page's title and where it went (`path`).
 - Never `trash` a page unless the user asked for that page to go.
 - A locked page can't be changed: say so, and don't work around it.
+- Omanote keeps the page as it was (its *Page history*) before each change
+  you make, so the user can put it back; still, change only what was asked.
 - If a command says the pages aren't loaded yet, or omarchy-shell isn't
   running, wait a moment and try once more. Don't fall back to editing files.

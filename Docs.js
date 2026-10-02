@@ -31,6 +31,8 @@ var STYLES = {
   toc:     { size: 14, lh: 1.6, above: 4, below: 4 },
   divider: { size: 16, lh: 1.0, above: 6, below: 6 },
   image:   { size: 16, lh: 1.5, above: 6, below: 6 },
+  mindmap: { size: 15, lh: 1.4, above: 10, below: 10 },
+  table:   { size: 15, lh: 1.45, above: 8, below: 8 },
   habit:   { size: 16, lh: 1.5, above: 3, below: 3 },
   calendar: { size: 15, lh: 1.5, above: 8, below: 8 }
 }
@@ -137,11 +139,13 @@ var COMMANDS = [
   { id: "callout", group: "Basic blocks", label: "Callout", hint: "Make writing stand out", icon: "sticky", type: "callout", props: { icon: "\u{1f4a1}" }, keys: "note info tip warning aside" },
   { id: "divider", group: "Basic blocks", label: "Divider", hint: "Visually divide blocks", icon: "divider", type: "divider", keys: "line separator hr rule ---" },
   { id: "code", group: "Basic blocks", label: "Code", hint: "Capture a code snippet", icon: "code", type: "code", keys: "snippet pre ```" },
+  { id: "table", group: "Basic blocks", label: "Table", hint: "Rows and columns, with a header row", icon: "table", type: "table", props: { table: { rows: [["", "", ""], ["", "", ""], ["", "", ""]], header: true } }, keys: "table grid rows columns cells spreadsheet" },
   { id: "habit", group: "Planning", label: "Habit", hint: "A habit, with a circle for each day of the week", icon: "habit", type: "habit", keys: "tracker streak routine week days" },
   { id: "calendar", group: "Planning", label: "Calendar", hint: "A month at a glance: click a date to circle it", icon: "calendarMonth", type: "calendar", keys: "month dates planner" },
   { id: "page", group: "Pages", label: "Page", hint: "A page inside this page", icon: "page", action: "page", keys: "subpage sub-page new document" },
   { id: "link", group: "Pages", label: "Link to page", hint: "Point to a page elsewhere", icon: "link", action: "link", keys: "mention reference goto" },
   { id: "image", group: "Media", label: "Image", hint: "A picture from a file", icon: "image", action: "image", keys: "picture photo png jpg" },
+  { id: "mindmap", group: "Advanced", label: "Mind map", hint: "Ideas branching out from one topic", icon: "mindmap", type: "mindmap", props: { outline: "Central topic\n  Main idea\n  Main idea\n  Main idea" }, keys: "mindmap brainstorm map tree ideas diagram" },
   { id: "toc", group: "Advanced", label: "Table of contents", hint: "The headings on this page", icon: "toc", type: "toc", keys: "contents outline index" },
   { id: "cols2", group: "Layout", label: "2 columns", hint: "Two columns side by side", icon: "columns", action: "columns", count: 2, keys: "columns side layout split" },
   { id: "cols3", group: "Layout", label: "3 columns", hint: "Three columns side by side", icon: "columns", action: "columns", count: 3, keys: "columns side layout split" },
@@ -203,7 +207,7 @@ function kindLabel(type, toggle) {
     var k = TURN_INTO[i]
     if (k.type === type && !!k.toggle === !!toggle) return k.label
   }
-  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : "Text"
+  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : "Text"
 }
 
 // Languages a code block can say it's in.

@@ -4,6 +4,8 @@ import "../Blocks.js" as Blocks
 import "../Papers.js" as Papers
 import "../Docs.js" as Docs
 import "../Workspace.js" as Workspace
+import "../Mindmap.js" as Mindmap
+import "../Table.js" as Table
 import "../Dates.js" as Dates
 import "../Emoji.js" as Emoji
 import "../Highlight.js" as Highlight
@@ -43,6 +45,8 @@ FocusScope {
   property color linkColor: "#2456b3"
   property color selectionColor: "#b9d3f5"
   property bool dark: false
+  // The page's own color, behind everything (Pages: a mind map's circles).
+  property color paper: dark ? "#1a1b26" : "#ffffff"
   property bool strikeDone: true
   property bool readOnly: false
   property real contentWidth: width
@@ -98,6 +102,12 @@ FocusScope {
   signal iconRequested(string uid)
   signal blockMenuRequested(string uid)
   signal languageRequested(string uid)
+  // A mind map's colors for the idea you're writing on, asked for (Pages).
+  signal mindMapColorsRequested(string uid, var anchor)
+  // A table's row or column handle clicked: its menu ("row" or "col", which one).
+  signal tableMenuRequested(string uid, string kind, int index, var anchor)
+  // A table's cells to color (TableBlock.colorScope says which).
+  signal tableColorsRequested(string uid, var anchor)
   // "/agent" typed on a block: ask your agent (Pages).
   signal agentRequested(string uid)
   signal textCopied(string text)
@@ -155,7 +165,8 @@ FocusScope {
       imgWidth: b.type === "column" ? (b.width || 0) : (b.width || 0.6), ratio: b.ratio || 0,
       label: b.label || "", days: b.days || "", month: b.month || "", marks: b.marks || "", hint: b.hint || "",
       color: b.color || "", toggle: b.toggle === true, collapsed: b.collapsed === true, lang: b.lang || "",
-      target: b.target || "", icon: b.icon || ""
+      target: b.target || "", icon: b.icon || "", outline: b.outline || "", folds: b.folds || "",
+      table: b.type === "table" && b.table ? JSON.stringify(b.table) : ""
     }
   }
 
@@ -163,7 +174,8 @@ FocusScope {
   function rowBlock(r) {
     return { uid: r.uid, type: r.type, indent: r.indent, checked: r.checked, align: r.align, tone: r.tone, style: r.dstyle, src: r.src, width: r.imgWidth, ratio: r.ratio,
       label: r.label, days: r.days, month: r.month, marks: r.marks, hint: r.hint,
-      color: r.color, toggle: r.toggle, collapsed: r.collapsed, lang: r.lang, target: r.target, icon: r.icon }
+      color: r.color, toggle: r.toggle, collapsed: r.collapsed, lang: r.lang, target: r.target, icon: r.icon,
+      outline: r.outline, folds: r.folds, table: r.type === "table" && r.table ? JSON.parse(r.table) : undefined }
   }
 
   readonly property var cleanOptions: doc ? ({ nest: true }) : null
@@ -195,6 +207,7 @@ FocusScope {
   // The block's newer text from its editor, if it has any.
   function syncBlock(uid) {
     var item = items[uid]
+    if (item && item.dirty && item.type === "table") { syncTable(item); return }
     if (!item || !item.dirty || !item.isText) return
     htmls[uid] = storedOf(item)
     item.dirty = false
@@ -723,6 +736,187 @@ FocusScope {
     return made
   }
 
+  // ---- Pages: mind maps ---------------------------------------------------------------
+
+  // A mind map's ideas (an outline, Mindmap.js) and which are folded, as one step.
+  function setMindMap(uid, outline, folds) {
+    var i = indexOf(uid)
+    if (i < 0 || readOnly || blocksModel.get(i).type !== "mindmap") return
+    var clean = Mindmap.clean(outline)
+    if (!clean) return
+    var f = Mindmap.cleanFolds(folds, Mindmap.count(clean))
+    if (clean === blocksModel.get(i).outline && f === blocksModel.get(i).folds) return
+    beginOp()
+    blocksModel.setProperty(i, "outline", clean)
+    blocksModel.setProperty(i, "folds", f)
+    endOp()
+  }
+
+  // ---- Pages: tables ---------------------------------------------------------------------
+
+  // A table's cells as they're being written, into the page.
+  function syncTable(item) {
+    var i = indexOf(item.uid)
+    item.dirty = false
+    var json = item.tableJson()
+    if (i >= 0 && json && blocksModel.get(i).table !== json) blocksModel.setProperty(i, "table", json)
+  }
+
+  // Writing in a table's cell: like typing in a block, a burst of it is one
+  // step to undo.
+  function tableTyped(item) {
+    if (restoring || inOp || readOnly) return
+    if (!burstOpen) {
+      pushUndo(stable)
+      redoStack = []
+      burstOpen = true
+    }
+    burstTimer.restart()
+    changed()
+  }
+
+  // A table changed another way (a row or a column in, out or moved, a
+  // width, the header row, formatting), as one step.
+  function setTable(uid, table) {
+    var i = indexOf(uid)
+    if (i < 0 || readOnly || blocksModel.get(i).type !== "table") return
+    var clean = Table.clean(table)
+    if (!clean) return
+    closeBurst()
+    var json = JSON.stringify(clean)
+    if (json === blocksModel.get(i).table) return
+    beginOp()
+    blocksModel.setProperty(i, "table", json)
+    endOp()
+  }
+
+  // The cursor's in a table's cell.
+  function tableFocused(uid) {
+    closeSlash()
+    closeMention()
+    if (focusUid !== uid && items[focusUid] && items[focusUid].isText) items[focusUid].edit.deselect()
+    focusUid = uid
+    if (selectedList.length > 0 && !dragSelecting) clearBlockSelection()
+  }
+
+  // Up or down out of a table, `x` across the page: into the block above or
+  // below (or the table past it).
+  function leaveTable(uid, dir, x) {
+    var target = cursorNeighbor(indexOf(uid), dir)
+    if (target < 0) {
+      if (dir < 0) leaveTop()
+      return
+    }
+    var dest = items[uidAt(target)]
+    if (!dest) return
+    if (dest.type === "table") { dest.enter(dir, x - dest.x); return }
+    var y = dir < 0 ? dest.edit.contentHeight - dest.lineHeight * 0.5 : dest.lineHeight * 0.5
+    focusBlock(dest.uid, dest.edit.positionAt(Math.max(0, x - dest.x - dest.edit.x), Math.max(0, y)))
+  }
+
+  // The next block the cursor can go to: text, or a table.
+  function cursorNeighbor(index, dir) {
+    for (var i = index + dir; i >= 0 && i < blocksModel.count; i += dir) {
+      var r = blocksModel.get(i)
+      if ((Blocks.isText(r.type) || r.type === "table") && !isHidden(r.uid)) return i
+    }
+    return -1
+  }
+
+  // A table as HTML (copied, for other apps).
+  function tableHtml(t) {
+    if (!t) return ""
+    return "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">" + t.rows.map(function(r, i) {
+      var tag = t.header && i === 0 ? "th" : "td"
+      return "<tr>" + r.map(function(c, k) {
+        var tint = Table.colorOf(t, i, k)
+        function hex(id, back) { var e = Docs.colorEntry(id); return e ? (back ? e.background[0] : e.text[0]) : id }
+        var style = (tint.color ? "color:" + hex(tint.color, false) + ";" : "") + (tint.background ? "background-color:" + hex(tint.background, true) + ";" : "")
+        return "<" + tag + (style ? " style=\"" + style + "\"" : "") + ">" + c + "</" + tag + ">"
+      }).join("") + "</tr>"
+    }).join("") + "</table>"
+  }
+
+  // A branch folded or unfolded: like a toggle, saved but not a step to undo.
+  function setMindMapFolds(uid, folds) {
+    var i = indexOf(uid)
+    if (i < 0 || blocksModel.get(i).type !== "mindmap") return
+    closeBurst()
+    blocksModel.setProperty(i, "folds", Mindmap.cleanFolds(folds, Mindmap.count(blocksModel.get(i).outline)))
+    stable = snapshot()
+    changed()
+  }
+
+  // Starts writing on a mind map's topic.
+  function editMindMap(uid) {
+    var item = items[uid]
+    if (item && typeof item.startMindMap === "function") item.startMindMap()
+  }
+
+  // Blocks (and what's inside them) as a mind map in their place, as one
+  // step: one block is the topic and what's inside it the ideas; several are
+  // the ideas of a topic called "Mind map". Not when a page is among them
+  // (it would go with them). The mind map's uid, or "".
+  function toMindMap(uids) {
+    if (readOnly) return ""
+    var ranges = subtreeRanges(uids)
+    if (ranges.length === 0) return ""
+    syncAll()
+    var rows = []
+    ranges.forEach(function(r) {
+      for (var k = r[0]; k <= r[1]; k++) {
+        var row = blocksModel.get(k)
+        rows.push({ uid: row.uid, type: row.type, indent: row.indent, outline: row.outline, color: row.color, table: row.table })
+      }
+    })
+    if (rows.some(function(b) { return b.type === "page" })) return ""
+    function words(b) { return Blocks.isText(b.type) ? Html.plainText(htmls[b.uid] || "").replace(/\s+/g, " ").trim() : "" }
+    // A table's rows are ideas: their cells' words.
+    function tableIdeas(b, depth) {
+      var t = b.table ? JSON.parse(b.table) : null
+      if (!t) return []
+      return t.rows.map(function(r) { return r.map(function(c) { return Html.plainText(c).replace(/\s+/g, " ").trim() }).filter(function(x) { return x !== "" }).join(" \u00b7 ") })
+        .filter(function(x) { return x !== "" }).map(function(x) { return { text: x, depth: depth, color: "", background: "" } })
+    }
+    // A block's color is its idea's: its text's, or its background's.
+    function idea(b, depth) {
+      var c = String(b.color || "")
+      var bg = /_background$/.test(c)
+      return { text: words(b), depth: depth, color: bg ? "" : c, background: bg ? c.replace(/_background$/, "") : "" }
+    }
+    var base = Math.min.apply(null, rows.map(function(b) { return b.indent }))
+    var single = ranges.length === 1
+    var items = []
+    rows.forEach(function(b, n) {
+      if (single && n === 0) return
+      var depth = b.indent - base + (single ? 0 : 1)
+      if (b.type === "mindmap") Mindmap.toList(b.outline).forEach(function(it) { it.depth += depth; items.push(it) })
+      else if (b.type === "table") tableIdeas(b, depth).forEach(function(it) { items.push(it) })
+      else if (words(b)) items.push(idea(b, depth))
+    })
+    var outline = Mindmap.fromList(single ? idea(rows[0], 0) : "Mind map", items)
+    var at = ranges[0][0]
+    var depthAt = blocksModel.get(at).indent
+    beginOp()
+    for (var j = ranges.length - 1; j >= 0; j--) for (var k = ranges[j][1]; k >= ranges[j][0]; k--) removeAt(k)
+    var made = insertBlock(at, { type: "mindmap", outline: outline, indent: depthAt }, "")
+    if (indexOf(made) === blocksModel.count - 1) insertBlock(blocksModel.count, { type: "p", indent: 0 }, "")
+    endOp()
+    clearBlockSelection()
+    return made
+  }
+
+  // A mind map as a bulleted list: its topic, and its ideas inside it.
+  function mindMapToList(uid) {
+    var i = indexOf(uid)
+    if (i < 0 || readOnly || blocksModel.get(i).type !== "mindmap") return
+    replaceWithBlocks(uid, Mindmap.toList(blocksModel.get(i).outline).map(function(it) {
+      return { type: "bullet", html: Html.escapeText(it.text), indent: it.depth,
+        color: it.background ? it.background + "_background" : it.color }
+    }))
+    clearBlockSelection()
+  }
+
   // Blocks a command sends in place of a block and the blocks inside it, as
   // deep as it was, as one step. The cursor stays where it is, or, if it was
   // in what went, goes to the end of what came.
@@ -758,6 +952,27 @@ FocusScope {
       c.indent = (b.indent || 0) + depth
       return c
     }), true)
+  }
+
+  // Every block replaced by `list` as it is (their ids kept: an earlier
+  // version of the page put back), as one step.
+  function resetBlocks(list) {
+    if (readOnly || !list) return
+    var clean = Blocks.cleanList(list, cleanOptions)
+    if (doc) {
+      clean = Workspace.applyFix(clean, Workspace.fixColumns(clean))
+      Workspace.normalizeDepths(clean)
+    }
+    clearBlockSelection()
+    closeSlash()
+    closeMention()
+    beginOp()
+    for (var k = blocksModel.count - 1; k >= 0; k--) removeAt(k)
+    clean.forEach(function(b, n) {
+      htmls[b.uid] = doc && b.type === "code" ? codeText(b.html || "") : b.html || ""
+      blocksModel.insert(n, row(b))
+    })
+    endOp()
   }
 
   // Every block replaced by `list` (a template on a blank page), as one
@@ -1095,6 +1310,12 @@ FocusScope {
 
   function focusInfo() {
     var item = items[focusUid]
+    // In a table: the cell.
+    if (item && item.type === "table" && item.tableView && item.tableView.writing) {
+      var t = item.tableView
+      var cell = t.cellAt(t.curRow, t.curCol)
+      return { uid: focusUid, pos: 0, anchor: -1, cell: { r: t.curRow, c: t.curCol, pos: cell ? cell.edit.cursorPosition : -1 } }
+    }
     if (!item || !item.isText) return { uid: focusUid, pos: 0, anchor: -1 }
     var e = item.edit
     var hasSel = e.selectionStart !== e.selectionEnd
@@ -1162,7 +1383,8 @@ FocusScope {
     restoring = false
     refreshNumbers()
     var f = snap.focus
-    if (f && f.uid && items[f.uid]) focusBlock(f.uid, f.pos, f.anchor)
+    if (f && f.cell && items[f.uid] && items[f.uid].tableView) items[f.uid].tableView.focusCell(f.cell.r, f.cell.c, f.cell.pos)
+    else if (f && f.uid && items[f.uid]) focusBlock(f.uid, f.pos, f.anchor)
     else if (blocksModel.count > 0) focusBlock(uidAt(0), 0)
   }
 
@@ -1354,6 +1576,10 @@ FocusScope {
     var made = insertBlock(at, p, "")
     if (!Blocks.isText(command.type) && indexOf(made) === blocksModel.count - 1) insertBlock(blocksModel.count, { type: "p", indent: 0 }, "")
     endOp()
+    // A new mind map: you write its topic first.
+    if (command.type === "mindmap") { Qt.callLater(function() { root.editMindMap(made) }); return }
+    // A new table: you write in its first cell.
+    if (command.type === "table") { Qt.callLater(function() { if (root.items[made]) root.items[made].enter(1, 0) }); return }
     if (Blocks.isText(command.type)) focusBlock(made, 0)
     else {
       var after = textNeighbor(indexOf(made), 1)
@@ -1662,7 +1888,7 @@ FocusScope {
   // Up or down into the next block, keeping the cursor's place across.
   function moveVertical(item, dir) {
     var index = indexOf(item.uid)
-    var target = textNeighbor(index, dir)
+    var target = doc ? cursorNeighbor(index, dir) : textNeighbor(index, dir)
     if (target < 0) {
       if (dir < 0) leaveTop()
       else item.edit.cursorPosition = item.edit.length
@@ -1670,6 +1896,10 @@ FocusScope {
     }
     var dest = items[uidAt(target)]
     if (!dest) return
+    if (dest.type === "table") {
+      dest.enter(dir, item.x + item.edit.x + item.edit.cursorRectangle.x - dest.x)
+      return
+    }
     var x = item.x + item.edit.x + item.edit.cursorRectangle.x - dest.x - dest.edit.x
     var y = dir < 0 ? dest.edit.contentHeight - dest.lineHeight * 0.5 : dest.lineHeight * 0.5
     focusBlock(dest.uid, dest.edit.positionAt(Math.max(0, x), Math.max(0, y)))
@@ -2049,6 +2279,11 @@ FocusScope {
     var next = blocksModel.get(index + 1)
     // The end of a column: the next column isn't something to delete.
     if (Workspace.isStructure(next.type)) return
+    // A table or a mind map below: pick it first, so it's never lost by accident.
+    if (doc && (next.type === "table" || next.type === "mindmap")) {
+      selectBlocks(next.uid, next.uid)
+      return
+    }
     beginOp()
     if (!Blocks.isText(next.type)) {
       removeAt(index + 1)
@@ -2855,6 +3090,7 @@ FocusScope {
       else if (b.type === "code") out += "<pre>" + inner + "</pre>"
       else if (b.type === "divider") out += "<hr />"
       else if (b.type === "time") out += "<p>" + (b.label ? Html.escapeText(b.label) + " " : "") + inner + "</p>"
+      else if (b.type === "table") out += tableHtml(b.table)
       else if (b.type === "image" || b.type === "calendar" || b.type === "columns" || b.type === "column") out += ""
       else out += "<p>" + inner + "</p>"
     })
@@ -2918,6 +3154,14 @@ FocusScope {
       return copiedBlocks.map(function(b) { var c = JSON.parse(JSON.stringify(b)); delete c.uid; return c })
     }
     var keep = keepLook === true || (lastCopied !== "" && normalizeClip(raw) === lastCopied)
+    // In Pages, a table (from a spreadsheet, a web page) is a table.
+    if (doc) {
+      var whole = clipArea.getFormattedText(0, n)
+      if (/<table[\s>]/i.test(whole)) {
+        var read = Import.fromHtml(whole, null, {}).blocks
+        if (read.some(function(b) { return b.type === "table" })) return read
+      }
+    }
     var out = []
     var start = 0
     for (var i = 0; i <= raw.length; i++) {
@@ -2939,9 +3183,12 @@ FocusScope {
     }
     // Trailing empty paragraph from the copy.
     if (out.length > 1 && out[out.length - 1].html === "" && out[out.length - 1].type === "p") out.pop()
-    // In Pages, Markdown pasted as plain text becomes blocks.
+    // In Pages, Markdown pasted as plain text becomes blocks, and cells
+    // from a spreadsheet (a row a line, tabs between) a table.
     if (doc && out.every(function(b) { return b.type === "p" })) {
       var text = raw.replace(/[\u2028\u2029]/g, "\n")
+      var cells = Table.fromTSV(text)
+      if (cells) return [{ type: "table", table: { rows: cells, header: true }, indent: 0 }]
       if (Import.looksLikeMarkdown(text)) {
         var md = Import.fromMarkdown(text, null, {}).blocks
         if (md.length) return md

@@ -16,6 +16,7 @@ Pop {
 
   signal moveRequested(var uids)
   signal toPageRequested(string uid)
+  signal mindMapRequested(var uids)
   signal agentRequested(var uids)
 
   focus: false
@@ -79,6 +80,18 @@ Pop {
       theme: menu.theme; icon: menu.theme.icons.toPage; text: "Turn into page"
       width: parent.width
       onClicked: { var uid = menu.uids[0]; menu.close(); menu.toPageRequested(uid) }
+    }
+    MenuRow {
+      visible: menu.panel === "main" && menu.text && !menu.editor.readOnly
+      theme: menu.theme; icon: menu.theme.icons.mindmap; text: "Turn into mind map"
+      width: parent.width
+      onClicked: { var list = menu.uids; menu.close(); menu.mindMapRequested(list) }
+    }
+    MenuRow {
+      visible: menu.panel === "main" && menu.first !== null && menu.first.type === "mindmap" && !menu.editor.readOnly
+      theme: menu.theme; icon: menu.theme.icons.bullets; text: "Turn into list"
+      width: parent.width
+      onClicked: { var uid = menu.uids[0]; menu.close(); menu.editor.mindMapToList(uid) }
     }
     MenuRow {
       visible: menu.panel === "main"

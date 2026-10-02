@@ -4,7 +4,7 @@
 // italics, strikethrough, highlights, code, links, nested lists, to-dos and
 // whether they're ticked, quotes, callouts, code blocks and their language,
 // dividers, pictures, toggles, columns (from Notion's HTML), colors, tables
-// (as their text, until Pages has tables), links between the pages imported.
+// (their cells' formatting too), links between the pages imported.
 //
 // Every reader gives { title, icon, blocks }: blocks as the editor has them
 // (in order, each with its depth), their text sanitized as any page's is.
@@ -18,6 +18,7 @@
 .pragma library
 .import "Html.js" as Html
 .import "Blocks.js" as Blocks
+.import "Mindmap.js" as Mindmap
 
 var MONO = "'iA Writer Mono S'"
 var HIGHLIGHT = "#fbf3db"
@@ -417,7 +418,9 @@ function readBlocks(lines, ctx, refs) {
         i++
       }
       i++
-      emit({ type: "code", html: Html.fromPlainText(code.join("\n")), lang: langName(f.lang), indent: 0 })
+      var map = mindMap(f.lang, code.join("\n"))
+      if (map) emit({ type: "mindmap", outline: map, indent: 0 })
+      else emit({ type: "code", html: Html.fromPlainText(code.join("\n")), lang: langName(f.lang), indent: 0 })
       continue
     }
 
@@ -503,12 +506,12 @@ function readBlocks(lines, ctx, refs) {
       continue
     }
 
-    // A table: as its text, lined up, in a code block (Pages has no tables yet).
+    // A table, its first row the header.
     if (i + 1 < lines.length && tableRow(line) && isTableRule(lines[i + 1])) {
       var rows = [tableRow(line)]
       i += 2
       while (i < lines.length && !isBlank(lines[i]) && lines[i].indexOf("|") >= 0) { rows.push(tableRow(lines[i])); i++ }
-      emit({ type: "code", lang: "Table", html: tableText(rows).map(Html.escapeText).map(function(l) { return l.replace(/  /g, " &nbsp;") }).join("<br />"), indent: 0 })
+      emit({ type: "table", table: { rows: rows.map(function(r) { return r.map(function(c) { return inlineHtml(c, ctx, refs) }) }), header: true }, indent: 0 })
       continue
     }
 
@@ -551,21 +554,21 @@ function readBlocks(lines, ctx, refs) {
   return out
 }
 
-// A table's rows as lines of text, the columns lined up.
-function tableText(rows) {
-  var widths = []
-  rows.forEach(function(r) { r.forEach(function(c, k) { widths[k] = Math.max(widths[k] || 0, c.length) }) })
-  var lines = rows.map(function(r) { return r.map(function(c, k) { return c + new Array(Math.max(0, (widths[k] || 0) - c.length) + 1).join(" ") }).join("  \u2502  ").replace(/\s+$/, "") })
-  if (lines.length > 1) lines.splice(1, 0, widths.map(function(w) { return new Array(w + 1).join("\u2500") }).join("\u2500\u2500\u253c\u2500\u2500"))
-  return lines
-}
-
 var LANGS = { js: "JavaScript", javascript: "JavaScript", ts: "TypeScript", typescript: "TypeScript", py: "Python", python: "Python", sh: "Bash", bash: "Bash",
   shell: "Bash", zsh: "Bash", console: "Bash", c: "C", cpp: "C++", "c++": "C++", cs: "C#", csharp: "C#", css: "CSS", go: "Go", golang: "Go", html: "HTML",
   java: "Java", json: "JSON", kotlin: "Kotlin", kt: "Kotlin", lua: "Lua", make: "Makefile", makefile: "Makefile", md: "Markdown", markdown: "Markdown",
   nix: "Nix", php: "PHP", qml: "QML", rb: "Ruby", ruby: "Ruby", rs: "Rust", rust: "Rust", sql: "SQL", swift: "Swift", toml: "TOML", yaml: "YAML", yml: "YAML",
   zig: "Zig", dockerfile: "Dockerfile", docker: "Dockerfile", xml: "XML", svg: "XML", diff: "Diff", patch: "Diff", ini: "INI",
   scss: "SCSS", jsx: "JavaScript", tsx: "TypeScript", text: "", plaintext: "", "plain text": "" }
+
+// A code block that's a mind map: ```mindmap (an outline), or a Mermaid
+// mind map (```mermaid starting "mindmap"). Its outline, or "".
+function mindMap(lang, text) {
+  var l = String(lang || "").trim().toLowerCase()
+  if (l === "mindmap" || l === "mind-map" || l === "mind map") return Mindmap.clean(text)
+  if (l === "mermaid" && /^\s*mindmap\s*(\n|$)/.test(String(text || ""))) return Mindmap.clean(text)
+  return ""
+}
 
 // A code block's language as Pages names it (kept as written if it's not
 // one it knows, so nothing's lost).
@@ -752,6 +755,24 @@ function inlineOf(nodes, ctx) {
   return out
 }
 
+// A table cell's text: its paragraphs (and lines) a line each.
+function cellOf(cell, ctx) {
+  var parts = []
+  var run = []
+  function flush() {
+    if (run.length) parts.push(inlineOf(run, ctx))
+    run = []
+  }
+  ;(cell.kids || []).forEach(function(k) {
+    if (isInline(k)) { run.push(k); return }
+    flush()
+    parts.push(cellOf(k, ctx))
+  })
+  flush()
+  var html = parts.map(function(p) { return p.replace(/^(\s|&nbsp;)+|(\s|&nbsp;|<br \/>)+$/g, "") }).filter(function(p) { return p !== "" }).join("<br />")
+  return Html.sanitize(html, true)
+}
+
 // A Notion color's light-page hex (as Docs.js has them).
 function notionHex(value) {
   var table = {
@@ -853,7 +874,9 @@ function readHtmlBlock(n, depth, out, ctx, opts) {
     var codeNode = find(n, function(k) { return k.tag === "code" }) || n
     var lang = /(?:^|\s)language-([^\s]+)/.exec(codeNode.attrs && codeNode.attrs["class"] || "")
     var lines = textOf(codeNode).replace(/\n$/, "").split("\n")
-    add({ type: "code", lang: langName(lang ? lang[1].replace(/_/g, " ") : ""), html: Html.fromPlainText(lines.join("\n")), indent: depth })
+    var map = mindMap(lang ? lang[1] : "", lines.join("\n"))
+    if (map) add({ type: "mindmap", outline: map, indent: depth })
+    else add({ type: "code", lang: langName(lang ? lang[1].replace(/_/g, " ") : ""), html: Html.fromPlainText(lines.join("\n")), indent: depth })
     return
   }
   if (tag === "blockquote") {
@@ -938,14 +961,20 @@ function readHtmlBlock(n, depth, out, ctx, opts) {
     return
   }
   if (tag === "table") {
+    // Its rows (not a table's inside a cell); the first a header row if
+    // its cells are <th>s.
     var rows = []
+    var header = false
     ;(function walk(node) {
       (node.kids || []).forEach(function(k) {
-        if (k.tag === "tr") rows.push(k.kids.filter(function(cell) { return cell.tag === "td" || cell.tag === "th" }).map(function(cell) { return textOf(cell).replace(/\s+/g, " ").trim() }))
-        else if (k.tag) walk(k)
+        if (k.tag === "tr") {
+          var cells = k.kids.filter(function(cell) { return cell.tag === "td" || cell.tag === "th" })
+          if (rows.length === 0) header = cells.length > 0 && cells.every(function(cell) { return cell.tag === "th" })
+          rows.push(cells.map(function(cell) { return cellOf(cell, ctx) }))
+        } else if (k.tag && k.tag !== "table") walk(k)
       })
     })(n)
-    if (rows.length) add({ type: "code", lang: "Table", html: tableText(rows).map(Html.escapeText).map(function(l) { return l.replace(/  /g, " &nbsp;") }).join("<br />"), indent: depth })
+    if (rows.length) add({ type: "table", table: { rows: rows, header: header }, indent: depth })
     return
   }
   // A paragraph that's only pictures (as Notion writes them): the pictures.

@@ -80,3 +80,20 @@ function prompt(o) {
     + "my request is about. When you're done, tell me what you changed.")
   return out.join("\n")
 }
+
+// The agents Omarchy offers, from its menu file (omarchy-menu.jsonc, where
+// each is "setup.default.agent.<name>" with its label): [{ name, label }].
+// Omarchy keeps that list, so a new agent shows up here when it adds one.
+function menuAgents(text) {
+  var out = []
+  var seen = {}
+  var re = /"setup\.default\.agent\.([a-z0-9][a-z0-9-]{0,30})"\s*:\s*\{([^}]*)\}/g
+  var m
+  while ((m = re.exec(String(text || ""))) !== null) {
+    if (seen[m[1]]) continue
+    seen[m[1]] = true
+    var label = /"label"\s*:\s*"([^"]{1,40})"/.exec(m[2])
+    out.push({ name: m[1], label: label ? label[1] : name(m[1]) })
+  }
+  return out
+}

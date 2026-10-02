@@ -10,6 +10,8 @@
 // plain JavaScript with no QML or Node APIs.
 .pragma library
 .import "Html.js" as Html
+.import "Mindmap.js" as Mindmap
+.import "Table.js" as Table
 
 // Every kind of block. `rows` is how many ruled lines one line of its text
 // takes (a big heading takes two, so the text below stays on the lines).
@@ -40,7 +42,11 @@ var KINDS = {
   // Columns side by side: a columns block holds two or more column blocks,
   // and each column holds blocks. Neither shows itself.
   columns: { label: "Columns",     text: false, rows: 1 },
-  column:  { label: "Column",      text: false, rows: 1 }
+  column:  { label: "Column",      text: false, rows: 1 },
+  // A mind map (Pages only): its ideas as an outline (Mindmap.js).
+  mindmap: { label: "Mind map",    text: false, rows: 1 },
+  // A table (Pages only): rows of cells (Table.js).
+  table:   { label: "Table",       text: false, rows: 1 }
 }
 
 // Colors a block (or its background) can have in Pages: "blue" is blue text,
@@ -211,6 +217,18 @@ function clean(raw, options) {
   if (type === "calendar") {
     block.month = isMonth(raw.month) ? raw.month : thisMonth()
     block.marks = cleanMarks(raw.marks)
+  }
+  if (type === "mindmap") {
+    // Only in Pages, and only with something in it.
+    var outline = nest && typeof raw.outline === "string" && raw.outline.length <= 100000 ? Mindmap.clean(raw.outline) : ""
+    if (!outline) return null
+    block.outline = outline
+    block.folds = Mindmap.cleanFolds(raw.folds, Mindmap.count(outline))
+  }
+  if (type === "table") {
+    var table = nest ? Table.clean(raw.table) : null
+    if (!table) return null
+    block.table = table
   }
   return block
 }

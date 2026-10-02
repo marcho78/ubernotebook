@@ -90,6 +90,7 @@ Pop {
     Rectangle { width: parent.width; height: 1; color: menu.theme.line }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.view && menu.view.favorite ? menu.theme.icons.star : menu.theme.icons.starOutline; text: menu.view && menu.view.favorite ? "Out of Favorites" : "Add to Favorites"; onClicked: { menu.close(); menu.view.toggleFavorite(menu.view.page.id) } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.agent; text: "Ask agent about this page"; hint: "Ctrl+J"; onClicked: { menu.close(); menu.view.openAgent("page") } }
+    MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.history; text: "Page history"; onClicked: { menu.close(); menu.view.openHistory() } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.duplicate; text: "Duplicate"; onClicked: { menu.close(); menu.view.duplicatePage(menu.view.page.id) } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.copy; text: "Copy as Markdown"; onClicked: { menu.close(); menu.view.copyMarkdown() } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.export; text: "Export with its pages\u2026"; onClicked: { menu.close(); menu.view.exportPage() } }

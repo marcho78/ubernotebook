@@ -37,7 +37,7 @@ check(opaque and opaque.spec.opacity == "1 1" and opaque.spec.tag == "-default-o
 check(find_rule("^Omanote Quick Note$", "float"), "the quick note floats")
 local card = find_rule("^Omanote Quick Note$", "float")
 check(card.spec.border_size == 0 and card.spec.no_shadow and card.spec.decorate == false, "the quick note is just the note")
-check(find_rule("^(Choose a picture|Import notes|Import a folder of notes)$", "float"), "the picture picker and the import dialogs float")
+check(find_rule("^(Choose a picture|Import notes|Import a folder of notes|Export to)$", "float"), "the picture picker and the import and export dialogs float")
 
 -- Registering again replaces the shortcuts and reuses the rules, so nothing piles up.
 check(register(options) == "ok", "registers again")

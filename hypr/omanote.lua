@@ -23,7 +23,7 @@ local STATE = "__marcho78_omanote"
 local CLASS = "^org\\.quickshell$"
 local MAIN_TITLE = "^Omanote$"
 local QUICK_TITLE = "^Omanote Quick Note$"
-local PICKER_TITLE = "^(Choose a picture|Import notes|Import a folder of notes)$"
+local PICKER_TITLE = "^(Choose a picture|Import notes|Import a folder of notes|Export to)$"
 
 return function(options)
   options = type(options) == "table" and options or {}

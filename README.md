@@ -283,8 +283,11 @@ takes them along.
 | A reminder | **@** and a date, then *Remind me*: an Omarchy notification then (click it to open the page) |
 | A link to a page in a line | **[[** and part of its name (or a new name, for a new page); click the link to go there |
 | An emoji | **:** and part of its name: `:rocket`, `:tada`, `:+1` (pick one, or type the whole name and a closing `:`) |
-| Ask your agent | **Ctrl+J**, `/agent`, or *Ask agent* in a block's ⋮⋮ menu, on the toolbar over selected words, or in the page's ⋯ menu: Omarchy's default coding agent (Claude Code, Codex, OpenCode...) does it, and its changes show up on the page (see [For AI agents and scripts](#for-ai-agents-and-scripts)) |
+| Ask your agent | The AI button at the top of the page, **Ctrl+J**, `/agent`, or *Ask agent* in a block's ⋮⋮ menu, on the toolbar over selected words, or in the page's ⋯ menu: Omarchy's default coding agent (Claude Code, Codex, OpenCode...) does it, and its changes show up on the page (see [For AI agents and scripts](#for-ai-agents-and-scripts)) |
 | Start a page from a template | On a new, empty page: pick one under *Start with a template* (a daily, weekly or monthly planner, a journal, a habit tracker, meeting or lecture notes, a project plan, a to-do list, a reading log, a recipe, a packing list). Each is laid out as a page: sections side by side, a callout for the one thing that matters, the day hour by hour, habits to tick, the month's calendar, and on every empty line, faintly, what goes there. **Ctrl+Z** takes it back off |
+| A mind map | `/mindmap`, or *Turn into mind map* in a nested list's ⋮⋮ menu (the top item is the topic, the items inside it the ideas). Click an idea to write on it: **Enter** adds the next idea, **Tab** one branching from it, **Shift+Tab** moves it out a level, **↑ ↓** move between ideas, **Backspace** on an empty idea takes it away, **Ctrl+Backspace** an idea and its branch, **Esc** stops. The color button over the idea you're writing on gives it a text color and a background (a main idea's color is its whole branch's): one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, a color picker (saturation and brightness, hue, a hex to type or paste, and how well the idea's text reads on it) that shows the color on the map as you pick it; **Enter** or *Apply* keeps it, **Esc** or *Cancel* puts back what was there. Text on a background with no text color of its own is made readable. The circle at an idea's end folds its branch. The block's own ⋮⋮ *Color* puts a background behind the whole map, or sets the text color of ideas with none of their own. *Turn into list* (⋮⋮) makes it a nested list again |
+| A table | `/table` (or paste cells from a spreadsheet, or a Markdown table). Click a cell to write in it: **Tab** and **Shift+Tab** go to the next and previous cell (**Tab** in the last one makes a new row), **Enter** goes down a row (past the last, a new one), **Shift+Enter** is a new line in the cell, the arrows cross into the next cell at a cell's ends and leave the table at its top and bottom, **Esc** picks the whole table. **Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+Shift+X** and **Ctrl+E** format what's selected in a cell (the toolbar over selected words is for text blocks). Point at a cell: the handle on its row's left and on its column's top open their menus (insert above or below, left or right; move; delete; *Header row* on or off), the **+** bars along the bottom and the right add a row or a column, and the lines between columns drag to make them wider. Colors: the color button on the cell you're in, or *Color* in a row's or a column's menu, gives a text color and a background: one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, the color picker (shown in the table as you pick, with how well the text reads; **Enter** keeps it, **Esc** puts back what was there). Cells pasted from a spreadsheet into a cell fill the table from there, and it grows to take them |
+| Go back to an earlier version | *Page history* in the page's ⋯ menu: the versions Omanote kept (every ten minutes while you write, and before an agent or a command changes the page), each shown as it was. *Restore this version* puts it back as one step **Ctrl+Z** takes back, and keeps the page as it was in the history too. Pages made inside the page since stay in it |
 | A habit to keep | `/habit`: its name, and a circle for each day of the week to click when it's done (today's is rimmed in your accent) |
 | A month at a glance | `/calendar`: click a date to circle it; the arrows over it go to other months |
 | Turn a block into a page | **⋮⋮** → *Turn into page*: its text is the page's name, and what's inside it goes along |
@@ -302,8 +305,12 @@ headings, which fold what's under them), bulleted, numbered (1, a, i as they nes
 lists, toggles, quotes, callouts with an emoji (click it for another), code
 with its language (in its colors: 30 languages, from Bash to Zig) and a Copy button, dividers, pictures (pasted, dropped or
 picked), pages, links to pages, a table of contents of the page's
-headings, habits with a circle for each day of the week, and a month's
-calendar. Nine text colors and nine backgrounds (Notion's), for a whole block
+headings, habits with a circle for each day of the week, a month's
+calendar, mind maps (the topic in the middle, ideas branching out in a
+color for each branch, laid out by themselves), and tables (rows and
+columns, a header row, columns as wide as you drag them, cells in a text
+color and a background of their own, and the cells' words formatted like
+any other). Nine text colors and nine backgrounds (Notion's), for a whole block
 or a few words; a callout or a colored block keeps the blocks inside it in
 its color.
 
@@ -324,14 +331,15 @@ more through LibreOffice (which Omarchy has) or pandoc. A folder's tree
 becomes pages inside pages, with a Notion page's own folder inside it; pages
 keep Notion's ids as their UUIDs; links between the files (and
 `[[wikilinks]]`) become links between the pages; pictures are copied in.
-Tables come in as their text, lined up, until Pages has tables; pictures on
-the web stay links (Omanote never goes online).
+Tables come in as tables, their cells' bold, links and line breaks kept;
+pictures on the web stay links (Omanote never goes online).
 
 **A page** has an icon (an emoji), a cover (a gradient or a picture of your
 own), a title, and a look of its own in its ⋯ menu: the Default, Serif or
 Mono font, small text, and full width. The same menu copies it as Markdown,
-exports it and the pages in it, moves it into another page, or puts it in the
-trash. The sidebar shows every page as a tree; the trash at its foot puts a
+exports it and the pages in it (as Markdown files, to a folder you pick or to
+`Exports/`, as Settings → Exports says), moves it into another page, or puts it
+in the trash. The sidebar shows every page as a tree; the trash at its foot puts a
 page back where it was, or deletes it from Pages.
 
 Pages follows your Omarchy theme, light or dark.
@@ -382,9 +390,10 @@ Omanote/
   Pages/
     index.json                  the tree of pages: titles, icons, which page is in which
     6f1c2b9e-….json             a page of Pages, named by its UUID
+    history/6f1c2b9e-…/         its earlier versions, a file each, named for when they were kept (the newest 100)
     assets/                     pictures and covers on Pages' pages
   .trash/                       notebooks and pages you threw away
-  Exports/                      notebooks and pages exported as Markdown
+  Exports/                      notebooks and pages exported as Markdown (with Settings → Exports on "Exports folder")
 ```
 
 A page of Pages is its blocks as Notion keeps them: the ids of the blocks on
@@ -412,7 +421,9 @@ Nothing is ever deleted: throwing a page or notebook away moves it to
 `.trash`.
 
 *Export notebook…* (⋯, or right-click on the shelf) writes each page as a
-Markdown file, with its pictures, into `Exports/`, and opens the folder.
+Markdown file, with its pictures, into a folder of its own, and opens it. Where
+that folder goes is a setting (Settings → Exports): a folder you pick each time
+(the default), or `Exports/` in your notebooks folder.
 *Copy page as Markdown* puts the page on the clipboard. Highlights come out as
 `==marked==`, sticky notes as `> [!NOTE]` callouts, checklists as `- [ ]`,
 time slots as a list with the times in bold, habits as a table of the week and
@@ -437,6 +448,8 @@ in `Defaults.js`.
 | `reduceMotion` | `false` | fade instead of turning pages and swinging covers |
 | `zoom` | `100` | 60 to 200 |
 | `space` | `notebooks` | which Omanote opens in: `notebooks` or `pages` (the one you were in) |
+| `recentColors` | `""` | the colors of your own you picked last in a mind map, newest first (up to 8) |
+| `exportTo` | `ask` | where exports go: `ask` (a folder picker each time) or `folder` (`Exports/` in your notebooks folder) |
 | `inbox` | `""` | the page agents' and scripts' new pages go into: made (as *Inbox*) the first time; `omarchy-shell omanote set inbox <page id>` makes it another page |
 | `pen`, `paper`, `paperColor`, `spacing`, `cover`, `material`, `binding` | `sans`, `ruled`, `ivory`, `regular`, `navy`, `leather`, `spiral` | what a new notebook starts with (the choices of the last one you made) |
 
@@ -488,18 +501,24 @@ omarchy-shell omanote trash <page id>             # to the trash, where it can b
 
 Pages come in as Markdown files, since an argument can't carry a page. They
 keep their headings, nested lists, to-dos and ticks, code with its language and
-callouts. `[[Page title]]` links to the page called that. A date is
+callouts. A `mindmap` code block (an outline: the topic, then each idea
+indented two spaces under the one it branches from; or Mermaid's `mindmap`) is
+a mind map, so "make me a mind map of…" puts one on a page. An idea's colors
+go in braces after it: `Marketing {red}`, `Marketing {blue background}`,
+`Marketing {red, yellow background}`, or any hex color, `Marketing {#ff8800}`. A Markdown table (`| a | b |` lines, the second `|---|---|`) is a
+table, its first row the header. `[[Page title]]` links to the page called that. A date is
 `[@Fri 2 Oct](omanote://date/2026-10-02)`, and a reminder is
 `[⏰ Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30)`: a notification at
 that time. `add` puts pages in an Inbox page at the top of Pages, made the first
-time it's needed; move them anywhere. Nothing is deleted for good, and a locked
-page isn't changed. On the page you have open, what's added goes in as one step
+time it's needed; move them anywhere. Nothing is deleted for good, a locked
+page isn't changed, and the page as it was is kept in its *Page history*
+before a command changes it. On the page you have open, what's added goes in as one step
 you can undo, and your cursor stays where it is.
 
 `replace` and `insertAfter` won't change columns themselves (only what's in
 them), and `replace` won't take a block with a page inside it.
 
-**Ask your agent, from Omanote.** In Pages, **Ctrl+J**, `/agent`, *Ask agent*
+**Ask your agent, from Omanote.** In Pages, the AI button at the top of the page, **Ctrl+J**, `/agent`, *Ask agent*
 in a block's ⋮⋮ menu, *Ask* on the toolbar over selected words, or *Ask agent
 about this page* in the page's ⋯ menu opens a box for what you'd like (or a
 suggestion: to-dos, a summary, carrying on writing, linking related pages).
@@ -507,8 +526,9 @@ It goes to Omarchy's default coding agent, whichever you chose with
 `omarchy default agent` (Claude Code, Codex, OpenCode, Gemini, Crush, Cursor,
 Pi...), which opens in its own terminal and does it with the commands above,
 so what it changes shows up on the page as it goes, each change a step you can
-undo. The box says which agent it is, and *Change* (or, with none yet, *Choose
-one*) opens Omarchy's menu to pick another. The agent gets the page's id, the
+undo. The box says which agent it is; click it to choose another of the agents
+installed here (Omarchy's list of them). That makes it Omarchy's default agent
+too, and opens nothing. The agent gets the page's id, the
 ids of the blocks you picked (or the empty line you're on, where its writing
 goes), the words you selected, and where the omanote skill is; it reads the
 rest itself. Omarchy starts it the way it starts every agent from a menu, with
@@ -581,6 +601,15 @@ quick-note card (`Notebook.qml`, `app/`), and the icon in the bar.
   character (it colors again a moment after you stop typing). `Api.qml`
   answers the commands agents and scripts send over IPC, through the same
   store as the window, and `Agent.js` writes what *Ask agent* hands your agent.
+  A mind map keeps its ideas as an outline; `Mindmap.js` reads it (and
+  Mermaid's), changes it and lays it out, and `app/MindMap.qml` draws it and
+  lets you write on it. A table keeps its rows of cells (each a little rich
+  text), whether its first row is a header, and its columns' widths;
+  `Table.js` cleans and changes it (its cells' colors too, which go with
+  their rows and columns; and it reads spreadsheet cells and writes
+  Markdown, which has no colors), and `app/TableBlock.qml` draws it and lets you write in it.
+  `Workspace.qml` keeps each page's earlier versions in `Pages/history/`, and
+  `app/HistoryPanel.qml` shows them and puts one back.
 * **Blocks** (`Blocks.js`) know how Enter, Backspace and numbering work for
   each kind; **templates**, and the dates planners go on by, are in
   `Templates.js`; **papers, pens and inks** are in `Papers.js`, **covers** in
@@ -683,11 +712,14 @@ at all).
 * Pages grow as long as you write; they're not cut into printed-page lengths.
 * Drawings stay where you drew them: if the text under them moves (a line
   added above, the window narrower), they don't follow it.
-* Find on a page looks through the writing, not the title; search on the
-  shelf looks through both.
-* No tables, no spell checking (Qt Quick's text editor has neither), and no
-  printing or PDF export: export as Markdown, or copy a page.
-* Pages has no databases (on purpose), no simple tables, no @-mentions of
+* Find on a page looks through the writing, not the title, a table's cells
+  or a mind map's ideas; search (Ctrl+P, and on the shelf) looks through all
+  of them.
+* Notebooks have no tables (Pages has them), no spell checking (Qt Quick's
+  text editor has none), and no printing or PDF export: export as Markdown,
+  or copy a page.
+* Pages has no databases (on purpose: a table is rows and columns of text),
+  no merged cells, no @-mentions of
   people (Omanote has one writer), and no syncing between computers; pages move into other pages with *Move to…*, not by
   dragging them in the sidebar. Columns are at the top of a page (not inside
   a toggle or a list), as Notion has them.

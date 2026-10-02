@@ -270,6 +270,26 @@ Item {
       compare(json(api.replace(c.id, cols.id, file("x.md", "x"))).ok, false, "not columns themselves")
     }
 
+    function test_10_an_agent_makes_a_mind_map() {
+      fresh()
+      var r = json(api.add("", file("m.md", "# Launch plan\n\n```mindmap\nLaunch\n  Marketing\n    Blog post\n  Engineering\n```\n\nNotes under it.")))
+      verify(r.ok, JSON.stringify(r))
+      var list = json(api.blocks(r.id))
+      compare(list[0].type, "mindmap", "a mind map block on the page")
+      compare(list[0].text, "Launch\n  Marketing\n    Blog post\n  Engineering")
+      verify(api.read(r.id).indexOf("```mindmap\nLaunch\n  Marketing\n    Blog post\n  Engineering\n```") >= 0, "read gives it back the same way")
+      verify(json(api.find("blog post")).some(function(p) { return p.id === r.id }), "found by its ideas")
+      // Changed by the agent while the page is open: one step you can undo.
+      view.open(r.id)
+      tryVerify(function() { return view.page && view.page.id === r.id }, 2000)
+      compare(json(api.replace(r.id, list[0].id, file("m2.md", "```mermaid\nmindmap\n  root((Launch))\n    Marketing\n    Engineering\n    Support\n```"))).ok, true)
+      var b = view.editor.blockAt(0)
+      compare(b.type, "mindmap")
+      compare(b.outline, "Launch\n  Marketing\n  Engineering\n  Support")
+      view.editor.undo()
+      compare(view.editor.blockAt(0).outline, "Launch\n  Marketing\n    Blog post\n  Engineering")
+    }
+
     function test_8_without_the_window() {
       fresh()
       api.ui = null

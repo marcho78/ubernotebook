@@ -93,6 +93,9 @@ QtObject {
     textColor: "\u{f069e}", palette: "\u{f0e0c}", newPage: "\u{f1a9e}", width: "\u{f084e}",
     tree: "\u{f13d2}", random: "\u{f049f}", hideSidebar: "\u{f013d}", forward: "\u{f0054}", swap: "\u{f04e1}",
     columns: "\u{f056d}", star: "\u{f04ce}", starOutline: "\u{f04d2}", lock: "\u{f033e}", unlock: "\u{f0fc7}",
-    duplicate: "\u{f0191}", toPage: "\u{f0ab9}", agent: "\u{f06a9}"
+    duplicate: "\u{f0191}", toPage: "\u{f0ab9}", agent: "\u{f06a9}", mindmap: "\u{f0645}",
+    table: "\u{f04eb}", rowAbove: "\u{f04f4}", rowBelow: "\u{f04f3}", rowRemove: "\u{f04f5}",
+    colLeft: "\u{f04ed}", colRight: "\u{f04ec}", colRemove: "\u{f04ee}", header: "\u{f121d}",
+    arrowUp: "\u{f005d}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}"
   })
 }

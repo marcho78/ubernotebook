@@ -8,6 +8,7 @@ import "../Import.js" as Import
 import "../Html.js" as Html
 import "../Templates.js" as Templates
 import "../Agent.js" as Agent
+import "../Colors.js" as Colors
 
 // Pages: the other way to write in Omanote, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -58,6 +59,7 @@ FocusScope {
   readonly property real pageW: format.width === "full" ? Math.max(360, main.width - 2 * 96) : Math.max(320, Math.min(720, main.width - 2 * 84))
   readonly property alias editor: editor
   readonly property alias agentBox: agentPop
+  readonly property alias historyPanel: historyPanel
   readonly property var crumbs: { var r = workspace ? workspace.revision : 0; var rr = revision; return page && workspace ? Workspace.path(workspace.index, page.id) : [] }
   readonly property string cover: { var r = revision; return page ? page.cover : "" }
   // The pages that link to this one.
@@ -501,6 +503,29 @@ FocusScope {
     commit()
   }
 
+  // ---- page history ------------------------------------------------------------------------
+
+  function openHistory() {
+    if (!page || !workspace) return
+    commit()
+    historyPanel.openFor(page.id)
+  }
+
+  // An earlier version of the page put back, as a step Undo takes back (the
+  // page as it was is kept in its history first, too).
+  function restoreVersion(version, label) {
+    if (!page || !workspace || locked || !version) return
+    commit()
+    workspace.keepVersion(page.id, "restore", true)
+    var r = Workspace.versionToRestore(version, page, workspace.index)
+    editor.resetBlocks(r.blocks)
+    if (Workspace.cleanTitle(titleEdit.text) !== r.title) titleEdit.text = r.title
+    page.icon = Workspace.cleanIcon(r.icon)
+    markDirty()
+    commit()
+    toast("Restored the version from " + label + "  \u00b7  Ctrl+Z takes it back")
+  }
+
   function setIcon(emoji) {
     if (!page) return
     page.icon = Workspace.cleanIcon(emoji)
@@ -708,6 +733,12 @@ FocusScope {
           tip: view.favorite ? "In Favorites" : "Add to Favorites"
           onClicked: view.toggleFavorite(view.page.id)
         }
+        IconButton {
+          visible: view.page !== null
+          theme: view.theme; icon: view.theme.icons.agent; size: 30; iconSize: 16
+          tip: "Ask your agent  Ctrl+J"
+          onClicked: view.openAgent("auto")
+        }
         IconButton { theme: view.theme; icon: view.theme.icons.search; size: 30; iconSize: 16; tip: "Find on this page  Ctrl+F"; checked: findBar.shown; onClicked: findBar.toggle() }
         IconButton {
           id: moreButton
@@ -911,6 +942,7 @@ FocusScope {
           linkColor: view.theme.accent
           selectionColor: Qt.alpha(view.theme.accent, 0.3)
           dark: view.theme.dark
+          paper: view.theme.background
           smallText: view.small
           readOnly: view.locked
           strikeDone: view.settings.strikeDone !== false
@@ -970,6 +1002,9 @@ FocusScope {
           onPictureOpened: function(src) { view.workspace.files.openUrl(view.workspace.assetUrl(src)) }
           onPastePicture: function(afterUid) { view.workspace.pastePicture(function(src) { if (src) editor.insertPicture(afterUid, src, 0) }) }
           onLinkRequested: linkPop.openAt(bubble)
+          onMindMapColorsRequested: function(uid, anchor) { view.openIdeaColors(uid, anchor) }
+          onTableMenuRequested: function(uid, kind, index, anchor) { tableMenu.openFor(uid, kind, index, anchor, view) }
+          onTableColorsRequested: function(uid, anchor) { view.openTableColors(uid, anchor) }
           onAgentRequested: function(uid) {
             var i = editor.indexOf(uid)
             var empty = i >= 0 && Html.plainText(editor.blockAt(i).html || "") === "" && !(editor.items[uid] && editor.items[uid].edit.length > 0)
@@ -1144,6 +1179,9 @@ FocusScope {
     theme: view.theme
     editor: editor
     onToPageRequested: function(uid) { view.turnIntoPage(uid) }
+    onMindMapRequested: function(uids) {
+      if (!editor.toMindMap(uids)) view.toast("A page is among those blocks, and it would go with them: move it out first")
+    }
     onAgentRequested: function(uids) { view.openAgent("blocks", uids) }
     onMoveRequested: function(uids) {
       view.movingBlocks = uids
@@ -1160,6 +1198,176 @@ FocusScope {
     files: view.workspace ? view.workspace.files : null
     parent: view
     onSent: function(request) { view.askAgent(request) }
+  }
+
+  // ---- a mind map's colors ----------------------------------------------------------------
+
+  // The colors you picked last (newest first), kept as a setting.
+  readonly property var recentColors: Colors.recentList(settings.recentColors || "")
+  function rememberColor(hex) {
+    if (service) service.setSetting("recentColors", Colors.withRecent(settings.recentColors || "", hex))
+  }
+
+  // The map whose idea is being colored.
+  property string colorTarget: ""
+  property point colorAt: Qt.point(0, 0)
+  property bool customOpen: false
+  function colorMap() {
+    var item = editor.items[colorTarget]
+    return item && item.mindMap ? item.mindMap : null
+  }
+
+  // The colors for the idea you're on, beside its color button (placed on
+  // the page: the map is drawn again under them as colors change).
+  function openIdeaColors(uid, anchor) {
+    var m = editor.items[uid] ? editor.items[uid].mindMap : null
+    if (!m || !m.current) return
+    colorTarget = uid
+    colorAt = anchor.mapToItem(view, anchor.width + 6, 0)
+    ideaColors.currentText = m.current.color || ""
+    ideaColors.currentBack = m.current.background || ""
+    ideaColors.x = colorAt.x
+    ideaColors.y = colorAt.y
+    ideaColors.open()
+  }
+
+  function openCustomColor(kind) {
+    var m = colorMap()
+    if (!m || !m.current) return
+    customOpen = true
+    customColor.recent = recentColors
+    customColor.x = colorAt.x
+    customColor.y = colorAt.y
+    customColor.start(kind, kind === "color" ? m.current.color : m.current.background, m.colorInfo())
+  }
+
+  // The table whose cells are being colored (its colorScope says which).
+  property string tableColorTarget: ""
+  property bool tableCustomOpen: false
+  function colorTable() {
+    var item = editor.items[tableColorTarget]
+    return item && item.tableView ? item.tableView : null
+  }
+
+  // The colors for a table's cells, beside the button or handle they were
+  // asked for from.
+  function openTableColors(uid, anchor) {
+    var t = editor.items[uid] ? editor.items[uid].tableView : null
+    if (!t || !t.colorScope) return
+    tableColorTarget = uid
+    colorAt = anchor.mapToItem(view, anchor.width + 6, 0)
+    var now = t.scopeColors()
+    tableColors.currentText = now.color
+    tableColors.currentBack = now.background
+    tableColors.x = colorAt.x
+    tableColors.y = colorAt.y
+    tableColors.open()
+  }
+
+  function openTableCustom(kind) {
+    var t = colorTable()
+    if (!t || !t.colorScope) return
+    tableCustomOpen = true
+    tableCustom.recent = recentColors
+    tableCustom.x = colorAt.x
+    tableCustom.y = colorAt.y
+    var now = t.scopeColors()
+    tableCustom.start(kind, kind === "color" ? now.color : now.background, t.colorInfo())
+  }
+
+  HistoryPanel {
+    id: historyPanel
+    theme: view.theme
+    workspace: view.workspace
+    view: view
+    parent: view
+    onRestoreRequested: function(page, label) { view.restoreVersion(page, label) }
+  }
+
+  // A table's row or column menu (its handle).
+  TableMenu {
+    id: tableMenu
+    theme: view.theme
+    editor: editor
+  }
+
+  // Colors for a mind map's idea (its color button).
+  ColorPop {
+    id: ideaColors
+    theme: view.theme
+    editor: editor
+    mode: "idea"
+    parent: view
+    recent: view.recentColors
+    onIdeaPicked: function(kind, color) {
+      var m = view.colorMap()
+      if (m) m.setIdeaColor(kind, color)
+    }
+    onCustomRequested: function(kind) { view.openCustomColor(kind) }
+    onClosed: {
+      if (view.customOpen) return
+      var m = view.colorMap()
+      if (m) m.colorsClosed(false)
+    }
+  }
+
+  // Colors for a table's cells (the cell you're in, or a row or a column).
+  ColorPop {
+    id: tableColors
+    objectName: "tableColors"
+    theme: view.theme
+    editor: editor
+    mode: "idea"
+    parent: view
+    recent: view.recentColors
+    onIdeaPicked: function(kind, color) { var t = view.colorTable(); if (t) t.applyColor(kind, color) }
+    onCustomRequested: function(kind) { view.openTableCustom(kind) }
+    onClosed: {
+      if (view.tableCustomOpen) return
+      var t = view.colorTable()
+      if (t) t.colorsClosed(true)
+    }
+  }
+
+  // A color of your own for them: shown in the table as you pick, kept with
+  // Apply, put back with Cancel.
+  ColorPicker {
+    id: tableCustom
+    objectName: "tableCustom"
+    theme: view.theme
+    parent: view
+    onPreview: function(hex) { var t = view.colorTable(); if (t) t.previewColor(kind, hex) }
+    onPicked: function(hex) {
+      var t = view.colorTable()
+      if (t) t.applyColor(kind, hex)
+      view.rememberColor(hex)
+    }
+    onCanceled: { var t = view.colorTable(); if (t) t.cancelColor() }
+    onClosed: {
+      view.tableCustomOpen = false
+      var t = view.colorTable()
+      if (t) t.colorsClosed(true)
+    }
+  }
+
+  // A color of your own for it: shown on the map as you pick, kept with
+  // Apply, put back with Cancel.
+  ColorPicker {
+    id: customColor
+    theme: view.theme
+    parent: view
+    onPreview: function(hex) { var m = view.colorMap(); if (m) m.previewIdeaColor(kind, hex) }
+    onPicked: function(hex) {
+      var m = view.colorMap()
+      if (m) m.previewIdeaColor(kind, hex)
+      view.rememberColor(hex)
+    }
+    onCanceled: { var m = view.colorMap(); if (m) m.previewIdeaColor(kind, original) }
+    onClosed: {
+      view.customOpen = false
+      var m = view.colorMap()
+      if (m) m.colorsClosed(true)
+    }
   }
 
   LinkPop {

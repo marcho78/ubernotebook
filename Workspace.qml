@@ -201,6 +201,8 @@ Item {
   // pages on it (in the order their blocks are).
   function savePage(page) {
     if (!page || !Workspace.isUuid(page.id)) return
+    // The page as it was, kept in its history first (every ten minutes of writing).
+    keepVersion(page.id, "edit", false)
     page.text = Workspace.pageText(page)
     written[page.id] = JSON.parse(JSON.stringify(page))
     texts[page.id] = page.text
@@ -226,6 +228,74 @@ Item {
     if (JSON.stringify(reminders) !== JSON.stringify(e.reminders)) { e.reminders = reminders; scheduleReminders() }
     if (changed) touched()
     else saveIndex()
+  }
+
+  // ---- page history ---------------------------------------------------------------------
+
+  // Earlier versions of a page, a file each in Pages/history/<id>/: the page
+  // as it was before it's written, when the last version kept is ten minutes
+  // old or more (so the page as it was before you started writing is always
+  // there), and always before a command or an agent changes it ("command")
+  // and before an older version is put back ("restore"). A page's newest
+  // Workspace.HISTORY_KEEP are kept.
+  property int historyGap: 10 * 60 * 1000
+  // id -> when its last version was kept (ms), and what it was (its JSON).
+  property var keptAt: ({})
+  property var keptJson: ({})
+  signal versionKept(string id)
+
+  function keepVersion(id, why, always) {
+    if (!Workspace.isUuid(id) || !index.pages[id]) return false
+    // (Never two in the same millisecond: each has a file of its own.)
+    var now = Math.max(Date.now(), (keptAt[id] || 0) + 1)
+    if (!always && keptAt[id] && now - keptAt[id] < historyGap) return false
+    keptAt[id] = now
+    var page = readPageNow(id)
+    if (!page) return false
+    delete page.text
+    var json = Workspace.pageJson(page)
+    if (keptJson[id] === json) return false
+    keptJson[id] = json
+    var dir = Workspace.historyDir(files.rootPath, id)
+    var text = JSON.stringify({ kept: new Date(now).toISOString(), why: why || "edit", page: JSON.parse(json) })
+    files.mkdirs([dir], function(ok) {
+      if (!ok) return
+      files.writeFile(dir + "/" + Workspace.versionName(new Date(now)), text, function(written) {
+        if (!written) return
+        ws.versionKept(id)
+        ws.pruneVersions(id)
+      })
+    })
+    return true
+  }
+
+  // A page's versions, newest first: done([{ name, date }]).
+  function listVersions(id, done) {
+    if (!Workspace.isUuid(id)) { done([]); return }
+    files.exec(["/usr/bin/bash", "-c", listScript, "omanote-list", Workspace.historyDir(files.rootPath, id)], function(ok, output) {
+      done(ok ? Workspace.versionList(String(output || "").split("\n")) : [])
+    })
+  }
+
+  // One version: done({ kept, why, page }) or done(null).
+  function readVersion(id, name, done) {
+    var path = Workspace.historyDir(files.rootPath, id) + "/" + name
+    if (!Workspace.versionDate(name)) { done(null); return }
+    files.readFiles([path], function(got) {
+      var v = files.parseJson(got[path] || "")
+      var page = v ? Workspace.cleanPage(v.page, id) : null
+      done(page ? { kept: v.kept || "", why: v.why || "", page: page } : null)
+    }, 32 * 1024 * 1024)
+  }
+
+  // Past the newest Workspace.HISTORY_KEEP: gone.
+  function pruneVersions(id) {
+    listVersions(id, function(list) {
+      var past = Workspace.versionsPast(list.map(function(v) { return v.name }))
+      if (past.length === 0) return
+      var dir = Workspace.historyDir(files.rootPath, id)
+      files.exec(["/usr/bin/rm", "-f", "--"].concat(past.map(function(n) { return dir + "/" + n })), null)
+    })
   }
 
   // Pages written before links and reminders were kept in the tree (or
@@ -342,6 +412,8 @@ Item {
       delete written[pid]
       delete texts[pid]
       files.trash(ws.pagePath(pid), "page-" + pid + ".json")
+      // Its history goes with it (if it has one).
+      ws.listVersions(pid, function(list) { if (list.length) files.trash(Workspace.historyDir(files.rootPath, pid), "history-" + pid) })
     })
     touched()
   }
@@ -461,7 +533,14 @@ Item {
 
   // A page and the pages in it as Markdown files, with their pictures, in
   // "<notebooks>/Exports/<title> <date>/"; the folder opens.
+  // The page and the pages in it as Markdown files, in a folder of their own
+  // where Settings says exports go (asked, or the Exports folder).
   function exportPage(id) {
+    if (typeof files.exportBase === "function") files.exportBase(function(base) { if (base) ws.exportPageTo(id, base) })
+    else exportPageTo(id, files.rootPath + "/Exports")
+  }
+
+  function exportPageTo(id, base) {
     var all = Workspace.withDescendants(index, id).filter(function(pid) { return !Workspace.inTrash(ws.index, pid) || pid === id })
     readPages(all, function(pages) {
       if (!pages.length) return
@@ -475,7 +554,7 @@ Item {
         names[p.id] = name
       })
       var top = pages.filter(function(p) { return p.id === id })[0] || pages[0]
-      var dir = files.rootPath + "/Exports/" + names[top.id] + " " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm")
+      var dir = base + "/" + names[top.id] + " " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm")
       files.mkdirs([dir], function(ok) {
         if (!ok) return
         pages.forEach(function(p) {

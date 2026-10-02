@@ -173,8 +173,34 @@ Item {
       compare(view.agentBox.agent, "")
       view.agentBox.send("Summarize this page")
       compare(files.launched.length, 0, "nothing is launched")
-      compare(files.picked, 1, "Omarchy's menu comes up to choose an agent")
+      compare(files.picked, 0, "not Omarchy's menu (it would launch the agent)")
+      clickText("Gemini")
+      compare(files.agent, "gemini", "chosen in the box")
+      compare(files.launched.length, 0, "and nothing opens")
       view.agentBox.close()
+      tryVerify(function() { return !view.agentBox.visible }, 1000)
+    }
+
+    function test_5_the_ai_button_and_the_agent_chooser() {
+      fresh()
+      // The AI button at the top of the page opens the box.
+      verify(!view.agentBox.opened)
+      var button = find(root.Window.window.contentItem, function(it) { return it.tip === "Ask your agent  Ctrl+J" })
+      verify(button !== null, "an AI button at the top of the page")
+      mouseClick(button)
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      // Your agent, and the others installed: choose one, and nothing opens.
+      compare(view.agentBox.agents.map(function(a) { return a.name }).join(","), "claude,codex,gemini")
+      clickText("Claude")
+      clickText("Codex")
+      compare(files.agent, "codex", "Omarchy's default, from now on")
+      compare(view.agentBox.agent, "codex")
+      verify(findText(root.Window.window.contentItem, "Codex") !== null, "the box says which")
+      compare(files.launched.length, 0, "nothing launched")
+      compare(files.picked, 0)
+      view.agentBox.send("Summarize this page")
+      compare(files.launched.length, 1, "what you ask goes to the agent you chose")
+      verify(files.launched[0].indexOf("What I'd like: Summarize this page") >= 0)
     }
   }
 }
