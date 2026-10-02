@@ -117,6 +117,68 @@ Item {
       compare(ws.index.pages[r3.id].parent, api.inbox)
     }
 
+    function test_11_a_quick_note_into_the_inbox() {
+      fresh()
+      var r = json(api.quickPage("Groceries\n[] milk\n[x] eggs\nsee [[Getting started]]\n**for Sunday**"))
+      verify(r.ok, JSON.stringify(r))
+      compare(r.title, "Groceries", "its first line is the title")
+      compare(r.path, "Inbox / Groceries", "in the Inbox")
+      compare(ws.index.pages[r.id].parent, api.inbox)
+      var page = fileOf(r.id)
+      compare(kinds(page).join("|"), "check:0:milk|check:0:eggs|p:0:see Getting started|p:0:for Sunday|p:0:")
+      verify(page.blocks[page.content[1]].checked, "ticked as it was")
+      verify(page.blocks[page.content[2]].html.indexOf("omanote://page/" + named("Getting started")) >= 0, "a link to the page")
+      verify(page.blocks[page.content[3]].html.indexOf("font-weight:700") >= 0, "Markdown")
+      compare(fileOf(api.inbox).blocks[r.id].type, "page", "its block is on the Inbox")
+      // One line: a page with that title, to write in.
+      var one = json(api.quickPage("Call the dentist"))
+      compare(one.title, "Call the dentist")
+      compare(kinds(fileOf(one.id)).join("|"), "p:0:")
+      // A list: it names the page, and stays in it.
+      var list = json(api.quickPage("- [ ] pay rent\n- [ ] water plants"))
+      compare(list.title, "pay rent")
+      compare(kinds(fileOf(list.id)).join("|"), "check:0:pay rent|check:0:water plants|p:0:")
+      compare(json(api.quickPage("   \n ")).ok, false, "nothing in it")
+      // The Inbox open in the window: the page shows up on it.
+      view.open(api.inbox)
+      tryVerify(function() { return view.page && view.page.id === api.inbox }, 2000)
+      var r4 = json(api.quickPage("Seen at once"))
+      verify(view.editor.serialize().some(function(b) { return b.type === "page" && b.uid === r4.id }), "on the open Inbox")
+      ws.ready = false
+      compare(json(api.quickPage("later")).ok, false, "not before the pages are loaded")
+      ws.ready = true
+    }
+
+    function test_12_tags() {
+      fresh()
+      var r = json(api.add("Errands", file("e.md", "- [ ] milk #errand\n- [x] post #Errand #home\n\nPlan the week #planning\n\n`#notatag`")))
+      verify(r.ok, JSON.stringify(r))
+      var list = json(api.tags())
+      compare(list.map(function(t) { return t.name }), ["errand", "home", "planning"], "the tags an agent's Markdown had")
+      compare(list[0].blocks, 2)
+      compare(list[0].tag, "#errand")
+      var blocks = json(api.tagged("#errand"))
+      compare(blocks.length, 2)
+      compare(blocks[0].page, r.id)
+      compare(blocks[0].text, "milk #errand", "as Markdown, the tag as its words")
+      compare(blocks[1].checked, true)
+      compare(json(api.tagged("not a tag")).ok, false)
+      compare(json(api.tagged("nothing")).length, 0)
+      // Colors: set by name or hex, a tag inside another takes its color.
+      compare(json(api.tagColor("#errand", "Blue")).color, "blue")
+      compare(json(api.tagColor("#home", "#FF8800")).color, "#ff8800")
+      compare(json(api.tagColor("#home", "neon")).ok, false)
+      var add2 = json(api.add("More", file("m.md", "x #errand/shop")))
+      var withColors = json(api.tags())
+      var shop = withColors.filter(function(t) { return t.name === "errand/shop" })[0]
+      compare(shop.color, "blue")
+      compare(shop.colorFrom, "#errand")
+      compare(json(api.tagColor("#errand", "")).color, "")
+      compare(ws.index.tagColors.errand, undefined, "none")
+      // read gives them back as Markdown's #tags.
+      verify(api.read(r.id).indexOf("- [ ] milk #errand") >= 0)
+    }
+
     function test_3_add_inside_a_page_with_links_dates_and_reminders() {
       fresh()
       var home = named("Getting started")

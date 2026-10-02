@@ -10,6 +10,10 @@ QtObject {
   property string rootPath: "/tmp/omanote-dev"
   property string version: "1.0.0"
   property string skillPath: "/tmp/omanote-dev-plugin/skills/omanote/SKILL.md"
+  // The Markdown copy (Mirror.qml), as Settings shows it.
+  property var mirror: QtObject { property string status: ""; property string problem: ""; property int files: 0; property var lastSync: null }
+  readonly property string mirrorPath: rootPath + "/Markdown"
+  function openMirror() {}
 
   function setSetting(key, value) {
     var next = JSON.parse(JSON.stringify(user))

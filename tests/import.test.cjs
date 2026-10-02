@@ -97,6 +97,28 @@ check("code, tables, pictures", () => {
   assert.ok(pics[1].html.includes('href="https://x.org/b.png"'));
 });
 
+check("a quick note as a page", () => {
+  const q = (t) => plain(Import.quickNote(t));
+  assert.equal(Import.quickNote("  \n \n"), null, "nothing in it");
+  assert.deepEqual(q("Buy milk"), { title: "Buy milk", markdown: "" });
+  assert.deepEqual(q("\nGroceries\n[] milk\n[x] eggs\n- bread\n"), { title: "Groceries", markdown: "- [ ] milk\n- [x] eggs\n- bread" }, "the first line the title, the quick note's to-dos Markdown's");
+  assert.deepEqual(q("# Trip **plans**\n\nBook it"), { title: "Trip plans", markdown: "Book it" }, "a heading, as plain words");
+  assert.deepEqual(q("- [ ] call the bank\n- [ ] pay rent"), { title: "call the bank", markdown: "- [ ] call the bank\n- [ ] pay rent" }, "a list names the page and stays in it");
+  assert.deepEqual(q("> a thought"), { title: "a thought", markdown: "> a thought" });
+  assert.equal(q("```js\nlet a = 1\n```").title, "Quick note");
+  assert.equal(q("A | B is not a table").title, "A | B is not a table");
+  const long = "This is a long first line that goes on and on about many things that I want to remember later on today";
+  const r = q(long + "\nmore");
+  assert.ok(r.title.length <= 81 && r.title.endsWith("\u2026"), r.title);
+  assert.equal(r.markdown, long + "\n\nmore", "a long first line stays in the page");
+  assert.equal(q("Plan\nline one\nline two\n- a\n- b\nafter").markdown, "line one\n\nline two\n\n- a\n- b\n\nafter", "each line its own, lists kept together");
+  assert.equal(q("Code\n```\nx\ny\n```").markdown, "```\nx\ny\n```", "code as it is");
+  // As blocks: the to-dos ticked or not, links to pages.
+  const blocks = plain(Import.fromMarkdown(q("Groceries\n[] milk\n[x] eggs\nsee [[Shopping]]").markdown, { wiki: (n) => (n === "Shopping" ? "6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b" : "") })).blocks;
+  assert.deepEqual(blocks.map((b) => b.type + (b.checked ? "x" : "")), ["check", "checkx", "p"]);
+  assert.ok(blocks[2].html.includes("omanote://page/6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b"));
+});
+
 check("code keeps every tab and space", () => {
   const r = md("# Build\n\n```makefile\nall:\n\tgcc -o app  main.c\n\n  done\n```\n\n\tindented text");
   const code = r.blocks.find((b) => b.type === "code");

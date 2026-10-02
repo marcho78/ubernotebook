@@ -16,6 +16,7 @@
 .import "Blocks.js" as Blocks
 .import "Workspace.js" as Workspace
 .import "Table.js" as Table
+.import "Sketch.js" as Sketch
 
 // Characters that would otherwise be read as Markdown.
 function escapeText(text) {
@@ -62,6 +63,8 @@ function inline(inner) {
     if (!core) { out += g.text.replace(/\u00a0/g, " "); return }
     var f = g.flags
     var body
+    // A tag is its words, "#idea", as Obsidian and others read them.
+    if (Html.isTag(g.href)) { out += lead + core + trail; return }
     if (f.code) {
       var fence = core.indexOf("`") >= 0 ? "``" : "`"
       body = fence + (core.charAt(0) === "`" ? " " : "") + core + (core.charAt(core.length - 1) === "`" ? " " : "") + fence
@@ -192,8 +195,12 @@ function fileName(page, index) {
 // with their icon; pages on it and links links to their files; columns one
 // after the other.
 // `lookup(id)` -> { title, icon, file } for pages it has or points to.
-function fromDocPage(page, lookup) {
+// `options.sketchFile(blockId)` -> where a sketch's SVG is (written beside
+// the Markdown), or "" (it's said to be there); `options.assetPrefix` is put
+// before pictures' paths ("assets/...").
+function fromDocPage(page, lookup, options) {
   var info = typeof lookup === "function" ? lookup : function() { return null }
+  var opts = options || {}
   var blocks = page.blocks || {}
 
   function indent(text, prefix) {
@@ -245,12 +252,16 @@ function fromDocPage(page, lookup) {
     else if (b.type === "callout") return quoted((b.icon ? b.icon + " " : "") + text + (kids ? "\n\n" + kids : ""))
     else if (b.type === "code") line = "```" + (b.lang ? b.lang.toLowerCase().replace(/\s+/g, "") : "") + "\n" + plainLines(b.html || "").join("\n") + "\n```"
     else if (b.type === "divider") line = "---"
-    else if (b.type === "image") line = b.src ? "![](" + b.src + ")" : ""
+    else if (b.type === "image") line = b.src ? "![](" + (opts.assetPrefix || "") + b.src + ")" : ""
     else if (b.type === "page") line = pageLink(b.id, false)
     else if (b.type === "link") line = pageLink(b.target, true)
     else if (b.type === "toc") line = ""
     else if (b.type === "mindmap") line = "```mindmap\n" + (b.outline || "") + "\n```"
     else if (b.type === "table") line = Table.toMarkdown(b.table, inline)
+    else if (b.type === "sketch") {
+      var file = typeof opts.sketchFile === "function" ? opts.sketchFile(b.id) : ""
+      line = file ? "![Sketch](" + file + ")" : "*(A sketch, drawn in Omanote)*"
+    }
     else if (b.type === "calendar") line = calendarTable(b)
     else line = text
     if (!kids) return line

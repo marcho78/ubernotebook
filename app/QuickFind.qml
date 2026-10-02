@@ -1,9 +1,11 @@
 import QtQuick
 import QtQuick.Controls
 import "../Workspace.js" as Workspace
+import "../Tags.js" as Tags
 
 // Search in Pages (Ctrl+P): recent pages, or every page with the words you
-// type in its title or on it, with the words around them.
+// type in its title or on it, with the words around them; "#" and a tag's
+// name, the tags first.
 Pop {
   id: pop
 
@@ -14,6 +16,7 @@ Pop {
   property bool searching: false
 
   signal pageChosen(string id)
+  signal tagChosen(string name)
 
   width: Math.min(600, (parent ? parent.width : 600) - 40)
   height: Math.min(480, (parent ? parent.height : 480) - 80)
@@ -31,7 +34,17 @@ Pop {
       .slice(0, 12)
       .map(function(id) { return { id: id, title: ix.pages[id].title, icon: ix.pages[id].icon, snippet: null } })
   }
-  readonly property var results: query.trim() ? found : recent
+  // Tags with what's typed after "#".
+  readonly property var tagHits: {
+    var r = workspace ? workspace.revision : 0
+    var q = query.trim()
+    if (!workspace || q.charAt(0) !== "#") return []
+    var list = Workspace.tagList(workspace.index)
+    var by = {}
+    list.forEach(function(t) { by[t.name] = t })
+    return Tags.matching(list.map(function(t) { return t.name }), q, 6).map(function(n) { return { tag: n, title: by[n].label, icon: "", snippet: null, hint: by[n].blocks + (by[n].blocks === 1 ? " block" : " blocks") + " on " + by[n].pages + (by[n].pages === 1 ? " page" : " pages") } })
+  }
+  readonly property var results: query.trim() ? tagHits.concat(found) : recent
 
   function start() {
     x = ((parent ? parent.width : width) - width) / 2
@@ -62,6 +75,7 @@ Pop {
 
   function take(i) {
     if (i < 0 || i >= results.length) return
+    if (results[i].tag) { var name = results[i].tag; close(); tagChosen(name); return }
     var id = results[i].id
     close()
     pageChosen(id)
@@ -106,6 +120,7 @@ Pop {
         required property int index
         readonly property var where: {
           var r = pop.workspace ? pop.workspace.revision : 0
+          if (modelData.tag) return modelData.hint
           return pop.workspace ? Workspace.path(pop.workspace.index, modelData.id).slice(0, -1).map(function(p) { return p.title || "Untitled" }).join(" / ") : ""
         }
         width: list.width
@@ -117,8 +132,8 @@ Pop {
           textFormat: Text.PlainText
           x: 10
           y: 8
-          text: modelData.icon || "\u{1f4c4}"
-          font.family: "Noto Color Emoji"
+          text: modelData.tag ? "#" : modelData.icon || "\u{1f4c4}"
+          font.family: modelData.tag ? pop.theme.uiFont : "Noto Color Emoji"
           font.pixelSize: 15
         }
         Text {

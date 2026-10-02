@@ -466,6 +466,8 @@ function normalizeLinks(inner) {
   return mapRuns(inner, function(run) {
     if (run.href) {
       delete run.style.color
+      // (A tag's background is how it's drawn, not kept.)
+      if (isTag(run.href)) delete run.style["background-color"]
       if (run.style["text-decoration"] === "none") delete run.style["text-decoration"]
       setDecoration(run.style, "underline", false)
     }
@@ -473,11 +475,14 @@ function normalizeLinks(inner) {
   })
 }
 
-// Links inside Omanote (Pages): to a page, a date, a reminder.
+// Links inside Omanote (Pages): to a page, a date, a reminder, a tag.
 //   omanote://page/<uuid>
 //   omanote://date/2026-10-05, omanote://date/2026-10-05T09:30
 //   omanote://remind/2026-10-05T09:30
-var INTERNAL = /^omanote:\/\/(page\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(date|remind)\/\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?)$/
+//   omanote://tag/idea (its name, encoded: Tags.js)
+var INTERNAL = /^omanote:\/\/(page\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(date|remind)\/\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?|tag\/[A-Za-z0-9%_-]{1,400})$/
+
+function isTag(url) { return /^omanote:\/\/tag\//.test(String(url || "")) }
 
 function isInternal(url) {
   return INTERNAL.test(String(url || ""))
@@ -490,14 +495,20 @@ function pageOf(url) {
 }
 
 // Links as Omanote draws them: the link color, underlined; a date or a
-// reminder in the link color without the line.
-function decorateLinks(inner, color) {
+// reminder in the link color without the line; a tag in its own colors
+// (`tagStyle(href)` -> { color, background }), without the line.
+function decorateLinks(inner, color, tagStyle) {
   if (inner.indexOf("<a") < 0) return inner
   return mapRuns(inner, function(run) {
     if (run.href) {
       run.style.color = normalColor(color) || "#2f6fd6"
       // (Qt underlines a link unless it's told not to.)
-      if (/^omanote:\/\/(date|remind)\//.test(run.href)) run.style["text-decoration"] = "none"
+      if (isTag(run.href)) {
+        var t = typeof tagStyle === "function" ? tagStyle(run.href) : null
+        if (t && normalColor(t.color)) run.style.color = normalColor(t.color)
+        if (t && normalColor(t.background)) run.style["background-color"] = normalColor(t.background)
+        run.style["text-decoration"] = "none"
+      } else if (/^omanote:\/\/(date|remind)\//.test(run.href)) run.style["text-decoration"] = "none"
       else setDecoration(run.style, "underline", true)
     }
     return run
@@ -538,7 +549,7 @@ function refreshPageLinks(inner, lookup) {
 // lineHeight tall with its baseline at 4/5 of it, whatever the font, which is
 // what keeps text on the ruled lines. An empty paragraph needs Qt's own
 // "empty" marker to keep its line height.
-function wrapBlock(inner, lineHeight, linkColor) {
+function wrapBlock(inner, lineHeight, linkColor, tagStyle) {
   var height = Math.max(1, Math.round(Number(lineHeight) || 30))
   // pre-wrap: spaces are kept as typed (Qt writes that in a stylesheet this
   // leaves out).
@@ -546,7 +557,7 @@ function wrapBlock(inner, lineHeight, linkColor) {
     + "line-height:" + height + "px; -qt-line-height-type: fixed;"
   var content = String(inner || "")
   if (content === "") return "<p style=\"-qt-paragraph-type:empty; " + style + "\"><br /></p>"
-  return "<p style=\"" + style + "\">" + decorateLinks(content, linkColor) + "</p>"
+  return "<p style=\"" + style + "\">" + decorateLinks(content, linkColor, tagStyle) + "</p>"
 }
 
 // ---- plain text -----------------------------------------------------------------

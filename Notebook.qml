@@ -254,6 +254,8 @@ Item {
       id: quickNote
       anchors.fill: parent
       theme: quickTheme
+      destination: root.service ? (root.service.settings.quickTo || "notebook") : "notebook"
+      onDestinationPicked: function(to) { if (root.service) root.service.setSetting("quickTo", to) }
       onKept: function(text) {
         quickWindow.visible = false
         if (root.service) root.service.quick(text)

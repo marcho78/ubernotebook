@@ -292,7 +292,7 @@ Item {
     var inner = editor.transformed(editor.innerOf(edit, s, t), kind)
     cell.loading = true
     edit.remove(s, t)
-    if (inner) edit.insert(s, editor.spaced(Html.decorateLinks(editor.display(inner), editor.linkColor)))
+    if (inner) edit.insert(s, editor.spaced(Html.decorateLinks(editor.display(inner), editor.linkColor, editor.tagStyle)))
     cell.loading = false
     // Shown as it is (not read again), so what's selected stays selected.
     var next = Table.clean(Table.setCell(table, cell.r, cell.c, editor.innerOf(edit, 0, edit.length)))
@@ -316,7 +316,7 @@ Item {
         var inner = blocks.filter(function(b) { return b.html !== undefined }).map(function(b) { return b.html || "" }).join("<br />")
         if (inner === "" && text === "") return
         if (edit.selectionStart !== edit.selectionEnd) edit.remove(edit.selectionStart, edit.selectionEnd)
-        edit.insert(edit.cursorPosition, editor.spaced(Html.decorateLinks(editor.display(inner || Html.fromPlainText(text)), editor.linkColor)))
+        edit.insert(edit.cursorPosition, editor.spaced(Html.decorateLinks(editor.display(inner || Html.fromPlainText(text)), editor.linkColor, editor.tagStyle)))
         return
       }
     }
@@ -457,7 +457,7 @@ Item {
   }
   readonly property int cursor: sizing || onEdge >= 0 ? Qt.SplitHCursor
     : onRowHandle || onColHandle || onAddRow || onAddCol || onColorButton ? Qt.PointingHandCursor
-    : linkUnder !== "" && ((hover.point.modifiers & Qt.ControlModifier) || Html.pageOf(linkUnder) !== "") ? Qt.PointingHandCursor
+    : linkUnder !== "" && ((hover.point.modifiers & Qt.ControlModifier) || Html.pageOf(linkUnder) !== "" || Html.isTag(linkUnder)) ? Qt.PointingHandCursor
     : hoverRow >= 0 && hoverCol >= 0 ? Qt.IBeamCursor : Qt.ArrowCursor
   readonly property int hoverRow: over && pointY >= gap && pointY < gap + frame.height ? rowAt(pointY - gap) : -1
   readonly property int hoverCol: over && pointX >= scroller.x && pointX < scroller.x + scroller.width ? colAt(pointX - scroller.x + scroller.contentX) : -1
@@ -519,7 +519,7 @@ Item {
             function reload() {
               loading = true
               var row = grid.table.rows[r]
-              text.text = Html.wrapBlock(grid.editor.display(row ? row[c] || "" : ""), grid.lineH, grid.editor.linkColor)
+              text.text = Html.wrapBlock(grid.editor.display(row ? row[c] || "" : ""), grid.lineH, grid.editor.linkColor, grid.editor.tagStyle)
               loading = false
             }
             Component.onCompleted: reload()
@@ -581,7 +581,7 @@ Item {
                 acceptedModifiers: Qt.NoModifier
                 onTapped: function(eventPoint) {
                   var link = text.linkAt(eventPoint.position.x, eventPoint.position.y)
-                  if (Html.pageOf(link)) grid.editor.openLink(link)
+                  if (Html.pageOf(link) || Html.isTag(link)) grid.editor.openLink(link)
                 }
               }
             }

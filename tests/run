@@ -28,6 +28,9 @@ node tests/mindmap.test.cjs
 node tests/colors.test.cjs
 node tests/table.test.cjs
 node tests/history.test.cjs
+node tests/sketch.test.cjs
+node tests/mirror.test.cjs
+node tests/tags.test.cjs
 lua tests/hypr.test.lua
 
 runner=/usr/lib/qt6/bin/qmltestrunner

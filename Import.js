@@ -19,6 +19,7 @@
 .import "Html.js" as Html
 .import "Blocks.js" as Blocks
 .import "Mindmap.js" as Mindmap
+.import "Tags.js" as Tags
 
 var MONO = "'iA Writer Mono S'"
 var HIGHLIGHT = "#fbf3db"
@@ -287,8 +288,9 @@ function resolve(atoms) {
   return runs
 }
 
+// (Obsidian's "#tags" are tags.)
 function inlineHtml(text, ctx, refs) {
-  return Html.sanitize(Html.serialize(inlineRuns(text, context(ctx), refs || {})), true)
+  return Tags.linkify(Html.sanitize(Html.serialize(inlineRuns(text, context(ctx), refs || {})), true))
 }
 
 // ---- Markdown blocks ----------------------------------------------------------------------
@@ -612,6 +614,60 @@ function fromMarkdown(text, ctx, options) {
   }
   // A page Notion exported starts with its title, then maybe its icon.
   return { title: title.trim(), icon: icon, blocks: blocks }
+}
+
+// A quick note (Super+Alt+N) as a page: { title, markdown }, or null when
+// there's nothing in it. Its first line is the title (a "# heading" too);
+// a first line that's a list item, a to-do or a quote names the page and
+// stays in it, and so does a long first line (the title is its start). The
+// quick note's own "[] " and "[x] " to-dos are Markdown's "- [ ] ".
+function quickNote(text) {
+  var lines = String(text || "").replace(/\r\n?/g, "\n").split("\n").map(function(l) {
+    var m = /^(\s*)\[( |x|X)?\]\s+(.*)$/.exec(l)
+    return m ? m[1] + "- [" + (m[2] && m[2] !== " " ? "x" : " ") + "] " + m[3] : l
+  })
+  while (lines.length && lines[0].trim() === "") lines.shift()
+  while (lines.length && lines[lines.length - 1].trim() === "") lines.pop()
+  if (lines.length === 0) return null
+  var first = lines[0].trim()
+  function words(line) { return Html.plainText(inlineHtml(line)).replace(/\s+/g, " ").trim() }
+  function shorten(t) {
+    if (t.length <= 80) return t
+    var cut = t.lastIndexOf(" ", 77)
+    return t.slice(0, cut > 40 ? cut : 77).replace(/[\s,;:.\-]+$/, "") + "\u2026"
+  }
+  // Each line its own line (Markdown would run plain lines together into one
+  // paragraph); lists, quotes, tables and code as they are.
+  function body(list) {
+    var out = []
+    var fence = null
+    var plainBefore = false
+    list.forEach(function(l) {
+      if (fence) { out.push(l); if (fenceEnd(l, fence)) fence = null; return }
+      var f = fenceStart(l)
+      if (f) { out.push("", l); fence = f; plainBefore = false; return }
+      if (/^\s*$/.test(l)) { out.push(""); plainBefore = false; return }
+      if (/^\s*(?:[-*+]\s|\d+[.)]\s|>|\||#)/.test(l) || /^\s{2,}\S/.test(l)) {
+        if (plainBefore) out.push("")
+        out.push(l)
+        plainBefore = false
+        return
+      }
+      out.push("", l, "")
+      plainBefore = true
+    })
+    return out.join("\n").replace(/\n{3,}/g, "\n\n").replace(/^\n+|\n+$/g, "")
+  }
+  var h = heading(first)
+  if (h && h.text.trim()) return { title: shorten(words(h.text)), markdown: body(lines.slice(1)) }
+  var item = /^(?:[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*(?:\[![A-Za-z]+\]\s*)?)(.*)$/.exec(first)
+  if (item || fenceStart(first) || /^\|/.test(first)) {
+    var named = item ? words(item[1]) : ""
+    return { title: shorten(named) || "Quick note", markdown: body(lines) }
+  }
+  var plain = words(first)
+  if (plain.length > 100) return { title: shorten(plain), markdown: body(lines) }
+  return { title: plain, markdown: body(lines.slice(1)) }
 }
 
 // Does pasted text look like Markdown (so it becomes blocks)?

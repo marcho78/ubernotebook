@@ -6,6 +6,8 @@ import "../Docs.js" as Docs
 import "../Workspace.js" as Workspace
 import "../Mindmap.js" as Mindmap
 import "../Table.js" as Table
+import "../Sketch.js" as Sketch
+import "../Tags.js" as Tags
 import "../Dates.js" as Dates
 import "../Emoji.js" as Emoji
 import "../Highlight.js" as Highlight
@@ -50,6 +52,15 @@ FocusScope {
   property bool strikeDone: true
   property bool readOnly: false
   property real contentWidth: width
+  // The app's look (Theme.qml), for what a page draws of the app's own: a
+  // sketch's tools.
+  property var theme: null
+  // Drawing in Pages: the pen last picked, for every sketch (a color of
+  // Pages', one of your own, or "" for the page's ink).
+  property string sketchTool: "pen"
+  property string sketchColor: ""
+  property string sketchMarker: "yellow"
+  property real sketchNib: Sketch.NIBS[1]
   // "assets/x.png" -> a URL the page can show. Set by the page.
   property var assetUrl: function(src) { return "" }
 
@@ -65,6 +76,10 @@ FocusScope {
   // Pages: pages for "[[", function(query) -> [{ id, title, icon, path }];
   // and a new page with a name, function(title) -> its id ("" if it wasn't made).
   property var findPages: function(query) { return [] }
+  // Pages: tags for "#", function(query) -> [{ name, label, pages }]; and
+  // how a tag is drawn, function(href) -> { color, background } (or null).
+  property var findTags: function(query) { return [] }
+  property var tagStyle: function(href) { return null }
   property var makePage: function(title) { return "" }
   // Pages: how far in a block's children start, and a list marker's room.
   readonly property real docGutter: smallText ? 24 : 27
@@ -108,6 +123,10 @@ FocusScope {
   signal tableMenuRequested(string uid, string kind, int index, var anchor)
   // A table's cells to color (TableBlock.colorScope says which).
   signal tableColorsRequested(string uid, var anchor)
+  // A sketch's pen color to pick, beside `anchor`.
+  signal sketchColorsRequested(string uid, var anchor)
+  // A tag clicked: every block with it.
+  signal tagOpened(string name)
   // "/agent" typed on a block: ask your agent (Pages).
   signal agentRequested(string uid)
   signal textCopied(string text)
@@ -166,7 +185,8 @@ FocusScope {
       label: b.label || "", days: b.days || "", month: b.month || "", marks: b.marks || "", hint: b.hint || "",
       color: b.color || "", toggle: b.toggle === true, collapsed: b.collapsed === true, lang: b.lang || "",
       target: b.target || "", icon: b.icon || "", outline: b.outline || "", folds: b.folds || "",
-      table: b.type === "table" && b.table ? JSON.stringify(b.table) : ""
+      table: b.type === "table" && b.table ? JSON.stringify(b.table) : "",
+      sketch: b.type === "sketch" && b.sketch ? JSON.stringify(b.sketch) : ""
     }
   }
 
@@ -175,7 +195,8 @@ FocusScope {
     return { uid: r.uid, type: r.type, indent: r.indent, checked: r.checked, align: r.align, tone: r.tone, style: r.dstyle, src: r.src, width: r.imgWidth, ratio: r.ratio,
       label: r.label, days: r.days, month: r.month, marks: r.marks, hint: r.hint,
       color: r.color, toggle: r.toggle, collapsed: r.collapsed, lang: r.lang, target: r.target, icon: r.icon,
-      outline: r.outline, folds: r.folds, table: r.type === "table" && r.table ? JSON.parse(r.table) : undefined }
+      outline: r.outline, folds: r.folds, table: r.type === "table" && r.table ? JSON.parse(r.table) : undefined,
+      sketch: r.type === "sketch" && r.sketch ? JSON.parse(r.sketch) : undefined }
   }
 
   readonly property var cleanOptions: doc ? ({ nest: true }) : null
@@ -752,6 +773,30 @@ FocusScope {
     endOp()
   }
 
+  // ---- Pages: sketches -------------------------------------------------------------------
+
+  // A sketch changed (a stroke drawn or erased, its height, its background), as one step.
+  function setSketch(uid, sketch) {
+    var i = indexOf(uid)
+    if (i < 0 || readOnly || blocksModel.get(i).type !== "sketch") return
+    var clean = Sketch.clean(sketch)
+    if (!clean) return
+    var json = JSON.stringify(clean)
+    if (json === blocksModel.get(i).sketch) return
+    beginOp()
+    blocksModel.setProperty(i, "sketch", json)
+    endOp()
+  }
+
+  // Drawing on a sketch: it's where you are on the page.
+  function sketchFocused(uid) {
+    closeSlash()
+    closeMention()
+    if (focusUid !== uid && items[focusUid] && items[focusUid].isText) items[focusUid].edit.deselect()
+    focusUid = uid
+    if (selectedList.length > 0 && !dragSelecting) clearBlockSelection()
+  }
+
   // ---- Pages: tables ---------------------------------------------------------------------
 
   // A table's cells as they're being written, into the page.
@@ -869,7 +914,8 @@ FocusScope {
         rows.push({ uid: row.uid, type: row.type, indent: row.indent, outline: row.outline, color: row.color, table: row.table })
       }
     })
-    if (rows.some(function(b) { return b.type === "page" })) return ""
+    // (Pages and drawings aren't ideas: they'd be lost.)
+    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" })) return ""
     function words(b) { return Blocks.isText(b.type) ? Html.plainText(htmls[b.uid] || "").replace(/\s+/g, " ").trim() : "" }
     // A table's rows are ideas: their cells' words.
     function tableIdeas(b, depth) {
@@ -1310,6 +1356,8 @@ FocusScope {
 
   function focusInfo() {
     var item = items[focusUid]
+    // Drawing on a sketch: it goes on.
+    if (item && item.type === "sketch" && item.sketchView && item.sketchView.drawing) return { uid: focusUid, pos: 0, anchor: -1, drawing: true }
     // In a table: the cell.
     if (item && item.type === "table" && item.tableView && item.tableView.writing) {
       var t = item.tableView
@@ -1384,6 +1432,7 @@ FocusScope {
     refreshNumbers()
     var f = snap.focus
     if (f && f.cell && items[f.uid] && items[f.uid].tableView) items[f.uid].tableView.focusCell(f.cell.r, f.cell.c, f.cell.pos)
+    else if (f && f.drawing && items[f.uid] && items[f.uid].sketchView) items[f.uid].sketchView.startDrawing()
     else if (f && f.uid && items[f.uid]) focusBlock(f.uid, f.pos, f.anchor)
     else if (blocksModel.count > 0) focusBlock(uidAt(0), 0)
   }
@@ -1578,6 +1627,8 @@ FocusScope {
     endOp()
     // A new mind map: you write its topic first.
     if (command.type === "mindmap") { Qt.callLater(function() { root.editMindMap(made) }); return }
+    // A new sketch: you draw on it.
+    if (command.type === "sketch") { Qt.callLater(function() { if (root.items[made] && root.items[made].sketchView) root.items[made].sketchView.startDrawing() }); return }
     // A new table: you write in its first cell.
     if (command.type === "table") { Qt.callLater(function() { if (root.items[made]) root.items[made].enter(1, 0) }); return }
     if (Blocks.isText(command.type)) focusBlock(made, 0)
@@ -1597,12 +1648,21 @@ FocusScope {
   property var mentionItems: []
   property int mentionIndex: 0
 
-  function triggerOf(kind) { return kind === "page" ? "[[" : kind === "emoji" ? ":" : "@" }
+  function triggerOf(kind) { return kind === "page" ? "[[" : kind === "emoji" ? ":" : kind === "tag" ? "#" : "@" }
+  // What a tag's name is made of, and a name followed by what ends it.
+  readonly property var tagChars: new RegExp("^" + Tags.CHARS + "*$")
+  readonly property var tagEnded: new RegExp("^(" + Tags.CHARS + "+)([\\s.,;:!?)\\]}\"'\u2019\u201d])$")
 
   // What the menu offers: dates and reminders; or pages, and a new page
   // with the name typed.
   function mentionList(kind, query) {
     if (kind === "emoji") return Emoji.find(query, 8).map(function(e) { return { kind: "emoji", label: ":" + e.code + ":", emoji: e.emoji } })
+    if (kind === "tag") {
+      var found = findTags(query).map(function(t) { return { kind: "tag", name: t.name, label: t.label, hint: t.pages + (t.pages === 1 ? " page" : " pages") } })
+      var typed = Tags.clean(query)
+      if (typed && !found.some(function(t) { return t.name === typed })) found.push({ kind: "tagnew", name: typed, label: "New tag " + Tags.label(query), tag: Tags.label(query) })
+      return found
+    }
     if (kind === "date") return Dates.suggestions(query, new Date()).map(function(d) {
       return { kind: "date", label: d.label, hint: d.hint, at: d.at, time: d.time, remind: d.remind }
     })
@@ -1627,6 +1687,17 @@ FocusScope {
       // Written past it (two spaces, a new line, "]]", on and on): it closes.
       if (pos < mention.at + trigger.length || text.slice(mention.at, mention.at + trigger.length) !== trigger
           || query.length > 40 || /\s\s|^\s|[\u2028\n]/.test(query) || (mention.kind === "page" && query.indexOf("]]") >= 0)) { closeMention(); return }
+      // A tag's name, then a space or a stop: it's a tag.
+      if (mention.kind === "tag") {
+        var ended = tagEnded.exec(query)
+        if (ended && Tags.clean(ended[1])) {
+          // (What ended it is put back after the tag.)
+          mention = { kind: "tag", uid: item.uid, at: mention.at, query: query }
+          applyMention({ kind: "tagnew", name: Tags.clean(ended[1]), tag: Tags.label(ended[1]), keep: ended[2] })
+          return
+        }
+        if (!tagChars.test(query)) { closeMention(); return }
+      }
       if (mention.kind === "emoji") {
         var name = query.replace(/:$/, "")
         if (!Emoji.isQuery(name)) { closeMention(); return }
@@ -1652,6 +1723,7 @@ FocusScope {
     var at = -1
     var query = ""
     if (before === "[[") { kind = "page"; at = pos - 2 }
+    else if (before.charAt(before.length - 1) === "#" && (before.length === 1 || /[\s(\[{"'\u201c\u2018]/.test(before.charAt(0)))) { kind = "tag"; at = pos - 1 }
     else if (before.charAt(before.length - 1) === "@" && (before.length === 1 || /\s/.test(before.charAt(0)))) { kind = "date"; at = pos - 1 }
     else {
       var named = /:([A-Za-z0-9_+-]{2,40})$/.exec(e.getText(Math.max(0, pos - 42), pos))
@@ -1695,6 +1767,19 @@ FocusScope {
       replaceRange(item, m.at, end, Html.escapeText(entry.emoji))
       endOp()
       focusBlock(item.uid, m.at + entry.emoji.length)
+      return
+    }
+    // A tag: its link, then what ended it (a space, a stop), or a space.
+    if (entry.kind === "tag" || entry.kind === "tagnew") {
+      var label = entry.kind === "tag" ? entry.label : entry.tag
+      var tag = Tags.html(label)
+      if (!tag) return
+      var after = entry.keep !== undefined ? entry.keep : " "
+      closeBurst()
+      beginOp()
+      replaceRange(item, m.at, end, tag + Html.escapeText(after))
+      endOp()
+      focusBlock(item.uid, m.at + label.length + after.length)
       return
     }
     var href = ""
@@ -1808,6 +1893,8 @@ FocusScope {
   function openLink(url) {
     var page = Html.pageOf(url)
     if (page) { pageOpened(page); return }
+    var tag = Tags.of(url)
+    if (tag) { tagOpened(tag); return }
     var clean = Html.cleanUrl(url)
     if (clean) linkOpened(clean)
   }
@@ -2279,8 +2366,8 @@ FocusScope {
     var next = blocksModel.get(index + 1)
     // The end of a column: the next column isn't something to delete.
     if (Workspace.isStructure(next.type)) return
-    // A table or a mind map below: pick it first, so it's never lost by accident.
-    if (doc && (next.type === "table" || next.type === "mindmap")) {
+    // A table, a mind map or a sketch below: pick it first, so it's never lost by accident.
+    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch")) {
       selectBlocks(next.uid, next.uid)
       return
     }
@@ -2743,7 +2830,7 @@ FocusScope {
     var edit = item.edit
     item.loading = true
     edit.remove(s, e)
-    if (inner) edit.insert(s, spaced(Html.decorateLinks(display(inner), linkColor)))
+    if (inner) edit.insert(s, spaced(Html.decorateLinks(display(inner), linkColor, tagStyle)))
     item.loading = false
     item.dirty = true
     syncBlock(item.uid)
@@ -3091,7 +3178,7 @@ FocusScope {
       else if (b.type === "divider") out += "<hr />"
       else if (b.type === "time") out += "<p>" + (b.label ? Html.escapeText(b.label) + " " : "") + inner + "</p>"
       else if (b.type === "table") out += tableHtml(b.table)
-      else if (b.type === "image" || b.type === "calendar" || b.type === "columns" || b.type === "column") out += ""
+      else if (b.type === "image" || b.type === "calendar" || b.type === "columns" || b.type === "column" || b.type === "sketch") out += ""
       else out += "<p>" + inner + "</p>"
     })
     close()

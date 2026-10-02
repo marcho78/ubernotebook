@@ -4,6 +4,8 @@ import "Import.js" as Import
 import "Blocks.js" as Blocks
 import "Html.js" as Html
 import "Markdown.js" as Markdown
+import "Sketch.js" as Sketch
+import "Tags.js" as Tags
 
 // Pages on disk: the workspace in the Pages folder of your notebooks folder
 // (~/Documents/Omanote/Pages), a JSON file per page, named by its UUID, and
@@ -29,6 +31,8 @@ Item {
   // A page's file changed while it wasn't open (a page put inside it, or
   // taken out): a view showing it should read it again.
   signal pageChanged(string id)
+  // A page was written (the Markdown copy follows).
+  signal saved(string id)
 
   onFolderChanged: if (folder) loadTimer.restart()
   Timer {
@@ -226,8 +230,63 @@ Item {
     if (JSON.stringify(links) !== JSON.stringify(e.links)) { e.links = links; changed = true }
     var reminders = Workspace.pageReminders(page)
     if (JSON.stringify(reminders) !== JSON.stringify(e.reminders)) { e.reminders = reminders; scheduleReminders() }
+    var tags = Workspace.pageTags(page)
+    if (JSON.stringify(tags) !== JSON.stringify(e.tags)) { e.tags = tags; changed = true }
     if (changed) touched()
     else saveIndex()
+    saved(page.id)
+  }
+
+  // ---- tags -------------------------------------------------------------------------------
+
+  // Every tag (not the trash's): [{ name, label, pages, blocks }].
+  function tags() { return Workspace.tagList(index) }
+
+  // A tag's color: one of Pages' ("blue"), one of your own, or "" for none.
+  function setTagColor(name, color) {
+    var n = Tags.clean(name)
+    if (!n) return
+    // (A new object, so what's drawn from it hears.)
+    var colors = {}
+    var had = index.tagColors || {}
+    for (var k in had) colors[k] = had[k]
+    var c = Workspace.cleanTagColor(color)
+    if (c) colors[n] = c
+    else delete colors[n]
+    index.tagColors = colors
+    touched()
+  }
+
+  // A tag renamed, or taken away (`to` ""), on every page with it: each page
+  // keeps the version it was in its history first. done(pages changed).
+  function changeTag(name, to, done) {
+    var from = Tags.clean(name)
+    var into = to ? Tags.clean(to) : ""
+    if (!from || (to && !into)) { if (done) done(0); return }
+    var ids = Workspace.pagesTagged(index, from)
+    var changed = 0
+    var i = 0
+    function next() {
+      if (i >= ids.length) {
+        var colors = index.tagColors || {}
+        if (colors[from] !== undefined) {
+          if (into && colors[into] === undefined) colors[into] = colors[from]
+          if (into !== from) delete colors[from]
+          index.tagColors = colors
+        }
+        touched()
+        if (done) done(changed)
+        return
+      }
+      var id = ids[i++]
+      keepVersion(id, "tag", true)
+      editPage(id, function(page) {
+        var n = Workspace.changeTags(page, function(inner) { return into ? Tags.rename(inner, from, to) : Tags.remove(inner, from) })
+        if (n === 0) return false
+        changed++
+      }, function() { next() })
+    }
+    next()
   }
 
   // ---- page history ---------------------------------------------------------------------
@@ -301,7 +360,7 @@ Item {
   // Pages written before links and reminders were kept in the tree (or
   // changed elsewhere): read once, in the background, to fill them in.
   function scanLinks() {
-    var ids = Object.keys(index.pages).filter(function(id) { return index.pages[id].links === null || index.pages[id].reminders === null })
+    var ids = Object.keys(index.pages).filter(function(id) { return index.pages[id].links === null || index.pages[id].reminders === null || index.pages[id].tags === null })
     if (ids.length === 0) return
     readPages(ids.slice(0, 2000), function(pages) {
       pages.forEach(function(p) {
@@ -309,6 +368,7 @@ Item {
         if (!e) return
         e.links = Workspace.linkedPages(p)
         e.reminders = Workspace.pageReminders(p)
+        e.tags = Workspace.pageTags(p)
       })
       ws.touched()
       ws.scheduleReminders()
@@ -555,14 +615,18 @@ Item {
       })
       var top = pages.filter(function(p) { return p.id === id })[0] || pages[0]
       var dir = base + "/" + names[top.id] + " " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm")
-      files.mkdirs([dir], function(ok) {
+      // Sketches as SVG files in sketches/, named by their blocks.
+      var sketches = []
+      pages.forEach(function(p) { Workspace.sketchesOf(p).forEach(function(k) { k.title = p.title; sketches.push(k) }) })
+      files.mkdirs(sketches.length ? [dir, dir + "/sketches"] : [dir], function(ok) {
         if (!ok) return
         pages.forEach(function(p) {
           files.writeFile(dir + "/" + names[p.id] + ".md", Markdown.fromDocPage(p, function(pid) {
             var e = ws.index.pages[pid]
             return e ? { title: e.title || "Untitled", icon: e.icon, file: names[pid] ? encodeURI(names[pid] + ".md") : "" } : null
-          }))
+          }, { sketchFile: function(bid) { return "sketches/" + bid + ".svg" } }))
         })
+        sketches.forEach(function(k) { files.writeFile(dir + "/sketches/" + k.id + ".svg", Sketch.toSvg(k.sketch, "A sketch on " + (k.title || "Untitled"))) })
         files.exec(["/usr/bin/cp", "-r", "--", Workspace.assetsDir(files.rootPath), dir + "/assets"], function() {
           files.exported(dir)
           files.openPath(dir)

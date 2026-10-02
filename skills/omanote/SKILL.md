@@ -31,6 +31,9 @@ except `read`, which prints the page as Markdown.
 | `omarchy-shell omanote blocks <id>` | the page's blocks in order: `[{id, type, depth, text}]` (`text` in Markdown, `depth`: how far inside other blocks) |
 | `omarchy-shell omanote replace <page id> <block id> <file.md>` | the Markdown in place of that block and the blocks inside it |
 | `omarchy-shell omanote insertAfter <page id> <block id> <file.md>` | the Markdown after that block (and the blocks inside it), as deep as it is |
+| `omarchy-shell omanote tags` | every tag: `[{tag, name, pages, blocks}]` |
+| `omarchy-shell omanote tagged "#tag"` | every block with the tag: `[{page, title, block, type, text, checked}]` |
+| `omarchy-shell omanote tagColor "#tag" <color>` | the tag's color: `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `red`, a hex like `#ff8800`, or `""` for none |
 | `omarchy-shell omanote trash <id>` | the page (and the pages in it) to the trash, where it can be put back |
 | `omarchy-shell omanote open <id>` | shows the page in Omanote's window |
 | `omarchy-shell omanote help` | all of this, as JSON |
@@ -109,6 +112,24 @@ table takes its colors off: say so when you do.
 | Flights | €420    | €398  |
 | Hotel   | €360    |       |
 ```
+
+## Sketches
+
+A page can have sketches (drawings the user made). `blocks` lists one as
+type `sketch`, text `(a drawing)`, and `read` as `*(A sketch, drawn in
+Omanote)*`. You can't draw one or see what's in it; don't `replace` a sketch's
+block unless the user asks for the drawing to go.
+
+## Tags
+
+`#name` in a line is a tag (letters, digits, `-`, `_`, `/`; not only digits;
+not in code): `- [ ] renew passport #errand`. Use the user's tags (`tags`
+lists them) rather than making near-duplicates, and only tag when the user
+asks or the page already uses tags. `tagged "#errand"` gives every block with
+a tag (to-dos with `checked`), and `read` gives tags back as `#name`.
+`tags` says each tag's `color` (a tag with none of its own takes the color of
+the tag it's in: `#work/acme` takes `#work`'s, and says `colorFrom`). Color
+tags with `tagColor` only when the user asks.
 
 ## Changing blocks on a page
 

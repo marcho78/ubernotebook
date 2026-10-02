@@ -1,17 +1,25 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Effects
 
 // The quick note: a sticky note that pops up wherever you are. Write, then
-// Ctrl+Enter (or Esc) keeps it as a page in the Quick notes notebook, its
-// first line as the title; "- " lines become a list and "[] " lines
-// checkboxes. Only the ✕ throws it away, so nothing is lost by a stray Esc.
+// Ctrl+Enter (or Esc) keeps it as a page in the Quick notes notebook, or in
+// the Pages Inbox (Settings, or the note's own "keeps it in" at its foot),
+// its first line as the title; "- " lines become a list and "[] " lines
+// checkboxes (in Pages, the rest is Markdown too). Only the ✕ throws it
+// away, so nothing is lost by a stray Esc.
 Item {
   id: note
 
   property var theme: null
+  // Where it goes: "notebook" (Quick notes) or "pages" (the Pages Inbox).
+  property string destination: "notebook"
+  readonly property bool toPages: destination === "pages"
 
   signal kept(string text)
   signal thrownAway()
+  // The other place picked, from the note's foot (kept as the setting).
+  signal destinationPicked(string to)
 
   function start(text) {
     edit.text = text || ""
@@ -137,16 +145,82 @@ Item {
       }
     }
 
-    Text {
-      textFormat: Text.PlainText
+    // Where it goes, which a click changes.
+    Row {
+      id: foot
       anchors.left: parent.left
       anchors.leftMargin: 22
       anchors.bottom: parent.bottom
-      anchors.bottomMargin: 12
-      text: "Ctrl+Enter keeps it in Quick notes"
+      anchors.bottomMargin: 9
+      spacing: 6
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "Ctrl+Enter keeps it in"
+        font.family: note.theme ? note.theme.uiFont : "sans-serif"
+        font.pixelSize: 11
+        color: "#8a7a2e"
+      }
+      Rectangle {
+        id: where
+        objectName: "destination"
+        anchors.verticalCenter: parent.verticalCenter
+        width: whereRow.implicitWidth + 16
+        height: 22
+        radius: 11
+        color: whereHover.hovered ? Qt.rgba(0.55, 0.45, 0.05, 0.22) : Qt.rgba(0.55, 0.45, 0.05, 0.12)
+        Row {
+          id: whereRow
+          anchors.centerIn: parent
+          spacing: 5
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: note.theme ? (note.toPages ? note.theme.icons.pages : note.theme.icons.notebook) : ""
+            font.family: note.theme ? note.theme.iconFont : "monospace"
+            font.pixelSize: 12
+            color: "#6e5f1a"
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: note.toPages ? "your Pages Inbox" : "Quick notes"
+            font.family: note.theme ? note.theme.uiFont : "sans-serif"
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+            color: "#6e5f1a"
+          }
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: note.theme ? note.theme.icons.swap : ""
+            font.family: note.theme ? note.theme.iconFont : "monospace"
+            font.pixelSize: 11
+            color: "#8a7a2e"
+          }
+        }
+        HoverHandler { id: whereHover; cursorShape: Qt.PointingHandCursor }
+        TapHandler {
+          onTapped: {
+            note.destinationPicked(note.toPages ? "notebook" : "pages")
+            edit.forceActiveFocus()
+          }
+        }
+        ToolTip.visible: whereHover.hovered
+        ToolTip.delay: 500
+        ToolTip.text: note.toPages ? "Keep quick notes in the Quick notes notebook instead" : "Keep quick notes in your Pages Inbox instead (Markdown works there)"
+      }
+    }
+    Text {
+      visible: note.toPages
+      anchors.right: parent.right
+      anchors.rightMargin: 18
+      anchors.verticalCenter: foot.verticalCenter
+      textFormat: Text.PlainText
+      text: "Markdown works"
       font.family: note.theme ? note.theme.uiFont : "sans-serif"
       font.pixelSize: 11
-      color: "#8a7a2e"
+      color: "#a2924a"
     }
   }
 }

@@ -96,6 +96,7 @@ QtObject {
     duplicate: "\u{f0191}", toPage: "\u{f0ab9}", agent: "\u{f06a9}", mindmap: "\u{f0645}",
     table: "\u{f04eb}", rowAbove: "\u{f04f4}", rowBelow: "\u{f04f3}", rowRemove: "\u{f04f5}",
     colLeft: "\u{f04ed}", colRight: "\u{f04ec}", colRemove: "\u{f04ee}", header: "\u{f121d}",
-    arrowUp: "\u{f005d}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}"
+    arrowUp: "\u{f005d}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}",
+    sketch: "\u{f0f49}", eraser: "\u{f01fe}"
   })
 }

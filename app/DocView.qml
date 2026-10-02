@@ -9,6 +9,7 @@ import "../Html.js" as Html
 import "../Templates.js" as Templates
 import "../Agent.js" as Agent
 import "../Colors.js" as Colors
+import "../Tags.js" as Tags
 
 // Pages: the other way to write in Omanote, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -47,6 +48,8 @@ FocusScope {
   property bool pageBlank: false
   // The faint title of a page from a template you name ("What's the meeting?").
   property string titleHint: ""
+  // A tag shown (its blocks, TagView.qml) instead of a page.
+  property string tagShown: ""
 
   readonly property var index: { var r = workspace ? workspace.revision : 0; return workspace ? workspace.index : Workspace.emptyIndex() }
   readonly property var format: { var r = revision; return page && page.format ? page.format : ({ width: "normal", size: "normal", font: "sans" }) }
@@ -60,6 +63,7 @@ FocusScope {
   readonly property alias editor: editor
   readonly property alias agentBox: agentPop
   readonly property alias historyPanel: historyPanel
+  readonly property alias tagView: tagView
   readonly property var crumbs: { var r = workspace ? workspace.revision : 0; var rr = revision; return page && workspace ? Workspace.path(workspace.index, page.id) : [] }
   readonly property string cover: { var r = revision; return page ? page.cover : "" }
   // The pages that link to this one.
@@ -71,6 +75,7 @@ FocusScope {
 
   // Pages shown: the page you were on last, else the first one.
   function activate() {
+    if (tagShown) return
     if (page) { focusPage(false); return }
     if (!workspace || !workspace.ready) { pendingActivate = true; return }
     workspace.ensureStarted()
@@ -97,14 +102,17 @@ FocusScope {
     }
   }
 
-  // Opens a page; `then`: "title" puts the cursor in its title.
+  // Opens a page; `then`: "title" puts the cursor in its title, { block }
+  // on that block. ("tag:<name>" in the history is a tag.)
   function open(id, fromHistory, then) {
     if (!workspace || !id) return
+    if (String(id).indexOf("tag:") === 0) { openTag(String(id).slice(4), fromHistory); return }
     commit()
     workspace.readPage(id, function(p) {
       if (!p) { view.toast("That page isn't there any more"); return }
       var e = view.workspace.index.pages[id]
       if (e) p.parent = e.parent
+      view.tagShown = ""
       view.show(p)
       if (!fromHistory) {
         view.history = view.history.slice(0, view.historyAt + 1).concat([id]).slice(-100)
@@ -112,8 +120,163 @@ FocusScope {
       }
       view.expandTo(id)
       if (view.service) view.service.setSetting("lastPage", id)
-      view.focusPage(then === "title")
+      if (then && then.block) Qt.callLater(function() { view.editor.focusBlock(then.block, 0) })
+      else view.focusPage(then === "title")
     })
+  }
+
+  // ---- tags ---------------------------------------------------------------------------------
+
+  // A tag's blocks, in place of the page.
+  function openTag(name, fromHistory) {
+    var n = Tags.clean(name)
+    if (!workspace || !n) return
+    commit()
+    page = null
+    editor.load([])
+    pageDirty = false
+    tagShown = n
+    if (!fromHistory) {
+      history = history.slice(0, historyAt + 1).concat(["tag:" + n]).slice(-100)
+      historyAt = history.length - 1
+    }
+    tagView.load()
+    tagView.forceActiveFocus()
+  }
+
+  // Tags for "#": those with what's typed, the most used first when nothing is.
+  function findTags(query) {
+    var list = Workspace.tagList(index)
+    if (!String(query || "").replace(/^#/, "")) return list.slice().sort(function(a, b) { return b.blocks - a.blocks }).slice(0, 8)
+    var by = {}
+    list.forEach(function(t) { by[t.name] = t })
+    return Tags.matching(list.map(function(t) { return t.name }), query, 8).map(function(n) { return by[n] })
+  }
+
+  // A tag's colors as it's drawn: its own (one of Pages', or one of yours as
+  // its background), else a quiet gray. While its color is being picked, that.
+  property var tagPreview: null
+  // The tags' colors, with the one being picked.
+  readonly property var tagColorsShown: {
+    // (The index is the same object as it changes: its revision says when.)
+    var r = workspace ? workspace.revision : 0
+    var colors = workspace ? workspace.index.tagColors || {} : {}
+    // (A copy: the same object again wouldn't tell what's drawn from it.)
+    var c = {}
+    for (var k in colors) c[k] = colors[k]
+    if (!tagPreview) return c
+    if (tagPreview.color) c[tagPreview.name] = tagPreview.color
+    else delete c[tagPreview.name]
+    return c
+  }
+  // (A tag with no color of its own takes the color of the tag it's in: #work/acme, #work's.)
+  function tagLook(name) {
+    var c = Workspace.tagColorOf(tagColorsShown, name).color
+    var dark = theme.dark
+    if (c) {
+      var e = Docs.colorEntry(c)
+      if (e) return { color: e.text[dark ? 1 : 0], background: e.background[dark ? 1 : 0] }
+      var hex = Colors.normalize(c)
+      if (hex) return { color: Colors.readableOn(hex, Colors.normalize(String(theme.text)) || "#000000"), background: hex }
+    }
+    return { color: Colors.normalize(String(theme.muted)) || "#666666", background: Colors.normalize(String(Qt.tint(theme.background, Qt.alpha(theme.text, dark ? 0.13 : 0.075)))) || "#eeeeee" }
+  }
+  function tagStyleOf(href) { var n = Tags.of(href); return n ? tagLook(n) : null }
+  readonly property string tagColorsKey: JSON.stringify(tagColorsShown)
+  onTagColorsKeyChanged: editor.restyle()
+
+  // A block's text as the tag view shows it.
+  function blockHtml(inner) {
+    return Html.decorateLinks(editor.display(inner || ""), theme.accent, function(href) { return view.tagStyleOf(href) })
+  }
+
+  // A link clicked in the tag view: a page, a tag, or out.
+  function openFromTag(link) { editor.openLink(link) }
+
+  // The tag the color menu and renaming are for (the one shown, or one in the sidebar).
+  property string tagTarget: ""
+
+  function renameTag(to, name) {
+    var from = name || tagTarget || tagShown
+    var into = Tags.clean(to)
+    if (!from || !into) return false
+    // (The page open is written first, so what's being written in it is renamed too.)
+    commit()
+    workspace.changeTag(from, to, function(n) {
+      view.toast(n ? "Renamed on " + n + (n === 1 ? " page" : " pages") : "Renamed")
+      // The history says the new name.
+      var h = view.history.slice()
+      for (var i = 0; i < h.length; i++) if (h[i] === "tag:" + from) h[i] = "tag:" + into
+      view.history = h
+      if (view.tagShown === from) {
+        view.tagShown = into
+        view.tagView.load()
+      } else if (view.page) {
+        // The page open may have had it: shown as it is now.
+        view.workspace.readPage(view.page.id, function(p) { if (p && view.page && view.page.id === p.id && !view.pageDirty) view.show(p) })
+      }
+    })
+    return true
+  }
+
+  function removeTag(which) {
+    var name = which || tagShown
+    var info = Workspace.tagList(index).filter(function(t) { return t.name === name })[0]
+    if (!info) return
+    confirmRequested("Take " + info.label + " off every page?",
+      "It comes off " + info.blocks + (info.blocks === 1 ? " block" : " blocks") + " on " + info.pages + (info.pages === 1 ? " page" : " pages")
+        + ". Each page keeps the version before in its Page history.",
+      "Take it off", function() {
+        view.commit()
+        view.workspace.changeTag(name, "", function(n) {
+          view.toast(info.label + " is off " + n + (n === 1 ? " page" : " pages"))
+          if (view.tagShown) view.tagView.load()
+          else if (view.page) view.workspace.readPage(view.page.id, function(p) { if (p && view.page && view.page.id === p.id && !view.pageDirty) view.show(p) })
+        })
+      })
+  }
+
+  // The colors for a tag (`name`, else the one shown), under `anchor` (or
+  // beside it, `side`).
+  function openTagColors(anchor, name, side) {
+    tagTarget = name || tagShown
+    var c = (index.tagColors || {})[tagTarget] || ""
+    var from = Workspace.tagColorOf(index.tagColors || {}, tagTarget).from
+    colorAt = side ? anchor.mapToItem(view, anchor.width + 6, 0) : anchor.mapToItem(view, 0, anchor.height + 8)
+    tagColors.currentText = c
+    tagColors.currentBack = ""
+    tagColors.noneLabel = from && from !== tagTarget ? "As #" + from : "Gray"
+    tagColors.x = side ? colorAt.x : Math.max(12, colorAt.x - tagColors.width + anchor.width)
+    tagColors.y = side ? Math.min(colorAt.y, view.height - 260) : colorAt.y
+    tagColors.open()
+  }
+
+  function openTagCustom() {
+    var c = (index.tagColors || {})[tagTarget] || ""
+    var look = tagLook(tagTarget)
+    tagCustom.recent = recentColors
+    tagCustom.x = Math.max(12, Math.min(view.width - 320, tagColors.x))
+    tagCustom.y = tagColors.y
+    tagCustom.start("background", Colors.isHex(c) ? c : "", { text: "#" + tagTarget, fill: look.background, ownInk: "", pageInk: Colors.normalize(String(theme.text)) || "#000000" })
+  }
+
+  function openTagRename(anchor, name, side) {
+    tagTarget = name || tagShown
+    var p = side ? anchor.mapToItem(view, anchor.width + 6, 0) : anchor.mapToItem(view, 0, anchor.height + 8)
+    tagRename.x = side ? p.x : Math.max(12, p.x - tagRename.width + anchor.width)
+    tagRename.y = p.y
+    tagRename.start(Workspace.tagList(index).filter(function(t) { return t.name === view.tagTarget }).map(function(t) { return t.label })[0] || "#" + tagTarget)
+  }
+
+  // A tag's menu (its ⋯ in the sidebar, or a right-click there).
+  function openTagMenu(name, anchor) {
+    tagTarget = name
+    tagMenu.tag = name
+    tagMenu.anchor = anchor
+    var p = anchor.mapToItem(view, anchor.width - 20, anchor.height - 4)
+    tagMenu.x = p.x
+    tagMenu.y = Math.min(p.y, view.height - 200)
+    tagMenu.open()
   }
 
   function show(p) {
@@ -667,6 +830,17 @@ FocusScope {
         IconButton { theme: view.theme; icon: view.theme.icons.back; size: 30; iconSize: 16; tip: "Back  Alt+\u2190"; active: view.historyAt > 0; onClicked: view.back() }
         IconButton { theme: view.theme; icon: view.theme.icons.forward; size: 30; iconSize: 16; tip: "Forward  Alt+\u2192"; active: view.historyAt < view.history.length - 1; onClicked: view.forward() }
         Item { width: 6; height: 1 }
+        // A tag shown: "Tags / #idea".
+        Text {
+          visible: view.tagShown !== ""
+          anchors.verticalCenter: parent.verticalCenter
+          leftPadding: 6
+          textFormat: Text.PlainText
+          text: "Tags  /  " + (view.tagShown ? view.tagView.info.label : "")
+          font.family: view.theme.uiFont
+          font.pixelSize: 13
+          color: view.theme.text
+        }
         Repeater {
           model: view.crumbs
           delegate: Row {
@@ -739,7 +913,7 @@ FocusScope {
           tip: "Ask your agent  Ctrl+J"
           onClicked: view.openAgent("auto")
         }
-        IconButton { theme: view.theme; icon: view.theme.icons.search; size: 30; iconSize: 16; tip: "Find on this page  Ctrl+F"; checked: findBar.shown; onClicked: findBar.toggle() }
+        IconButton { visible: view.tagShown === ""; theme: view.theme; icon: view.theme.icons.search; size: 30; iconSize: 16; tip: "Find on this page  Ctrl+F"; checked: findBar.shown; onClicked: findBar.toggle() }
         IconButton {
           id: moreButton
           theme: view.theme; icon: view.theme.icons.more; size: 30; iconSize: 16; tip: "Font, width, export, trash"
@@ -757,6 +931,23 @@ FocusScope {
     }
 
     // ---- the page -----------------------------------------------------------------------------
+
+    // A tag's blocks, in place of the page.
+    TagView {
+      id: tagView
+      z: 2
+      anchors.top: topBar.bottom
+      anchors.bottom: parent.bottom
+      width: parent.width
+      visible: view.tagShown !== ""
+      theme: view.theme
+      workspace: view.workspace
+      view: view
+      name: view.tagShown
+      onColorRequested: function(anchor) { view.openTagColors(anchor) }
+      onRenameRequested: function(anchor) { view.openTagRename(anchor) }
+      onRemoveRequested: view.removeTag()
+    }
 
     Flickable {
       id: flick
@@ -930,6 +1121,9 @@ FocusScope {
         Editor {
           id: editor
           layout: "doc"
+          theme: view.theme
+          findTags: function(query) { return view.findTags(query) }
+          tagStyle: function(href) { return view.tagStyleOf(href) }
           width: view.pageW
           contentWidth: width
           focus: true
@@ -1005,6 +1199,8 @@ FocusScope {
           onMindMapColorsRequested: function(uid, anchor) { view.openIdeaColors(uid, anchor) }
           onTableMenuRequested: function(uid, kind, index, anchor) { tableMenu.openFor(uid, kind, index, anchor, view) }
           onTableColorsRequested: function(uid, anchor) { view.openTableColors(uid, anchor) }
+          onSketchColorsRequested: function(uid, anchor) { view.openSketchColors(uid, anchor) }
+          onTagOpened: function(name) { view.openTag(name) }
           onAgentRequested: function(uid) {
             var i = editor.indexOf(uid)
             var empty = i >= 0 && Html.plainText(editor.blockAt(i).html || "") === "" && !(editor.items[uid] && editor.items[uid].edit.length > 0)
@@ -1084,7 +1280,7 @@ FocusScope {
 
     // No page open (none yet, or every one in the trash).
     Column {
-      visible: view.page === null && view.workspace !== null && view.workspace.ready
+      visible: view.page === null && view.tagShown === "" && view.workspace !== null && view.workspace.ready
       anchors.centerIn: parent
       spacing: 12
       Text {
@@ -1180,7 +1376,7 @@ FocusScope {
     editor: editor
     onToPageRequested: function(uid) { view.turnIntoPage(uid) }
     onMindMapRequested: function(uids) {
-      if (!editor.toMindMap(uids)) view.toast("A page is among those blocks, and it would go with them: move it out first")
+      if (!editor.toMindMap(uids)) view.toast("A page or a sketch is among those blocks, and it would be lost: move it out first")
     }
     onAgentRequested: function(uids) { view.openAgent("blocks", uids) }
     onMoveRequested: function(uids) {
@@ -1275,6 +1471,38 @@ FocusScope {
     tableCustom.start(kind, kind === "color" ? now.color : now.background, t.colorInfo())
   }
 
+  // The sketch whose pen color is being picked.
+  property string sketchColorTarget: ""
+  property bool sketchCustomOpen: false
+  function colorSketch() {
+    var item = editor.items[sketchColorTarget]
+    return item && item.sketchView ? item.sketchView : null
+  }
+
+  function openSketchColors(uid, anchor) {
+    var k = editor.items[uid] ? editor.items[uid].sketchView : null
+    if (!k) return
+    sketchColorTarget = uid
+    colorAt = anchor.mapToItem(view, 0, anchor.height + 8)
+    sketchColors.currentText = k.penColor
+    sketchColors.currentBack = ""
+    sketchColors.marker = k.tool === "marker"
+    sketchColors.x = colorAt.x
+    sketchColors.y = colorAt.y
+    sketchColors.open()
+  }
+
+  function openSketchCustom() {
+    var k = colorSketch()
+    if (!k) return
+    sketchCustomOpen = true
+    sketchCustom.recent = recentColors
+    sketchCustom.had = k.penColor
+    sketchCustom.x = colorAt.x
+    sketchCustom.y = colorAt.y
+    sketchCustom.start("color", Colors.isHex(k.penColor) ? k.penColor : "", k.colorInfo())
+  }
+
   HistoryPanel {
     id: historyPanel
     theme: view.theme
@@ -1308,6 +1536,116 @@ FocusScope {
       if (view.customOpen) return
       var m = view.colorMap()
       if (m) m.colorsClosed(false)
+    }
+  }
+
+  // A tag's color (the tag view's palette).
+  ColorPop {
+    id: tagColors
+    objectName: "tagColors"
+    theme: view.theme
+    editor: editor
+    mode: "tag"
+    parent: view
+    recent: view.recentColors
+    property bool customOpen: false
+    onIdeaPicked: function(kind, color) { view.workspace.setTagColor(view.tagTarget, color) }
+    onCustomRequested: function(kind) { customOpen = true; view.openTagCustom() }
+  }
+
+  // A tag's color of your own: shown as you pick, kept with Apply.
+  ColorPicker {
+    id: tagCustom
+    objectName: "tagCustom"
+    theme: view.theme
+    parent: view
+    onPreview: function(hex) { view.tagPreview = { name: view.tagTarget, color: hex } }
+    onPicked: function(hex) {
+      view.tagPreview = null
+      view.workspace.setTagColor(view.tagTarget, hex)
+      view.rememberColor(hex)
+    }
+    onCanceled: view.tagPreview = null
+    onClosed: { view.tagPreview = null; tagColors.customOpen = false }
+  }
+
+  TagRename {
+    id: tagRename
+    theme: view.theme
+    parent: view
+    known: Workspace.tagList(view.index).map(function(t) { return t.name })
+    onRenamed: function(to) { view.renameTag(to, view.tagTarget) }
+  }
+
+  // A tag's menu in the sidebar: its blocks, its color, renaming it, taking it off.
+  Pop {
+    id: tagMenu
+    objectName: "tagMenu"
+    theme: view.theme
+    property string tag: ""
+    property var anchor: null
+    readonly property var info: { var r = view.workspace ? view.workspace.revision : 0; return Workspace.tagList(view.index).filter(function(t) { return t.name === tagMenu.tag })[0] || { label: "#" + tagMenu.tag, pages: 0, blocks: 0 } }
+    focus: false
+    width: 240
+    contentItem: Column {
+      spacing: 2
+      Text {
+        textFormat: Text.PlainText
+        leftPadding: 10
+        topPadding: 4
+        bottomPadding: 4
+        text: tagMenu.info.label + "  \u00b7  " + tagMenu.info.blocks + (tagMenu.info.blocks === 1 ? " block" : " blocks")
+        font.family: view.theme.uiFont
+        font.pixelSize: 11
+        font.weight: Font.DemiBold
+        color: view.theme.muted
+      }
+      MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.open; text: "Every block with it"; onClicked: { tagMenu.close(); view.openTag(tagMenu.tag) } }
+      MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.palette; text: "Color"; hint: "\u203a"; onClicked: { var a = tagMenu.anchor; var t = tagMenu.tag; tagMenu.close(); view.openTagColors(a, t, true) } }
+      MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.pen; text: "Rename\u2026"; onClicked: { var a = tagMenu.anchor; var t = tagMenu.tag; tagMenu.close(); view.openTagRename(a, t, true) } }
+      Rectangle { width: parent.width; height: 1; color: view.theme.line }
+      MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.trash; text: "Take it off every page"; danger: true; onClicked: { var t = tagMenu.tag; tagMenu.close(); view.removeTag(t) } }
+    }
+  }
+
+  // A sketch's pen color (its color button).
+  ColorPop {
+    id: sketchColors
+    objectName: "sketchColors"
+    theme: view.theme
+    editor: editor
+    mode: "pen"
+    parent: view
+    recent: view.recentColors
+    onIdeaPicked: function(kind, color) { var k = view.colorSketch(); if (k) k.setColor(color) }
+    onCustomRequested: function(kind) { view.openSketchCustom() }
+    onClosed: {
+      if (view.sketchCustomOpen) return
+      var k = view.colorSketch()
+      if (k) k.colorsClosed()
+    }
+  }
+
+  // A pen color of your own: the pen takes it as you pick; Cancel puts back
+  // the one it had.
+  ColorPicker {
+    id: sketchCustom
+    objectName: "sketchCustom"
+    theme: view.theme
+    parent: view
+    // The pen's color before (to put back).
+    property string had: ""
+    onPreview: function(hex) { var k = view.colorSketch(); if (k) k.setColor(hex) }
+    onPicked: function(hex) {
+      var k = view.colorSketch()
+      if (k) k.setColor(hex)
+      view.rememberColor(hex)
+    }
+    onCanceled: { var k = view.colorSketch(); if (k) k.setColor(had) }
+    onClosed: {
+      view.sketchCustomOpen = false
+      var k = view.colorSketch()
+      if (k) k.colorsClosed()
     }
   }
 
@@ -1433,6 +1771,7 @@ FocusScope {
     workspace: view.workspace
     parent: view
     onPageChosen: function(id) { view.open(id) }
+    onTagChosen: function(name) { view.openTag(name) }
   }
 
   TrashPop {

@@ -122,6 +122,34 @@ Item {
 
   property alias workspace: workspaceItem
 
+  // The Markdown copy of every page, while Settings has it on (Mirror.qml).
+  readonly property string mirrorPath: {
+    var f = settings.mirrorFolder || ""
+    if (f.indexOf("~/") === 0) return home + f.slice(1)
+    if (f) return f
+    return storeItem.rootPath ? storeItem.rootPath + "/Markdown" : ""
+  }
+
+  Mirror {
+    id: mirrorItem
+    workspace: workspaceItem
+    store: storeItem
+    on: root.settings.mirror === true
+    folder: root.mirrorPath
+    notesRoot: storeItem.rootPath
+    home: root.home
+  }
+
+  property alias mirror: mirrorItem
+
+  // The copy's folder, in the file manager (once there's a copy).
+  function openMirror() {
+    if (!mirrorItem.on || mirrorItem.problem || !mirrorPath) return
+    storeItem.exec(["/usr/bin/mkdir", "-p", "--", mirrorPath], function(ok) {
+      if (ok) Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", root.mirrorPath])
+    })
+  }
+
   // Commands for AI agents and scripts (the IPC below hands them on).
   Api {
     id: apiItem
@@ -284,16 +312,59 @@ Item {
     else if (ui) ui.close()
   }
 
-  // A quick note: with text, straight into the Quick notes notebook;
-  // without, the quick-note card opens.
+  // A quick note: with text, straight into the Quick notes notebook (or the
+  // Pages Inbox, as Settings says); without, the quick-note card opens.
   function quick(text) {
     var value = String(text || "").trim()
     if (value) {
-      storeItem.quickNote(value)
-      osd("\u{f082e}", "Saved to Quick notes")
+      if (settings.quickTo === "pages") quickToPages(value)
+      else quickToNotebook(value)
       return
     }
     if (ui && typeof ui.openQuick === "function") ui.openQuick()
+  }
+
+  function quickToNotebook(value) {
+    storeItem.quickNote(value)
+    osd("\u{f082e}", "Saved to Quick notes")
+  }
+
+  // Into the Pages Inbox, once Pages has loaded (a note made before then
+  // waits for it; if Pages can't load, it goes to the Quick notes notebook,
+  // so it's never lost).
+  property var quickWaiting: []
+
+  function quickToPages(value) {
+    if (!workspaceItem.ready) {
+      quickWaiting = quickWaiting.concat([value])
+      quickTimer.restart()
+      return
+    }
+    var r = null
+    try { r = JSON.parse(apiItem.quickPage(value)) } catch (e) { r = null }
+    if (r && r.ok) osd("\u{f0836}", "Saved to your Pages Inbox")
+    else {
+      storeItem.quickNote(value)
+      osd("\u{f082e}", "Saved to Quick notes (Pages: " + (r ? r.error : "couldn't save it") + ")")
+    }
+  }
+
+  function flushQuick(toPages) {
+    quickTimer.stop()
+    var list = quickWaiting
+    quickWaiting = []
+    list.forEach(function(v) { if (toPages) root.quickToPages(v); else root.quickToNotebook(v) })
+  }
+
+  Connections {
+    target: workspaceItem
+    function onReadyChanged() { if (workspaceItem.ready && root.quickWaiting.length) root.flushQuick(true) }
+  }
+
+  Timer {
+    id: quickTimer
+    interval: 10000
+    onTriggered: root.flushQuick(false)
   }
 
   // The desktop's file picker, for notes to import into Pages (files, or a folder).
@@ -387,6 +458,12 @@ Item {
       return JSON.stringify(root.settings[key])
     }
     function reset(): void { root.resetSettings() }
+    // omarchy-shell omanote mirror: the Markdown copy made up to date now, and how it is.
+    function mirror(): string {
+      if (!mirrorItem.on) return JSON.stringify({ ok: false, error: "the Markdown copy is off: omarchy-shell omanote set mirror true" })
+      mirrorItem.sync()
+      return JSON.stringify({ ok: !mirrorItem.problem, folder: root.mirrorPath, status: mirrorItem.status, files: mirrorItem.files })
+    }
 
     // For AI agents and scripts: pages in and out, answered in JSON
     // (omarchy-shell omanote help lists them; Api.qml does them).
@@ -398,6 +475,9 @@ Item {
     function addTo(page: string, title: string, file: string): string { return apiItem.addTo(page, title, file) }
     function append(id: string, file: string): string { return apiItem.append(id, file) }
     function blocks(id: string): string { return apiItem.blocks(id) }
+    function tags(): string { return apiItem.tags() }
+    function tagged(tag: string): string { return apiItem.tagged(tag) }
+    function tagColor(tag: string, color: string): string { return apiItem.tagColor(tag, color) }
     function replace(page: string, block: string, file: string): string { return apiItem.replace(page, block, file) }
     function insertAfter(page: string, block: string, file: string): string { return apiItem.insertAfter(page, block, file) }
     function trash(id: string): string { return apiItem.trash(id) }

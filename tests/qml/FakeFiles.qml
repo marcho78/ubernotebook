@@ -89,6 +89,15 @@ QtObject {
       done(true, names.join("\n") + (names.length ? "\n" : ""))
       return
     }
+    // The Markdown copy's own files in a folder (Mirror.qml).
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-mirror-list") {
+      var top = argv[4] + "/"
+      var mine = Object.keys(disk).filter(function(p) { return p.indexOf(top) === 0 })
+        .map(function(p) { return p.slice(top.length) })
+        .filter(function(p) { return /^(Pages|Notebooks|sketches)\//.test(p) && /\.(md|svg)$/.test(p) })
+      done(true, mine.join("\n") + (mine.length ? "\n" : ""))
+      return
+    }
     if (argv[0] === "/usr/bin/rm") {
       argv.slice(3).forEach(function(p) { delete disk[p] })
       if (done) done(true, "")

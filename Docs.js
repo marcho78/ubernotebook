@@ -33,6 +33,7 @@ var STYLES = {
   image:   { size: 16, lh: 1.5, above: 6, below: 6 },
   mindmap: { size: 15, lh: 1.4, above: 10, below: 10 },
   table:   { size: 15, lh: 1.45, above: 8, below: 8 },
+  sketch:  { size: 15, lh: 1.45, above: 8, below: 8 },
   habit:   { size: 16, lh: 1.5, above: 3, below: 3 },
   calendar: { size: 15, lh: 1.5, above: 8, below: 8 }
 }
@@ -140,6 +141,7 @@ var COMMANDS = [
   { id: "divider", group: "Basic blocks", label: "Divider", hint: "Visually divide blocks", icon: "divider", type: "divider", keys: "line separator hr rule ---" },
   { id: "code", group: "Basic blocks", label: "Code", hint: "Capture a code snippet", icon: "code", type: "code", keys: "snippet pre ```" },
   { id: "table", group: "Basic blocks", label: "Table", hint: "Rows and columns, with a header row", icon: "table", type: "table", props: { table: { rows: [["", "", ""], ["", "", ""], ["", "", ""]], header: true } }, keys: "table grid rows columns cells spreadsheet" },
+  { id: "sketch", group: "Basic blocks", label: "Sketch", hint: "Draw with a pen and a highlighter", icon: "sketch", type: "sketch", keys: "sketch draw drawing pen pencil doodle whiteboard canvas ink handwriting" },
   { id: "habit", group: "Planning", label: "Habit", hint: "A habit, with a circle for each day of the week", icon: "habit", type: "habit", keys: "tracker streak routine week days" },
   { id: "calendar", group: "Planning", label: "Calendar", hint: "A month at a glance: click a date to circle it", icon: "calendarMonth", type: "calendar", keys: "month dates planner" },
   { id: "page", group: "Pages", label: "Page", hint: "A page inside this page", icon: "page", action: "page", keys: "subpage sub-page new document" },
@@ -207,7 +209,7 @@ function kindLabel(type, toggle) {
     var k = TURN_INTO[i]
     if (k.type === type && !!k.toggle === !!toggle) return k.label
   }
-  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : "Text"
+  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : type === "sketch" ? "Sketch" : "Text"
 }
 
 // Languages a code block can say it's in.

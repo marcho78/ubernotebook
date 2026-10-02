@@ -12,6 +12,7 @@
 .import "Html.js" as Html
 .import "Mindmap.js" as Mindmap
 .import "Table.js" as Table
+.import "Sketch.js" as Sketch
 
 // Every kind of block. `rows` is how many ruled lines one line of its text
 // takes (a big heading takes two, so the text below stays on the lines).
@@ -46,7 +47,9 @@ var KINDS = {
   // A mind map (Pages only): its ideas as an outline (Mindmap.js).
   mindmap: { label: "Mind map",    text: false, rows: 1 },
   // A table (Pages only): rows of cells (Table.js).
-  table:   { label: "Table",       text: false, rows: 1 }
+  table:   { label: "Table",       text: false, rows: 1 },
+  // A drawing (Pages only): pen and highlighter strokes (Sketch.js).
+  sketch:  { label: "Sketch",      text: false, rows: 1 }
 }
 
 // Colors a block (or its background) can have in Pages: "blue" is blue text,
@@ -229,6 +232,11 @@ function clean(raw, options) {
     var table = nest ? Table.clean(raw.table) : null
     if (!table) return null
     block.table = table
+  }
+  if (type === "sketch") {
+    // Only in Pages; a new one is empty.
+    if (!nest) return null
+    block.sketch = Sketch.clean(raw.sketch) || Sketch.make()
   }
   return block
 }

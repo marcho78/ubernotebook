@@ -79,6 +79,17 @@ The first version.
   by dragging, a text color and a background for a cell, a row or a column
   (Pages' colors, recent ones, or the color picker), and spreadsheet cells
   pasted into a cell filling the table;
+  tags (`#errand` in any line, the "#" menu, a color for each, a Tags list
+  in the sidebar with a ⋯ and right-click menu to color, rename or remove
+  one, sorted by name or by color, nested tags under the tag they're in and
+  in its color unless they have their own, Ctrl+P with "#"): a tag shows
+  every block with it, page by page, to-dos ticked there, and renames or
+  comes off every page in one go (Obsidian's `#tags` come in as tags, and go
+  out as `#tags` in Markdown);
+  sketches (`/sketch`): a pen, a highlighter and an eraser that lifts whole
+  strokes, in the page's ink, Pages' colors or any color from the color
+  picker, three nibs, plain paper, dots or a grid, a height you drag, every
+  stroke a step to undo, and SVG files in exports;
   page history (*Page history* in a page's ⋯ menu): a version kept every ten
   minutes while you write and before an agent or a command changes the page,
   each shown as it was, and put back as a step Undo takes back, without
@@ -98,7 +109,9 @@ The first version.
   `addTo`, `append` and `trash`, answered in JSON, with pages in and out as
   Markdown (links to pages, dates and reminders too), new pages in an Inbox, and
   the app doing every write; `blocks`, `replace` and `insertAfter` change a
-  page block by block. A skill (`skills/omanote/SKILL.md`), linked into the
+  page block by block; `tags`, `tagged` and `tagColor` list tags, the blocks
+  with one, and color them; `mirror` brings the Markdown copy up to date. A
+  version of a page is kept in its history before a command changes it. A skill (`skills/omanote/SKILL.md`), linked into the
   skill folders of the agents Omarchy supports while Omanote runs, teaches them
   how to use the commands.
 - **Ask your agent** from Pages: Ctrl+J, `/agent`, a block's menu, the toolbar
@@ -114,10 +127,16 @@ The first version.
   shelf.
 - **Quick notes**: Super+Alt+N (or right-click the bar icon, or
   `omarchy-shell omanote quick "text"`) puts a sticky note up anywhere; kept,
-  it becomes a page in the Quick notes notebook.
+  it becomes a page in the Quick notes notebook, or (Settings, or a click on
+  the note's foot) a page in the Pages Inbox, its text read as Markdown.
 - **Files**: a folder per notebook, a JSON file per page, pictures beside
   them, written atomically; trash instead of deleting; Markdown export, to a
   folder you pick or to the Exports folder (a setting).
+- **A Markdown copy** (Settings): every page of Pages and of the notebooks
+  kept as Markdown files in a folder, a few seconds after anything changes,
+  for Obsidian, git or any editor; Pages' tree as folders, links between
+  pages as links between files, pictures and sketches beside them; files
+  written only when they change, and only the copy's own files ever removed.
 - **Omarchy**: follows your theme, a bar icon, an app-launcher entry with
   its own icon, Super+N and Super+Alt+N
   registered with Hyprland at runtime (never in your config), window rules

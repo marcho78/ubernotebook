@@ -39,6 +39,7 @@ Item {
   required property string outline
   required property string folds
   required property string table
+  required property string sketch
 
   property var editor: null
 
@@ -116,6 +117,7 @@ Item {
     : type === "calendar" ? calHead + calWeekdays + cal.weeks * calRow + 4
     : type === "mindmap" ? (mapLoader.item ? mapLoader.item.height : st.lineHeight)
     : type === "table" ? (tableLoader.item ? tableLoader.item.height : st.lineHeight)
+    : type === "sketch" ? (sketchLoader.item ? sketchLoader.item.height : st.lineHeight)
     : st.lineHeight
 
   property alias edit: textEdit
@@ -149,13 +151,20 @@ Item {
   function tableJson() { return tableLoader.item ? tableLoader.item.json() : "" }
   function enter(dir, x) { if (tableLoader.item) tableLoader.item.enter(dir, x - tableLoader.x) }
 
+  // A sketch: drawn on (startDrawing).
+  readonly property var sketchView: sketchLoader.item
+  // A table or a sketch tells where the pointer is itself (the block's own
+  // pointer zone would keep it from knowing).
+  readonly property bool ownHover: type === "table" || type === "sketch"
+  readonly property bool contentHovered: (tableLoader.item !== null && tableLoader.item.pointerIn) || (sketchLoader.item !== null && sketchLoader.item.pointerIn)
+
   function reload() {
     if (!isText) return
     var had = textEdit.activeFocus
     var pos = textEdit.cursorPosition
     loading = true
     measure(editor.htmls[uid] || "")
-    textEdit.text = Html.wrapBlock(editor.displayOf(uid, type, lang), lineHeight, editor.linkColor)
+    textEdit.text = Html.wrapBlock(editor.displayOf(uid, type, lang), lineHeight, editor.linkColor, editor.tagStyle)
     shownCode = type === "code"
     loading = false
     dirty = false
@@ -453,7 +462,7 @@ Item {
     HoverHandler {
       id: hover
       readonly property string link: textEdit.linkAt(hover.point.position.x, hover.point.position.y)
-      cursorShape: (link !== "" && (hover.point.modifiers & Qt.ControlModifier)) || Html.pageOf(link) !== ""
+      cursorShape: (link !== "" && (hover.point.modifiers & Qt.ControlModifier)) || Html.pageOf(link) !== "" || Html.isTag(link)
         ? Qt.PointingHandCursor : Qt.IBeamCursor
     }
     TapHandler {
@@ -463,12 +472,13 @@ Item {
         if (link) block.editor.openLink(link)
       }
     }
-    // A link to a page opens with a plain click, as in Notion.
+    // A link to a page opens with a plain click, as in Notion, and a tag
+    // shows every block with it.
     TapHandler {
       acceptedModifiers: Qt.NoModifier
       onTapped: function(eventPoint) {
         var link = textEdit.linkAt(eventPoint.position.x, eventPoint.position.y)
-        if (Html.pageOf(link)) block.editor.openLink(link)
+        if (Html.pageOf(link) || Html.isTag(link)) block.editor.openLink(link)
       }
     }
   }
@@ -534,6 +544,23 @@ Item {
       ink: block.inkColor
       fontPx: block.st.size
       lineH: Math.round(block.st.size * 1.45)
+      available: block.width - block.bx - block.boxRight
+    }
+  }
+
+  // ---- a sketch ----------------------------------------------------------------------------------
+
+  Loader {
+    id: sketchLoader
+    active: block.type === "sketch"
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: SketchBlock {
+      editor: block.editor
+      host: block
+      uid: block.uid
+      source: block.sketch
+      ink: block.inkColor
       available: block.width - block.bx - block.boxRight
     }
   }
@@ -1007,7 +1034,7 @@ Item {
   // Blocks that aren't text are picked with a click (a calendar picks
   // itself, away from its dates).
   TapHandler {
-    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table"
+    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch"
     onTapped: block.editor.selectBlocks(block.uid, block.uid)
     onDoubleTapped: if (block.type === "image") block.editor.openPicture(block.src)
   }
@@ -1021,14 +1048,14 @@ Item {
   Item {
     id: hoverZone
     x: block.bx - 56
-    width: block.type === "table" ? 56 : block.width - x
+    width: block.ownHover ? 56 : block.width - x
     height: block.height
     HoverHandler { id: zoneHover }
   }
 
   Row {
     id: handles
-    visible: (zoneHover.hovered || grip.active || (tableLoader.item !== null && (tableLoader.item.pointerIn || plusHover.hovered || gripHover.hovered))) && !block.editor.readOnly && block.editor.dragUid === "" || block.dragged
+    visible: (zoneHover.hovered || grip.active || (block.ownHover && (block.contentHovered || plusHover.hovered || gripHover.hovered))) && !block.editor.readOnly && block.editor.dragUid === "" || block.dragged
     x: block.bx - 48
     y: (block.isText ? block.markY : block.st.above + block.boxTop + Math.min(block.contentH, 30) / 2) - height / 2
     spacing: 0

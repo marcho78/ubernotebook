@@ -43,6 +43,9 @@ Item {
   signal exported(string path)
   // A page was added from outside the open notebook (a quick note).
   signal pageAdded(string notebookId, var page)
+  // Something on the shelf changed: a page written, a notebook made,
+  // renamed, moved or thrown away (the Markdown copy follows).
+  signal changed()
 
   // The folder can change just after the shell starts (when the settings
   // arrive): look a moment later, once, and ignore what an older look finds.
@@ -309,6 +312,7 @@ Item {
   function publish() {
     publishTimer.stop()
     notebooks = order.filter(function(id) { return index[id] }).map(function(id) { return meta(index[id]) })
+    changed()
   }
 
   // For changes only the shelf's small print shows (when it was last edited).
@@ -493,6 +497,31 @@ Item {
     var path = Library.pageFile(rootPath, id, page.id)
     var text = pageJson(page)
     whenReady(id, function() { store.writeFile(path, text) })
+    changed()
+  }
+
+  // The shelf's notebooks, for the Markdown copy: [{ id, title, modified }].
+  function notebookList() {
+    return order.filter(function(id) { return index[id] }).map(function(id) { return { id: id, title: index[id].title, modified: index[id].modified } })
+  }
+
+  // A notebook's pages in order, read and nothing else (no page made for an
+  // empty notebook, no order put right): done([page]).
+  function notebookPages(id, done) {
+    var nb = index[id]
+    if (!nb) { done([]); return }
+    readGlob(Library.pagesDir(rootPath, id), "*.json", function(files) {
+      var byId = {}
+      for (var path in files) {
+        var pid = path.slice(path.lastIndexOf("/") + 1, path.length - 5)
+        var page = Library.cleanPage(parseJson(files[path]), pid)
+        if (page) byId[pid] = page
+      }
+      var mine = store.written[id] || {}
+      for (var wid in mine) byId[wid] = JSON.parse(JSON.stringify(mine[wid]))
+      var ids = Library.reconcilePages(nb.pages, Object.keys(byId))
+      done(ids.map(function(pid) { return byId[pid] }).filter(function(p) { return !!p }))
+    })
   }
 
   // A new page at an index (blank, or what `options` has on it: a

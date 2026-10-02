@@ -26,6 +26,7 @@ Popup {
     toggleField.text = s.shortcut || ""
     quickField.text = s.quickShortcut || ""
     folderField.text = s.folder || ""
+    mirrorField.text = s.mirrorFolder || ""
   }
 
   function set(key, value) { if (service) service.setSetting(key, value) }
@@ -130,6 +131,23 @@ Popup {
             input.onActiveFocusChanged: if (!input.activeFocus) panel.set("quickShortcut", text)
           }
         }
+        Line {
+          label: "Quick notes go to"
+          note: panel.s.quickTo === "pages" ? "A page in your Pages Inbox: the first line is its title, the rest Markdown." : "A page in the Quick notes notebook."
+          Row {
+            spacing: 6
+            Repeater {
+              model: [{ label: "Quick notes", value: "notebook" }, { label: "Pages Inbox", value: "pages" }]
+              delegate: Chip {
+                required property var modelData
+                theme: panel.theme
+                text: modelData.label
+                checked: (panel.s.quickTo || "notebook") === modelData.value
+                onClicked: panel.set("quickTo", modelData.value)
+              }
+            }
+          }
+        }
 
         Heading { text: "Window" }
         Line {
@@ -190,6 +208,32 @@ Popup {
                 onClicked: panel.set("exportTo", modelData.value)
               }
             }
+          }
+        }
+
+        Line {
+          label: "Markdown copy"
+          note: panel.s.mirror === true && panel.service
+            ? panel.service.mirror.status + (panel.service.mirror.status === "Up to date" && panel.service.mirror.lastSync
+              ? " \u00b7 " + panel.service.mirror.files + " files \u00b7 " + Qt.formatTime(panel.service.mirror.lastSync, "HH:mm") : "")
+            : "A Markdown file of every page, kept up to date in a folder, for Obsidian, git or any editor."
+          Toggle { theme: panel.theme; checked: panel.s.mirror === true; onToggled: function(on) { panel.set("mirror", on) } }
+        }
+        Line {
+          visible: panel.s.mirror === true
+          label: "Copy to"
+          note: panel.service ? panel.service.mirrorPath : ""
+          Row {
+            spacing: 6
+            Field {
+              id: mirrorField
+              theme: panel.theme
+              width: 190
+              placeholder: "Default (Markdown)"
+              onAccepted: panel.set("mirrorFolder", text)
+              input.onActiveFocusChanged: if (!input.activeFocus) panel.set("mirrorFolder", text)
+            }
+            IconButton { theme: panel.theme; icon: panel.theme.icons.folder; tip: "Open the copy"; onClicked: panel.service.openMirror() }
           }
         }
 

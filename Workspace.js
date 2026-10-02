@@ -27,6 +27,7 @@
 .import "Dates.js" as Dates
 .import "Mindmap.js" as Mindmap
 .import "Table.js" as Table
+.import "Tags.js" as Tags
 
 var VERSION = 1
 var MAX_DEPTH = 12
@@ -58,7 +59,7 @@ function isUuid(value) {
 // ---- blocks ---------------------------------------------------------------------------
 
 // The kinds of block a page can have.
-var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table"]
+var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch"]
 
 function isKind(type) {
   return KINDS.indexOf(type) >= 0
@@ -394,6 +395,11 @@ function depthRange(list, index) {
 // ---- what's on a page -------------------------------------------------------------------
 
 // The pages inside a page, in the order their blocks are on it.
+// The sketches on a page: [{ id (the block's), sketch }].
+function sketchesOf(page) {
+  return flatten(page).filter(function(b) { return b.type === "sketch" && b.sketch }).map(function(b) { return { id: b.uid, sketch: b.sketch } })
+}
+
 function childPages(page) {
   return flatten(page).filter(function(b) { return b.type === "page" }).map(function(b) { return b.uid })
 }
@@ -470,7 +476,7 @@ function appendPageBlock(page, childId) {
 // ---- the tree of pages -------------------------------------------------------------------
 
 function emptyIndex() {
-  return { version: VERSION, top: [], pages: {}, fired: {}, favorites: [] }
+  return { version: VERSION, top: [], pages: {}, fired: {}, favorites: [], tagColors: {} }
 }
 
 function entry(raw) {
@@ -484,8 +490,9 @@ function entry(raw) {
     trashed: e.trashed === true,
     created: created,
     modified: cleanDate(e.modified, created),
-    // What it links to, and its reminders (null: not worked out yet).
+    // What it links to, its reminders and its tags (null: not worked out yet).
     links: Array.isArray(e.links) ? e.links.filter(isUuid).slice(0, 2000) : null,
+    tags: Array.isArray(e.tags) ? cleanTagCounts(e.tags) : null,
     reminders: Array.isArray(e.reminders) ? e.reminders.filter(function(r) {
       return r && isUuid(r.block) && Dates.fromIso(r.at) !== null && typeof r.text === "string"
     }).map(function(r) { return { block: r.block, at: r.at, text: r.text.slice(0, 200) } }).slice(0, 200) : null,
@@ -558,7 +565,14 @@ function cleanIndex(raw) {
   var fired = {}
   var src2 = r.fired && typeof r.fired === "object" && !Array.isArray(r.fired) ? r.fired : {}
   Object.keys(src2).slice(0, 5000).forEach(function(key) { if (/^[0-9a-f-]{36}\|[0-9a-f-]{36}\|[0-9T:-]{16}$/.test(key)) fired[key] = true })
-  return { version: VERSION, top: top, pages: pages, fired: fired, favorites: favorites }
+  // Tags' colors: { name: "blue" | "#ff8800" | "blue_background"... }.
+  var tagColors = {}
+  var src3 = r.tagColors && typeof r.tagColors === "object" && !Array.isArray(r.tagColors) ? r.tagColors : {}
+  Object.keys(src3).slice(0, 2000).forEach(function(name) {
+    var c = cleanTagColor(src3[name])
+    if (Tags.clean(name) === name && c) tagColors[name] = c
+  })
+  return { version: VERSION, top: top, pages: pages, fired: fired, favorites: favorites, tagColors: tagColors }
 }
 
 // Is page `id` inside page `of` (at any depth), by the parents recorded?
@@ -807,9 +821,10 @@ function indexJson(index) {
     var out = { title: e.title, icon: e.icon, parent: e.parent, children: e.children, trashed: e.trashed, created: e.created, modified: e.modified }
     if (e.links) out.links = e.links
     if (e.reminders) out.reminders = e.reminders
+    if (e.tags) out.tags = e.tags
     pages[id] = out
   }
-  return stringify({ version: VERSION, top: index.top, pages: pages, fired: index.fired || {}, favorites: index.favorites || [] })
+  return stringify({ version: VERSION, top: index.top, pages: pages, fired: index.fired || {}, favorites: index.favorites || [], tagColors: index.tagColors || {} })
 }
 
 // Favorites that are there, and not in the trash.
@@ -935,6 +950,7 @@ function blockList(page, md, titleOf) {
     if (b.type === "calendar") out.month = b.month
     if (b.type === "mindmap") out.text = b.outline
     if (b.type === "table") out.text = Table.toMarkdown(b.table, md)
+    if (b.type === "sketch") { out.text = "(a drawing)"; out.strokes = b.sketch ? b.sketch.strokes.length : 0 }
     if (b.type === "link") out.target = b.target
     if ((b.type === "page" || b.type === "link") && typeof titleOf === "function") out.title = titleOf(b.type === "page" ? b.uid : b.target)
     if (b.type === "image") out.src = b.src
@@ -984,7 +1000,8 @@ function versionLabels(list, now) {
 var VERSION_WHY = {
   edit: "",
   command: "Before an agent or command changed it",
-  restore: "Before an older version was put back"
+  restore: "Before an older version was put back",
+  tag: "Before a tag was renamed or taken away"
 }
 function versionWhy(why) { return VERSION_WHY[why] || "" }
 
@@ -1036,5 +1053,153 @@ function versionToRestore(version, current, index) {
     }
   })
   return { title: version.title || "", icon: version.icon || "", blocks: list }
+}
+
+// ---- tags ---------------------------------------------------------------------------------
+
+// A page's tags (Tags.js): [{ name, label (as written), n (blocks with it) }],
+// by name. Text blocks' and tables' cells.
+function pageTags(page) {
+  var by = {}
+  function add(inner) {
+    Tags.inHtml(inner).forEach(function(t) {
+      if (!by[t.name]) by[t.name] = { name: t.name, label: t.label, n: 0 }
+      by[t.name].n++
+    })
+  }
+  flatten(page).forEach(function(b) {
+    if (Blocks.isText(b.type) && b.type !== "code" && b.html) add(b.html)
+    else if (b.type === "table" && b.table) {
+      var seen = {}
+      b.table.rows.forEach(function(r) { r.forEach(function(c) { Tags.inHtml(c).forEach(function(t) { seen[t.name] = t }) }) })
+      for (var k in seen) {
+        if (!by[k]) by[k] = { name: k, label: seen[k].label, n: 0 }
+        by[k].n++
+      }
+    }
+  })
+  return Object.keys(by).sort().map(function(k) { return by[k] }).slice(0, 500)
+}
+
+function cleanTagCounts(list) {
+  var out = []
+  var seen = {}
+  list.forEach(function(t) {
+    if (!t || typeof t !== "object") return
+    var name = Tags.clean(t.name)
+    if (!name || name !== t.name || seen[name]) return
+    seen[name] = true
+    out.push({ name: name, label: Tags.label(t.label) || "#" + name, n: Math.max(1, Math.min(100000, Math.round(Number(t.n) || 1))) })
+  })
+  return out.slice(0, 500)
+}
+
+// A tag's color as kept: one of Pages' ("blue") or one of your own ("#ff8800").
+function cleanTagColor(value) {
+  return Mindmap.cleanColor(value)
+}
+
+// Every tag on a page not in the trash: [{ name, label, pages, blocks }], by name.
+function tagList(index) {
+  var by = {}
+  for (var id in index.pages) {
+    var e = index.pages[id]
+    if (!e.tags || !e.tags.length || inTrash(index, id)) continue
+    e.tags.forEach(function(t) {
+      if (!by[t.name]) by[t.name] = { name: t.name, label: t.label, pages: 0, blocks: 0 }
+      by[t.name].pages++
+      by[t.name].blocks += t.n
+    })
+  }
+  return Object.keys(by).sort().map(function(k) { return by[k] })
+}
+
+// A tag's color: its own, else that of the nearest tag it's inside
+// (#work/acme takes #work's): { color, from (the tag it's from, "" for none) }.
+function tagColorOf(colors, name) {
+  var c = colors || {}
+  var n = String(name || "")
+  while (n) {
+    if (c[n]) return { color: c[n], from: n }
+    var i = n.lastIndexOf("/")
+    n = i > 0 ? n.slice(0, i) : ""
+  }
+  return { color: "", from: "" }
+}
+
+// Tags in the order the sidebar shows them: by name, or ("color") by color,
+// Pages' colors in their order, then colors of your own, then gray, by name
+// in each; each with how deep it is under a tag in the list ("work/acme" is
+// 1 under "work"). [{ name, label, pages, blocks, depth, color }]
+function sortTags(list, colors, by) {
+  var names = {}
+  list.forEach(function(t) { names[t.name] = true })
+  function depth(name) {
+    var d = 0
+    var n = name
+    while (n.lastIndexOf("/") > 0) {
+      n = n.slice(0, n.lastIndexOf("/"))
+      if (names[n]) d++
+    }
+    return d
+  }
+  var out = list.map(function(t) {
+    return { name: t.name, label: t.label, pages: t.pages, blocks: t.blocks, depth: by === "color" ? 0 : depth(t.name), color: tagColorOf(colors, t.name).color }
+  })
+  if (by === "color") {
+    out.sort(function(a, b) {
+      function rank(c) { var i = Blocks.COLORS.indexOf(c); return c === "" ? 1000 : i >= 0 ? i : 100 }
+      var ra = rank(a.color), rb = rank(b.color)
+      if (ra !== rb) return ra - rb
+      if (ra === 100 && a.color !== b.color) return a.color < b.color ? -1 : 1
+      return a.name < b.name ? -1 : a.name > b.name ? 1 : 0
+    })
+  } else {
+    out.sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0 })
+  }
+  return out
+}
+
+// The pages with a tag (not in the trash), the most recently changed first.
+function pagesTagged(index, name) {
+  return Object.keys(index.pages).filter(function(id) {
+    var e = index.pages[id]
+    return e.tags && e.tags.some(function(t) { return t.name === name }) && !inTrash(index, id)
+  }).sort(function(a, b) { return index.pages[a].modified < index.pages[b].modified ? 1 : -1 })
+}
+
+// The blocks on a page with a tag: [{ uid, type, html, checked, indent }] (a
+// table's: the cells with it, side by side).
+function taggedBlocks(page, name) {
+  var out = []
+  function has(inner) { return Tags.inHtml(inner).some(function(t) { return t.name === name }) }
+  flatten(page).forEach(function(b) {
+    if (Blocks.isText(b.type) && b.type !== "code" && b.html && has(b.html)) {
+      out.push({ uid: b.uid, type: b.type, html: b.html, checked: b.checked === true, indent: b.indent })
+    } else if (b.type === "table" && b.table) {
+      var cells = []
+      b.table.rows.forEach(function(r) { r.forEach(function(c) { if (has(c)) cells.push(c) }) })
+      if (cells.length) out.push({ uid: b.uid, type: "table", html: cells.join(" \u00b7 "), checked: false, indent: b.indent })
+    }
+  })
+  return out
+}
+
+// A tag renamed or taken away in a page's blocks (text and tables' cells):
+// `change(inner)` -> the new text. Returns how many blocks changed.
+function changeTags(page, change) {
+  var n = 0
+  for (var id in page.blocks) {
+    var b = page.blocks[id]
+    if (Blocks.isText(b.type) && b.type !== "code" && b.html) {
+      var next = change(b.html)
+      if (next !== b.html) { b.html = next; n++ }
+    } else if (b.type === "table" && b.table) {
+      var hit = false
+      b.table.rows = b.table.rows.map(function(r) { return r.map(function(c) { var x = change(c); if (x !== c) hit = true; return x }) })
+      if (hit) n++
+    }
+  }
+  return n
 }
 

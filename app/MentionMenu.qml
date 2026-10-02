@@ -1,8 +1,10 @@
 import QtQuick
 import QtQuick.Controls
+import "../Tags.js" as Tags
 
 // The "@" menu (dates, and reminders then), the "[[" menu (pages, and a
-// new page with the name typed) and the ":" menu (emoji by name). The
+// new page with the name typed), the ":" menu (emoji by name) and the "#"
+// menu (tags, and a new tag with the name typed). The
 // editor keeps the keyboard: ↑ ↓ pick, Enter takes it, Esc closes.
 Pop {
   id: menu
@@ -13,7 +15,7 @@ Pop {
   closePolicy: Popup.CloseOnPressOutside
   readonly property string kind: editor && editor.mention ? editor.mention.kind : ""
 
-  width: kind === "emoji" ? 260 : 340
+  width: kind === "emoji" || kind === "tag" ? 280 : 340
   height: Math.max(44, Math.min(340, list.contentHeight + 12))
   padding: 6
 
@@ -34,7 +36,7 @@ Pop {
       leftPadding: 10
       topPadding: 4
       bottomPadding: 6
-      text: menu.kind === "page" ? "Link to a page" : menu.kind === "emoji" ? "Emoji" : "A date, or a reminder"
+      text: menu.kind === "page" ? "Link to a page" : menu.kind === "emoji" ? "Emoji" : menu.kind === "tag" ? "Tags" : "A date, or a reminder"
       font.family: menu.theme.uiFont
       font.pixelSize: 11
       font.weight: Font.DemiBold
@@ -49,18 +51,43 @@ Pop {
       height: modelData.hint ? 44 : 34
       radius: 7
       color: picked ? menu.theme.hover : "transparent"
+      // A tag: "#" in its colors.
+      Rectangle {
+        visible: entry.modelData.kind === "tag"
+        x: 9
+        anchors.verticalCenter: parent.verticalCenter
+        width: 24
+        height: 22
+        radius: 6
+        readonly property var look: menu.editor && entry.modelData.kind === "tag" ? (menu.editor.tagStyle(Tags.href(entry.modelData.name)) || { color: String(menu.theme.muted), background: "transparent" }) : ({ color: "black", background: "transparent" })
+        color: look.background
+        Text {
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: "#"
+          font.family: menu.theme.uiFont
+          font.pixelSize: 14
+          font.weight: Font.Bold
+          color: parent.look.color
+        }
+      }
       Text {
         id: glyph
+        visible: entry.modelData.kind !== "tag"
         textFormat: Text.PlainText
         x: 10
         anchors.verticalCenter: parent.verticalCenter
         width: 22
         horizontalAlignment: Text.AlignHCenter
+        readonly property bool tag: entry.modelData.kind === "tag" || entry.modelData.kind === "tagnew"
         text: entry.modelData.kind === "page" ? (entry.modelData.icon || "\u{1f4c4}")
           : entry.modelData.kind === "emoji" ? entry.modelData.emoji
-          : entry.modelData.kind === "create" ? "\u2795"
+          : entry.modelData.kind === "create" || entry.modelData.kind === "tagnew" ? (tag ? "+" : "\u2795")
+          : tag ? "#"
           : entry.modelData.remind ? "\u23f0" : "\u{1f4c5}"
-        font.family: "Noto Color Emoji"
+        font.family: tag ? menu.theme.uiFont : "Noto Color Emoji"
+        font.weight: tag ? Font.DemiBold : Font.Normal
+        color: menu.theme.muted
         font.pixelSize: entry.modelData.kind === "emoji" ? 17 : 15
       }
       Column {
@@ -102,6 +129,7 @@ Pop {
       y: 30
       text: menu.kind === "date"
         ? "Try \u201ctomorrow 9am\u201d, \u201cfri\u201d, \u201cin 2 hours\u201d, \u201coct 3\u201d"
+        : menu.kind === "tag" ? "Type a tag: #idea, #project/omanote"
         : "No page is called that."
       font.family: menu.theme.uiFont
       font.pixelSize: 12

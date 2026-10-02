@@ -2,10 +2,12 @@ import QtQuick
 import QtQuick.Controls
 import "../Docs.js" as Docs
 import "../Colors.js" as Colors
+import "../Sketch.js" as Sketch
 
 // Colors in Pages: for text, or behind it. On the words selected ("words"),
-// on whole blocks ("blocks": their text, or their background), or on a mind
-// map's idea ("idea": ideaPicked says which). An idea can also have a color
+// on whole blocks ("blocks": their text, or their background), on a mind
+// map's idea or a table's cells ("idea": ideaPicked says which), or for a
+// sketch's pen ("pen": one color, as dots of ink). An idea can also have a color
 // of its own: the colors you picked last are there, and Custom… opens the
 // color picker (customRequested); the idea's colors now are marked.
 Pop {
@@ -21,6 +23,8 @@ Pop {
   // For an idea: its colors now ("red", "#ff8800", or ""), and the colors
   // you picked last.
   property string currentText: ""
+  // What "no color" is called (a tag with none takes its parent's).
+  property string noneLabel: ""
   property string currentBack: ""
   property var recent: []
 
@@ -47,9 +51,15 @@ Pop {
   width: 5 * 38 + 4 * 4 + 2 * padding
   padding: 12
 
+  // One color, as dots: a sketch's pen ("pen"), or a tag ("tag").
+  readonly property bool pen: mode === "pen" || mode === "tag"
+  // The pen is a highlighter: its colors are a highlighter's.
+  property bool marker: false
+  readonly property bool own: mode === "idea" || mode === "pen" || mode === "tag"
+
   function pickText(c) {
     close()
-    if (mode === "idea") ideaPicked("color", c ? c.id : "")
+    if (own) ideaPicked("color", c ? c.id : "")
     else if (mode === "blocks") editor.setBlockColor(uids, c ? c.id : "")
     else editor.formatInline("color", c ? c.text[0] : "")
   }
@@ -80,7 +90,7 @@ Pop {
     // The idea has this color now.
     property bool chosen: false
     signal picked()
-    readonly property string fg: custom !== "" ? custom : entry ? entry.text[pop.theme.dark ? 1 : 0] : pop.theme.text
+    readonly property string fg: custom !== "" ? custom : entry ? entry.text[pop.theme.dark ? 1 : 0] : String(pop.mode === "tag" ? pop.theme.muted : pop.theme.text)
     readonly property string bg: custom !== "" ? custom : entry ? entry.background[pop.theme.dark ? 1 : 0] : "transparent"
     width: 38
     height: 38
@@ -88,8 +98,19 @@ Pop {
     color: tileHover.hovered ? pop.theme.hover : "transparent"
     border.width: chosen ? 2 : 0
     border.color: pop.theme.accent
+    // A pen's color: a dot of the ink.
     Rectangle {
-      visible: !tile.plus
+      visible: pop.pen && !tile.plus
+      anchors.centerIn: parent
+      width: 22
+      height: 22
+      radius: 11
+      color: pop.marker && tile.custom === "" ? Sketch.markerHex(tile.entry ? tile.entry.id : "", pop.theme.dark, String(pop.theme.text)) : tile.fg
+      border.width: 1
+      border.color: Qt.alpha("#000000", 0.18)
+    }
+    Rectangle {
+      visible: !tile.plus && !pop.pen
       anchors.centerIn: parent
       width: 26
       height: 26
@@ -146,27 +167,27 @@ Pop {
     ToolTip.visible: tileHover.hovered
     ToolTip.delay: 500
     ToolTip.text: tile.plus ? "A color of your own\u2026" : tile.custom !== "" ? tile.custom + (back ? " background" : "")
-      : (entry ? entry.label : "Default") + (back ? " background" : "")
+      : (entry ? entry.label : pop.mode === "tag" ? (pop.noneLabel || "Gray") : pop.pen ? "The page's ink" : "Default") + (back ? " background" : "")
   }
 
   contentItem: Column {
     spacing: 8
-    Heading { text: pop.mode === "blocks" ? "Color" : "Text color" }
+    Heading { text: pop.mode === "blocks" ? "Color" : pop.mode === "tag" ? "Tag color" : pop.pen ? "Ink" : "Text color" }
     Flow {
       width: parent.width
       spacing: 4
-      Tile { entry: null; chosen: pop.mode === "idea" && pop.currentText === ""; onPicked: pop.pickText(null) }
+      Tile { entry: null; chosen: pop.own && pop.currentText === ""; onPicked: pop.pickText(null) }
       Repeater {
         model: Docs.COLORS
         delegate: Tile {
           required property var modelData
           entry: modelData
-          chosen: pop.mode === "idea" && pop.currentText === modelData.id
+          chosen: pop.own && pop.currentText === modelData.id
           onPicked: pop.pickText(modelData)
         }
       }
       Repeater {
-        model: pop.mode === "idea" ? pop.customsFor(pop.currentText) : []
+        model: pop.own ? pop.customsFor(pop.currentText) : []
         delegate: Tile {
           required property var modelData
           custom: modelData
@@ -174,10 +195,11 @@ Pop {
           onPicked: pop.pickCustom("color", modelData)
         }
       }
-      Tile { visible: pop.mode === "idea"; plus: true; onPicked: pop.openCustom("color") }
+      Tile { visible: pop.own; plus: true; onPicked: pop.openCustom("color") }
     }
-    Heading { text: "Background" }
+    Heading { visible: !pop.pen; text: "Background" }
     Flow {
+      visible: !pop.pen
       width: parent.width
       spacing: 4
       Tile { entry: null; back: true; chosen: pop.mode === "idea" && pop.currentBack === ""; onPicked: pop.pickBackground(null) }

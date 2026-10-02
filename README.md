@@ -54,7 +54,8 @@ pages, fold toggles, color anything.
 * **Find anything.** Search every page of every notebook from the shelf, or
   Ctrl+F on a page.
 * **Quick notes.** Super+Alt+N pops up a sticky note wherever you are; what
-  you write becomes a page in your Quick notes notebook.
+  you write becomes a page in your Quick notes notebook, or, if you'd
+  rather, a page in your Pages Inbox, written in Markdown.
 * **Plain files.** Every notebook is a folder of JSON files in
   `~/Documents/Omanote`, pictures beside them; export any notebook as Markdown.
 
@@ -281,12 +282,15 @@ takes them along.
 | A page inside this page | `/page` |
 | A date in a line | **@** and a date: `@tomorrow`, `@fri 3pm`, `@in 2 hours`, `@oct 3`, `@2026-12-24` |
 | A reminder | **@** and a date, then *Remind me*: an Omarchy notification then (click it to open the page) |
+| A tag | **#** and a name, anywhere in a line: `#errand`, `#project/omanote` (letters, digits, `-`, `_` and `/`; not only digits). The **#** menu offers the tags you have (and a new one with what's typed); a space or a stop after a name makes it a tag too. A tag is drawn in its color; click it (or it in the sidebar's *Tags*, or find it with **Ctrl+P** and `#`) for every block with it, page by page: tick to-dos there, click a block to go to it on its page. At the top of that view: the tag's color (Pages' colors, or **Custom…**, the color picker), renaming it on every page (renamed to a tag you have, the two are one), and taking it off every page (each page keeps the version before in its *Page history*) |
+| Color-code tags | A tag's **⋯** in the sidebar (or a right-click on it): *Color*, *Rename…*, *Take it off every page*; or the palette at the top of its blocks. A tag inside another (`#work/acme`) takes the color of the one it's in (`#work`) until it has its own, and sits under it in the sidebar. *A–Z* at the top of the sidebar's *Tags* sorts them by color instead (Pages' colors in order, then yours, then gray). The **#** menu shows each tag in its color |
 | A link to a page in a line | **[[** and part of its name (or a new name, for a new page); click the link to go there |
 | An emoji | **:** and part of its name: `:rocket`, `:tada`, `:+1` (pick one, or type the whole name and a closing `:`) |
 | Ask your agent | The AI button at the top of the page, **Ctrl+J**, `/agent`, or *Ask agent* in a block's ⋮⋮ menu, on the toolbar over selected words, or in the page's ⋯ menu: Omarchy's default coding agent (Claude Code, Codex, OpenCode...) does it, and its changes show up on the page (see [For AI agents and scripts](#for-ai-agents-and-scripts)) |
 | Start a page from a template | On a new, empty page: pick one under *Start with a template* (a daily, weekly or monthly planner, a journal, a habit tracker, meeting or lecture notes, a project plan, a to-do list, a reading log, a recipe, a packing list). Each is laid out as a page: sections side by side, a callout for the one thing that matters, the day hour by hour, habits to tick, the month's calendar, and on every empty line, faintly, what goes there. **Ctrl+Z** takes it back off |
 | A mind map | `/mindmap`, or *Turn into mind map* in a nested list's ⋮⋮ menu (the top item is the topic, the items inside it the ideas). Click an idea to write on it: **Enter** adds the next idea, **Tab** one branching from it, **Shift+Tab** moves it out a level, **↑ ↓** move between ideas, **Backspace** on an empty idea takes it away, **Ctrl+Backspace** an idea and its branch, **Esc** stops. The color button over the idea you're writing on gives it a text color and a background (a main idea's color is its whole branch's): one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, a color picker (saturation and brightness, hue, a hex to type or paste, and how well the idea's text reads on it) that shows the color on the map as you pick it; **Enter** or *Apply* keeps it, **Esc** or *Cancel* puts back what was there. Text on a background with no text color of its own is made readable. The circle at an idea's end folds its branch. The block's own ⋮⋮ *Color* puts a background behind the whole map, or sets the text color of ideas with none of their own. *Turn into list* (⋮⋮) makes it a nested list again |
 | A table | `/table` (or paste cells from a spreadsheet, or a Markdown table). Click a cell to write in it: **Tab** and **Shift+Tab** go to the next and previous cell (**Tab** in the last one makes a new row), **Enter** goes down a row (past the last, a new one), **Shift+Enter** is a new line in the cell, the arrows cross into the next cell at a cell's ends and leave the table at its top and bottom, **Esc** picks the whole table. **Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+Shift+X** and **Ctrl+E** format what's selected in a cell (the toolbar over selected words is for text blocks). Point at a cell: the handle on its row's left and on its column's top open their menus (insert above or below, left or right; move; delete; *Header row* on or off), the **+** bars along the bottom and the right add a row or a column, and the lines between columns drag to make them wider. Colors: the color button on the cell you're in, or *Color* in a row's or a column's menu, gives a text color and a background: one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, the color picker (shown in the table as you pick, with how well the text reads; **Enter** keeps it, **Esc** puts back what was there). Cells pasted from a spreadsheet into a cell fill the table from there, and it grows to take them |
+| A sketch | `/sketch`: a sheet to draw on, with your mouse, pen or tablet. Click it to draw; its tools come up under it: the pen, the highlighter (**P**, **M**), the eraser (**E**, which lifts whole strokes), the color (the page's ink, Pages' colors, which follow your light or dark theme, colors you picked recently, or **Custom…**, the color picker), three nibs, plain paper, dots or a grid, Undo, Redo, and clearing it. Every stroke is a step **Ctrl+Z** takes back. **Esc**, *Done* or a click elsewhere on the page stops drawing. Its bottom edge drags to make it taller or shorter. A drawing keeps its shape at any page width |
 | Go back to an earlier version | *Page history* in the page's ⋯ menu: the versions Omanote kept (every ten minutes while you write, and before an agent or a command changes the page), each shown as it was. *Restore this version* puts it back as one step **Ctrl+Z** takes back, and keeps the page as it was in the history too. Pages made inside the page since stay in it |
 | A habit to keep | `/habit`: its name, and a circle for each day of the week to click when it's done (today's is rimmed in your accent) |
 | A month at a glance | `/calendar`: click a date to circle it; the arrows over it go to other months |
@@ -307,10 +311,11 @@ with its language (in its colors: 30 languages, from Bash to Zig) and a Copy but
 picked), pages, links to pages, a table of contents of the page's
 headings, habits with a circle for each day of the week, a month's
 calendar, mind maps (the topic in the middle, ideas branching out in a
-color for each branch, laid out by themselves), and tables (rows and
+color for each branch, laid out by themselves), tables (rows and
 columns, a header row, columns as wide as you drag them, cells in a text
 color and a background of their own, and the cells' words formatted like
-any other). Nine text colors and nine backgrounds (Notion's), for a whole block
+any other), and sketches (pen and highlighter drawings on plain paper,
+dots or a grid). Nine text colors and nine backgrounds (Notion's), for a whole block
 or a few words; a callout or a colored block keeps the blocks inside it in
 its color.
 
@@ -338,7 +343,7 @@ pictures on the web stay links (Omanote never goes online).
 own), a title, and a look of its own in its ⋯ menu: the Default, Serif or
 Mono font, small text, and full width. The same menu copies it as Markdown,
 exports it and the pages in it (as Markdown files, to a folder you pick or to
-`Exports/`, as Settings → Exports says), moves it into another page, or puts it
+`Exports/`, as Settings → Exports says, with its sketches as SVG files beside them), moves it into another page, or puts it
 in the trash. The sidebar shows every page as a tree; the trash at its foot puts a
 page back where it was, or deletes it from Pages.
 
@@ -394,6 +399,7 @@ Omanote/
     assets/                     pictures and covers on Pages' pages
   .trash/                       notebooks and pages you threw away
   Exports/                      notebooks and pages exported as Markdown (with Settings → Exports on "Exports folder")
+  Markdown/                     the Markdown copy of every page (Settings → Markdown copy), unless you pick another folder
 ```
 
 A page of Pages is its blocks as Notion keeps them: the ids of the blocks on
@@ -439,6 +445,10 @@ in `Defaults.js`.
 |---|---|---|
 | `shortcut` | `SUPER + N` | any modifiers and a key, or empty |
 | `quickShortcut` | `SUPER + ALT + N` | any modifiers and a key, or empty |
+| `mirror` | `false` | keep a Markdown copy of every page (see [A Markdown copy](#a-markdown-copy)) |
+| `mirrorFolder` | `""` | where the copy goes: a full path or `~/…`; empty is `Markdown/` in your notes folder |
+| `tagSort` | `name` | how the sidebar lists tags: `name` (a tag inside another under it) or `color` |
+| `quickTo` | `notebook` | where a quick note goes: `notebook` (the Quick notes notebook) or `pages` (a page in the Pages Inbox, its text read as Markdown). The note's foot says which, and a click there changes it |
 | `barIcon` | `true` | show the notebook in the top bar |
 | `folder` | `""` | where the notebooks live (`""` is `~/Documents/Omanote`); `/path` or `~/path` |
 | `floating` | `true` | float in the middle of the screen (`false`: tile) |
@@ -461,7 +471,7 @@ which. A shortcut needs a modifier, unless it's a function or media key.
 ```bash
 omarchy-shell omanote toggle              # or show, hide
 omarchy-shell omanote quick               # the quick-note card
-omarchy-shell omanote quick "Buy milk"    # straight into Quick notes
+omarchy-shell omanote quick "Buy milk"    # straight into Quick notes (or the Pages Inbox)
 omarchy-shell omanote search "tram 28"
 omarchy-shell omanote shelf
 omarchy-shell omanote pages               # straight to Pages
@@ -470,11 +480,48 @@ omarchy-shell omanote importNotes ~/notes # files or a folder (a Notion or Obsid
 omarchy-shell omanote settings
 omarchy-shell omanote set paper grid      # any setting above
 omarchy-shell omanote reset               # every setting back to its default
+omarchy-shell omanote mirror              # the Markdown copy, up to date now
 omarchy-shell omanote status
 ```
 
 A quick note's first line is its title; lines starting with `- ` become a
-list and `[] ` a checklist.
+list and `[] ` a checklist. Sent to Pages (`quickTo`), the rest is Markdown
+too (**bold**, links, `[[Page title]]`, code, `- [ ]` to-dos), every line
+stays a line of its own, and a first line that's a list item or a to-do
+names the page and stays in it. A note made while Pages is still loading
+waits for it; if Pages can't load, the note goes to Quick notes, so it's
+never lost.
+
+### A Markdown copy
+
+Settings → **Markdown copy** keeps a plain Markdown file of every page in a
+folder, a few seconds after anything changes, so Obsidian, git, grep or any
+editor can read your notes (`omarchy-shell omanote set mirror true` does the
+same). It's `Markdown/` in your notes folder unless you pick another
+(`mirrorFolder`, or *Copy to* in Settings), for example an Obsidian vault:
+
+```
+Markdown/
+  Pages/
+    Plans.md                    a page of Pages
+    Plans/Trip.md               the pages inside it, in its folder
+  Notebooks/
+    Recipes/001 2026-09-30 Shakshuka.md   a notebook's pages, in order
+    Recipes/assets/             its pictures
+  assets/                       Pages' pictures
+  sketches/<id>.svg             sketches, as SVG
+  .omanote-mirror.json          what the copy wrote
+```
+
+Links between pages are links between the files, so they work in any
+Markdown app. The copy goes one way: Omanote writes it and never reads it, so
+change your notes in Omanote. It writes a file only when what's in it changed
+(git sees real changes), and takes away only files it wrote itself (as
+`.omanote-mirror.json` lists them): anything else in the folder is never
+touched, and a file of yours with a name it wants keeps it (the page's takes
+`Name (2).md`). It won't use your home folder, the notes folder itself or one
+of Omanote's own folders in it. `omarchy-shell omanote mirror` brings it up to
+date now and says how it is.
 
 ### For AI agents and scripts
 
@@ -497,6 +544,9 @@ omarchy-shell omanote blocks <page id>            # its blocks: id, type, depth,
 omarchy-shell omanote replace <page id> <block id> new.md      # in place of a block (and what's inside it)
 omarchy-shell omanote insertAfter <page id> <block id> more.md # after a block, as deep as it is
 omarchy-shell omanote trash <page id>             # to the trash, where it can be put back
+omarchy-shell omanote tags                        # every tag: how many pages and blocks have it
+omarchy-shell omanote tagged "#errand"            # every block with the tag: page, block id, text (Markdown), ticked
+omarchy-shell omanote tagColor "#work" blue       # a tag's color (Pages' colors, a hex, or "" for none)
 ```
 
 Pages come in as Markdown files, since an argument can't carry a page. They
@@ -506,7 +556,7 @@ indented two spaces under the one it branches from; or Mermaid's `mindmap`) is
 a mind map, so "make me a mind map of…" puts one on a page. An idea's colors
 go in braces after it: `Marketing {red}`, `Marketing {blue background}`,
 `Marketing {red, yellow background}`, or any hex color, `Marketing {#ff8800}`. A Markdown table (`| a | b |` lines, the second `|---|---|`) is a
-table, its first row the header. `[[Page title]]` links to the page called that. A date is
+table, its first row the header. `[[Page title]]` links to the page called that, and `#tag` is a tag. A date is
 `[@Fri 2 Oct](omanote://date/2026-10-02)`, and a reminder is
 `[⏰ Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30)`: a notification at
 that time. `add` puts pages in an Inbox page at the top of Pages, made the first
@@ -609,7 +659,10 @@ quick-note card (`Notebook.qml`, `app/`), and the icon in the bar.
   their rows and columns; and it reads spreadsheet cells and writes
   Markdown, which has no colors), and `app/TableBlock.qml` draws it and lets you write in it.
   `Workspace.qml` keeps each page's earlier versions in `Pages/history/`, and
-  `app/HistoryPanel.qml` shows them and puts one back.
+  `app/HistoryPanel.qml` shows them and puts one back. A sketch keeps its
+  strokes in its own units (1000 wide), so it scales with the page;
+  `Sketch.js` cleans it, finds what the eraser touches and writes it as SVG,
+  and `app/SketchBlock.qml` draws it and lets you draw on it.
 * **Blocks** (`Blocks.js`) know how Enter, Backspace and numbering work for
   each kind; **templates**, and the dates planners go on by, are in
   `Templates.js`; **papers, pens and inks** are in `Papers.js`, **covers** in

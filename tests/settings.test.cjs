@@ -25,8 +25,10 @@ check("defaults are valid and complete", () => {
 check("merging validates", () => {
   const merged = plain(Settings.merge(defaults, {
     paper: "grid", pen: "comic-sans", sounds: "yes", width: 800.5, height: 100, zoom: 999,
-    shortcut: "super + j", folder: "~/Notes/", lastNotebook: "work-3f9a", unknown: 1
+    shortcut: "super + j", folder: "~/Notes/", lastNotebook: "work-3f9a", unknown: 1, quickTo: "desk"
   }, schema));
+  assert.equal(merged.quickTo, "notebook", "quick notes go to a notebook or Pages, nowhere else");
+  assert.equal(plain(Settings.merge(defaults, { quickTo: "pages" }, schema)).quickTo, "pages");
   assert.equal(merged.paper, "grid");
   assert.equal(merged.pen, "sans", "not a choice");
   assert.equal(merged.sounds, true, "not a boolean");

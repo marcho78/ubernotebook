@@ -46,7 +46,17 @@ var DEFAULTS = {
   // (the Exports folder in the notebooks folder).
   exportTo: "ask",
   // Colors of your own you picked last, newest first ("#ff8800,#1e66f5").
-  recentColors: ""
+  recentColors: "",
+  // Where a quick note goes: "notebook" (a page in the Quick notes notebook)
+  // or "pages" (a page in the Pages Inbox, its text read as Markdown).
+  quickTo: "notebook",
+  // A Markdown copy of every page (Pages and notebooks), kept up to date in a
+  // folder for Obsidian, git or any editor: off, or on, in `mirrorFolder`
+  // ("" is a Markdown folder in the notes folder).
+  mirror: false,
+  mirrorFolder: "",
+  // How the sidebar lists tags: by name ("name") or by color ("color").
+  tagSort: "name"
 }
 
 var SCHEMA = {
@@ -74,7 +84,11 @@ var SCHEMA = {
     lastPage: "id",
     inbox: "id",
     exportTo: "string",
-    recentColors: "string"
+    recentColors: "string",
+    quickTo: "string",
+    mirror: "bool",
+    mirrorFolder: "folder",
+    tagSort: "string"
   },
   choices: {
     pen: ["sans", "serif", "hand", "print", "typewriter", "mono", "duo"],
@@ -85,7 +99,9 @@ var SCHEMA = {
     material: ["leather", "linen", "kraft", "plain", "composition"],
     binding: ["spiral", "stitched", "hardcover"],
     space: ["notebooks", "pages"],
-    exportTo: ["ask", "folder"]
+    exportTo: ["ask", "folder"],
+    quickTo: ["notebook", "pages"],
+    tagSort: ["name", "color"]
   },
   ranges: {
     width: [640, 5000],

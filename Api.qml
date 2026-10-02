@@ -2,6 +2,7 @@ import QtQuick
 import "Workspace.js" as Workspace
 import "Import.js" as Import
 import "Markdown.js" as Markdown
+import "Tags.js" as Tags
 
 // Omanote's commands for AI agents and scripts: `omarchy-shell omanote
 // <command>` (Service.qml hands them on). They work on the same pages as the
@@ -100,10 +101,13 @@ QtObject {
         { use: "replace <page id> <block id> <file.md>", does: "the Markdown in place of that block and the blocks inside it" },
         { use: "insertAfter <page id> <block id> <file.md>", does: "the Markdown after that block (and the blocks inside it), as deep as it is" },
         { use: "trash <id>", does: "the page (and the pages in it) to the trash, where it can be put back" },
+        { use: "tags", does: "every tag: tag, pages, blocks (how many have it)" },
+        { use: "tagged <tag>", does: "every block with the tag: page id, page title, block id, type, text (Markdown), checked" },
+        { use: "tagColor <tag> <color>", does: "the tag's color: gray, brown, orange, yellow, green, blue, purple, pink, red, a hex like #ff8800, or \"\" for none (a tag with none takes the color of the tag it's in: #work/acme, #work's)" },
         { use: "open <id>", does: "shows the page in Omanote's window" }
       ],
       markdown: "Headings, lists, - [ ] to-dos, code blocks with their language, > [!NOTE] callouts, "
-        + "[[Page title]] (a link to that page), [@Fri 2 Oct](omanote://date/2026-10-02) (a date) and "
+        + "[[Page title]] (a link to that page), #tag (a tag), [@Fri 2 Oct](omanote://date/2026-10-02) (a date) and "
         + "[\u23f0 Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30) (a reminder: a notification then)"
     })
   }
@@ -137,6 +141,52 @@ QtObject {
     return answer(found.slice(0, 50).map(function(d) { delete d.score; return d }))
   }
 
+  // Every tag: [{ tag, pages, blocks }].
+  function tags() {
+    var not = unready()
+    if (not) return fail(not)
+    var colors = workspace.index.tagColors || {}
+    return answer(Workspace.tagList(workspace.index).map(function(t) {
+      var c = Workspace.tagColorOf(colors, t.name)
+      var o = { tag: t.label, name: t.name, pages: t.pages, blocks: t.blocks, color: c.color }
+      if (c.from && c.from !== t.name) o.colorFrom = "#" + c.from
+      return o
+    }))
+  }
+
+  // A tag's color: one of Pages' ("blue"), one of your own ("#ff8800"), or "" for none.
+  function tagColor(tag, color) {
+    var not = unready()
+    if (not) return fail(not)
+    var name = Tags.clean(tag)
+    if (!name) return fail("give a tag: tagColor \"#work\" blue")
+    var value = String(color || "").trim().toLowerCase()
+    var clean = Workspace.cleanTagColor(value)
+    if (value && !clean) return fail("a color is gray, brown, orange, yellow, green, blue, purple, pink, red, a hex like #ff8800, or \"\" for none")
+    workspace.setTagColor(name, clean)
+    return answer({ ok: true, tag: "#" + name, color: clean })
+  }
+
+  // Every block with a tag: [{ page, title, block, type, text, checked }].
+  function tagged(tag) {
+    var not = unready()
+    if (not) return fail(not)
+    var name = Tags.clean(tag)
+    if (!name) return fail("give a tag: tagged \"#idea\" (or tags, for every tag)")
+    writeOpen()
+    var out = []
+    Workspace.pagesTagged(workspace.index, name).forEach(function(id) {
+      var page = workspace.readPageNow(id)
+      if (!page) return
+      Workspace.taggedBlocks(page, name).forEach(function(b) {
+        var o = { page: id, title: page.title || "Untitled", block: b.uid, type: b.type, text: Markdown.inline(b.html) }
+        if (b.type === "check") o.checked = b.checked
+        out.push(o)
+      })
+    })
+    return answer(out)
+  }
+
   function read(id) {
     var not = unready()
     if (not) return fail(not)
@@ -148,6 +198,24 @@ QtObject {
       var e = api.workspace.index.pages[pid]
       return e && !Workspace.inTrash(api.workspace.index, pid) ? { title: e.title || "Untitled", icon: e.icon, file: "omanote://page/" + pid } : null
     })
+  }
+
+  // A quick note (Super+Alt+N) as a page in the Inbox: its first line the
+  // title, the rest Markdown (Import.quickNote).
+  function quickPage(text) {
+    var not = unready()
+    if (not) return fail(not)
+    var q = Import.quickNote(text)
+    if (!q) return fail("there's nothing in it")
+    var got = blocksOf(q.markdown, false)
+    writeOpen()
+    var into = inboxPage()
+    if (!into) return fail("couldn't make the Inbox")
+    var page = workspace.createPage({ parent: into, title: Workspace.cleanTitle(q.title),
+      blocks: got.blocks.concat([{ type: "p", html: "", indent: 0 }]) })
+    if (!page) return fail("couldn't make the page")
+    placeIn(into, page.id)
+    return answer({ ok: true, id: page.id, title: page.title || "Untitled", path: where(page.id) })
   }
 
   function add(title, path) {
@@ -270,7 +338,7 @@ QtObject {
     if (live(inbox)) return inbox
     var page = workspace.createPage({ parent: "", title: "Inbox", icon: "\u{1f4e5}", blocks: [
       { type: "callout", icon: "\u{1f916}", color: "gray_background", indent: 0,
-        html: "Pages that AI agents and scripts add (with omarchy-shell omanote add) come in here. Move them anywhere." },
+        html: "Quick notes (Super+Alt+N, when Settings sends them here) and pages that AI agents and scripts add come in here. Move them anywhere." },
       { type: "p", html: "", indent: 0 }
     ] })
     if (!page) return ""
