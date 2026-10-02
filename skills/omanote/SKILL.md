@@ -34,6 +34,9 @@ except `read`, which prints the page as Markdown.
 | `omarchy-shell omanote tags` | every tag: `[{tag, name, pages, blocks}]` |
 | `omarchy-shell omanote tagged "#tag"` | every block with the tag: `[{page, title, block, type, text, checked}]` |
 | `omarchy-shell omanote tagColor "#tag" <color>` | the tag's color: `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `red`, a hex like `#ff8800`, or `""` for none |
+| `omarchy-shell omanote projects` | every project (not the archive's): `[{id, title, status, due, progress, overdue, path}]` |
+| `omarchy-shell omanote project <id> <status> <due>` | makes the page a project or changes it: status `planning`, `active`, `paused`, `done` (`""` keeps it, `none` makes it a page again); due `2026-10-12`, `""` for none, `-` keeps it |
+| `omarchy-shell omanote archive <id>` | puts the page (and the pages in it) away in the archive; `unarchive <id>` brings it back |
 | `omarchy-shell omanote trash <id>` | the page (and the pages in it) to the trash, where it can be put back |
 | `omarchy-shell omanote open <id>` | shows the page in Omanote's window |
 | `omarchy-shell omanote help` | all of this, as JSON |
@@ -119,6 +122,24 @@ A page can have sketches (drawings the user made). `blocks` lists one as
 type `sketch`, text `(a drawing)`, and `read` as `*(A sketch, drawn in
 Omanote)*`. You can't draw one or see what's in it; don't `replace` a sketch's
 block unless the user asks for the drawing to go.
+
+## Projects
+
+A page can be a project: a status (planning, active, paused, done), a due
+date, and its progress (the to-dos on it and on the pages inside it). Make
+one with `project <id> active 2026-10-12`, or write front matter at the top
+of the Markdown you `add`:
+
+```markdown
+---
+status: active
+due: 2026-10-12
+---
+# Q4 launch
+```
+
+`projects` lists them, late ones with `overdue: true`. When the user says a
+project is finished, set it `done`; `archive` it only when they ask.
 
 ## Tags
 

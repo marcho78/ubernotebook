@@ -277,5 +277,7 @@ function fromDocPage(page, lookup, options) {
 
   var title = String(page.title || "").trim()
   var head = title || page.icon ? "# " + (page.icon ? page.icon + " " : "") + escapeText(title || "Untitled") + "\n\n" : ""
-  return (head + list(page.content || [])).replace(/\n{3,}/g, "\n\n").trim() + "\n"
+  // A project's status and due date as front matter (Obsidian reads it as properties).
+  var front = page.project ? "---\nstatus: " + page.project.status + (page.project.due ? "\ndue: " + page.project.due : "") + "\n---\n\n" : ""
+  return front + (head + list(page.content || [])).replace(/\n{3,}/g, "\n\n").trim() + "\n"
 }

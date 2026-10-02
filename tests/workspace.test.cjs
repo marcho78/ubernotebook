@@ -341,4 +341,42 @@ check("what commands need: pages described, found by name, added to", () => {
   assert.ok(flat.every((x) => W.isUuid(x.uid)));
 });
 
+check("projects: kept, their progress, when they're due, the list", () => {
+  const id = W.uuid4(), sub = W.uuid4(), c1 = W.uuid4(), c2 = W.uuid4();
+  const page = W.cleanPage({ title: "Launch", project: { status: "nonsense", due: "2026-10-12" }, content: [c1, c2], blocks: {
+    [c1]: { type: "check", html: "a", checked: true }, [c2]: { type: "check", html: "b" } } }, id);
+  assert.deepEqual(plain(page.project), { status: "active", due: "2026-10-12" }, "a status it knows");
+  assert.deepEqual(plain(W.cleanPage(JSON.parse(W.pageJson(page)), id).project), plain(page.project), "kept in its file");
+  assert.equal(W.cleanPage({ title: "x", project: { due: "2026-13-40" } }, id).project.due, "", "a date that is one");
+  assert.equal(W.cleanPage({ title: "x" }, id).project, undefined);
+  assert.equal(JSON.parse(W.pageJson(W.cleanPage({ title: "x" }, id))).project, undefined, "none: not written");
+  assert.deepEqual(plain(W.pageChecks(page)), { done: 1, total: 2 });
+  W.putBlocks(page, 2, 0, [{ type: "p", html: "more", indent: 0 }], 0);
+  assert.equal(page.project.due, "2026-10-12", "blocks put in keep it a project");
+  const ix = W.cleanIndex({ top: [id], pages: {
+    [id]: { title: "Launch", project: page.project, checks: { done: 1, total: 2 }, children: [sub] },
+    [sub]: { title: "Tasks", parent: id, checks: { done: 2, total: 5 } } } });
+  assert.deepEqual(plain(W.projectProgress(ix, id)), { done: 3, total: 7 }, "its pages' to-dos too");
+  const now = new Date(2026, 9, 2, 10);
+  assert.deepEqual(plain(W.dueInfo("2026-10-02", now)), { label: "Today", overdue: false, days: 0 });
+  assert.equal(W.dueInfo("2026-10-03", now).label, "Tomorrow");
+  assert.equal(W.dueInfo("2026-10-06", now).label, "Tue");
+  assert.equal(W.dueInfo("2026-10-20", now).label, "Tue 20 Oct");
+  assert.deepEqual(plain(W.dueInfo("2026-09-29", now)), { label: "3 days late", overdue: true, days: -3 });
+  assert.equal(W.dueInfo("", now), null);
+  const a = W.uuid4(), b = W.uuid4(), c = W.uuid4(), d = W.uuid4(), e = W.uuid4();
+  const ix2 = W.cleanIndex({ top: [a, b, c, d, e], pages: {
+    [a]: { title: "Paused one", project: { status: "paused" } },
+    [b]: { title: "Late", project: { status: "active", due: "2026-09-01" } },
+    [c]: { title: "Later", project: { status: "active", due: "2026-12-01" } },
+    [d]: { title: "Put away", project: { status: "active" }, archived: true },
+    [e]: { title: "No due", project: { status: "active" } } } });
+  const list = plain(W.projectList(ix2, now));
+  assert.deepEqual(list.map((p) => p.title), ["Late", "Later", "No due", "Paused one"], "active first, by when they're due; not the archive's");
+  assert.equal(list[0].overdue, true);
+  assert.ok(W.inArchive(ix2, d));
+  assert.deepEqual(plain(W.archived(ix2)), [d]);
+  assert.ok(JSON.parse(W.indexJson(ix2)).pages[d].archived, "kept");
+});
+
 console.log(`workspace: ${passed} checks passed`);

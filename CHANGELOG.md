@@ -86,6 +86,14 @@ The first version.
   every block with it, page by page, to-dos ticked there, and renames or
   comes off every page in one go (Obsidian's `#tags` come in as tags, and go
   out as `#tags` in Markdown);
+  pages dragged in the sidebar (before, after or inside another page, with
+  Undo); projects (a page's status, due date and progress from the to-dos on
+  it and in it; the sidebar's Projects, where + makes one, a page dragged
+  there is one and a project dragged into Pages is a page again, with the
+  pages in each under it and late ones in red; front matter in and out of
+  Markdown); an Archive for pages that are done (out of the tree and the
+  Projects, still there to open and search, with Undo); a page's menu in
+  the sidebar makes it a project or archives it too;
   sketches (`/sketch`): a pen, a highlighter and an eraser that lifts whole
   strokes, in the page's ink, Pages' colors or any color from the color
   picker, three nibs, plain paper, dots or a grid, a height you drag, every
@@ -110,7 +118,8 @@ The first version.
   Markdown (links to pages, dates and reminders too), new pages in an Inbox, and
   the app doing every write; `blocks`, `replace` and `insertAfter` change a
   page block by block; `tags`, `tagged` and `tagColor` list tags, the blocks
-  with one, and color them; `mirror` brings the Markdown copy up to date. A
+  with one, and color them; `projects`, `project`, `archive` and `unarchive`
+  for projects and the archive; `mirror` brings the Markdown copy up to date. A
   version of a page is kept in its history before a command changes it. A skill (`skills/omanote/SKILL.md`), linked into the
   skill folders of the agents Omarchy supports while Omanote runs, teaches them
   how to use the commands.

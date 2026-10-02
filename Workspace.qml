@@ -232,9 +232,24 @@ Item {
     if (JSON.stringify(reminders) !== JSON.stringify(e.reminders)) { e.reminders = reminders; scheduleReminders() }
     var tags = Workspace.pageTags(page)
     if (JSON.stringify(tags) !== JSON.stringify(e.tags)) { e.tags = tags; changed = true }
+    // A project's status and due date, and the to-dos (its progress).
+    var project = page.project || null
+    if (JSON.stringify(project) !== JSON.stringify(e.project)) { e.project = project; changed = true }
+    var checks = Workspace.pageChecks(page)
+    if (JSON.stringify(checks) !== JSON.stringify(e.checks)) { e.checks = checks; changed = true }
     if (changed) touched()
     else saveIndex()
     saved(page.id)
+  }
+
+  // ---- the archive ----------------------------------------------------------------------------
+
+  // A page put away in the archive (with the pages in it), or back out.
+  function setArchived(id, on) {
+    var e = index.pages[id]
+    if (!e || e.archived === !!on) return
+    e.archived = !!on
+    touched()
   }
 
   // ---- tags -------------------------------------------------------------------------------
@@ -360,7 +375,7 @@ Item {
   // Pages written before links and reminders were kept in the tree (or
   // changed elsewhere): read once, in the background, to fill them in.
   function scanLinks() {
-    var ids = Object.keys(index.pages).filter(function(id) { return index.pages[id].links === null || index.pages[id].reminders === null || index.pages[id].tags === null })
+    var ids = Object.keys(index.pages).filter(function(id) { return index.pages[id].links === null || index.pages[id].reminders === null || index.pages[id].tags === null || index.pages[id].checks === null })
     if (ids.length === 0) return
     readPages(ids.slice(0, 2000), function(pages) {
       pages.forEach(function(p) {
@@ -369,6 +384,8 @@ Item {
         e.links = Workspace.linkedPages(p)
         e.reminders = Workspace.pageReminders(p)
         e.tags = Workspace.pageTags(p)
+        e.checks = Workspace.pageChecks(p)
+        e.project = p.project || null
       })
       ws.touched()
       ws.scheduleReminders()
@@ -416,7 +433,7 @@ Item {
   // format, blocks }. Returns it.
   function createPage(options) {
     var o = options || {}
-    var page = Workspace.newPage({ parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format, blocks: o.blocks || [{ type: "p", html: "", indent: 0 }] })
+    var page = Workspace.newPage({ parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format, project: o.project, blocks: o.blocks || [{ type: "p", html: "", indent: 0 }] })
     if (!page) return null
     index.pages[page.id] = { title: page.title, icon: page.icon, parent: "", children: [], trashed: false, created: page.created, modified: page.modified }
     Workspace.attach(index, page.id, o.parent && index.pages[o.parent] ? o.parent : "", typeof o.at === "number" ? o.at : -1)
@@ -492,6 +509,23 @@ Item {
     if (from !== parent && id !== openId) editPage(id, function(p) { p.parent = parent; return true })
     touched()
     return true
+  }
+
+  // A page put in a place in the tree (Workspace.dropPlace, placeOf): under
+  // `parent` at `at`, its block on that page beside the pages it goes
+  // between; off the page it was on. done() once the pages are written.
+  function placePage(id, place, done) {
+    var e = index.pages[id]
+    if (!e || !place || (place.parent && (place.parent === id || Workspace.isInside(index.pages, place.parent, id)))) { if (done) done(false); return }
+    var from = e.parent
+    Workspace.attach(index, id, place.parent, place.at)
+    var pending = 1
+    function one() { if (--pending === 0) { ws.touched(); if (done) done(true) } }
+    if (from && from !== place.parent) { pending++; editPage(from, function(p) { return Workspace.removeBlock(p, id) }, one) }
+    if (place.parent) { pending++; editPage(place.parent, function(p) { return Workspace.placePageBlock(p, id, place.before, place.after) }, one) }
+    if (from !== place.parent) { pending++; editPage(id, function(p) { p.parent = place.parent; return true }, one) }
+    touched()
+    one()
   }
 
   // In Favorites, or not.

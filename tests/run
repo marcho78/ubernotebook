@@ -31,6 +31,7 @@ node tests/history.test.cjs
 node tests/sketch.test.cjs
 node tests/mirror.test.cjs
 node tests/tags.test.cjs
+node tests/drag.test.cjs
 lua tests/hypr.test.lua
 
 runner=/usr/lib/qt6/bin/qmltestrunner

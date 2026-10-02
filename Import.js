@@ -590,14 +590,21 @@ function fromMarkdown(text, ctx, options) {
   var lines = expandTabs(String(text || "").replace(/^\ufeff/, "").replace(/\r\n?/g, "\n").split("\n"))
   var title = ""
   var icon = ""
-  // Front matter (--- at the top, key: value lines, ---).
+  var status = ""
+  var due = ""
+  // Front matter (--- at the top, key: value lines, ---): a title, an icon,
+  // and a project's status and due date.
   if (lines[0] === "---") {
     var end = lines.indexOf("---", 1)
     if (end > 0 && end < 80) {
       lines.slice(1, end).forEach(function(l) {
-        var m = /^(title|name|icon)\s*:\s*["']?(.*?)["']?\s*$/i.exec(l)
-        if (m && m[1].toLowerCase() === "icon") icon = m[2]
-        else if (m && !title) title = m[2]
+        var m = /^(title|name|icon|status|due)\s*:\s*["']?(.*?)["']?\s*$/i.exec(l)
+        if (!m) return
+        var key = m[1].toLowerCase()
+        if (key === "icon") icon = m[2]
+        else if (key === "status") status = m[2].toLowerCase()
+        else if (key === "due") due = m[2]
+        else if (!title) title = m[2]
       })
       lines = lines.slice(end + 1)
     }
@@ -613,7 +620,9 @@ function fromMarkdown(text, ctx, options) {
     }
   }
   // A page Notion exported starts with its title, then maybe its icon.
-  return { title: title.trim(), icon: icon, blocks: blocks }
+  var out = { title: title.trim(), icon: icon, blocks: blocks }
+  if (/^(planning|active|paused|done)$/.test(status)) out.project = { status: status, due: /^\d{4}-\d{2}-\d{2}$/.test(due) ? due : "" }
+  return out
 }
 
 // A quick note (Super+Alt+N) as a page: { title, markdown }, or null when

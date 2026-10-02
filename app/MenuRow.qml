@@ -55,5 +55,6 @@ Rectangle {
   }
 
   HoverHandler { id: hover; cursorShape: rowItem.active ? Qt.PointingHandCursor : Qt.ArrowCursor }
-  TapHandler { enabled: rowItem.active; onTapped: rowItem.clicked() }
+  // (It takes the click for itself: nothing under the menu gets it too.)
+  TapHandler { enabled: rowItem.active; gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: rowItem.clicked() }
 }

@@ -97,6 +97,7 @@ QtObject {
     table: "\u{f04eb}", rowAbove: "\u{f04f4}", rowBelow: "\u{f04f3}", rowRemove: "\u{f04f5}",
     colLeft: "\u{f04ed}", colRight: "\u{f04ec}", colRemove: "\u{f04ee}", header: "\u{f121d}",
     arrowUp: "\u{f005d}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}",
-    sketch: "\u{f0f49}", eraser: "\u{f01fe}"
+    sketch: "\u{f0f49}", eraser: "\u{f01fe}",
+    archive: "\u{f120e}", unarchive: "\u{f125c}", briefcase: "\u{f0814}"
   })
 }

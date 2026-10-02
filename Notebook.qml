@@ -111,6 +111,7 @@ Item {
   function addPageBlock(parentId, childId) { return content.item ? content.item.docView.pageAddedInto(parentId, childId) : false }
   function replaceInOpenPage(id, change) { return content.item ? content.item.docView.replaceFromCommand(id, change) : false }
   function insertInOpenPage(id, change) { return content.item ? content.item.docView.insertFromCommand(id, change) : false }
+  function setProjectOfOpenPage(id, next) { return content.item ? content.item.docView.setProjectOfOpenPage(id, next) : false }
   function trashPage(id) {
     if (!content.item) return false
     content.item.docView.trashPage(id)

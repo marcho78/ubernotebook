@@ -103,6 +103,9 @@ QtObject {
         { use: "trash <id>", does: "the page (and the pages in it) to the trash, where it can be put back" },
         { use: "tags", does: "every tag: tag, pages, blocks (how many have it)" },
         { use: "tagged <tag>", does: "every block with the tag: page id, page title, block id, type, text (Markdown), checked" },
+        { use: "projects", does: "every project (not the archive's): id, title, status, due, progress (to-dos done of all, its pages' too), overdue" },
+        { use: "project <id> <status> <due>", does: "makes the page a project, or changes it: status planning, active, paused or done (\"\" keeps it); due a date like 2026-10-12, \"\" for none, \"-\" to keep it; status \"none\" makes it a page again" },
+        { use: "archive <id>", does: "puts the page (and the pages in it) away in the archive; unarchive <id> brings it back" },
         { use: "tagColor <tag> <color>", does: "the tag's color: gray, brown, orange, yellow, green, blue, purple, pink, red, a hex like #ff8800, or \"\" for none (a tag with none takes the color of the tag it's in: #work/acme, #work's)" },
         { use: "open <id>", does: "shows the page in Omanote's window" }
       ],
@@ -139,6 +142,51 @@ QtObject {
     }
     found.sort(function(a, b) { return b.score - a.score || (a.modified < b.modified ? 1 : -1) })
     return answer(found.slice(0, 50).map(function(d) { delete d.score; return d }))
+  }
+
+  // ---- projects and the archive ---------------------------------------------------------------
+
+  function projects() {
+    var not = unready()
+    if (not) return fail(not)
+    return answer(Workspace.projectList(workspace.index, new Date()).map(function(p) {
+      return { id: p.id, title: p.title || "Untitled", status: p.status, due: p.due, progress: p.progress.done + "/" + p.progress.total, overdue: p.overdue, path: where(p.id) }
+    }))
+  }
+
+  // A page made a project (or changed, or a page again: status "none").
+  function project(id, status, due) {
+    var not = unready()
+    if (not) return fail(not)
+    if (!live(id)) return fail("there's no page with that id (list or find gives them)")
+    var st = String(status || "").trim().toLowerCase()
+    var d = String(due === undefined ? "-" : due).trim()
+    if (st && st !== "none" && !/^(planning|active|paused|done)$/.test(st)) return fail("a status is planning, active, paused or done (or none: not a project)")
+    if (d && d !== "-" && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return fail("a due date is like 2026-10-12, \"\" for none, \"-\" to keep it")
+    keep(id)
+    var page = workspace.readPageNow(id)
+    if (!page) return fail("couldn't read that page")
+    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Omanote first")
+    var had = page.project || { status: "active", due: "" }
+    var next = st === "none" ? null : Workspace.cleanProject({ status: st || had.status, due: d === "-" ? had.due : d })
+    var took = viewDoes("setProjectOfOpenPage", id, next)
+    if (took === "locked") return fail("that page is locked: unlock it in Omanote first")
+    if (took !== true) {
+      if (next) page.project = next
+      else delete page.project
+      page.modified = new Date().toISOString()
+      workspace.savePage(page)
+      workspace.pageChanged(id)
+    }
+    return answer({ ok: true, id: id, project: next })
+  }
+
+  function archive(id, on) {
+    var not = unready()
+    if (not) return fail(not)
+    if (!live(id) && !(on === false && Workspace.isUuid(id) && workspace.index.pages[id])) return fail("there's no page with that id (list or find gives them)")
+    workspace.setArchived(id, on !== false)
+    return answer({ ok: true, id: id, archived: on !== false })
   }
 
   // Every tag: [{ tag, pages, blocks }].
@@ -235,7 +283,7 @@ QtObject {
     var name = String(title || "").trim()
     var got = blocksOf(md.text, name === "")
     writeOpen()
-    var page = workspace.createPage({ parent: into, title: Workspace.cleanTitle(name || got.title || ""), icon: got.icon || "",
+    var page = workspace.createPage({ parent: into, title: Workspace.cleanTitle(name || got.title || ""), icon: got.icon || "", project: got.project,
       blocks: got.blocks.length ? got.blocks.concat([{ type: "p", html: "", indent: 0 }]) : undefined })
     if (!page) return fail("couldn't make the page")
     if (into) placeIn(into, page.id)

@@ -154,6 +154,7 @@ FocusScope {
     onNotebooksRequested: root.showSpace("notebooks")
     onSettingsRequested: settingsPanel.open()
     onToast: function(text) { root.toast(text) }
+    onToastUndo: function(text, undo) { root.toastWithUndo(text, undo) }
     onPictureRequested: function(done) { if (root.service) root.service.pickPicture(done); else done("") }
     onConfirmRequested: function(title, text, action, confirmed) { confirm.ask(title, text, action, confirmed) }
     onImportRequested: function(folder) {
@@ -362,8 +363,20 @@ FocusScope {
   // ---- messages -----------------------------------------------------------------------------
 
   function toast(text) {
+    toastUndoAction = null
     toastText.text = text
     toastBox.opacity = 1
+    toastTimer.interval = 2600
+    toastTimer.restart()
+  }
+
+  // A message with Undo, a while longer.
+  property var toastUndoAction: null
+  function toastWithUndo(text, undo) {
+    toastText.text = text
+    toastUndoAction = undo
+    toastBox.opacity = 1
+    toastTimer.interval = 6000
     toastTimer.restart()
   }
 
@@ -372,7 +385,7 @@ FocusScope {
     anchors.horizontalCenter: parent.horizontalCenter
     anchors.bottom: parent.bottom
     anchors.bottomMargin: 92
-    width: toastText.implicitWidth + 36
+    width: toastText.implicitWidth + 36 + (root.toastUndoAction ? undoButton.width + 8 : 0)
     height: 38
     radius: 19
     color: themeObject.surfaceHigh
@@ -384,10 +397,42 @@ FocusScope {
     Text {
       textFormat: Text.PlainText
       id: toastText
-      anchors.centerIn: parent
+      x: 18
+      anchors.verticalCenter: parent.verticalCenter
       font.family: themeObject.uiFont
       font.pixelSize: 13
       color: themeObject.text
+    }
+    Rectangle {
+      id: undoButton
+      objectName: "toastUndo"
+      visible: root.toastUndoAction !== null
+      anchors.right: parent.right
+      anchors.rightMargin: 6
+      anchors.verticalCenter: parent.verticalCenter
+      width: undoText.implicitWidth + 20
+      height: 28
+      radius: 14
+      color: undoHover.hovered ? themeObject.hover : "transparent"
+      Text {
+        id: undoText
+        anchors.centerIn: parent
+        textFormat: Text.PlainText
+        text: "Undo"
+        font.family: themeObject.uiFont
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+        color: themeObject.accent
+      }
+      HoverHandler { id: undoHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler {
+        onTapped: {
+          var f = root.toastUndoAction
+          root.toastUndoAction = null
+          toastBox.opacity = 0
+          if (f) f()
+        }
+      }
     }
   }
   Timer { id: toastTimer; interval: 2600; onTriggered: toastBox.opacity = 0 }

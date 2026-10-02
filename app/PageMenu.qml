@@ -91,6 +91,22 @@ Pop {
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.view && menu.view.favorite ? menu.theme.icons.star : menu.theme.icons.starOutline; text: menu.view && menu.view.favorite ? "Out of Favorites" : "Add to Favorites"; onClicked: { menu.close(); menu.view.toggleFavorite(menu.view.page.id) } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.agent; text: "Ask agent about this page"; hint: "Ctrl+J"; onClicked: { menu.close(); menu.view.openAgent("page") } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.history; text: "Page history"; onClicked: { menu.close(); menu.view.openHistory() } }
+    MenuRow {
+      objectName: "makeProject"
+      width: parent.width; theme: menu.theme; icon: menu.theme.icons.briefcase
+      readonly property bool isProject: { var r = menu.view ? menu.view.revision : 0; return !!(menu.view && menu.view.page && menu.view.page.project) }
+      text: isProject ? "Not a project" : "Make it a project"
+      active: menu.view && !menu.view.locked
+      onClicked: { menu.close(); menu.view.makeProjectOf(menu.view.page.id, !isProject) }
+    }
+    MenuRow {
+      objectName: "archivePage"
+      width: parent.width; theme: menu.theme
+      readonly property bool inArchive: { var r = menu.view && menu.view.workspace ? menu.view.workspace.revision : 0; return !!(menu.view && menu.view.page && menu.view.workspace && menu.view.workspace.index.pages[menu.view.page.id] && menu.view.workspace.index.pages[menu.view.page.id].archived) }
+      icon: inArchive ? menu.theme.icons.unarchive : menu.theme.icons.archive
+      text: inArchive ? "Out of the archive" : "Archive"
+      onClicked: { menu.close(); menu.view.archivePage(menu.view.page.id, !inArchive) }
+    }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.duplicate; text: "Duplicate"; onClicked: { menu.close(); menu.view.duplicatePage(menu.view.page.id) } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.copy; text: "Copy as Markdown"; onClicked: { menu.close(); menu.view.copyMarkdown() } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.export; text: "Export with its pages\u2026"; onClicked: { menu.close(); menu.view.exportPage() } }

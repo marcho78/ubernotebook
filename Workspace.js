@@ -278,6 +278,9 @@ function cleanPage(raw, id) {
     content: tree.content,
     blocks: tree.blocks
   }
+  // A project: its status and when it's due.
+  var project = cleanProject(raw.project)
+  if (project) page.project = project
   page.text = pageText(page)
   return page
 }
@@ -296,7 +299,7 @@ function newPage(options, date, random) {
   })
   var tree = unflatten(list, id)
   var page = cleanPage({
-    parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format,
+    parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format, project: o.project,
     created: now, modified: now, content: tree.content, blocks: tree.blocks
   }, id)
   return page
@@ -473,6 +476,23 @@ function appendPageBlock(page, childId) {
   return true
 }
 
+// A page inside it, as a page block in front of the page block `before`
+// (or right after `after`), in the same place on the page as that one; else
+// at its end. (The order of a page's pages is the order of their blocks.)
+function placePageBlock(page, childId, before, after) {
+  if (!isUuid(childId)) return false
+  if (page.blocks[childId]) removeBlock(page, childId)
+  var ref = before && page.blocks[before] && before !== childId ? before : after && page.blocks[after] && after !== childId ? after : ""
+  if (!ref) return appendPageBlock(page, childId)
+  var rb = page.blocks[ref]
+  var inBlock = rb.parent && page.blocks[rb.parent]
+  var list = inBlock ? page.blocks[rb.parent].content : page.content
+  var at = list.indexOf(ref) + (ref === before ? 0 : 1)
+  page.blocks[childId] = { id: childId, type: "page", parent: inBlock ? rb.parent : page.id }
+  list.splice(at, 0, childId)
+  return true
+}
+
 // ---- the tree of pages -------------------------------------------------------------------
 
 function emptyIndex() {
@@ -493,6 +513,11 @@ function entry(raw) {
     // What it links to, its reminders and its tags (null: not worked out yet).
     links: Array.isArray(e.links) ? e.links.filter(isUuid).slice(0, 2000) : null,
     tags: Array.isArray(e.tags) ? cleanTagCounts(e.tags) : null,
+    // A project (its status and due date), and the to-dos on the page.
+    project: cleanProject(e.project),
+    checks: e.checks && typeof e.checks === "object" ? cleanChecks(e.checks) : null,
+    // Put away in the archive (with the pages in it).
+    archived: e.archived === true,
     reminders: Array.isArray(e.reminders) ? e.reminders.filter(function(r) {
       return r && isUuid(r.block) && Dates.fromIso(r.at) !== null && typeof r.text === "string"
     }).map(function(r) { return { block: r.block, at: r.at, text: r.text.slice(0, 200) } }).slice(0, 200) : null,
@@ -627,14 +652,45 @@ function rows(index, open) {
   function walk(ids, depth) {
     ids.forEach(function(id) {
       var e = index.pages[id]
-      if (!e || e.trashed) return
-      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed })
+      // (The trash's and the archive's aren't in the tree.)
+      if (!e || e.trashed || e.archived) return
+      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived })
       out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
       if (open && open[id]) walk(kids, depth + 1)
     })
   }
   walk(index.top, 0)
   return out
+}
+
+// The sidebar's two trees: { projects, pages }. Every project is at the top
+// of Projects (a project inside a page or another project too), what's on
+// now first (as projectList), with the pages in it under it; Pages has the
+// rest. So a page is in one of them, once. A project's row has isProject,
+// status, due, progress and overdue.
+function sidebarRows(index, open, now) {
+  function shown(id) { var e = index.pages[id]; return !!e && !e.trashed && !e.archived }
+  function kidsOf(e) { return e.children.filter(function(c) { return shown(c) && !index.pages[c].project }) }
+  function walk(ids, depth, out) {
+    ids.forEach(function(id) {
+      var e = index.pages[id]
+      if (!shown(id) || e.project) return
+      var kids = kidsOf(e)
+      out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
+      if (open && open[id]) walk(kids, depth + 1, out)
+    })
+  }
+  var pages = []
+  walk(index.top, 0, pages)
+  var projects = []
+  projectList(index, now).forEach(function(p) {
+    var e = index.pages[p.id]
+    var kids = kidsOf(e)
+    projects.push({ id: p.id, depth: 0, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[p.id]),
+      isProject: true, status: p.status, due: p.due, progress: p.progress, overdue: p.overdue })
+    if (open && open[p.id]) walk(kids, 1, projects)
+  })
+  return { projects: projects, pages: pages }
 }
 
 // The pages above a page, from the top: [{ id, title, icon }].
@@ -651,6 +707,39 @@ function path(index, id) {
 }
 
 // Puts a page in the tree: under `parent` ("" for the top) at `at` (or the end).
+// Where a page dragged in the sidebar goes, dropped "before", "after" or
+// "inside" the page `target` (or "end": at the end of the top of Pages):
+// { parent, at (its place among the parent's pages), before, after (the
+// pages beside it there) }, or null when it can't go there (into itself, or
+// into a page inside it).
+function dropPlace(index, id, target, where) {
+  if (!index.pages[id]) return null
+  if (where === "end") {
+    var top = index.top.filter(function(x) { return x !== id })
+    return { parent: "", at: top.length, before: "", after: top[top.length - 1] || "" }
+  }
+  if (!index.pages[target] || id === target || isInside(index.pages, target, id)) return null
+  if (where === "inside") {
+    var kids = index.pages[target].children.filter(function(x) { return x !== id })
+    return { parent: target, at: kids.length, before: "", after: kids[kids.length - 1] || "" }
+  }
+  var parent = index.pages[target].parent
+  var list = (parent && index.pages[parent] ? index.pages[parent].children : index.top).filter(function(x) { return x !== id })
+  var i = list.indexOf(target)
+  var at = where === "before" ? i : i + 1
+  return { parent: parent, at: at, before: list[at] || "", after: at > 0 ? list[at - 1] : "" }
+}
+
+// Where a page is now, to put it back there: { parent, at, before, after }.
+function placeOf(index, id) {
+  var e = index.pages[id]
+  if (!e) return null
+  var list = (e.parent && index.pages[e.parent] ? index.pages[e.parent].children : index.top).filter(function(x) { return x !== id })
+  var all = e.parent && index.pages[e.parent] ? index.pages[e.parent].children : index.top
+  var at = all.indexOf(id)
+  return { parent: e.parent, at: at, before: list[at] || "", after: at > 0 ? list[at - 1] : "" }
+}
+
 function attach(index, id, parent, at) {
   detach(index, id)
   var list = parent && index.pages[parent] ? index.pages[parent].children : index.top
@@ -808,7 +897,7 @@ function pageJson(page) {
   }
   return stringify({
     version: VERSION, id: page.id, type: "page", parent: page.parent || "",
-    title: page.title || "", icon: page.icon || "", cover: page.cover || "", format: page.format,
+    title: page.title || "", icon: page.icon || "", cover: page.cover || "", format: page.format, project: page.project || undefined,
     created: page.created, modified: page.modified,
     content: page.content, blocks: blocks, text: page.text || ""
   })
@@ -822,14 +911,17 @@ function indexJson(index) {
     if (e.links) out.links = e.links
     if (e.reminders) out.reminders = e.reminders
     if (e.tags) out.tags = e.tags
+    if (e.project) out.project = e.project
+    if (e.checks) out.checks = e.checks
+    if (e.archived) out.archived = true
     pages[id] = out
   }
   return stringify({ version: VERSION, top: index.top, pages: pages, fired: index.fired || {}, favorites: index.favorites || [], tagColors: index.tagColors || {} })
 }
 
-// Favorites that are there, and not in the trash.
+// Favorites that are there, and not in the trash or the archive.
 function favorites(index) {
-  return (index.favorites || []).filter(function(id) { return index.pages[id] && !inTrash(index, id) })
+  return (index.favorites || []).filter(function(id) { return index.pages[id] && !inTrash(index, id) && !inArchive(index, id) })
 }
 
 // A page (with the pages in it) copied: every block and page a new id, the
@@ -847,7 +939,7 @@ function duplicate(pages, topId, date, random) {
       return c
     })
     var copy = newPage({ id: ids[p.id], parent: p.id === topId ? p.parent : ids[p.parent] || p.parent,
-      title: p.id === topId ? (p.title || "Untitled") + " (copy)" : p.title, icon: p.icon, cover: p.cover, format: p.format, blocks: list }, date, random)
+      title: p.id === topId ? (p.title || "Untitled") + " (copy)" : p.title, icon: p.icon, cover: p.cover, format: p.format, project: p.project, blocks: list }, date, random)
     copy.created = now
     copy.modified = now
     return copy
@@ -908,7 +1000,7 @@ function putBlocks(page, at, remove, list, depth, random) {
     return c
   })
   var tree = unflatten(flat.slice(0, start).concat(added, flat.slice(start + gone.length)), page.id)
-  var clean = cleanPage({ parent: page.parent, title: page.title, icon: page.icon, cover: page.cover, format: page.format,
+  var clean = cleanPage({ parent: page.parent, title: page.title, icon: page.icon, cover: page.cover, format: page.format, project: page.project,
     created: page.created, modified: page.modified, content: tree.content, blocks: tree.blocks }, page.id)
   page.content = clean.content
   page.blocks = clean.blocks
@@ -1201,5 +1293,114 @@ function changeTags(page, change) {
     }
   }
   return n
+}
+
+// ---- projects ----------------------------------------------------------------------------
+
+// A page can be a project: { status, due ("2026-10-12" or "") }.
+var STATUSES = [
+  { id: "planning", label: "Planning", color: "gray" },
+  { id: "active", label: "Active", color: "blue" },
+  { id: "paused", label: "Paused", color: "yellow" },
+  { id: "done", label: "Done", color: "green" }
+]
+
+function statusOf(id) {
+  for (var i = 0; i < STATUSES.length; i++) if (STATUSES[i].id === id) return STATUSES[i]
+  return STATUSES[1]
+}
+
+function cleanProject(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  var status = STATUSES.some(function(s) { return s.id === raw.status }) ? raw.status : "active"
+  var d = Dates.fromIso(raw.due)
+  return { status: status, due: d && !d.time ? raw.due : "" }
+}
+
+function cleanChecks(raw) {
+  var total = Math.max(0, Math.min(1000000, Math.round(Number(raw.total) || 0)))
+  return { done: Math.max(0, Math.min(total, Math.round(Number(raw.done) || 0))), total: total }
+}
+
+// The to-dos on a page: { done, total }.
+function pageChecks(page) {
+  var out = { done: 0, total: 0 }
+  flatten(page).forEach(function(b) {
+    if (b.type !== "check") return
+    out.total++
+    if (b.checked) out.done++
+  })
+  return out
+}
+
+// A project's progress: the to-dos on it and on the pages in it (not the
+// trash's): { done, total }.
+function projectProgress(index, id) {
+  var out = { done: 0, total: 0 }
+  withDescendants(index, id).forEach(function(pid) {
+    var e = index.pages[pid]
+    if (!e || !e.checks || (pid !== id && e.trashed)) return
+    out.done += e.checks.done
+    out.total += e.checks.total
+  })
+  return out
+}
+
+// When a project's due, as the sidebar and its page say it: { label,
+// overdue, days } ("Today", "Tomorrow", "Fri", "Fri 12 Oct", "3 days late").
+function dueInfo(due, now) {
+  var d = Dates.fromIso(due)
+  if (!d) return null
+  var n = now || new Date()
+  var today = new Date(n.getFullYear(), n.getMonth(), n.getDate())
+  var days = Math.round((new Date(d.at.getFullYear(), d.at.getMonth(), d.at.getDate()).getTime() - today.getTime()) / 86400000)
+  var label = days === 0 ? "Today" : days === 1 ? "Tomorrow" : days === -1 ? "Yesterday"
+    : days < -1 ? -days + " days late" : days < 7 ? Dates.label(d.at, false, n).split(" ")[0] : Dates.label(d.at, false, n)
+  return { label: label, overdue: days < 0, days: days }
+}
+
+// The projects (not in the trash or the archive): [{ id, title, icon,
+// status, due, progress, overdue }], what's on now first: active, then
+// planning, then paused, then done; each by when it's due (late first, none
+// last), then by name.
+function projectList(index, now) {
+  var out = []
+  for (var id in index.pages) {
+    var e = index.pages[id]
+    if (!e.project || inTrash(index, id) || inArchive(index, id)) continue
+    var info = dueInfo(e.project.due, now)
+    out.push({ id: id, title: e.title, icon: e.icon, status: e.project.status, due: e.project.due,
+      progress: projectProgress(index, id), overdue: !!(info && info.overdue && e.project.status !== "done") })
+  }
+  var rank = { active: 0, planning: 1, paused: 2, done: 3 }
+  out.sort(function(a, b) {
+    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
+    if (a.due !== b.due) return !a.due ? 1 : !b.due ? -1 : a.due < b.due ? -1 : 1
+    return (a.title || "").toLowerCase() < (b.title || "").toLowerCase() ? -1 : 1
+  })
+  return out
+}
+
+// ---- the archive ---------------------------------------------------------------------------
+
+// Put away (or inside a page that is): out of the tree and the projects,
+// still there to search, link to and open.
+function inArchive(index, id) {
+  var seen = {}
+  var p = id
+  while (p && index.pages[p] && !seen[p]) {
+    if (index.pages[p].archived) return true
+    seen[p] = true
+    p = index.pages[p].parent
+  }
+  return false
+}
+
+// The pages put away (each with its pages inside it), the last changed first.
+function archived(index) {
+  return Object.keys(index.pages).filter(function(id) {
+    var e = index.pages[id]
+    return e.archived && !inTrash(index, id) && !(e.parent && inArchive(index, e.parent))
+  }).sort(function(a, b) { return index.pages[a].modified < index.pages[b].modified ? 1 : -1 })
 }
 

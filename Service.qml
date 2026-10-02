@@ -478,6 +478,10 @@ Item {
     function tags(): string { return apiItem.tags() }
     function tagged(tag: string): string { return apiItem.tagged(tag) }
     function tagColor(tag: string, color: string): string { return apiItem.tagColor(tag, color) }
+    function projects(): string { return apiItem.projects() }
+    function project(id: string, status: string, due: string): string { return apiItem.project(id, status, due) }
+    function archive(id: string): string { return apiItem.archive(id, true) }
+    function unarchive(id: string): string { return apiItem.archive(id, false) }
     function replace(page: string, block: string, file: string): string { return apiItem.replace(page, block, file) }
     function insertAfter(page: string, block: string, file: string): string { return apiItem.insertAfter(page, block, file) }
     function trash(id: string): string { return apiItem.trash(id) }

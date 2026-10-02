@@ -27,6 +27,8 @@ FocusScope {
   signal notebooksRequested()
   signal settingsRequested()
   signal toast(string text)
+  // A message with a way to take back what it says was done.
+  signal toastUndo(string text, var undo)
   // A picture from the desktop's file picker: done(path) ("" for none).
   signal pictureRequested(var done)
   signal confirmRequested(string title, string text, string action, var confirmed)
@@ -436,6 +438,63 @@ FocusScope {
     toast("Moved to " + where)
   }
 
+  // A page dragged in the sidebar and dropped before, after or inside
+  // another (or "end": the end of the top of Pages). The page open is
+  // written first, and shown again as it is then; Undo puts it back.
+  // `where` "project": dropped on the sidebar's Projects, it's a project.
+  // `inPages`: dropped in Pages, where a project dropped is a page again.
+  function dropPage(id, target, where, inPages) {
+    if (!workspace || !workspace.index.pages[id]) return false
+    if (where === "project") return makeProjectOf(id, true)
+    var place = Workspace.dropPlace(workspace.index, id, target, where)
+    if (!place) return false
+    var was = Workspace.placeOf(workspace.index, id)
+    var had = workspace.index.pages[id].project || null
+    var unproject = !!(inPages && had)
+    var moves = !(was.parent === place.parent && was.at === place.at)
+    if (!moves && !unproject) return false
+    commit()
+    var title = workspace.index.pages[id].title || "Untitled"
+    var into = place.parent ? "\u201c" + (workspace.index.pages[place.parent].title || "Untitled") + "\u201d" : "the top of Pages"
+    function move(then) {
+      if (!moves) { then(); return }
+      workspace.placePage(id, place, function() { view.refreshOpen([was.parent, place.parent, id]); then() })
+    }
+    function undo() {
+      view.commit()
+      if (moves) view.workspace.placePage(id, was, function() { view.refreshOpen([was.parent, place.parent, id]) })
+      if (unproject) view.projectOf(id, had)
+    }
+    if (unproject) {
+      projectOf(id, null, function(ok) {
+        if (!ok) { view.toast("\u201c" + title + "\u201d is locked: unlock it to make it a page again"); return }
+        move(function() {
+          view.expandTo(id)
+          view.toastUndo("\u201c" + title + "\u201d is a page again" + (was.parent === place.parent ? "" : ", in " + into), undo)
+        })
+      })
+      return true
+    }
+    move(function() {
+      view.expandTo(id)
+      view.toastUndo("Moved \u201c" + title + "\u201d" + (was.parent === place.parent ? "" : " into " + into), undo)
+    })
+    return true
+  }
+
+  // The page open shown again if one of these changed (keeping where you were on it).
+  function refreshOpen(ids) {
+    if (!page || ids.indexOf(page.id) < 0 || pageDirty) return
+    var y = flick.contentY
+    workspace.readPage(page.id, function(p) {
+      if (!p || !view.page || view.page.id !== p.id || view.pageDirty) return
+      var e = view.workspace.index.pages[p.id]
+      if (e) p.parent = e.parent
+      view.show(p)
+      flick.contentY = y
+    })
+  }
+
   // Blocks moved (with what's inside them) to the end of another page.
   function moveBlocks(uids, target) {
     if (!page || !target || target === page.id) return
@@ -647,11 +706,119 @@ FocusScope {
     var t = Templates.forPages(id, Templates.iso(new Date()), function(d, pattern) { return Qt.formatDate(Templates.parse(d), pattern) })
     editor.replaceAll(t.blocks)
     if (!page.icon && t.icon) page.icon = Workspace.cleanIcon(t.icon)
+    // A project plan is a project.
+    if (id === "project" && !page.project) page.project = { status: "active", due: "" }
     if (!titleEdit.text.trim() && t.title) titleEdit.text = t.title
     titleHint = t.hint
     markDirty()
     revision++
     if (!titleEdit.text.trim() && t.hint) { titleEdit.forceActiveFocus(); titleEdit.cursorPosition = 0 }
+  }
+
+  // ---- projects and the archive ------------------------------------------------------------
+
+  // The open page as a project ({ status, due }), or not (null), as a change to it.
+  function setProject(next) {
+    if (!page || locked) return
+    var p = next ? Workspace.cleanProject(next) : null
+    if (p) page.project = p
+    else delete page.project
+    markDirty()
+    commit()
+    revision++
+  }
+
+  function makeProject() { setProject({ status: "active", due: "" }) }
+
+  // Any page made a project (`next`: { status, due }) or a page again
+  // (null): the open page as a change to it, another in its file. done(ok):
+  // not if it's locked.
+  function projectOf(id, next, done) {
+    if (!workspace || !workspace.index.pages[id]) { if (done) done(false); return }
+    if (page && page.id === id) {
+      if (locked) { if (done) done(false); return }
+      setProject(next)
+      if (done) done(true)
+      return
+    }
+    workspace.editPage(id, function(p) {
+      if (p.format && p.format.locked) return false
+      var c = next ? Workspace.cleanProject(next) : null
+      if (c) p.project = c
+      else delete p.project
+      return true
+    }, function(ok) { if (done) done(ok) })
+  }
+
+  // From the sidebar (a page dragged on Projects, its menu) and the page's
+  // menu: a project, or a page again, said so, with Undo.
+  function makeProjectOf(id, on) {
+    var e = workspace && workspace.index.pages[id]
+    if (!e || !!e.project === on) return false
+    commit()
+    var had = e.project || null
+    var title = e.title || "Untitled"
+    projectOf(id, on ? { status: "active", due: "" } : null, function(ok) {
+      if (!ok) { view.toast("\u201c" + title + "\u201d is locked: unlock it first"); return }
+      view.toastUndo(on ? "\u201c" + title + "\u201d is a project, in Projects" : "\u201c" + title + "\u201d is a page again, in Pages", function() {
+        view.projectOf(id, on ? null : had)
+      })
+    })
+    return true
+  }
+
+  // The sidebar's + on Projects: a new page that's a project, at the top.
+  function newProject() {
+    if (!workspace) return
+    commit()
+    var p = workspace.createPage({ parent: "", project: { status: "active", due: "" } })
+    if (!p) return
+    open(p.id, false, "title")
+  }
+
+  function setProjectStatus(status) {
+    if (!page || !page.project) return
+    setProject({ status: status, due: page.project.due })
+    if (status === "done") toast("Done \u2713  Archive it to put it away")
+  }
+
+  function setProjectDue(due) {
+    if (!page || !page.project) return
+    setProject({ status: page.project.status, due: due })
+  }
+
+  // A command changing the project of the page open (Api.project).
+  function setProjectOfOpenPage(id, next) {
+    if (!page || page.id !== id) return false
+    if (locked) return "locked"
+    setProject(next)
+    return true
+  }
+
+  // The page put away in the archive (with the pages in it), or back out; Undo.
+  function archivePage(id, on) {
+    if (!workspace || !id || !workspace.index.pages[id]) return
+    commit()
+    var title = workspace.index.pages[id].title || "Untitled"
+    workspace.setArchived(id, on)
+    revision++
+    toastUndo(on ? "\u201c" + title + "\u201d is in the archive" : "\u201c" + title + "\u201d is out of the archive", function() {
+      view.workspace.setArchived(id, !on)
+      view.revision++
+    })
+  }
+
+  // The page in the archive a page is in (itself, or one it's inside).
+  function archivedRoot(id) {
+    var ix = workspace.index
+    var p = id
+    var seen = {}
+    while (p && ix.pages[p] && !seen[p]) {
+      if (ix.pages[p].archived) return p
+      seen[p] = true
+      p = ix.pages[p].parent
+    }
+    return id
   }
 
   // ---- the page's look -----------------------------------------------------------------------
@@ -754,6 +921,7 @@ FocusScope {
 
   function openFind() { quickFind.start() }
   function openTrash() { trashPop.x = 12; trashPop.y = view.height - trashPop.height - 60; trashPop.open() }
+  function openArchive() { archivePop.x = 12; archivePop.y = view.height - archivePop.height - 90; archivePop.open() }
   function openRowMenu(id, anchor) {
     rowMenu.pageId = id
     rowMenu.parent = anchor
@@ -795,6 +963,7 @@ FocusScope {
 
   DocSidebar {
     id: sidebar
+    objectName: "sidebar"
     theme: view.theme
     view: view
     width: 250
@@ -1075,6 +1244,44 @@ FocusScope {
             color: Qt.alpha(view.theme.text, 0.25)
           }
         }
+        // Put away in the archive: it says so, and takes it back out.
+        Rectangle {
+          id: archivedNote
+          objectName: "archivedNote"
+          readonly property bool shown: { var r = view.workspace ? view.workspace.revision : 0; return view.page !== null && view.workspace !== null && Workspace.inArchive(view.workspace.index, view.page.id) }
+          visible: shown
+          width: archivedRow.implicitWidth + 24
+          height: visible ? 32 : 0
+          radius: 8
+          color: Qt.alpha(view.theme.text, 0.06)
+          Row {
+            id: archivedRow
+            anchors.centerIn: parent
+            spacing: 8
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: view.theme.icons.archive; font.family: view.theme.iconFont; font.pixelSize: 14; color: view.theme.muted }
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: "In the archive"; font.family: view.theme.uiFont; font.pixelSize: 13; color: view.theme.muted }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: "Bring it back"
+              font.family: view.theme.uiFont
+              font.pixelSize: 13
+              font.weight: Font.DemiBold
+              color: view.theme.accent
+              HoverHandler { cursorShape: Qt.PointingHandCursor }
+              TapHandler { onTapped: view.archivePage(view.archivedRoot(view.page.id), false) }
+            }
+          }
+        }
+
+        // A project: its status, when it's due, how far along it is.
+        ProjectBar {
+          id: projectBar
+          objectName: "projectBar"
+          theme: view.theme
+          view: view
+        }
+
         // The pages that link here.
         Flow {
           visible: view.backlinks.length > 0
@@ -1774,6 +1981,16 @@ FocusScope {
     onTagChosen: function(name) { view.openTag(name) }
   }
 
+  ArchivePop {
+    id: archivePop
+    objectName: "archivePop"
+    theme: view.theme
+    workspace: view.workspace
+    parent: view
+    onOpenRequested: function(id) { view.open(id) }
+    onUnarchiveRequested: function(id) { view.archivePage(id, false) }
+  }
+
   TrashPop {
     id: trashPop
     theme: view.theme
@@ -1812,8 +2029,16 @@ FocusScope {
         text: view.workspace && view.workspace.isFavorite(rowMenu.pageId) ? "Out of Favorites" : "Add to Favorites"
         onClicked: { rowMenu.close(); view.toggleFavorite(rowMenu.pageId) }
       }
+      MenuRow {
+        objectName: "rowProject"
+        width: parent.width; theme: view.theme; icon: view.theme.icons.briefcase
+        readonly property bool isProject: { var r = view.workspace ? view.workspace.revision : 0; return !!(view.workspace && view.workspace.index.pages[rowMenu.pageId] && view.workspace.index.pages[rowMenu.pageId].project) }
+        text: isProject ? "Not a project" : "Make it a project"
+        onClicked: { rowMenu.close(); view.makeProjectOf(rowMenu.pageId, !isProject) }
+      }
       MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.duplicate; text: "Duplicate"; onClicked: { rowMenu.close(); view.duplicatePage(rowMenu.pageId) } }
       MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.move; text: "Move to\u2026"; onClicked: { rowMenu.close(); view.movePageAsk(rowMenu.pageId) } }
+      MenuRow { objectName: "rowArchive"; width: parent.width; theme: view.theme; icon: view.theme.icons.archive; text: "Archive"; onClicked: { rowMenu.close(); view.archivePage(rowMenu.pageId, true) } }
       Rectangle { width: parent.width; height: 1; color: view.theme.line }
       MenuRow { width: parent.width; theme: view.theme; icon: view.theme.icons.trash; text: "Move to the trash"; danger: true; onClicked: { rowMenu.close(); view.trashPage(rowMenu.pageId) } }
     }

@@ -179,6 +179,34 @@ Item {
       verify(api.read(r.id).indexOf("- [ ] milk #errand") >= 0)
     }
 
+    function test_13_projects_and_the_archive() {
+      fresh()
+      var r = json(api.add("", file("p.md", "---\nstatus: active\ndue: 2026-12-01\n---\n\n# Launch\n\n- [x] post\n- [ ] video")))
+      verify(r.ok, JSON.stringify(r))
+      compare(fileOf(r.id).project.status, "active", "front matter makes it a project")
+      var list = json(api.projects())
+      compare(list.length, 1)
+      compare(list[0].title, "Launch")
+      compare(list[0].due, "2026-12-01")
+      compare(list[0].progress, "1/2")
+      // Changed: its status, its due date kept; then none.
+      compare(json(api.project(r.id, "paused", "-")).project.status, "paused")
+      compare(fileOf(r.id).project.due, "2026-12-01", "kept")
+      compare(json(api.project(r.id, "", "2027-01-15")).project.due, "2027-01-15")
+      compare(json(api.project(r.id, "bogus", "")).ok, false)
+      compare(json(api.project(r.id, "", "next week")).ok, false)
+      var other = json(api.add("Plain", file("q.md", "x")))
+      compare(json(api.project(other.id, "planning", "")).project.status, "planning", "a page made a project")
+      compare(json(api.project(other.id, "none", "")).project, null, "and a page again")
+      compare(fileOf(other.id).project, undefined)
+      // The archive.
+      verify(json(api.archive(r.id)).ok)
+      compare(json(api.projects()).length, 0, "not on the list in the archive")
+      verify(api.read(r.id).indexOf("status: paused") >= 0, "still read, its status as front matter")
+      verify(json(api.archive(r.id, false)).ok)
+      compare(json(api.projects()).length, 1)
+    }
+
     function test_3_add_inside_a_page_with_links_dates_and_reminders() {
       fresh()
       var home = named("Getting started")

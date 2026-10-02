@@ -295,6 +295,9 @@ takes them along.
 | A habit to keep | `/habit`: its name, and a circle for each day of the week to click when it's done (today's is rimmed in your accent) |
 | A month at a glance | `/calendar`: click a date to circle it; the arrows over it go to other months |
 | Turn a block into a page | **⋮⋮** → *Turn into page*: its text is the page's name, and what's inside it goes along |
+| Reorganize pages | Drag a page in the sidebar: a line shows where it goes (before or after another page, as deep as it), or the page it goes inside lights up; below every page is the end of the top. A page can't go inside a page that's inside it. Its block moves to its place on the page it goes on, the page open is shown as it is then, and **Undo** on the message puts it back. Dropped on **Projects**, a page is a project; a project dropped in **Pages** is a page again |
+| A project | **+** on the sidebar's **Projects** makes one; so does dragging a page there, or *Make it a project* in a page's ⋯ menu or its menu in the sidebar (the *Project plan* template is one already): a line under its title with its status (Planning, Active, Paused, Done; click it to change it), when it's due (click: a date, typed as `fri`, `oct 20`, `in 2 weeks`, or Today, Tomorrow, Next week...; late, it says so in red) and how far along it is (the to-dos on it and on the pages inside it). The sidebar's **Projects** has every project, with the pages in it under it (they're not in **Pages**): what's on now first, late first, then by when they're due, done ones last, each with a ring for its progress in its status's color. Done, it offers to go in the archive |
+| Put a page away | *Archive* in its ⋯ menu: it leaves the tree (with the pages in it) and the Projects, and is in **Archive** at the sidebar's foot, still there to open, search and link to. Open, it says it's in the archive, with *Bring it back*; so does the archive's arrow. **Undo** on the message takes it back too |
 | Keep a page at hand | The ☆ at the top right, or *Add to Favorites* in its menu: it's under *Favorites* at the top of the sidebar |
 | Copy a page | *Duplicate* in its ⋯ menu (or in the sidebar's): a copy of it and the pages in it, right after it |
 | Stop a page changing | *Lock the page* in its ⋯ menu: it reads, and copies, but can't be changed until you unlock it (the lock at the top) |
@@ -547,6 +550,9 @@ omarchy-shell omanote trash <page id>             # to the trash, where it can b
 omarchy-shell omanote tags                        # every tag: how many pages and blocks have it
 omarchy-shell omanote tagged "#errand"            # every block with the tag: page, block id, text (Markdown), ticked
 omarchy-shell omanote tagColor "#work" blue       # a tag's color (Pages' colors, a hex, or "" for none)
+omarchy-shell omanote projects                    # every project: status, due date, progress, late or not
+omarchy-shell omanote project <page id> active 2026-10-12   # a page made a project, or changed ("" keeps, "-" keeps the date, none: a page again)
+omarchy-shell omanote archive <page id>           # put away in the archive (unarchive <page id> brings it back)
 ```
 
 Pages come in as Markdown files, since an argument can't carry a page. They
@@ -556,7 +562,7 @@ indented two spaces under the one it branches from; or Mermaid's `mindmap`) is
 a mind map, so "make me a mind map of…" puts one on a page. An idea's colors
 go in braces after it: `Marketing {red}`, `Marketing {blue background}`,
 `Marketing {red, yellow background}`, or any hex color, `Marketing {#ff8800}`. A Markdown table (`| a | b |` lines, the second `|---|---|`) is a
-table, its first row the header. `[[Page title]]` links to the page called that, and `#tag` is a tag. A date is
+table, its first row the header. Front matter's `status:` (planning, active, paused, done) and `due:` (2026-10-12) make the page a project, and a project's page is read and exported with them. `[[Page title]]` links to the page called that, and `#tag` is a tag. A date is
 `[@Fri 2 Oct](omanote://date/2026-10-02)`, and a reminder is
 `[⏰ Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30)`: a notification at
 that time. `add` puts pages in an Inbox page at the top of Pages, made the first
@@ -771,7 +777,8 @@ at all).
 * Notebooks have no tables (Pages has them), no spell checking (Qt Quick's
   text editor has none), and no printing or PDF export: export as Markdown,
   or copy a page.
-* Pages has no databases (on purpose: a table is rows and columns of text),
+* Pages has no databases (on purpose: a table is rows and columns of text,
+  and a project is a page with a status, a due date and its to-dos),
   no merged cells, no @-mentions of
   people (Omanote has one writer), and no syncing between computers; pages move into other pages with *Move to…*, not by
   dragging them in the sidebar. Columns are at the top of a page (not inside
