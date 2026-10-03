@@ -938,5 +938,16 @@ Rectangle {
     Row2 { objectName: "archiveRow"; icon: bar.theme.icons.archive; text: "Archive"; hint: bar.archiveCount > 0 ? String(bar.archiveCount) : ""; onClicked: bar.view.openArchive() }
     Row2 { icon: bar.theme.icons.trash; text: "Trash"; hint: bar.trashCount > 0 ? String(bar.trashCount) : ""; onClicked: bar.view.openTrash() }
     Row2 { icon: bar.theme.icons.cog; text: "Settings"; hint: "Ctrl+,"; onClicked: bar.view.settingsRequested() }
+    Item { width: 1; height: 4 }
+    Rectangle { width: parent.width; height: 1; color: bar.theme.line; opacity: 0.7 }
+    Item { width: 1; height: 4 }
+    // A newer version, if there's one; who makes Omanote, on X.
+    SideFooter {
+      objectName: "sidebarFooter"
+      width: parent.width
+      theme: bar.theme
+      service: bar.view.service
+      onNotesRequested: bar.view.releaseNotesRequested()
+    }
   }
 }

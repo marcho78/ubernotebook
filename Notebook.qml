@@ -313,10 +313,12 @@ Item {
 
   // A file to put on a page (any, a PDF, a video).
   property var fileDone: null
-  function pickFile(kind, done) {
+  // (`from`: the folder it opens in; else your home.)
+  function pickFile(kind, done, from) {
     fileDone = done
-    filePicker.nameFilters = kind === "calendar" ? ["Calendars (*.ics *.ical *.ifb *.vcs)", "Any file (*)"] : kind === "pdf" ? ["PDF (*.pdf)"] : kind === "video" ? ["Videos (*.mp4 *.m4v *.mov *.webm *.mkv *.avi *.ogv)"] : kind === "contacts" ? ["Contacts (*.vcf *.vcard *.csv)"] : kind === "email" ? ["Emails (*.eml)", "Any file (*)"] : ["Any file (*)"]
-    filePicker.title = kind === "calendar" ? "Choose a calendar file (.ics)" : kind === "pdf" ? "Choose a PDF" : kind === "video" ? "Choose a video" : kind === "contacts" ? "Choose contacts to import (.vcf or .csv)" : kind === "email" ? "Choose an email (.eml)" : "Choose a file"
+    filePicker.nameFilters = kind === "calendar" ? ["Calendars (*.ics *.ical *.ifb *.vcs)", "Any file (*)"] : kind === "pdf" ? ["PDF (*.pdf)"] : kind === "video" ? ["Videos (*.mp4 *.m4v *.mov *.webm *.mkv *.avi *.ogv)"] : kind === "contacts" ? ["Contacts (*.vcf *.vcard *.csv)"] : kind === "email" ? ["Emails (*.eml)", "Any file (*)"] : kind === "backup" ? ["Backups (*.tar.gz)", "Any file (*)"] : ["Any file (*)"]
+    filePicker.title = kind === "calendar" ? "Choose a calendar file (.ics)" : kind === "pdf" ? "Choose a PDF" : kind === "video" ? "Choose a video" : kind === "contacts" ? "Choose contacts to import (.vcf or .csv)" : kind === "email" ? "Choose an email (.eml)" : kind === "backup" ? "Choose a backup (.tar.gz)" : "Choose a file"
+    filePicker.currentFolder = "file://" + (from || Quickshell.env("HOME"))
     filePicker.open()
   }
 

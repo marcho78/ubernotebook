@@ -83,7 +83,16 @@ var DEFAULTS = {
   // source's name ("" is the default one).
   audioInput: "",
   // A voice evened out and made loud enough (a quiet laptop microphone).
-  audioBoost: true
+  audioBoost: true,
+  // Backups (Backups.js): the folder they go in ("" is ~/Documents/Omanote
+  // Backups); automatic ones of every profile ("off", "daily", "weekly"),
+  // and how many of those are kept (the oldest go to the trash).
+  backupFolder: "",
+  backupEvery: "off",
+  backupKeep: 10,
+  // Whether Omanote asks GitHub, once a day, if there's a newer version
+  // (Updates.qml); off, only when you ask.
+  checkUpdates: true
 }
 
 var SCHEMA = {
@@ -127,7 +136,11 @@ var SCHEMA = {
     colorText: "string",
     audioTranscribe: "bool",
     audioInput: "string",
-    audioBoost: "bool"
+    audioBoost: "bool",
+    backupFolder: "folder",
+    backupEvery: "string",
+    backupKeep: "int",
+    checkUpdates: "bool"
   },
   choices: {
     pen: ["sans", "serif", "hand", "print", "typewriter", "mono", "duo"],
@@ -143,7 +156,9 @@ var SCHEMA = {
     tagSort: ["name", "color"],
     calendarView: ["month", "week", "agenda", "compact"],
     peopleLayout: ["list", "cards"],
-    scrollSpeed: ["slower", "normal", "faster"]
+    scrollSpeed: ["slower", "normal", "faster"],
+    backupEvery: ["off", "daily", "weekly"],
+    backupKeep: [3, 5, 10, 20, 50]
   },
   ranges: {
     width: [640, 5000],

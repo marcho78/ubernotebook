@@ -57,10 +57,23 @@ QtObject {
     agentList = [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
     launched = []
     picked = 0
+    http = ({})
+    gitCheckout = false
+    installed = []
+    mtimes = ({})
+    opened = []
   }
 
   property var fetchPages: ({})
   property var fetchPictures: ({})
+  // GitHub, for the update check: { url: { code, body } } (a URL not in it:
+  // GitHub can't be reached). Omanote installed from git, and what
+  // `omarchy plugin update` was asked to update.
+  property var http: ({})
+  property bool gitCheckout: false
+  property var installed: []
+  // When files were last changed (seconds), for the backups listed.
+  property var mtimes: ({})
 
   function parseJson(text) {
     try { return JSON.parse(text) } catch (e) { return null }
@@ -131,6 +144,72 @@ QtObject {
           bit(ids[0] && disk[d + "/Pages/" + ids[0] + ".json"] !== undefined), bit(ids[1] && disk[d + "/Pages/" + ids[1] + ".json"] !== undefined),
           bit(ids[2] && disk[d + "/" + ids[2] + "/notebook.json"] !== undefined)].join(" ")
       }).join("\n") + "\n")
+      return
+    }
+    // The update check (Updates.qml): GitHub's answer, then its status.
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-update") {
+      var answer = http[argv[4]]
+      if (!answer) { done(false, "curl: (6) Could not resolve host: api.github.com"); return }
+      done(true, answer.body + "\n" + answer.code)
+      return
+    }
+    if (argv[0] === "/usr/bin/test" && /\/\.git$/.test(argv[2])) { done(gitCheckout, ""); return }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-install") {
+      installed = installed.concat([argv[4]])
+      done(true, "Updated " + argv[4] + ".")
+      return
+    }
+    // Backups (Backups.js). A backup here is "FAKE-TAR:" then JSON:
+    // { manifest, files: { p1: { "Pages/x.json": text } } }.
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backup-has") {
+      done(true, argv.slice(4).map(function(d) { return Object.keys(disk).some(function(p) { return p.indexOf(d + "/") === 0 }) ? "1" : "0" }).join("\n") + "\n")
+      return
+    }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backups") {
+      var bdir = argv[4].replace(/\/+$/, "") + "/"
+      var rows2 = Object.keys(disk).filter(function(p) { var n = p.slice(bdir.length); return p.indexOf(bdir) === 0 && n.indexOf("/") < 0 && n.charAt(0) !== "." && /\.tar\.gz$/.test(n) })
+        .map(function(p) { return (mtimes[p] || 1759455000) + "\t" + String(disk[p]).length + "\t" + p.slice(bdir.length) })
+      done(true, rows2.join("\n") + (rows2.length ? "\n" : ""))
+      return
+    }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backup") {
+      var a = argv.slice(4)
+      var out2 = a[0] + "/" + a[1] + a[2]
+      for (var k2 = 2; disk[out2] !== undefined; k2++) out2 = a[0] + "/" + a[1] + " " + k2 + a[2]
+      var packed = {}
+      for (var t = 4; t + 2 < a.length; t += 3) {
+        var src = a[t], skip = a[t + 2]
+        packed[a[t + 1]] = {}
+        Object.keys(disk).forEach(function(p) {
+          if (p.indexOf(src + "/") !== 0) return
+          var rel = p.slice(src.length + 1)
+          if (skip && (rel === skip || rel.indexOf(skip + "/") === 0)) return
+          packed[a[t + 1]][rel] = disk[p]
+        })
+      }
+      disk[out2] = "FAKE-TAR:" + JSON.stringify({ manifest: JSON.parse(a[3]), files: packed })
+      mtimes[out2] = Date.now() / 1000
+      done(true, String(disk[out2].length) + "\n" + out2 + "\n")
+      return
+    }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backup-check") {
+      var tarred = disk[argv[4]]
+      if (tarred === undefined || String(tarred).indexOf("FAKE-TAR:") !== 0) { done(true, "readable:0\n"); return }
+      done(true, "readable:1\ntypes:-d\noutside:0\ndots:0\n---\n" + JSON.stringify(JSON.parse(String(tarred).slice(9)).manifest))
+      return
+    }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-restore") {
+      var held = JSON.parse(String(disk[argv[4]]).slice(9)).files[argv[5]]
+      if (!held) { done(false, "not in it"); return }
+      var dest = argv[6]
+      for (var k3 = 2; Object.keys(disk).some(function(p) { return p === dest || p.indexOf(dest + "/") === 0 }); k3++) dest = argv[6] + " " + k3
+      for (var rel2 in held) disk[dest + "/" + rel2] = held[rel2]
+      done(true, dest + "\n")
+      return
+    }
+    if (argv[0] === "/usr/bin/gio" && argv[1] === "trash") {
+      argv.slice(3).forEach(function(p) { files.trashed.push(p); delete disk[p] })
+      done(true, "")
       return
     }
     if (argv[0] === "/usr/bin/cp" && disk[argv[2]] !== undefined) {

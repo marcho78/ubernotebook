@@ -7,6 +7,8 @@ Rectangle {
   property var theme: null
   property string text: ""
   property string icon: ""
+  // X's logo before the words (a link to X).
+  property bool xMark: false
   property bool primary: false
   signal clicked()
 
@@ -22,6 +24,12 @@ Rectangle {
     id: btnRow
     anchors.centerIn: parent
     spacing: 6
+    XLogo {
+      visible: btn.xMark
+      anchors.verticalCenter: parent.verticalCenter
+      size: 12
+      color: btn.primary ? btn.theme.background : btn.theme.text
+    }
     Text {
       visible: btn.icon !== ""
       anchors.verticalCenter: parent.verticalCenter

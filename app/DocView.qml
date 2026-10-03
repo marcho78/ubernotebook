@@ -34,6 +34,8 @@ FocusScope {
 
   signal notebooksRequested()
   signal settingsRequested()
+  // What's new in a newer version (the sidebar's foot says there's one).
+  signal releaseNotesRequested()
   signal toast(string text)
   // A message with a way to take back what it says was done.
   signal toastUndo(string text, var undo)

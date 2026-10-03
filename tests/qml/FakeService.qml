@@ -41,7 +41,8 @@ QtObject {
   // The file a pick gets ("" as if it was called off), and what was asked for.
   property string nextFile: ""
   property string pickedKind: ""
-  function pickFile(kind, done) { pickedKind = kind; done(nextFile) }
+  property string pickedFrom: ""
+  function pickFile(kind, done, from) { pickedKind = kind; pickedFrom = from || ""; done(nextFile) }
   // The pictures a pick gets ([] as if it was called off).
   property var nextPictures: []
   function pickPictures(done) { done(nextPictures) }
@@ -49,4 +50,7 @@ QtObject {
   property var recorder: FakeRecorder { input: fake.settings.audioInput || ""; boost: fake.settings.audioBoost !== false }
   // voxtype's meetings (FakeMeetings.qml).
   property var meetings: FakeMeetings {}
+  // The update check (Updates.qml) and backups (Backups.qml), when a test has them.
+  property var updates: null
+  property var backups: null
 }

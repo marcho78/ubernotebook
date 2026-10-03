@@ -1,13 +1,25 @@
 import QtQuick
 
 // The first time Omanote opens: your first profile (its name, and the folder
-// its notes go in), or the demo to look around in first. Nothing's made
-// anywhere until one of them is picked.
+// its notes go in), the demo to look around in first, or your profiles put
+// back from a backup (from another computer, say). Nothing's made anywhere
+// until one of them is picked.
 Rectangle {
   id: fr
 
   property var theme: null
   property var service: null
+  // Putting a backup back: "" or "working", or what went wrong.
+  property string restoring: ""
+
+  function restore() {
+    if (!service || !service.backups) return
+    service.pickFile("backup", function(path) {
+      if (!path) return
+      fr.restoring = "working"
+      fr.service.backups.restore(path, true, function(r) { fr.restoring = r.ok ? "" : r.error })
+    }, service.backups.folder)
+  }
 
   objectName: "firstRun"
   color: theme.background
@@ -86,6 +98,42 @@ Rectangle {
         theme: fr.theme
         text: "Explore the demo"
         onClicked: fr.service.profiles.openDemo()
+      }
+    }
+    Item { width: 1; height: 6 }
+    Row {
+      width: parent.width
+      spacing: 12
+      Column {
+        width: parent.width - restoreButton.width - 12
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 2
+        Text {
+          textFormat: Text.PlainText
+          text: "Coming from another computer?"
+          font.family: fr.theme.uiFont
+          font.pixelSize: 14
+          font.weight: Font.Medium
+          color: fr.theme.text
+        }
+        Text {
+          objectName: "firstRunRestoreNote"
+          width: parent.width
+          wrapMode: Text.Wrap
+          textFormat: Text.PlainText
+          text: fr.restoring === "working" ? "Putting your profiles back…" : fr.restoring || "Put your profiles back from a backup Omanote made (Settings → Backups)."
+          font.family: fr.theme.uiFont
+          font.pixelSize: 12
+          color: fr.restoring !== "" && fr.restoring !== "working" ? fr.theme.urgent : fr.theme.muted
+        }
+      }
+      TextButton {
+        id: restoreButton
+        objectName: "firstRunRestore"
+        anchors.verticalCenter: parent.verticalCenter
+        theme: fr.theme
+        text: "Restore a backup…"
+        onClicked: if (fr.restoring !== "working") fr.restore()
       }
     }
   }

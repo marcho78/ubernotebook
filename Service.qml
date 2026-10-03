@@ -40,7 +40,11 @@ Item {
   readonly property string pluginId: "marcho78.omanote"
   readonly property string pluginDir: decodeURIComponent(Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, ""))
   readonly property string home: Quickshell.env("HOME")
-  readonly property string version: manifest && manifest.version ? manifest.version : "1.0.0"
+  // The manifest, as the shell hands it over (or, if it doesn't, as
+  // manifest.json says): the version, and the homepage updates are asked of.
+  property var ownManifest: null
+  readonly property var about: manifest && manifest.version ? manifest : ownManifest
+  readonly property string version: about && about.version ? about.version : "1.0.0"
 
   // ---- settings ----------------------------------------------------------------------
   //
@@ -212,6 +216,30 @@ Item {
     })
   }
 
+  // Whether there's a newer Omanote, and what's in it (Updates.qml).
+  Updates {
+    id: updatesItem
+    files: storeItem
+    current: root.version
+    homepage: root.about && root.about.homepage ? root.about.homepage : ""
+    pluginDir: root.pluginDir
+    pluginId: root.pluginId
+    automatic: root.settings.checkUpdates !== false
+  }
+
+  property alias updates: updatesItem
+
+  // Backups of the profiles, and putting one back (Backups.qml).
+  Backups {
+    id: backupsItem
+    service: root
+    files: storeItem
+    profiles: profilesItem
+    version: root.version
+  }
+
+  property alias backups: backupsItem
+
   // Commands for AI agents and scripts (the IPC below hands them on).
   Api {
     id: apiItem
@@ -222,6 +250,8 @@ Item {
     noProfile: profilesItem.firstRun
     profiles: profilesItem
     settings: root.settings
+    updates: updatesItem
+    backups: backupsItem
     onInboxMade: function(id) { root.setSetting("inbox", id) }
   }
 
@@ -449,8 +479,8 @@ Item {
 
   // The desktop's file picker, for a picture (the window shows it).
   // A file to put on a page: "any", "pdf" or "video". done(path), or done("").
-  function pickFile(kind, done) {
-    if (ui && typeof ui.pickFile === "function") ui.pickFile(kind, done)
+  function pickFile(kind, done, from) {
+    if (ui && typeof ui.pickFile === "function") ui.pickFile(kind, done, from || "")
     else done("")
   }
 
@@ -622,6 +652,13 @@ Item {
     function removeProfile(which: string): string { return apiItem.removeProfile(which) }
     function demo(): string { return apiItem.demo(false) }
     function restartDemo(): string { return apiItem.demo(true) }
+    function backup(which: string): string { return apiItem.backup(which) }
+    function backups(): string { return apiItem.backupList() }
+    function restoreBackup(file: string, open: string): string { return apiItem.restoreBackup(file, open) }
+    function appVersion(): string { return apiItem.appVersion() }
+    function checkUpdate(): string { return apiItem.checkUpdate() }
+    function releaseNotes(): string { return apiItem.releaseNotes() }
+    function installUpdate(): string { return apiItem.installUpdate() }
     function status(): string {
       return JSON.stringify({
         open: root.windowOpen,
@@ -629,6 +666,8 @@ Item {
         takenShortcuts: root.takenBinds,
         folder: root.rootPath,
         profile: profilesItem.current ? profilesItem.current.name : "",
+        version: root.version,
+        updateAvailable: updatesItem.available,
         notebooks: storeItem.notebooks.length,
         pages: Object.keys(workspaceItem.index.pages).length,
         ready: storeItem.ready,
@@ -638,8 +677,13 @@ Item {
   }
 
   Component.onCompleted: {
+    try { ownManifest = JSON.parse(storeItem.readNow(pluginDir + "/manifest.json", 64 * 1024) || "null") } catch (e) { ownManifest = null }
     scheduleRegister()
     if (launcherEntry) launcherTimer.start()
     if (agentSkill) storeItem.linkSkill(skillDir)
+    backupsTimer.start()
   }
+
+  // The backups there, once the profiles are in.
+  Timer { id: backupsTimer; interval: 2500; onTriggered: backupsItem.refresh() }
 }

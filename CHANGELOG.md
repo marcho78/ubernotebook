@@ -218,6 +218,31 @@ The first version.
   twice); a `.vcf` attachment puts its people in People; a file whose only
   app is a web browser, or none, isn't handed to it (it would download it
   and take you away): it's said so; `importCalendar` for agents.
+- **Settings in sections**: General, Appearance, Writing, Audio, Profiles,
+  Backups and About, chosen at the left, each setting on a card in its
+  group with a line about it; Esc closes Settings opened from Pages (the
+  page kept the keys before).
+- **Backups**: the open profile, or all of them, in one `.tar.gz` (any
+  archive tool opens it: an `omanote-backup.json` and each profile's
+  folder), in `~/Documents/Omanote Backups` or a folder you choose, whole
+  or not at all; automatic ones daily or weekly (off to start with), the
+  oldest past 3 to 50 to the trash, never the ones you make. **Restore**
+  says what's in a backup, then puts each profile back as a new profile in
+  a new folder, with its page, notebook and Inbox, writing over nothing;
+  the first run can restore one, for a new computer. A file that isn't a
+  backup, or holds links or reaches outside its folders, is refused;
+  `backup`, `backups` and `restoreBackup` for agents.
+- **Updates**: Omanote asks GitHub for its newest release a minute after
+  it starts and once a day (Settings → About; off, only when you ask);
+  a newer one shows at the foot of Pages' sidebar, in the shelf's corner
+  and by About, a click from its release notes (read in Omanote, without
+  pictures or HTML); *Update now* for an Omanote installed with
+  `omarchy plugin add` (`omarchy plugin update`), else the command to
+  copy; *Release notes* for the version you have, from `CHANGELOG.md`;
+  `appVersion`, `checkUpdate`, `releaseNotes` and `installUpdate` for
+  agents.
+- **Follow me on X** (@devsec_ai) at the foot of Pages' sidebar, in the
+  shelf's corner and in Settings → About.
 - **Profiles**: notes kept apart (personal, work, the demo...), each a
   folder of its own with its notebooks, Pages, calendar, People, templates
   and Markdown copy, and its own Inbox for agents and place you were; a

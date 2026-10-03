@@ -184,7 +184,7 @@ Item {
       fresh()
       verify(profiles.add("Personal", "~/Documents/Omanote", true) === "")
       verify(profiles.add("Side", "~/Side", false) === "")
-      app.openSettings()
+      app.openSettings("profiles")
       var rows = []
       tryVerify(function() { rows = findAll(win(), function(it) { return it.objectName === "settingsProfile" }, []); return rows.length === 2 }, 1000)
       var side = rows.filter(function(r) { return r.modelData.name === "Side" })[0]

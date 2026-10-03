@@ -7,7 +7,8 @@ description: >
   meeting notes, set a reminder in their notes, add to an existing page, or look
   something up in their notes, or work with their Omanote calendar, People
   (contacts), boards, pictures and galleries, templates, settings, page history,
-  notebooks or profiles (notes kept apart: personal, work, a client, the demo). Triggers: note, notes, Omanote, profile, "save this",
+  notebooks, profiles (notes kept apart: personal, work, a client, the demo),
+  backups (back up, restore) or Omanote's version and updates. Triggers: note, notes, Omanote, profile, "save this",
   "write it down", "add to my notes", "put it in my notes", "remind me",
   "what did I write about", "my Inbox".
 ---
@@ -95,6 +96,13 @@ except `read`, which prints the page as Markdown.
 | `omarchy-shell omanote profileFolder "<name or id>" "<folder>"` | a profile's notes looked for in another folder (nothing is moved) |
 | `omarchy-shell omanote removeProfile "<name or id>"` | takes a profile off the list (not the open one); its notes stay in their folder. Only when the user asks |
 | `omarchy-shell omanote demo` | opens the demo profile (example pages, people, events, templates), made the first time; `restartDemo` makes it new (the old one to the trash), only when the user asks |
+| `omarchy-shell omanote backup "<profile>"` | a backup (one `.tar.gz` in the backup folder) of the open profile (`""`), every profile (`all`; not the demo), or one by its name or id. It's written in a moment |
+| `omarchy-shell omanote backups` | the backups in the backup folder, newest first: `{folder, working, last, lastFailed, backups: [{name, file, made, size, automatic}]}` |
+| `omarchy-shell omanote restoreBackup <file> true\|false` | puts a backup back: each profile in it a new profile, in a new folder (nothing there is changed); `true` opens the first. Only when the user asks |
+| `omarchy-shell omanote appVersion` | the version running and whether there's a newer one: `{version, latest, updateAvailable, status, checked, canUpdateItself, update, releases}` (`status`: `current`, `available`, `none` (no releases yet), `failed`, `idle` (not asked yet)) |
+| `omarchy-shell omanote checkUpdate` | asks GitHub for the newest version now; `appVersion` says what it found a few seconds later |
+| `omarchy-shell omanote releaseNotes` | what's new, as Markdown: the newer releases' notes, or (up to date) the notes of the version running |
+| `omarchy-shell omanote installUpdate` | installs the newer version (`omarchy plugin update`, only for an Omanote installed from git); Omanote starts again. Only when the user asks |
 | `omarchy-shell omanote help` | all of this, as JSON |
 
 ## Writing a page
@@ -303,6 +311,22 @@ the user asks ("scroll faster" is `set scrollSpeed faster`; the colors
 `colorSidebar`, `colorPage`, `colorCards`, `colorText` take a hex, `""` for
 the theme's). Profiles have their own commands (`profiles`, `addProfile`...),
 not `set`.
+
+## Backups and updates
+
+When the user asks to back up their notes, `backup ""` backs up the open
+profile and `backup all` every profile; then `backups` shows it (with
+`last` saying how it went). Say where it went (`folder`). Automatic backups
+are a setting (`set backupEvery daily`, `weekly` or `off`; `set backupKeep
+10`); change them only when asked. `restoreBackup` never changes anything
+there is: each profile in the backup comes back as a new one, in a new
+folder; use it only when the user asks, and tell them the new profiles'
+names (`profiles`).
+
+"Is there a new version?" is `checkUpdate`, then `appVersion` a few seconds
+later; `releaseNotes` says what's in it. Install it (`installUpdate`) only
+when the user says to: Omanote restarts. If `canUpdateItself` is false, tell
+them the command in `update` instead.
 
 ## Meetings
 

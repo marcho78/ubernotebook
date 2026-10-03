@@ -1,6 +1,7 @@
 import QtQuick
 import "Profiles.js" as Profiles
 import "Settings.js" as Settings
+import "Backups.js" as Backups
 
 // Profiles (Profiles.js): notes kept apart, each a folder of its own. The
 // list, the one open, and what changes them; Service.qml has one (and the
@@ -114,6 +115,27 @@ QtObject {
     }
     apply(changes)
     return ""
+  }
+
+  // Profiles put back from a backup ([{ name, folder, saved }]): each a new
+  // one, its name or "Name (restored)" if that's taken, with the page, the
+  // notebook and the Inbox it had; the first opened if `open`. The ones
+  // made: [{ id, name, folder }].
+  function addRestored(items, open) {
+    var next = shown.slice()
+    var made = []
+    ;(items || []).forEach(function(it) {
+      if (next.length >= Profiles.MAX) return
+      var p = Profiles.make(next, Backups.restoredName(next.map(function(x) { return x.name }), it.name), it.folder)
+      p.saved = Backups.savedOf(it.saved)
+      next.push(p)
+      made.push({ id: p.id, name: p.name, folder: p.folder })
+    })
+    if (!made.length) return made
+    if (!open) { apply({ profiles: next }); return made }
+    if (typeof service.saveOpen === "function") service.saveOpen()
+    apply(Profiles.switchTo(next, service.settings, made[0].id))
+    return made
   }
 
   // Off the list; its notes stay where they are.

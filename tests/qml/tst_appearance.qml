@@ -105,7 +105,7 @@ Item {
     }
 
     function test_3_picked_in_settings() {
-      app.openSettings()
+      app.openSettings("appearance")
       var swatch = null
       tryVerify(function() { swatch = named(win(), "appearanceSwatch_colorPage"); return swatch !== null }, 2000)
       wait(200)

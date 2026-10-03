@@ -31,6 +31,8 @@ FocusScope {
   readonly property alias notebookView: view
   readonly property alias shelfView: shelf
   readonly property alias docView: docs
+  readonly property alias settingsPopup: settingsPanel
+  readonly property alias releaseNotesPopup: releaseNotes
   property string mode: "shelf"
   // "notebooks" (the shelf and the desk) or "pages".
   property string space: "notebooks"
@@ -119,6 +121,7 @@ FocusScope {
     onEditRequested: function(notebook) { notebookDialog.defaults = root.settings; notebookDialog.start(notebook) }
     onDeleteRequested: function(notebook) { root.askDelete(notebook) }
     onSettingsRequested: settingsPanel.open()
+    onReleaseNotesRequested: releaseNotes.show()
     onResultOpened: function(notebookId, pageId, query) {
       var meta = null
       root.store.notebooks.forEach(function(n) { if (n.id === notebookId) meta = n })
@@ -159,6 +162,7 @@ FocusScope {
     focus: visible
     onNotebooksRequested: root.showSpace("notebooks")
     onSettingsRequested: settingsPanel.open()
+    onReleaseNotesRequested: releaseNotes.show()
     onToast: function(text) { root.toast(text) }
     onToastUndo: function(text, undo) { root.toastWithUndo(text, undo) }
     onPictureRequested: function(done) { if (root.service) root.service.pickPicture(done); else done("") }
@@ -288,7 +292,9 @@ FocusScope {
 
   // ---- notebooks --------------------------------------------------------------------------
 
-  function openSettings() { settingsPanel.open() }
+  // Settings, at a section ("" the one it was at).
+  function openSettings(section) { if (section) settingsPanel.openAt(section); else settingsPanel.open() }
+  function showReleaseNotes(own) { releaseNotes.show(own === true) }
 
   function newNotebook() {
     notebookDialog.defaults = root.settings
@@ -367,7 +373,8 @@ FocusScope {
   }
 
   Confirm { id: confirm; theme: themeObject; parent: root }
-  SettingsPanel { id: settingsPanel; theme: themeObject; service: root.service; parent: root }
+  SettingsPanel { id: settingsPanel; theme: themeObject; service: root.service; parent: root; onReleaseNotesRequested: function(own) { releaseNotes.show(own) } }
+  ReleaseNotes { id: releaseNotes; theme: themeObject; service: root.service; parent: root }
 
   // A picture from a file, chosen with the desktop's file picker.
   function pickPicture(afterUid) {

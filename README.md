@@ -500,11 +500,61 @@ that folder goes is a setting (Settings → Exports): a folder you pick each tim
 time slots as a list with the times in bold, habits as a table of the week and
 a calendar as a table of the month.
 
+### Backups
+
+Settings → **Backups** keeps your notes safe, or takes them to another
+computer. **Back up** puts the open profile (its notebooks, Pages, calendar,
+People, templates, history and trash: everything in its folder) in one
+`.tar.gz`; **Back up all** puts every profile in one (the demo can start
+over, so it's left out). They go in `~/Documents/Omanote Backups` (or a
+folder you choose), named for the profile and the time:
+`Omanote Personal 2026-10-03 0130.tar.gz`. Any archive tool opens one: it
+holds `omanote-backup.json` (which profiles, when, which Omanote made it) and
+each profile's folder under `p1/`, `p2/`.... A backup is written beside where
+it goes and only named when it's whole, and a backup folder inside a
+profile's folder is left out of it.
+
+**Automatic backups**, daily or weekly (off to start with), back up every
+profile while Omanote runs, and keep the newest 3, 5, 10, 20 or 50: older
+automatic ones go to the trash. The backups you make are never cleared out.
+
+**Restore** puts a backup back, from the list or from a file anywhere: it
+says what's in it first, then each profile in it comes back as a new
+profile, in a new folder (`~/Documents/Omanote Personal (restored)`), with
+the page, notebook and Inbox it had. Nothing you have is changed or written
+over; a name that's taken gets *(restored)*. A file that isn't one of
+Omanote's backups, or that holds links or anything reaching outside its
+folders, isn't put back. The first time Omanote opens, *Restore a backup…*
+does the same, so a new computer starts with your profiles.
+
+### Updates
+
+Omanote asks GitHub for the project's newest release a minute after it
+starts and once a day after that (Settings → About → *Check for updates
+automatically*; off, it asks only when you click *Check now*). It's one plain
+request for the list of releases: nothing of yours goes with it. When there's
+a newer version, the foot of Pages' sidebar and the shelf's corner say so
+(*Version 1.1.0 is available*), with a dot by About in Settings; a click
+shows its release notes, here in Omanote (no pictures or HTML from them,
+nothing fetched). An Omanote installed with `omarchy plugin add` updates
+itself with *Update now* (`omarchy plugin update marcho78.omanote`, which
+checks it before the shell loads it); one installed another way shows that
+command, to copy. *Release notes* in About shows what's in the version you
+have, from `CHANGELOG.md`.
+
+At the foot of the sidebar (and the shelf's corner) is *Follow me on X
+@devsec_ai*: a click opens the profile in your browser.
+
 ## Settings
 
 They apply as you change them and are saved on Omanote's entry in
 `~/.config/omarchy/shell.json`, keeping only what differs from the defaults
-in `Defaults.js`.
+in `Defaults.js`. Settings (the ⚙ in the sidebar or on the shelf, or
+**Ctrl+,**) has a section for each part of Omanote: General (shortcuts, the
+window, scrolling), Appearance (colors, motion and sound), Writing
+(checklists, exports, the Markdown copy), Audio (the microphone, dictation,
+meetings), Profiles, Backups and About (the version, updates, release notes,
+contact).
 
 | Setting | Default | Values |
 |---|---|---|
@@ -533,6 +583,10 @@ in `Defaults.js`.
 | `recentColors` | `""` | the colors of your own you picked last in a mind map, newest first (up to 8) |
 | `exportTo` | `ask` | where exports go: `ask` (a folder picker each time) or `folder` (`Exports/` in your notebooks folder) |
 | `inbox` | `""` | the page agents' and scripts' new pages go into: made (as *Inbox*) the first time; `omarchy-shell omanote set inbox <page id>` makes it another page |
+| `backupFolder` | `""` | where backups go (`""` is `~/Documents/Omanote Backups`); `/path` or `~/path` |
+| `backupEvery` | `off` | automatic backups of every profile: `off`, `daily` or `weekly` |
+| `backupKeep` | `10` | how many automatic backups are kept: `3`, `5`, `10`, `20` or `50` (older ones go to the trash; yours are never cleared out) |
+| `checkUpdates` | `true` | ask GitHub once a day whether there's a newer Omanote |
 | `pen`, `paper`, `paperColor`, `spacing`, `cover`, `material`, `binding` | `sans`, `ruled`, `ivory`, `regular`, `navy`, `leather`, `spiral` | what a new notebook starts with (the choices of the last one you made) |
 
 A shortcut another binding already uses is left alone, and the settings say
@@ -650,6 +704,11 @@ omarchy-shell omanote gallery <page id> <block id> caption 2 "Tram 28"   # a gal
 omarchy-shell omanote bookmark <page id> https://example.com   # a link as a card
 omarchy-shell omanote setLink <page id> <block id> https://example.org   # a bookmark's link (or a link's page: its id or title)
 omarchy-shell omanote preferences                 # every setting, its value and what it can be (set <key> <value> changes one)
+omarchy-shell omanote backup ""                   # a backup of the open profile ("all": every one; or a profile's name)
+omarchy-shell omanote backups                     # the backups in the backup folder, newest first, and how the last one went
+omarchy-shell omanote restoreBackup ~/Documents/Omanote\ Backups/<file>.tar.gz false   # put back as new profiles (true opens the first)
+omarchy-shell omanote appVersion                  # the version running, and whether there's a newer one (checkUpdate asks GitHub now)
+omarchy-shell omanote releaseNotes                # what's new, as Markdown (installUpdate installs it, for an Omanote installed from git)
 omarchy-shell omanote editEvent <event id> when "fri 3pm"   # an event changed: title, when, start, end, allDay, place, notes, repeat, alert, color
 omarchy-shell omanote editContact "Sam" phone "mobile: +1 555 0100"   # someone changed (removeContact <id>: taken out)
 omarchy-shell omanote renameTag "#idea" "#ideas"  # on every page (removeTag "#idea": off every page)
@@ -833,8 +892,12 @@ quick-note card (`Notebook.qml`, `app/`), and the icon in the bar.
 Omanote runs as unsandboxed code in the Omarchy shell, like every shell
 plugin, so here is exactly what it does.
 
-**No network, no root, nothing compiled on your machine.** Links you Ctrl+click
-open in your browser; Omanote itself never connects anywhere.
+**No root, nothing compiled on your machine, and the network only for two
+things.** Links you Ctrl+click open in your browser. Omanote itself connects
+only to read a web bookmark's page and picture, once, when you add one; and
+to ask GitHub's API for the project's list of releases (a minute after it
+starts and once a day, while Settings → About has it on; a plain request,
+with nothing of yours in it).
 
 **Programs.** Every command runs by absolute path with an argument list:
 
@@ -858,6 +921,10 @@ open in your browser; Omanote itself never connects anywhere.
 | `/usr/bin/voxtype` | `transcribe`: write out what was said in a recording, the way voxtype's settings say (its model, on your computer as Omarchy sets it up); `meeting start`, `stop`, `pause`, `resume`, `list` and `export`: record a meeting and get what voxtype wrote out; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on |
 | `/usr/bin/systemctl` | `--user restart voxtype.service`, once, when you turn voxtype's meeting mode on |
 | `/usr/bin/rm` | take Omanote's launcher entry out when it stops; take away dictation's recordings (in a folder of Omanote's own under `$XDG_RUNTIME_DIR`) once they're written out |
+| `/usr/bin/curl` | ask `api.github.com` for the project's releases (https only, at most 2 MB, 15 seconds) |
+| `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp`, `/usr/bin/stat`, `/usr/bin/find` | make a backup (a fixed script: its omanote-backup.json in a folder of its own from `mktemp`, then each profile's folder added under `p1/`..., compressed beside where it goes and named when it's whole); list the backups; look inside one before it's put back (only plain files and folders, nothing outside its own) and put a profile back into a new folder (`--no-same-owner`) |
+| `/usr/bin/gio` | `trash`: automatic backups past how many are kept (only ever those) |
+| `omarchy-plugin-update` | when you click *Update now* (an Omanote installed from git): `omarchy plugin update marcho78.omanote --yes` |
 | `/usr/bin/setsid`, `/usr/bin/kill` | run each command in its own process group, with a deadline and an output budget, and end it if it overruns them |
 
 What you type reaches `grep` as a separate argument after `-e`, so it can

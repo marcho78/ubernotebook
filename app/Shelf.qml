@@ -20,6 +20,8 @@ Item {
   signal editRequested(var notebook)
   signal deleteRequested(var notebook)
   signal settingsRequested()
+  // What's new in a newer version (the corner says there's one).
+  signal releaseNotesRequested()
   signal resultOpened(string notebookId, string pageId, string query)
   // Pages (or notebooks, where it is): the switch at the top.
   signal spaceRequested(string space)
@@ -273,6 +275,19 @@ Item {
       Rectangle { width: parent.width; height: 1; color: shelf.theme.line }
       MenuRow { theme: shelf.theme; icon: shelf.theme.icons.trash; text: "Put in the trash\u2026"; danger: true; onClicked: { menu.close(); shelf.deleteRequested(menu.target) } }
     }
+  }
+
+  // A newer version, if there's one; who makes Omanote, on X.
+  SideFooter {
+    objectName: "shelfFooter"
+    x: 22
+    width: 250
+    anchors.bottom: parent.bottom
+    anchors.bottomMargin: 14
+    z: 2
+    theme: shelf.theme
+    service: shelf.service
+    onNotesRequested: shelf.releaseNotesRequested()
   }
 
   // ---- search results ---------------------------------------------------------------------

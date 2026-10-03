@@ -309,14 +309,15 @@ Item {
 
     function test_6_settings_the_microphone_louder_and_a_test() {
       fresh()
-      settingsPanel.open()
+      settingsPanel.openAt("audio")
       tryVerify(function() { return settingsPanel.opened }, 1000)
       tryVerify(function() { return rec.sources.length === 2 }, 1000, "the microphones, listed")
       var picker = null
       tryVerify(function() { picker = named(win(), "micPicker"); return picker !== null }, 1000)
       compare(settingsPanel.micLabel, "The default one")
       // Another microphone.
-      settingsPanel.contentItem.children[2].contentY = picker.mapToItem(settingsPanel.contentItem.children[2].contentItem, 0, 0).y - 40
+      var flick = named(win(), "settingsFlick")
+      flick.contentY = Math.max(0, picker.mapToItem(flick.contentItem, 0, 0).y - 40)
       wait(200)
       click(picker)
       var usb = null

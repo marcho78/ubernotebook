@@ -47,6 +47,9 @@ QtObject {
   property var profiles: null
   // Settings as they are now (Service.qml's), for `preferences`.
   property var settings: null
+  // Whether there's a newer Omanote (Updates.qml), and backups (Backups.qml).
+  property var updates: null
+  property var backups: null
 
   readonly property int maxBytes: 2 * 1024 * 1024
 
@@ -184,7 +187,14 @@ QtObject {
         { use: "renameProfile <name or id> <new name>", does: "a profile's name" },
         { use: "profileFolder <name or id> <folder>", does: "a profile's notes looked for in another folder (nothing is moved)" },
         { use: "removeProfile <name or id>", does: "takes a profile off the list (not the open one); its notes stay in their folder" },
-        { use: "demo", does: "opens the demo profile (example pages, people, events, templates), made the first time; restartDemo makes it new again, the old one to the trash (only when the user asks)" }
+        { use: "demo", does: "opens the demo profile (example pages, people, events, templates), made the first time; restartDemo makes it new again, the old one to the trash (only when the user asks)" },
+        { use: "backup <profile>", does: "a backup (a .tar.gz in the backup folder) of the open profile (\"\"), every profile (all; not the demo), or one by its name or id; written in a moment" },
+        { use: "backups", does: "the backups in the backup folder, newest first: name, file, made, size, automatic; and how the last one went (last, lastFailed, working)" },
+        { use: "restoreBackup <file> <open>", does: "a backup put back (only when the user asks): each profile in it a new profile in a new folder (nothing there is changed); open true opens the first" },
+        { use: "appVersion", does: "the version running, and whether there's a newer one: latest, updateAvailable, status (current, available, none: no releases yet, failed), checked, releases" },
+        { use: "checkUpdate", does: "asks GitHub for the newest version now; appVersion says what it found a few seconds later" },
+        { use: "releaseNotes", does: "what's new, as Markdown: the newer releases' notes, or (up to date) this version's" },
+        { use: "installUpdate", does: "installs the newer version with omarchy plugin update (only when the user asks; only an Omanote installed from git): Omanote starts again" }
       ],
       fences: "read gives (and add, append, replace and insertAfter take) these as fenced code: "
         + "```board (## a column, - a card under it), ```bookmark (a link), ```contact (someone in People: their name, email or id), "
@@ -1534,6 +1544,67 @@ QtObject {
     writeOpen()
     var problem = fresh ? profiles.restartDemo() : profiles.openDemo()
     return problem ? fail(problem) : answer({ ok: true, profile: profiles.current ? profiles.current.name : "", note: "example pages, people, events and templates" })
+  }
+
+  // ---- updates ----------------------------------------------------------------------------------
+
+  // The version running, and whether there's a newer one (as GitHub said when last asked).
+  function appVersion() {
+    if (!updates) return fail("the update check isn't here")
+    var o = updates.summary()
+    o.ok = true
+    return answer(o)
+  }
+  // GitHub asked now; appVersion says what it found, in a few seconds.
+  function checkUpdate() {
+    if (!updates) return fail("the update check isn't here")
+    updates.check()
+    return answer({ ok: true, version: updates.current, note: "asking GitHub: appVersion says what it found in a few seconds" })
+  }
+  // What's new (the newer releases' notes; up to date, this version's), as Markdown.
+  function releaseNotes() {
+    if (!updates) return fail("the update check isn't here")
+    var n = updates.notes()
+    return "# " + n.title + "\n\n" + n.markdown + "\n" + (n.url ? "\n" + n.url + "\n" : "")
+  }
+  // The newer version installed (only when the user asks): Omanote starts again.
+  function installUpdate() {
+    if (!updates) return fail("the update check isn't here")
+    if (!updates.available) return fail(updates.status === "idle" || updates.status === "checking" ? "it hasn't been asked yet: checkUpdate, then appVersion" : "there's no newer version (appVersion)")
+    if (!updates.managed) return fail("Omanote wasn't installed from git, so it can't update itself; the user can reinstall it with omarchy plugin add")
+    updates.install()
+    return answer({ ok: true, version: updates.latest.version, note: "updating to " + updates.latest.version + " with omarchy plugin update: Omanote starts again when it's done" })
+  }
+
+  // ---- backups ----------------------------------------------------------------------------------
+
+  // A backup made: of the open profile (""), every one ("all"), or one by
+  // its name or id. It's written in a moment; backups lists it.
+  function backup(which) {
+    if (!backups) return fail("backups aren't here")
+    if (noProfile) return fail(unready())
+    if (backups.working) return fail("a backup is being " + (backups.working === "backup" ? "made" : "put back") + " already: try again when it's done (backups says)")
+    var picked = backups.chosen(which)
+    if (!picked.length) return fail(String(which || "").trim() ? "there's no profile like that (profiles lists them)" : "no profile is open")
+    backups.backUp(which, false, function() {})
+    return answer({ ok: true, profiles: picked.map(function(p) { return p.name }), folder: backups.folderShown, note: "being written: backups lists it when it's done" })
+  }
+  // The backups in the backup folder, newest first, and how the last one went.
+  function backupList() {
+    if (!backups) return fail("backups aren't here")
+    var o = { ok: true, folder: backups.folderShown, working: backups.working, last: backups.note, lastFailed: backups.failed, backups: backups.listing() }
+    backups.refresh()
+    return answer(o)
+  }
+  // A backup put back (only when the user asks): each profile in it a new
+  // profile, in a new folder; nothing that's there is changed.
+  function restoreBackup(file, open) {
+    if (!backups) return fail("backups aren't here")
+    if (backups.working) return fail("a backup is being " + (backups.working === "backup" ? "made" : "put back") + " already")
+    var p = String(file || "").trim()
+    if (!p || (p.charAt(0) !== "/" && p.indexOf("~/") !== 0)) return fail("give the backup's full path (backups lists them)")
+    backups.restore(p, yes(open === undefined || open === "" ? "false" : open), function() {})
+    return answer({ ok: true, file: p, note: "being put back as new profiles, each in a new folder: profiles lists them when it's done (backups says how it went)" })
   }
 
   // ---- the Inbox --------------------------------------------------------------------------------
