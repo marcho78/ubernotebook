@@ -70,6 +70,8 @@ var DEFAULTS = {
   calendarView: "month",
   // How People shows everyone: a list beside the one picked ("list"), or cards.
   peopleLayout: "list",
+  // As cards, how People groups everyone: A to Z ("letter") or by company.
+  peopleGroup: "letter",
   // Appearance: colors of your own ("#1e1e2e"), or "" to follow the Omarchy
   // theme: the sidebar, the page (and desk) behind everything, the sections
   // and cards (the sidebar's sections, cards, menus), and the text.
@@ -130,6 +132,7 @@ var SCHEMA = {
     tagSort: "string",
     calendarView: "string",
     peopleLayout: "string",
+    peopleGroup: "string",
     colorSidebar: "string",
     colorPage: "string",
     colorCards: "string",
@@ -156,6 +159,7 @@ var SCHEMA = {
     tagSort: ["name", "color"],
     calendarView: ["month", "week", "agenda", "compact"],
     peopleLayout: ["list", "cards"],
+    peopleGroup: ["letter", "company"],
     scrollSpeed: ["slower", "normal", "faster"],
     backupEvery: ["off", "daily", "weekly"],
     backupKeep: [3, 5, 10, 20, 50]

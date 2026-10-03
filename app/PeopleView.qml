@@ -76,8 +76,15 @@ Item {
     errors = ({})
     selected = id || ""
     detailFlick.contentY = 0
-    if (!id) Qt.callLater(function() { search.focusField() })
-    else pv.forceActiveFocus()
+    if (id) { pv.forceActiveFocus(); return }
+    // Back to everyone: as cards, on the card you were on (the keys go on
+    // from it), else the search.
+    Qt.callLater(function() {
+      if (pv.layoutMode === "cards" && pv.cardFocus && pv.cardAt(pv.cardFocus)) {
+        pv.forceActiveFocus()
+        grid.positionViewAtIndex(pv.cardAt(pv.cardFocus).row, ListView.Contain)
+      } else (pv.layoutMode === "cards" ? cardSearch : search).focusField()
+    })
   }
   function focusSearch() { search.focusField() }
 
@@ -179,6 +186,14 @@ Item {
     if (pv.editing && ctrl && (e.key === Qt.Key_S || e.key === Qt.Key_Return || e.key === Qt.Key_Enter)) { e.accepted = true; pv.save() }
     else if (pv.editing && e.key === Qt.Key_Escape) { e.accepted = true; pv.cancelEdit() }
     else if (!pv.editing && pv.person && e.key === Qt.Key_Escape) { e.accepted = true; pv.show("") }
+    else if (pv.layoutMode === "cards" && !pv.showingPerson) {
+      if (e.key === Qt.Key_Right) { e.accepted = true; pv.moveCard(0, 1) }
+      else if (e.key === Qt.Key_Left) { e.accepted = true; pv.moveCard(0, -1) }
+      else if (e.key === Qt.Key_Down) { e.accepted = true; pv.moveCard(1, 0) }
+      else if (e.key === Qt.Key_Up) { e.accepted = true; pv.moveCard(-1, 0) }
+      else if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter) && pv.cardFocus) { e.accepted = true; pv.show(pv.cardFocus) }
+      else if (e.key === Qt.Key_Escape && pv.cardFocus) { e.accepted = true; pv.cardFocus = "" }
+    }
   }
 
   Rectangle { anchors.fill: parent; color: pv.theme.background }
@@ -640,6 +655,413 @@ Item {
   }
 
   // ---- as cards --------------------------------------------------------------------------------
+  //
+  // Everyone as a card, in groups (A to Z, or by company) under a heading
+  // each: their name, what they do and where, their number and email (the
+  // buttons under the pointer copy them, or write to them), and what's worth
+  // knowing at a glance: a birthday coming up, the pages they're named on,
+  // more numbers and emails. What's searched for is in bold. A click opens
+  // their card; the arrow keys go from card to card and Enter opens one.
+
+  readonly property string savedGroup: view && view.settings && view.settings.peopleGroup === "company" ? "company" : "letter"
+  property string groupBy: savedGroup
+  function setGroup(g) {
+    groupBy = g
+    if (view && view.service) view.service.setSetting("peopleGroup", g)
+  }
+
+  // How many pages each person is named on: { id: n }.
+  readonly property var namedCount: {
+    var r = workspace ? workspace.revision : 0
+    if (!workspace || layoutMode !== "cards") return ({})
+    var seen = {}
+    var out = {}
+    Workspace.collected(workspace.index).forEach(function(x) {
+      if (x.kind !== "person" || !x.person || seen[x.person + "|" + x.page]) return
+      seen[x.person + "|" + x.page] = true
+      out[x.person] = (out[x.person] || 0) + 1
+    })
+    return out
+  }
+
+  function groupOf(c) {
+    if (groupBy === "company") return String(c.company || "").trim()
+    var ch = Contacts.nameOf(c).charAt(0).toUpperCase()
+    return ch && ch.toLowerCase() !== ch ? ch : "#"
+  }
+  readonly property int cardGap: 14
+  // (Room at the right for A to Z, when it's there.)
+  readonly property bool railShown: {
+    if (groupBy !== "letter" || layoutMode !== "cards") return false
+    var seen = {}
+    var n = 0
+    for (var i = 0; i < shown.length && n < 2; i++) { var g = groupOf(shown[i]); if (!seen[g]) { seen[g] = true; n++ } }
+    return n > 1
+  }
+  readonly property real cardsArea: cardsSide.width - (railShown ? 30 : 0)
+  readonly property int cardCols: Math.max(1, Math.floor((cardsArea + cardGap) / (300 + cardGap)))
+  readonly property real cardW: (cardsArea - (cardCols - 1) * cardGap) / cardCols
+  // The rows the cards are in: a group's heading, then its cards, a row at a time.
+  readonly property var cardRows: {
+    if (layoutMode !== "cards") return []
+    var groups = []
+    var at = {}
+    shown.forEach(function(c) {
+      var g = pv.groupOf(c)
+      if (at[g] === undefined) { at[g] = groups.length; groups.push({ label: g, people: [] }) }
+      groups[at[g]].people.push(c)
+    })
+    if (groupBy === "company") groups.sort(function(a, b) {
+      if (!a.label || !b.label) return a.label ? -1 : b.label ? 1 : 0
+      return a.label.toLowerCase().localeCompare(b.label.toLowerCase())
+    })
+    var rows = []
+    groups.forEach(function(g) {
+      rows.push({ header: true, label: g.label || "No company", count: g.people.length, first: rows.length === 0 })
+      for (var i = 0; i < g.people.length; i += pv.cardCols) rows.push({ header: false, people: g.people.slice(i, i + pv.cardCols) })
+    })
+    return rows
+  }
+
+  // A card's height, from what's on it (cards in a row are as tall as the tallest).
+  function birthdaySoon(c) {
+    var b = Contacts.birthdayInfo(c, new Date())
+    if (!b) return ""
+    var m = /^in (\d+) days$/.exec(b.next)
+    return b.next === "today" || b.next === "tomorrow" || (m && Number(m[1]) <= 30) ? b.next : ""
+  }
+  function cardFacts(c) {
+    var out = []
+    var soon = birthdaySoon(c)
+    if (soon) out.push({ icon: "cake", text: "Birthday " + soon })
+    var n = namedCount[c.id] || 0
+    if (n) out.push({ icon: "pages", text: n === 1 ? "On 1 page" : "On " + n + " pages" })
+    var more = Math.max(0, c.phones.length - 1) + Math.max(0, c.emails.length - 1)
+    if (more) out.push({ icon: "", text: "+" + more + " more" })
+    return out
+  }
+  function headHeight(c) { return Math.max(46, 21 + (c.title ? 18 : 0) + (c.company ? 18 : 0)) }
+  function cardHeight(c) {
+    var lines = (c.phones.length ? 1 : 0) + (c.emails.length ? 1 : 0)
+    return 18 + headHeight(c) + 15 + Math.max(1, lines) * 30 + (cardFacts(c).length ? 36 : 0) + 14
+  }
+
+  // Where a letter's group starts (-1: no one's under it).
+  function letterRow(letter) {
+    for (var r = 0; r < cardRows.length; r++) if (cardRows[r].header && cardRows[r].label === letter) return r
+    return -1
+  }
+
+  // The card the arrow keys are on (a person's id).
+  property string cardFocus: ""
+  function cardAt(id) {
+    for (var r = 0; r < cardRows.length; r++) if (!cardRows[r].header)
+      for (var c = 0; c < cardRows[r].people.length; c++) if (cardRows[r].people[c].id === id) return { row: r, col: c }
+    return null
+  }
+  function moveCard(down, across) {
+    var rows = cardRows
+    var at = cardAt(cardFocus)
+    var next = ""
+    if (!at) {
+      for (var f = 0; f < rows.length && !next; f++) if (!rows[f].header) next = rows[f].people[0].id
+    } else if (across) {
+      var flat = []
+      rows.forEach(function(row) { if (!row.header) row.people.forEach(function(p) { flat.push(p.id) }) })
+      var i = flat.indexOf(cardFocus) + across
+      next = flat[Math.max(0, Math.min(flat.length - 1, i))]
+    } else {
+      var r = at.row
+      do { r += down } while (r >= 0 && r < rows.length && rows[r].header)
+      next = r >= 0 && r < rows.length ? rows[r].people[Math.min(at.col, rows[r].people.length - 1)].id : cardFocus
+    }
+    if (!next) return
+    cardFocus = next
+    var where = cardAt(next)
+    if (where) grid.positionViewAtIndex(where.row, ListView.Contain)
+    pv.forceActiveFocus()
+  }
+
+  // What's searched for, in bold (the rest escaped).
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") }
+  function marked(text) {
+    var t = String(text || "")
+    var words = query.toLowerCase().split(/\s+/).filter(function(w) { return w.length > 0 })
+    var lower = t.toLowerCase()
+    var hits = []
+    words.forEach(function(w) {
+      for (var i = lower.indexOf(w); i >= 0; i = lower.indexOf(w, i + w.length)) hits.push([i, i + w.length])
+    })
+    if (!hits.length) return esc(t)
+    hits.sort(function(a, b) { return a[0] - b[0] })
+    var out = ""
+    var at = 0
+    hits.forEach(function(h) {
+      if (h[1] <= at) return
+      var from = Math.max(at, h[0])
+      out += esc(t.slice(at, from)) + "<b>" + esc(t.slice(from, h[1])) + "</b>"
+      at = h[1]
+    })
+    return out + esc(t.slice(at))
+  }
+
+  // A way to reach them on a card: what it is (a phone, an email), it, what
+  // kind (mobile, work), and under the pointer Copy (and Email).
+  component ReachLine: Item {
+    id: reach
+    property string icon: ""
+    property string value: ""
+    property string label: ""
+    property bool mail: false
+    readonly property alias tools: reachTools
+    width: parent ? parent.width : 200
+    height: 30
+    Text {
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: reach.icon
+      font.family: pv.theme.iconFont
+      font.pixelSize: 14
+      color: pv.theme.muted
+    }
+    Text {
+      x: 24
+      width: parent.width - x - (reachHover.hovered ? reachTools.width + 6 : labelText.implicitWidth + 10)
+      anchors.verticalCenter: parent.verticalCenter
+      elide: Text.ElideRight
+      textFormat: Text.StyledText
+      text: pv.marked(reach.value)
+      font.family: pv.theme.uiFont
+      font.pixelSize: 13
+      font.features: { "tnum": 1 }
+      color: pv.theme.text
+    }
+    Text {
+      id: labelText
+      visible: !reachHover.hovered
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      textFormat: Text.PlainText
+      text: reach.label
+      font.family: pv.theme.uiFont
+      font.pixelSize: 11
+      color: pv.theme.faint
+    }
+    Row {
+      id: reachTools
+      visible: reachHover.hovered
+      anchors.right: parent.right
+      anchors.rightMargin: -6
+      anchors.verticalCenter: parent.verticalCenter
+      IconButton {
+        visible: reach.mail
+        objectName: "cardMail"
+        theme: pv.theme; icon: pv.theme.icons.mail; size: 26; iconSize: 13; tip: "Write to them"
+        onClicked: pv.view.mailTo(reach.value)
+      }
+      IconButton {
+        objectName: "cardCopy"
+        theme: pv.theme; icon: pv.theme.icons.copy; size: 26; iconSize: 13; tip: "Copy it"
+        onClicked: pv.view.copyText(reach.value)
+      }
+    }
+    HoverHandler { id: reachHover }
+  }
+
+  // Someone as a card.
+  component PersonCard: Rectangle {
+    id: pc
+    required property var modelData
+    readonly property var p: modelData
+    readonly property bool keyed: pv.cardFocus === p.id
+    readonly property var facts: pv.cardFacts(p)
+    objectName: "personCard"
+    radius: 12
+    color: pcHover.hovered ? pv.theme.surfaceHigh : pv.theme.surface
+    border.width: keyed ? 2 : 1
+    border.color: keyed ? Qt.alpha(pv.theme.accent, 0.9) : pcHover.hovered ? Qt.alpha(pv.theme.text, 0.24) : pv.theme.line
+    Behavior on color { ColorAnimation { duration: 90 } }
+
+    // Who: their initials, name, what they do, where.
+    Item {
+      id: pcHead
+      x: 16
+      y: 18
+      width: parent.width - 32
+      height: pv.headHeight(pc.p)
+      Avatar { theme: pv.theme; person: pc.p; size: 46 }
+      Column {
+        x: 60
+        y: pc.p.title || pc.p.company ? 1 : 12
+        width: parent.width - x - (pcTools.visible ? pcTools.width : 0)
+        spacing: 2
+        Text {
+          objectName: "cardName"
+          width: parent.width
+          elide: Text.ElideRight
+          textFormat: Text.StyledText
+          text: pv.marked(Contacts.nameOf(pc.p))
+          font.family: pv.theme.uiFont
+          font.pixelSize: 15
+          font.weight: Font.Medium
+          color: pv.theme.text
+        }
+        Text {
+          visible: !!pc.p.title
+          width: parent.width
+          elide: Text.ElideRight
+          textFormat: Text.StyledText
+          text: pv.marked(pc.p.title || "")
+          font.family: pv.theme.uiFont
+          font.pixelSize: 13
+          color: pv.theme.muted
+        }
+        Row {
+          visible: !!pc.p.company
+          width: parent.width
+          spacing: 5
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            textFormat: Text.PlainText
+            text: pv.theme.icons.briefcase
+            font.family: pv.theme.iconFont
+            font.pixelSize: 12
+            color: pv.theme.faint
+          }
+          Text {
+            width: parent.width - 17
+            anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
+            textFormat: Text.StyledText
+            text: pv.marked(pc.p.company || "")
+            font.family: pv.theme.uiFont
+            font.pixelSize: 13
+            color: pv.theme.muted
+          }
+        }
+      }
+      // Under the pointer: write to them, change their card.
+      Row {
+        id: pcTools
+        visible: pcHover.hovered
+        anchors.right: parent.right
+        anchors.rightMargin: -6
+        y: -6
+        IconButton {
+          visible: pc.p.emails.length > 0
+          objectName: "cardWrite"
+          theme: pv.theme; icon: pv.theme.icons.mail; size: 28; iconSize: 14; tip: "Write to them"
+          onClicked: pv.view.mailTo(pc.p.emails[0].value)
+        }
+        IconButton {
+          objectName: "cardEdit"
+          theme: pv.theme; icon: pv.theme.icons.edit; size: 28; iconSize: 14; tip: "Edit"
+          onClicked: { pv.show(pc.p.id); pv.startEdit() }
+        }
+      }
+    }
+
+    Rectangle { x: 16; y: pcHead.y + pcHead.height + 14; width: parent.width - 32; height: 1; color: pv.theme.line; opacity: 0.7 }
+
+    // How to reach them (the first number and email), or how to add one.
+    Column {
+      id: pcReach
+      x: 16
+      y: pcHead.y + pcHead.height + 15
+      width: parent.width - 32
+      ReachLine {
+        id: phoneLine
+        visible: pc.p.phones.length > 0
+        icon: pv.theme.icons.phone
+        value: pc.p.phones.length ? pc.p.phones[0].value : ""
+        label: pc.p.phones.length ? pc.p.phones[0].label : ""
+      }
+      ReachLine {
+        id: mailLine
+        visible: pc.p.emails.length > 0
+        icon: pv.theme.icons.mail
+        value: pc.p.emails.length ? pc.p.emails[0].value : ""
+        label: pc.p.emails.length ? pc.p.emails[0].label : ""
+        mail: true
+      }
+      Item {
+        visible: !pc.p.phones.length && !pc.p.emails.length
+        width: parent.width
+        height: 30
+        Text {
+          objectName: "cardAddReach"
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: "No number or email yet"
+          font.family: pv.theme.uiFont
+          font.pixelSize: 13
+          font.italic: true
+          color: pv.theme.faint
+        }
+      }
+    }
+
+    // At a glance.
+    Flow {
+      id: pcFacts
+      visible: pc.facts.length > 0
+      x: 16
+      y: pcReach.y + pcReach.height + 10
+      width: parent.width - 32
+      spacing: 6
+      Repeater {
+        model: pc.facts
+        delegate: Rectangle {
+          id: fact
+          required property var modelData
+          objectName: "cardFact"
+          readonly property string text: modelData.text
+          width: factRow.implicitWidth + 16
+          height: 22
+          radius: 11
+          color: "transparent"
+          border.width: 1
+          border.color: pv.theme.line
+          Row {
+            id: factRow
+            anchors.centerIn: parent
+            spacing: 5
+            Text {
+              visible: fact.modelData.icon !== ""
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: fact.modelData.icon ? pv.theme.icons[fact.modelData.icon] : ""
+              font.family: pv.theme.iconFont
+              font.pixelSize: 11
+              color: pv.theme.muted
+            }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: fact.modelData.text
+              font.family: pv.theme.uiFont
+              font.pixelSize: 11
+              color: pv.theme.muted
+            }
+          }
+        }
+      }
+    }
+
+    HoverHandler { id: pcHover; cursorShape: Qt.PointingHandCursor }
+    // A click opens their card (not one on a button, which does its own).
+    TapHandler {
+      onTapped: function(point) {
+        var buttons = [pcTools, phoneLine.tools, mailLine.tools]
+        for (var i = 0; i < buttons.length; i++) {
+          var b = buttons[i]
+          if (b.visible && b.contains(b.mapFromItem(pc, point.position.x, point.position.y))) return
+        }
+        pv.cardFocus = pc.p.id
+        pv.show(pc.p.id)
+      }
+    }
+  }
 
   Item {
     id: cardsSide
@@ -653,95 +1075,154 @@ Item {
       id: cardSearch
       objectName: "peopleCardSearch"
       theme: pv.theme
-      width: Math.min(420, parent.width)
+      width: Math.min(420, parent.width - groupRow.width - 16)
       height: 36
       icon: pv.theme.icons.search
-      placeholder: "Search people"
+      placeholder: "Search people, companies, numbers"
       text: pv.query
-      onEdited: function(text) { pv.query = text }
+      onEdited: function(text) { pv.query = text; pv.cardFocus = "" }
       onEscaped: { text = ""; pv.query = "" }
       onAccepted: if (pv.shown.length) pv.show(pv.shown[0].id)
     }
 
-    GridView {
+    // Grouped A to Z, or by company.
+    Row {
+      id: groupRow
+      anchors.right: parent.right
+      anchors.verticalCenter: cardSearch.verticalCenter
+      spacing: 6
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        rightPadding: 4
+        textFormat: Text.PlainText
+        text: "Group by"
+        font.family: pv.theme.uiFont
+        font.pixelSize: 12
+        color: pv.theme.muted
+      }
+      Repeater {
+        model: [{ id: "letter", label: "Name" }, { id: "company", label: "Company" }]
+        delegate: Chip {
+          required property var modelData
+          objectName: "peopleGroup_" + modelData.id
+          theme: pv.theme
+          text: modelData.label
+          checked: pv.groupBy === modelData.id
+          onClicked: pv.setGroup(modelData.id)
+        }
+      }
+    }
+
+    ListView {
       id: grid
       objectName: "peopleGrid"
-      y: cardSearch.height + 14
-      width: parent.width + 12
+      y: cardSearch.height + 10
+      width: pv.cardsArea + 12
       height: parent.height - y
       clip: true
-      readonly property int cols: Math.max(1, Math.floor(width / 272))
-      cellWidth: Math.floor(width / cols)
-      cellHeight: 104
       boundsBehavior: Flickable.StopAtBounds
-      model: pv.layoutMode === "cards" ? pv.shown : []
+      model: pv.cardRows
+      cacheBuffer: 600
       ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
       delegate: Item {
-        id: cell
+        id: cardRow
         required property var modelData
-        readonly property string reach: modelData.phones.length ? modelData.phones[0].value : modelData.emails.length ? modelData.emails[0].value : ""
-        objectName: "personCard"
-        width: grid.cellWidth
-        height: grid.cellHeight
-        Rectangle {
-          id: card
-          width: parent.width - 12
-          height: parent.height - 12
-          radius: 10
-          color: cardHover.hovered ? pv.theme.surfaceHigh : pv.theme.surface
-          border.width: 1
-          border.color: cardHover.hovered ? Qt.alpha(pv.theme.text, 0.22) : pv.theme.line
-          Behavior on color { ColorAnimation { duration: 90 } }
-          Avatar { x: 14; anchors.verticalCenter: parent.verticalCenter; theme: pv.theme; person: cell.modelData; size: 42 }
-          Column {
-            x: 68
-            anchors.verticalCenter: parent.verticalCenter
-            width: parent.width - x - 14
-            spacing: 2
-            Text {
-              width: parent.width
-              elide: Text.ElideRight
-              textFormat: Text.PlainText
-              text: Contacts.nameOf(cell.modelData)
-              font.family: pv.theme.uiFont
-              font.pixelSize: 14
-              font.weight: Font.Medium
-              color: pv.theme.text
-            }
-            Text {
-              visible: text !== ""
-              width: parent.width
-              elide: Text.ElideRight
-              textFormat: Text.PlainText
-              text: cell.modelData.title && cell.modelData.company ? cell.modelData.title + ", " + cell.modelData.company : cell.modelData.company || cell.modelData.title
-              font.family: pv.theme.uiFont
-              font.pixelSize: 12
-              color: pv.theme.muted
-            }
-            Text {
-              visible: cell.reach !== ""
-              width: parent.width
-              elide: Text.ElideRight
-              textFormat: Text.PlainText
-              text: cell.reach
-              font.family: pv.theme.uiFont
-              font.pixelSize: 12
-              font.features: { "tnum": 1 }
-              color: pv.theme.muted
+        required property int index
+        width: grid.width - 12
+        height: modelData.header ? (modelData.first ? 34 : 46) : rowHeight + pv.cardGap
+        readonly property real rowHeight: {
+          if (modelData.header) return 0
+          var h = 0
+          modelData.people.forEach(function(c) { h = Math.max(h, pv.cardHeight(c)) })
+          return h
+        }
+        // A group's heading: its letter (or company) and how many, and a line.
+        Row {
+          visible: cardRow.modelData.header
+          objectName: "peopleGroupHeading"
+          anchors.bottom: parent.bottom
+          anchors.bottomMargin: 10
+          width: parent.width
+          spacing: 8
+          Text {
+            id: groupLabel
+            textFormat: Text.PlainText
+            text: cardRow.modelData.header ? cardRow.modelData.label : ""
+            font.family: pv.theme.uiFont
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+            color: pv.theme.text
+          }
+          Text {
+            id: groupCount
+            anchors.baseline: groupLabel.baseline
+            textFormat: Text.PlainText
+            text: cardRow.modelData.header ? String(cardRow.modelData.count) : ""
+            font.family: pv.theme.uiFont
+            font.pixelSize: 12
+            color: pv.theme.faint
+          }
+          Rectangle {
+            anchors.verticalCenter: groupLabel.verticalCenter
+            width: parent.width - groupLabel.width - groupCount.width - 16
+            height: 1
+            color: pv.theme.line
+            opacity: 0.7
+          }
+        }
+        Row {
+          visible: !cardRow.modelData.header
+          spacing: pv.cardGap
+          Repeater {
+            model: cardRow.modelData.header ? [] : cardRow.modelData.people
+            delegate: PersonCard {
+              width: pv.cardW
+              height: cardRow.rowHeight
             }
           }
-          HoverHandler { id: cardHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: pv.show(cell.modelData.id) }
         }
       }
       Text {
         visible: grid.count === 0 && pv.query !== ""
         topPadding: 12
         textFormat: Text.PlainText
-        text: "No one matches \u201c" + pv.query + "\u201d."
+        text: "No one matches “" + pv.query + "”."
         font.family: pv.theme.uiFont
         font.pixelSize: 13
         color: pv.theme.muted
+      }
+    }
+
+    // A to Z down the side: a click goes to that letter (the ones no one's
+    // under, faint).
+    Column {
+      id: letterRail
+      objectName: "peopleLetters"
+      visible: pv.railShown
+      x: parent.width - width
+      anchors.verticalCenter: grid.verticalCenter
+      spacing: 0
+      Repeater {
+        model: "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("")
+        delegate: Text {
+          id: letterItem
+          required property string modelData
+          readonly property int row: pv.letterRow(modelData)
+          objectName: "peopleLetter_" + modelData
+          width: 16
+          height: Math.max(12, Math.min(20, (grid.height - 20) / 27))
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          textFormat: Text.PlainText
+          text: modelData
+          font.family: pv.theme.uiFont
+          font.pixelSize: 10
+          font.weight: row >= 0 ? Font.DemiBold : Font.Normal
+          color: row < 0 ? pv.theme.faint : letterHover.hovered ? pv.theme.text : pv.theme.muted
+          opacity: row < 0 ? 0.5 : 1
+          HoverHandler { id: letterHover; enabled: letterItem.row >= 0; cursorShape: Qt.PointingHandCursor }
+          TapHandler { enabled: letterItem.row >= 0; onTapped: grid.positionViewAtIndex(letterItem.row, ListView.Beginning) }
+        }
       }
     }
   }

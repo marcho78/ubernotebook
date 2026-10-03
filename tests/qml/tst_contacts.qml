@@ -277,6 +277,95 @@ Item {
       tryVerify(function() { return lib.counts.person >= 2 && lib.counts.email === 1 }, 2000, JSON.stringify(lib.counts))
     }
 
+    // As cards: in groups (A to Z, or by company) under headings, A to Z
+    // down the side; each card who and where, a number and an email with
+    // Copy and Write under the pointer, what's worth knowing; the search in
+    // bold; the arrow keys and Enter.
+    function test_5_cards() {
+      fresh()
+      var soon = new Date(Date.now() + 3 * 86400000)
+      ws.setContacts({ contacts: [
+        { id: "ana", name: "Ana Lopez", company: "Mapas", title: "CTO", phones: [{ label: "mobile", value: "+34 91 555 0101" }], emails: [{ label: "work", value: "ana@mapas.es" }, { label: "home", value: "ana@x.org" }] },
+        { id: "aub", name: "Aubrey Rogers", company: "Westwind Insurance", title: "Controller", phones: [{ label: "mobile", value: "+1-818-555-9479" }], emails: [] },
+        { id: "bo", name: "Bo Chen", company: "", phones: [{ label: "mobile", value: "+1 415 555 0199" }], emails: [] },
+        { id: "cal", name: "Caleb Perez", company: "Westwind Insurance", title: "Account Executive", phones: [], emails: [{ label: "work", value: "caleb@westwind.com" }],
+          birthday: "--" + Qt.formatDate(soon, "MM-dd") },
+        { id: "zoe", name: "Zoe Hill", company: "", phones: [], emails: [] }
+      ] })
+      ws.createPage({ parent: "", title: "Plans", blocks: [{ type: "p", indent: 0, html: "Call <a href=\"uber-notebook://contact/ana\">@Ana Lopez</a>" }] })
+      view.openPeople("", false)
+      tryVerify(function() { return pv().visible }, 1000)
+      // (Nothing searched for, no one open, from before.)
+      pv().query = ""
+      pv().show("")
+      pv().setLayout("cards")
+      pv().setGroup("letter")
+      var cards = function() { return findAll(pv(), function(it) { return it.objectName === "personCard" }, []) }
+      var card = function(id) { return cards().filter(function(c) { return c.modelData.id === id })[0] || null }
+      var headings = function() { return findAll(pv(), function(it) { return it.objectName === "peopleGroupHeading" }, []).map(function(h) { return h.children[0].text }) }
+      tryVerify(function() { return cards().length === 5 }, 1000)
+      compare(headings().join(","), "A,B,C,Z", "A to Z, a heading each")
+      // A to Z down the side: the letters with someone under them.
+      verify(named(pv(), "peopleLetters") !== null)
+      verify(named(pv(), "peopleLetter_Z").row >= 0)
+      compare(named(pv(), "peopleLetter_Q").row, -1, "no one under Q")
+      // What's on a card.
+      var facts = function(id) { return findAll(card(id), function(it) { return it.objectName === "cardFact" }, []).map(function(f) { return f.text }) }
+      tryVerify(function() { return facts("ana").indexOf("On 1 page") >= 0 }, 1000, "the pages they're named on")
+      verify(facts("ana").indexOf("+1 more") >= 0, "another email")
+      verify(facts("cal").indexOf("Birthday in 3 days") >= 0, JSON.stringify(facts("cal")))
+      verify(named(card("zoe"), "cardAddReach") !== null, "no number or email: said")
+      // Copy, under the pointer.
+      var c = card("aub")
+      var number = find(c, function(it) { return it.text === "+1-818-555-9479" })
+      verify(number !== null)
+      mouseMove(number, 5, number.height / 2)
+      var lines = []
+      tryVerify(function() { lines = findAll(c, function(it) { return it.objectName === "cardCopy" }, []); return lines.length === 1 }, 1000, "Copy, on the line under the pointer")
+      mouseMove(lines[0], 5, 5)
+      click(lines[0])
+      compare(files.copied, "+1-818-555-9479")
+      compare(pv().selected, "", "a button, not the card")
+      // A click on the card: theirs; back, on it, the keys going on from there.
+      click(card("bo"))
+      tryCompare(pv(), "selected", "bo")
+      pv().show("")
+      tryVerify(function() { return cards().length === 5 && pv().activeFocus }, 1000)
+      compare(pv().cardFocus, "bo")
+      keyClick(Qt.Key_Down)
+      compare(pv().cardFocus, "cal")
+      // The keys: from card to card, Enter opens one.
+      pv().cardFocus = ""
+      pv().forceActiveFocus()
+      keyClick(Qt.Key_Right)
+      compare(pv().cardFocus, "ana", "the first")
+      keyClick(Qt.Key_Right)
+      compare(pv().cardFocus, "aub")
+      keyClick(Qt.Key_Down)
+      compare(pv().cardFocus, "bo", "the row below (B's)")
+      keyClick(Qt.Key_Down)
+      compare(pv().cardFocus, "cal")
+      keyClick(Qt.Key_Up)
+      keyClick(Qt.Key_Up)
+      compare(pv().cardFocus, "ana", "up, the same place in the row above")
+      keyClick(Qt.Key_Return)
+      tryCompare(pv(), "selected", "ana")
+      pv().show("")
+      // By company: the ones with none last; no A to Z.
+      tryVerify(function() { return named(pv(), "peopleGroup_company") !== null }, 1000)
+      click(named(pv(), "peopleGroup_company"))
+      compare(service.user.peopleGroup, "company", "kept for next time")
+      tryVerify(function() { return headings().join(",") === "Mapas,Westwind Insurance,No company" }, 1000, headings().join(","))
+      compare(named(pv(), "peopleLetters"), null)
+      // The search, in bold.
+      pv().query = "west"
+      tryVerify(function() { return cards().length === 2 }, 1000)
+      verify(find(card("aub"), function(it) { return it.text === "<b>West</b>wind Insurance" }) !== null, "what was searched for, in bold")
+      pv().query = ""
+      pv().setGroup("letter")
+      pv().setLayout("list")
+    }
+
     function test_4_commands() {
       fresh()
       files.disk["/tmp/in/c.vcf"] = root.vcf

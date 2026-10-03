@@ -128,7 +128,11 @@ The first version.
   People (in the sidebar: your contacts, on your computer with no account;
   imported from a .vcf (a phone, Google, iCloud, Outlook) or a .csv, those
   already there filled in, not added twice; exported as a .vcf; a list
-  beside the one picked, or cards; each person a card: their numbers and
+  beside the one picked, or cards (grouped A to Z, with A to Z down the
+  side, or by company; each with who and where, a number and an email
+  with Copy and Write under the pointer, and a birthday coming up, the
+  pages they're on and how many more numbers and emails; the search in
+  bold; the arrow keys and Enter); each person a card: their numbers and
   emails with what they are, birthday, address, website, notes, and the
   pages they're named on; Edit, a form with each field named and what's
   wrong said under it); "@" and a name
