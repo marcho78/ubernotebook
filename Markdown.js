@@ -19,6 +19,13 @@
 .import "Sketch.js" as Sketch
 .import "Audio.js" as Audio
 .import "Meeting.js" as Meeting
+.import "Calendar.js" as Calendar
+.import "Dates.js" as Dates
+.import "Files.js" as Files
+.import "Bookmark.js" as Bookmark
+.import "Board.js" as Board
+.import "Contacts.js" as Contacts
+.import "Email.js" as Email
 
 // Characters that would otherwise be read as Markdown.
 function escapeText(text) {
@@ -208,6 +215,47 @@ function fromDocPage(page, lookup, options) {
   function indent(text, prefix) {
     return text.split("\n").map(function(l) { return l ? prefix + l : l }).join("\n")
   }
+  // A synced block: its blocks, from its page (when there's a way to read it).
+  function syncedLines(b) {
+    var id = b.data ? b.data.page : ""
+    var p = id && typeof opts.syncedPage === "function" ? opts.syncedPage(id) : null
+    if (!p) return "*(A synced block)*"
+    var inner = fromDocPage(p, lookup, { assetPrefix: opts.assetPrefix, calendar: opts.calendar }).replace(/^# .*\n\n?/, "")
+    return inner.trim()
+  }
+
+  // A contact card: the person as People has them (opts.contactOf), else
+  // their name as it was.
+  function contactLines(b) {
+    var d = b.data || {}
+    if (!d.contact) return "*(A contact card)*"
+    var c = typeof opts.contactOf === "function" ? opts.contactOf(d.contact) : null
+    return c ? Contacts.toMarkdown(c) : "**" + (d.name || "Someone") + "**"
+  }
+
+  // A person's ```contact line: their name as People has it, else as the block does.
+  function fencedName(d) {
+    var c = typeof opts.contactOf === "function" ? opts.contactOf(d.contact) : null
+    return (c ? Contacts.nameOf(c) : "") || d.name || d.contact
+  }
+
+  // An agenda (the day's events, as the calendar has them) or an event, as lines.
+  function calendarLines(b) {
+    var cal = opts.calendar
+    var ref = b.calendar || {}
+    var now = new Date()
+    if (b.type === "event") {
+      var ev = cal ? Calendar.byId(cal, ref.id) : null
+      return ev ? "\u{1f4c5} " + Calendar.line(Calendar.nextOf(ev, now), now) : "*(An event on the calendar)*"
+    }
+    var d = ref.day ? Dates.fromIso(ref.day).at : new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    var head = "**\u{1f4c5} " + Dates.label(d, false, now) + "**"
+    if (!cal) return head
+    var list = Calendar.occurrences(cal, d, new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1))
+    if (!list.length) return head + "\n\n*(Nothing on the calendar)*"
+    return head + "\n\n" + list.map(function(o) { return "- " + Calendar.span(o, d) + ": " + (o.title || "Untitled") + (o.place ? " (" + o.place + ")" : "") }).join("\n")
+  }
+
   function quoted(text) {
     return text.split("\n").map(function(l) { return l ? "> " + l : ">" }).join("\n")
   }
@@ -255,7 +303,10 @@ function fromDocPage(page, lookup, options) {
     else if (b.type === "code") line = "```" + (b.lang ? b.lang.toLowerCase().replace(/\s+/g, "") : "") + "\n" + plainLines(b.html || "").join("\n") + "\n```"
     else if (b.type === "divider") line = "---"
     else if (b.type === "image") line = b.src ? "![](" + (opts.assetPrefix || "") + b.src + ")" : ""
+    else if (opts.fences && b.type === "gallery" && b.data) line = "```gallery\ncolumns: " + b.data.columns + (b.data.height ? "\nheight: " + b.data.height : "") + b.data.images.map(function(x) { return "\n![" + (x.caption || "") + "](" + x.src + ")" }).join("") + "\n```"
+    else if (b.type === "gallery") line = (b.data && b.data.images ? b.data.images : []).map(function(x) { return "![" + escapeText(x.caption || "") + "](" + (opts.assetPrefix || "") + x.src + ")" }).join("\n")
     else if (b.type === "page") line = pageLink(b.id, false)
+    else if (opts.fences && b.type === "link" && b.target) { var lp = info(b.target); line = "```link\n" + b.target + (lp ? "\n" + (lp.title || "Untitled") : "") + "\n```" }
     else if (b.type === "link") line = pageLink(b.target, true)
     else if (b.type === "toc") line = ""
     else if (b.type === "mindmap") line = "```mindmap\n" + (b.outline || "") + "\n```"
@@ -271,6 +322,20 @@ function fromDocPage(page, lookup, options) {
       line = au.transcript ? head + "\n\n" + quoted(au.transcript) : head
     }
     else if (b.type === "meeting") line = Meeting.toMarkdown(b.meeting)
+    // (Agents get Pages' own blocks back as they write them: ```board...)
+    else if (opts.fences && b.type === "board") line = "```board\n" + Board.toFence(b.data) + "\n```"
+    else if (opts.fences && b.type === "bookmark" && b.data && b.data.url) line = "```bookmark\n" + b.data.url + "\n```"
+    else if (opts.fences && b.type === "contact" && b.data && b.data.contact) line = "```contact\n" + fencedName(b.data) + "\n```"
+    else if (opts.fences && b.type === "agenda") line = "```agenda\n" + (b.calendar && b.calendar.day ? b.calendar.day : "today") + "\n```"
+    else if (opts.fences && b.type === "event" && b.calendar && b.calendar.id) line = "```event\n" + b.calendar.id + "\n```"
+    else if (b.type === "agenda" || b.type === "event") line = calendarLines(b)
+    else if (b.type === "file" || b.type === "video") line = Files.toMarkdown(b.data, opts.assetPrefix)
+    else if (b.type === "bookmark") line = Bookmark.toMarkdown(b.data)
+    else if (b.type === "board") line = Board.toMarkdown(b.data)
+    else if (b.type === "button") line = ""
+    else if (b.type === "synced") line = syncedLines(b)
+    else if (b.type === "contact") line = contactLines(b)
+    else if (b.type === "email") line = Email.toMarkdown(b.data, opts.assetPrefix)
     else if (b.type === "calendar") line = calendarTable(b)
     else line = text
     if (!kids) return line

@@ -18,6 +18,7 @@ Pop {
   signal toPageRequested(string uid)
   signal mindMapRequested(var uids)
   signal agentRequested(var uids)
+  signal syncedRequested(var uids)
 
   focus: false
   width: 250
@@ -92,6 +93,13 @@ Pop {
       theme: menu.theme; icon: menu.theme.icons.bullets; text: "Turn into list"
       width: parent.width
       onClicked: { var uid = menu.uids[0]; menu.close(); menu.editor.mindMapToList(uid) }
+    }
+    MenuRow {
+      objectName: "makeSynced"
+      visible: menu.panel === "main" && menu.editor.doc && !menu.editor.readOnly && menu.first !== null && menu.first.type !== "synced" && menu.first.type !== "page"
+      theme: menu.theme; icon: menu.theme.icons.synced; text: "Turn into a synced block"
+      width: parent.width
+      onClicked: { var list = menu.uids; menu.close(); menu.syncedRequested(list) }
     }
     MenuRow {
       visible: menu.panel === "main"

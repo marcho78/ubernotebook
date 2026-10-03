@@ -36,6 +36,17 @@ var STYLES = {
   sketch:  { size: 15, lh: 1.45, above: 8, below: 8 },
   audio:   { size: 15, lh: 1.45, above: 8, below: 8 },
   meeting: { size: 15, lh: 1.45, above: 8, below: 8 },
+  agenda:  { size: 15, lh: 1.45, above: 8, below: 8 },
+  event:   { size: 15, lh: 1.45, above: 4, below: 4 },
+  button:  { size: 15, lh: 1.45, above: 6, below: 6 },
+  file:    { size: 15, lh: 1.45, above: 6, below: 6 },
+  video:   { size: 15, lh: 1.45, above: 8, below: 8 },
+  bookmark: { size: 15, lh: 1.45, above: 6, below: 6 },
+  contact: { size: 15, lh: 1.45, above: 6, below: 6 },
+  email: { size: 15, lh: 1.45, above: 6, below: 6 },
+  board:   { size: 15, lh: 1.45, above: 8, below: 8 },
+  gallery: { size: 15, lh: 1.45, above: 8, below: 8 },
+  synced:  { size: 15, lh: 1.45, above: 4, below: 4 },
   habit:   { size: 16, lh: 1.5, above: 3, below: 3 },
   calendar: { size: 15, lh: 1.5, above: 8, below: 8 }
 }
@@ -144,15 +155,27 @@ var COMMANDS = [
   { id: "code", group: "Basic blocks", label: "Code", hint: "Capture a code snippet", icon: "code", type: "code", keys: "snippet pre ```" },
   { id: "table", group: "Basic blocks", label: "Table", hint: "Rows and columns, with a header row", icon: "table", type: "table", props: { table: { rows: [["", "", ""], ["", "", ""], ["", "", ""]], header: true } }, keys: "table grid rows columns cells spreadsheet" },
   { id: "sketch", group: "Basic blocks", label: "Sketch", hint: "Draw with a pen and a highlighter", icon: "sketch", type: "sketch", keys: "sketch draw drawing pen pencil doodle whiteboard canvas ink handwriting" },
+  { id: "agenda", group: "Planning", label: "Agenda", hint: "A day's events from the calendar (today, or a day)", icon: "calendarWeek", type: "agenda", keys: "agenda schedule today day events calendar plan" },
+  { id: "event", group: "Planning", label: "Event", hint: "Put something on the calendar, and here", icon: "calendar", action: "event", keys: "event appointment meeting schedule calendar add when" },
   { id: "habit", group: "Planning", label: "Habit", hint: "A habit, with a circle for each day of the week", icon: "habit", type: "habit", keys: "tracker streak routine week days" },
   { id: "calendar", group: "Planning", label: "Calendar", hint: "A month at a glance: click a date to circle it", icon: "calendarMonth", type: "calendar", keys: "month dates planner" },
   { id: "page", group: "Pages", label: "Page", hint: "A page inside this page", icon: "page", action: "page", keys: "subpage sub-page new document" },
   { id: "template", group: "Pages", label: "Template", hint: "One of your templates, put in here", icon: "templates", action: "template", keys: "template snippet boilerplate reuse saved preset" },
   { id: "link", group: "Pages", label: "Link to page", hint: "Point to a page elsewhere", icon: "link", action: "link", keys: "mention reference goto" },
   { id: "image", group: "Media", label: "Image", hint: "A picture from a file", icon: "image", action: "image", keys: "picture photo png jpg" },
+  { id: "gallery", group: "Media", label: "Gallery", hint: "Pictures side by side in a grid", icon: "grid", type: "gallery", keys: "gallery pictures photos images grid album collage" },
+  { id: "file", group: "Media", label: "File", hint: "Any file: a PDF shows page by page", icon: "attach", type: "file", keys: "file attachment attach upload pdf document doc zip upload" },
+  { id: "pdf", group: "Media", label: "PDF", hint: "A PDF, shown page by page", icon: "pdf", type: "file", props: { data: { kind: "pdf" } }, keys: "pdf document paper read" },
+  { id: "video", group: "Media", label: "Video", hint: "A video file, played here", icon: "video", type: "video", keys: "video movie clip mp4 mov webm film" },
+  { id: "email", group: "Media", label: "Email", hint: "An email (.eml): who it's from, the subject, the message", icon: "mail", type: "email", keys: "email mail eml message letter inbox outlook thunderbird gmail" },
+  { id: "bookmark", group: "Media", label: "Web bookmark", hint: "A link as a card: its title, a line, its picture", icon: "bookmark", type: "bookmark", keys: "bookmark link url web website preview card embed" },
   { id: "audio", group: "Media", label: "Audio note", hint: "Record your voice; it's written out under it", icon: "mic", type: "audio", keys: "audio voice record recording memo microphone mic sound transcribe transcript voxtype" },
   { id: "meeting", group: "Media", label: "Meeting", hint: "Record a meeting; voxtype writes out who said what", icon: "people", type: "meeting", keys: "meeting call zoom meet teams interview lecture transcript record voxtype minutes" },
   { id: "dictate", group: "Media", label: "Dictate", hint: "Say it, and it's written here  (Ctrl+Shift+D)", icon: "dictate", action: "dictate", keys: "dictation voice speak speech talk microphone mic voxtype type" },
+  { id: "contact", group: "Advanced", label: "Contact", hint: "Someone's card from People: their numbers and emails", icon: "person", type: "contact", keys: "contact person people phone email card address someone vcard" },
+  { id: "board", group: "Advanced", label: "Board", hint: "Cards in columns: to do, doing, done", icon: "board", type: "board", keys: "board kanban cards columns status todo doing done trello" },
+  { id: "button", group: "Advanced", label: "Button", hint: "A click puts in a template", icon: "button", type: "button", keys: "button template insert click action automation" },
+  { id: "synced", group: "Advanced", label: "Synced block", hint: "The same blocks in many places: changed in one, changed in all", icon: "synced", action: "synced", keys: "synced sync shared reuse mirror transclude copy same" },
   { id: "mindmap", group: "Advanced", label: "Mind map", hint: "Ideas branching out from one topic", icon: "mindmap", type: "mindmap", props: { outline: "Central topic\n  Main idea\n  Main idea\n  Main idea" }, keys: "mindmap brainstorm map tree ideas diagram" },
   { id: "toc", group: "Advanced", label: "Table of contents", hint: "The headings on this page", icon: "toc", type: "toc", keys: "contents outline index" },
   { id: "cols2", group: "Layout", label: "2 columns", hint: "Two columns side by side", icon: "columns", action: "columns", count: 2, keys: "columns side layout split" },
@@ -183,7 +206,8 @@ function findCommands(query) {
   COMMANDS.concat(colorCommands()).forEach(function(c, i) {
     var label = c.label.toLowerCase()
     var words = (label + " " + (c.keys || "")).toLowerCase()
-    var score = label.indexOf(q) === 0 ? 3 : words.split(/\s+/).some(function(w) { return w.indexOf(q) === 0 }) ? 2 : words.indexOf(q) >= 0 ? 1 : 0
+    // (Its name or its id, from the start: "/age" is Ask agent before Agenda.)
+    var score = label.indexOf(q) === 0 || String(c.id || "").indexOf(q) === 0 ? 3 : words.split(/\s+/).some(function(w) { return w.indexOf(q) === 0 }) ? 2 : words.indexOf(q) >= 0 ? 1 : 0
     if (score > 0) out.push({ c: c, score: score, i: i })
   })
   out.sort(function(a, b) { return b.score - a.score || a.i - b.i })
@@ -215,7 +239,7 @@ function kindLabel(type, toggle) {
     var k = TURN_INTO[i]
     if (k.type === type && !!k.toggle === !!toggle) return k.label
   }
-  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : type === "sketch" ? "Sketch" : type === "audio" ? "Audio note" : type === "meeting" ? "Meeting" : "Text"
+  return type === "page" ? "Page" : type === "link" ? "Link to page" : type === "image" ? "Image" : type === "divider" ? "Divider" : type === "toc" ? "Table of contents" : type === "calendar" ? "Calendar" : type === "mindmap" ? "Mind map" : type === "table" ? "Table" : type === "sketch" ? "Sketch" : type === "audio" ? "Audio note" : type === "meeting" ? "Meeting" : type === "agenda" ? "Agenda" : type === "event" ? "Event" : type === "button" ? "Button" : type === "file" ? "File" : type === "video" ? "Video" : type === "bookmark" ? "Web bookmark" : type === "board" ? "Board" : type === "synced" ? "Synced block" : type === "contact" ? "Contact" : type === "email" ? "Email" : type === "gallery" ? "Gallery" : "Text"
 }
 
 // Languages a code block can say it's in.

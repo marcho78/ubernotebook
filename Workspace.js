@@ -30,6 +30,11 @@
 .import "Tags.js" as Tags
 .import "Audio.js" as Audio
 .import "Meeting.js" as Meeting
+.import "Files.js" as Files
+.import "Bookmark.js" as Bookmark
+.import "Board.js" as Board
+.import "Collection.js" as Collection
+.import "Email.js" as Email
 
 var VERSION = 1
 var MAX_DEPTH = 12
@@ -61,7 +66,7 @@ function isUuid(value) {
 // ---- blocks ---------------------------------------------------------------------------
 
 // The kinds of block a page can have.
-var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch", "audio", "meeting"]
+var KINDS = ["p", "h1", "h2", "h3", "bullet", "number", "check", "toggle", "quote", "callout", "code", "divider", "image", "page", "link", "toc", "columns", "column", "habit", "calendar", "mindmap", "table", "sketch", "audio", "meeting", "agenda", "event", "button", "file", "video", "bookmark", "board", "synced", "contact", "email", "gallery"]
 
 function isKind(type) {
   return KINDS.indexOf(type) >= 0
@@ -185,6 +190,12 @@ var COVERS = 12
 function cleanTitle(value) {
   if (typeof value !== "string") return ""
   return value.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim().slice(0, MAX_TITLE)
+}
+
+// What a template's for: a line, at most 200 characters.
+function cleanDescription(value) {
+  if (typeof value !== "string") return ""
+  return value.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200)
 }
 
 // A page's icon: an emoji (a few characters at most, nothing that isn't one).
@@ -406,7 +417,20 @@ function sketchesOf(page) {
 }
 
 function childPages(page) {
-  return flatten(page).filter(function(b) { return b.type === "page" }).map(function(b) { return b.uid })
+  var out = []
+  flatten(page).forEach(function(b) {
+    if (b.type === "page") out.push(b.uid)
+    // (A board's cards that became pages are pages in it too.)
+    if (b.type === "board" && b.data && b.data.columns) b.data.columns.forEach(function(c) { c.cards.forEach(function(k) { if (isUuid(k.page) && out.indexOf(k.page) < 0) out.push(k.page) }) })
+  })
+  return out
+}
+
+// A board's cards pointed to the copies of their pages (or to none).
+function remapBoard(b, ids) {
+  if (b.type !== "board" || !b.data || !b.data.columns) return
+  b.data = JSON.parse(JSON.stringify(b.data))
+  b.data.columns.forEach(function(c) { c.cards.forEach(function(k) { k.page = k.page && ids[k.page] ? ids[k.page] : "" }) })
 }
 
 // Every page it links to: link blocks, and pages linked from its text
@@ -415,6 +439,9 @@ function linkedPages(page) {
   var out = []
   flatten(page).forEach(function(b) {
     if (b.type === "link" && isUuid(b.target) && out.indexOf(b.target) < 0) out.push(b.target)
+    // A synced block's page (so it's known where it's shown), and the pages a board's cards became.
+    if (b.type === "synced" && b.data && isUuid(b.data.page) && out.indexOf(b.data.page) < 0) out.push(b.data.page)
+    if (b.type === "board" && b.data && b.data.columns) b.data.columns.forEach(function(c) { c.cards.forEach(function(k) { if (isUuid(k.page) && out.indexOf(k.page) < 0) out.push(k.page) }) })
     if (!Blocks.isText(b.type) || !b.html) return
     Html.links(b.html).forEach(function(l) {
       var id = Html.pageOf(l.href)
@@ -450,6 +477,13 @@ function pageText(page) {
     else if (b.type === "audio" && b.audio && b.audio.transcript) lines.push(b.audio.transcript)
     // And in a meeting.
     else if (b.type === "meeting" && b.meeting) lines.push((b.meeting.title || "") + "\n" + Meeting.text(b.meeting))
+    else if (b.type === "board" && b.data) lines.push(Board.text(b.data))
+    else if (b.type === "gallery" && b.data) lines.push(b.data.images.map(function(x) { return x.caption }).filter(function(c) { return c }).join("\n"))
+    else if (b.type === "bookmark" && b.data) lines.push([b.data.title, b.data.description, b.data.url].join(" "))
+    else if (b.type === "contact" && b.data && b.data.name) lines.push(b.data.name)
+    else if (b.type === "email" && b.data) lines.push([b.data.subject, b.data.from, b.data.to, b.data.cc, b.data.preview].join(" "))
+    else if ((b.type === "file" || b.type === "video") && b.data) lines.push(b.data.name)
+    else if (b.type === "button" && b.data) lines.push(b.data.label)
   })
   return lines.join("\n").trim()
 }
@@ -502,7 +536,7 @@ function placePageBlock(page, childId, before, after) {
 // ---- the tree of pages -------------------------------------------------------------------
 
 function emptyIndex() {
-  return { version: VERSION, top: [], pages: {}, fired: {}, favorites: [], tagColors: {} }
+  return { version: VERSION, top: [], pages: {}, fired: {}, favorites: [], tagColors: {}, collected: Collection.VERSION }
 }
 
 function entry(raw) {
@@ -519,6 +553,8 @@ function entry(raw) {
     // What it links to, its reminders and its tags (null: not worked out yet).
     links: Array.isArray(e.links) ? e.links.filter(isUuid).slice(0, 2000) : null,
     tags: Array.isArray(e.tags) ? cleanTagCounts(e.tags) : null,
+    // What's been put on it, for the Library (Collection.js; null: not worked out yet).
+    collected: Array.isArray(e.collected) ? Collection.clean(e.collected) : null,
     // A project (its status and due date), and the to-dos on the page.
     project: cleanProject(e.project),
     checks: e.checks && typeof e.checks === "object" ? cleanChecks(e.checks) : null,
@@ -527,6 +563,10 @@ function entry(raw) {
     // A template (with the pages in it), and the template new pages inside
     // this one start from.
     template: e.template === true,
+    // What a template's for, in a line (Templates shows it).
+    description: cleanDescription(e.description),
+    // A synced block's blocks: a page of their own, out of the tree.
+    synced: e.synced === true,
     childTemplate: isUuid(e.childTemplate) ? e.childTemplate : "",
     reminders: Array.isArray(e.reminders) ? e.reminders.filter(function(r) {
       return r && isUuid(r.block) && Dates.fromIso(r.at) !== null && typeof r.text === "string"
@@ -607,7 +647,9 @@ function cleanIndex(raw) {
     var c = cleanTagColor(src3[name])
     if (Tags.clean(name) === name && c) tagColors[name] = c
   })
-  return { version: VERSION, top: top, pages: pages, fired: fired, favorites: favorites, tagColors: tagColors }
+  // Pages' Library lists made by an older Collection.js: worked out again.
+  if (r.collected !== Collection.VERSION) for (var cid in pages) pages[cid].collected = null
+  return { version: VERSION, top: top, pages: pages, fired: fired, favorites: favorites, tagColors: tagColors, collected: Collection.VERSION }
 }
 
 // Is page `id` inside page `of` (at any depth), by the parents recorded?
@@ -663,8 +705,8 @@ function rows(index, open) {
     ids.forEach(function(id) {
       var e = index.pages[id]
       // (The trash's and the archive's aren't in the tree.)
-      if (!e || e.trashed || e.archived || e.template) return
-      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived && !index.pages[c].template })
+      if (!e || e.trashed || e.archived || e.template || e.synced) return
+      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived && !index.pages[c].template && !index.pages[c].synced })
       out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
       if (open && open[id]) walk(kids, depth + 1)
     })
@@ -679,7 +721,7 @@ function rows(index, open) {
 // rest. So a page is in one of them, once. A project's row has isProject,
 // status, due, progress and overdue.
 function sidebarRows(index, open, now) {
-  function shown(id) { var e = index.pages[id]; return !!e && !e.trashed && !e.archived && !e.template }
+  function shown(id) { var e = index.pages[id]; return !!e && !e.trashed && !e.archived && !e.template && !e.synced }
   function kidsOf(e) { return e.children.filter(function(c) { return shown(c) && !index.pages[c].project }) }
   function walk(ids, depth, out) {
     ids.forEach(function(id) {
@@ -818,6 +860,30 @@ function pendingReminders(index) {
   return out.sort(function(a, b) { return a.at - b.at })
 }
 
+// The dates in your notes, for the calendar: reminders on pages and
+// projects' due dates, from `from` up to `to` (Dates), not the trash's, the
+// archive's or the templates': [{ kind: "reminder" | "due", page, title
+// (the page's), text, at (a Date), time (it has one) }], by when.
+function datedNotes(index, from, to) {
+  var out = []
+  for (var pid in index.pages) {
+    var e = index.pages[pid]
+    if (!e.reminders && !(e.project && e.project.due)) continue
+    if (inTrash(index, pid) || inArchive(index, pid) || inTemplates(index, pid)) continue
+    var rs = e.reminders || []
+    rs.forEach(function(r) {
+      var d = Dates.fromIso(r.at)
+      if (!d || d.at < from || d.at >= to) return
+      out.push({ kind: "reminder", page: pid, title: e.title || "Untitled", text: r.text || "", at: d.at, time: d.time })
+    })
+    if (e.project && e.project.due && e.project.status !== "done") {
+      var due = Dates.fromIso(e.project.due)
+      if (due && due.at >= from && due.at < to) out.push({ kind: "due", page: pid, title: e.title || "Untitled", text: "Due", at: due.at, time: false })
+    }
+  }
+  return out.sort(function(a, b) { return a.at - b.at })
+}
+
 // ---- finding pages ----------------------------------------------------------------------
 
 function terms(query) {
@@ -922,19 +988,22 @@ function indexJson(index) {
     if (e.links) out.links = e.links
     if (e.reminders) out.reminders = e.reminders
     if (e.tags) out.tags = e.tags
+    if (e.collected) out.collected = e.collected
     if (e.project) out.project = e.project
     if (e.checks) out.checks = e.checks
     if (e.archived) out.archived = true
     if (e.template) out.template = true
+    if (e.description) out.description = e.description
+    if (e.synced) out.synced = true
     if (e.childTemplate) out.childTemplate = e.childTemplate
     pages[id] = out
   }
-  return stringify({ version: VERSION, top: index.top, pages: pages, fired: index.fired || {}, favorites: index.favorites || [], tagColors: index.tagColors || {} })
+  return stringify({ version: VERSION, top: index.top, pages: pages, fired: index.fired || {}, favorites: index.favorites || [], tagColors: index.tagColors || {}, collected: Collection.VERSION })
 }
 
 // Favorites that are there, and not in the trash or the archive.
 function favorites(index) {
-  return (index.favorites || []).filter(function(id) { return index.pages[id] && !inTrash(index, id) && !inArchive(index, id) && !inTemplates(index, id) })
+  return (index.favorites || []).filter(function(id) { return index.pages[id] && !inTrash(index, id) && !inArchive(index, id) && !inTemplates(index, id) && !index.pages[id].synced })
 }
 
 // A page (with the pages in it) copied: every block and page a new id, the
@@ -949,6 +1018,7 @@ function duplicate(pages, topId, date, random) {
       var c = {}
       for (var k in b) c[k] = b[k]
       c.uid = b.type === "page" && ids[b.uid] ? ids[b.uid] : uuid4(random)
+      remapBoard(c, ids)
       return c
     })
     var copy = newPage({ id: ids[p.id], parent: p.id === topId ? p.parent : ids[p.parent] || p.parent,
@@ -1061,6 +1131,23 @@ function blockList(page, md, titleOf) {
       out.text = au.transcript || (au.src ? "(an audio note, " + Audio.clock(au.duration) + ", not written out)" : "(an audio note, not recorded yet)")
       if (au.src) { out.src = au.src; out.duration = au.duration }
     }
+    if (b.type === "agenda") out.text = "(the calendar's events on " + (b.calendar && b.calendar.day ? b.calendar.day : "the day it's read: today") + "; `events` lists them)"
+    if (b.type === "event") { out.text = "(an event on the calendar)"; if (b.calendar && b.calendar.id) out.event = b.calendar.id }
+    if (b.type === "button") out.text = "(a button: \u201c" + (b.data ? b.data.label : "") + "\u201d)"
+    if (b.type === "file" || b.type === "video") { out.text = b.data && b.data.src ? "(" + (b.type === "video" ? "a video" : "a file") + ": " + b.data.name + ", " + Files.sizeLabel(b.data.size) + ")" : "(a file, not added yet)"; if (b.data && b.data.src) out.src = b.data.src }
+    if (b.type === "bookmark") { out.text = b.data && b.data.url ? Bookmark.toMarkdown(b.data) : "(a bookmark, not added yet)"; if (b.data) out.url = b.data.url }
+    if (b.type === "board") {
+      out.text = b.data ? Board.toMarkdown(b.data) : ""
+      // Its columns and cards, with their ids (the `board` command changes them).
+      if (b.data) out.board = { columns: b.data.columns.map(function(c) { return { id: c.id, name: c.name, cards: c.cards.map(function(k) { return { id: k.id, text: k.text } }) } }) }
+    }
+    if (b.type === "email") {
+      var em = b.data || {}
+      out.text = em.src ? "(an email: \u201c" + (em.subject || "no subject") + "\u201d from " + (em.from || "?") + (em.to ? " to " + em.to : "") + (em.date ? ", " + em.date : "") + ")" + (em.preview ? "\n" + em.preview : "") : "(an email, not added yet)"
+      if (em.src) { out.src = em.src; out.subject = em.subject; out.from = em.from; out.to = em.to; out.date = em.date }
+    }
+    if (b.type === "contact") { out.text = b.data && b.data.contact ? "(a contact card: " + (b.data.name || "someone") + "; `contact " + b.data.contact + "` for them)" : "(a contact card, no one picked yet)"; if (b.data && b.data.contact) out.contact = b.data.contact }
+    if (b.type === "synced") { out.text = "(a synced block: its blocks are on page " + (b.data ? b.data.page : "") + "; read it for them)"; if (b.data) out.synced = b.data.page }
     if (b.type === "meeting") {
       var me = b.meeting || Meeting.make()
       out.text = me.segments.length ? Meeting.text(me) : me.id ? "(a meeting recorded with voxtype, not written out yet)" : "(a meeting, not recorded yet)"
@@ -1069,7 +1156,14 @@ function blockList(page, md, titleOf) {
     }
     if (b.type === "link") out.target = b.target
     if ((b.type === "page" || b.type === "link") && typeof titleOf === "function") out.title = titleOf(b.type === "page" ? b.uid : b.target)
-    if (b.type === "image") out.src = b.src
+    if (b.type === "image") { out.src = b.src; out.width = Math.round((b.width || 0.6) * 100); out.align = b.align || "center" }
+    if (b.type === "gallery") {
+      var g = b.data || { images: [] }
+      out.text = g.images.length ? "(a gallery of " + g.images.length + (g.images.length === 1 ? " picture" : " pictures") + ")" : "(a gallery, no pictures yet)"
+      out.images = g.images.map(function(x) { return { src: x.src, caption: x.caption } })
+      out.columns = g.columns
+      out.height = g.height
+    }
     return out
   })
 }
@@ -1169,6 +1263,40 @@ function versionToRestore(version, current, index) {
     }
   })
   return { title: version.title || "", icon: version.icon || "", blocks: list }
+}
+
+// ---- the Library ----------------------------------------------------------------------------
+
+// What's been put on a page, for the Library (Collection.js): its links,
+// files, videos, pictures, audio notes, meetings and sketches, in order.
+function pageCollected(page) {
+  var out = []
+  flatten(page).forEach(function(b) {
+    if (out.length < Collection.MAX_PER_PAGE) out = out.concat(Collection.ofBlock(b))
+  })
+  // (As the index keeps it, so a page saved again changes nothing.)
+  return Collection.clean(out)
+}
+
+// Everything on the pages (not the trash's or the templates'), newest first.
+// What's in a synced block is on the page it's shown on (the first, if it's
+// on more than one), not on the hidden page its blocks are kept on.
+function collected(index) {
+  var hidden = function(id) { return inTrash(index, id) || inTemplates(index, id) }
+  var shownOn = {}
+  for (var id in index.pages) {
+    var e = index.pages[id]
+    if (!e.links || hidden(id) || e.synced) continue
+    e.links.forEach(function(to) { if (index.pages[to] && index.pages[to].synced && !shownOn[to]) shownOn[to] = id })
+  }
+  return Collection.gather(index, hidden).map(function(r) {
+    var host = shownOn[r.page]
+    if (!host) return r
+    r.page = host
+    r.pageTitle = index.pages[host].title || ""
+    r.pageIcon = index.pages[host].icon || ""
+    return r
+  })
 }
 
 // ---- tags ---------------------------------------------------------------------------------
@@ -1451,8 +1579,15 @@ function templates(index) {
     var e = index.pages[id]
     return e.template && !inTrash(index, id) && !(e.parent && inTemplates(index, e.parent))
   }).map(function(id) {
-    return { id: id, title: index.pages[id].title || "Untitled", icon: index.pages[id].icon || "" }
+    return { id: id, title: index.pages[id].title || "Untitled", icon: index.pages[id].icon || "", description: index.pages[id].description || "" }
   }).sort(function(a, b) { return a.title.toLowerCase().localeCompare(b.title.toLowerCase()) })
+}
+
+// The synced blocks' pages (not the trash's): [{ id, title, modified }], the last changed first.
+function syncedPages(index) {
+  return Object.keys(index.pages).filter(function(id) { return index.pages[id].synced && !inTrash(index, id) })
+    .map(function(id) { return { id: id, title: index.pages[id].title || "", modified: index.pages[id].modified } })
+    .sort(function(a, b) { return a.modified < b.modified ? 1 : -1 })
 }
 
 // The template called (or with the id) `name`, or "".
@@ -1482,6 +1617,7 @@ function fromTemplate(pages, topId, into, fill, date, random) {
       if (typeof c.html === "string" && c.html) c.html = f(c.html, true)
       if (c.type === "table" && c.table && Array.isArray(c.table.rows)) c.table.rows = c.table.rows.map(function(r) { return r.map(function(cell) { return f(String(cell || ""), true) }) })
       if (c.type === "mindmap" && c.outline) c.outline = f(c.outline, false)
+      remapBoard(c, ids)
       // A meeting in a template is one to record, each time.
       if (c.type === "meeting" && c.meeting) c.meeting = { color: c.meeting.color || "", background: c.meeting.background || "" }
       return c

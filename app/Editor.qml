@@ -9,6 +9,7 @@ import "../Table.js" as Table
 import "../Sketch.js" as Sketch
 import "../Audio.js" as Audio
 import "../Meeting.js" as Meeting
+import "../Calendar.js" as Calendar
 import "../Tags.js" as Tags
 import "../Dates.js" as Dates
 import "../Emoji.js" as Emoji
@@ -83,6 +84,12 @@ FocusScope {
   property var findTags: function(query) { return [] }
   property var tagStyle: function(href) { return null }
   property var makePage: function(title) { return "" }
+  // People (the "@" menu offers them): those with what's typed, [{ id,
+  // name, sub, initials, tint }]; a new one with a name, its id; the link
+  // for an email that's someone's ("" if it's no one's).
+  property var findPeople: function(query) { return [] }
+  property var makePerson: null
+  property var personOfEmail: function(email) { return "" }
   // Pages: how far in a block's children start, and a list marker's room.
   readonly property real docGutter: smallText ? 24 : 27
 
@@ -115,6 +122,8 @@ FocusScope {
   signal pageOpened(string id)
   signal subpageRequested(string uid)
   signal pageLinkRequested(string uid)
+  // A link to a page: to another page (the picker's).
+  signal pageRelinkRequested(string uid)
   signal imageRequested(string uid)
   signal iconRequested(string uid)
   signal blockMenuRequested(string uid)
@@ -138,6 +147,8 @@ FocusScope {
   signal templateRequested(string uid)
   // A tag clicked: every block with it.
   signal tagOpened(string name)
+  // A person named on the page, clicked (beside where: an item, a point in it).
+  signal contactOpened(string id, var anchor, real x, real y)
   // "/agent" typed on a block: ask your agent (Pages).
   signal agentRequested(string uid)
   signal textCopied(string text)
@@ -199,7 +210,9 @@ FocusScope {
       table: b.type === "table" && b.table ? JSON.stringify(b.table) : "",
       sketch: b.type === "sketch" && b.sketch ? JSON.stringify(b.sketch) : "",
       audio: b.type === "audio" && b.audio ? JSON.stringify(b.audio) : "",
-      meeting: b.type === "meeting" && b.meeting ? JSON.stringify(b.meeting) : ""
+      meeting: b.type === "meeting" && b.meeting ? JSON.stringify(b.meeting) : "",
+      calref: (b.type === "agenda" || b.type === "event") && b.calendar ? JSON.stringify(b.calendar) : "",
+      extra: Blocks.hasData(b.type) && b.data ? JSON.stringify(b.data) : ""
     }
   }
 
@@ -211,7 +224,9 @@ FocusScope {
       outline: r.outline, folds: r.folds, table: r.type === "table" && r.table ? JSON.parse(r.table) : undefined,
       sketch: r.type === "sketch" && r.sketch ? JSON.parse(r.sketch) : undefined,
       audio: r.type === "audio" && r.audio ? JSON.parse(r.audio) : undefined,
-      meeting: r.type === "meeting" && r.meeting ? JSON.parse(r.meeting) : undefined }
+      meeting: r.type === "meeting" && r.meeting ? JSON.parse(r.meeting) : undefined,
+      calendar: (r.type === "agenda" || r.type === "event") && r.calref ? JSON.parse(r.calref) : undefined,
+      data: Blocks.hasData(r.type) && r.extra ? JSON.parse(r.extra) : undefined }
   }
 
   readonly property var cleanOptions: doc ? ({ nest: true }) : null
@@ -900,6 +915,54 @@ FocusScope {
     return ""
   }
 
+  // ---- Pages: buttons, files, videos, bookmarks, boards, synced blocks ------------------------
+
+  // The ones being worked on ({ uid: true }: a bookmark's page being read).
+  property var dataWork: ({})
+  // What one of them asks for: "new" (just made: pick its file, its link, set it up),
+  // "colors" (`arg` the anchor), and their own ("press", "open", "fetch", "edit"...).
+  signal dataAction(string uid, string what, var arg)
+
+  // A block's `data` changed, as one step.
+  function setData(uid, data) {
+    var i = indexOf(uid)
+    if (i < 0 || !Blocks.hasData(blocksModel.get(i).type)) return false
+    var json = JSON.stringify(Blocks.cleanData(blocksModel.get(i).type, data))
+    if (json === blocksModel.get(i).extra) return true
+    beginOp()
+    blocksModel.setProperty(i, "extra", json)
+    endOp()
+    return true
+  }
+
+  function dataOf(uid) {
+    var i = indexOf(uid)
+    if (i < 0 || !Blocks.hasData(blocksModel.get(i).type)) return null
+    try { return Blocks.cleanData(blocksModel.get(i).type, JSON.parse(blocksModel.get(i).extra || "{}")) } catch (e) { return Blocks.cleanData(blocksModel.get(i).type, {}) }
+  }
+
+  // ---- Pages: the calendar's blocks ---------------------------------------------------------
+
+  // The workspace's calendar (for an agenda or an event block).
+  property var calendarSource: null
+  // An agenda's or an event block's buttons: "add" (an event that day),
+  // "open" (an event, `arg` { id, day, anchor }), "colors" (its, `arg` the anchor).
+  signal calendarAction(string uid, string what, var arg)
+  // "/event": a new event, typed, and its block where the "/" was.
+  signal eventRequested(string uid)
+
+  // An agenda's or an event block's data changed (the day it shows, its colors), as one step.
+  function setCalRef(uid, ref) {
+    var i = indexOf(uid)
+    if (i < 0 || (blocksModel.get(i).type !== "agenda" && blocksModel.get(i).type !== "event")) return false
+    var json = JSON.stringify(Calendar.cleanRef(ref))
+    if (json === blocksModel.get(i).calref) return true
+    beginOp()
+    blocksModel.setProperty(i, "calref", json)
+    endOp()
+    return true
+  }
+
   // An audio note's data as the page has it now (or null).
   function audioOf(uid) {
     var i = indexOf(uid)
@@ -914,6 +977,13 @@ FocusScope {
     if (focusUid !== uid && items[focusUid] && items[focusUid].isText) items[focusUid].edit.deselect()
     focusUid = uid
     if (selectedList.length > 0 && !dragSelecting) clearBlockSelection()
+  }
+
+  // Done writing in a block's own field (a board's card or column name):
+  // the keyboard back to the page (undo and the rest), no text under it.
+  function parkFocus() {
+    if (selectedList.length > 0 && !dragSelecting) clearBlockSelection()
+    keyCatcher.forceActiveFocus()
   }
 
   // ---- Pages: tables ---------------------------------------------------------------------
@@ -1034,7 +1104,7 @@ FocusScope {
       }
     })
     // (Pages and drawings aren't ideas: they'd be lost.)
-    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" || b.type === "audio" || b.type === "meeting" })) return ""
+    if (rows.some(function(b) { return b.type === "page" || b.type === "sketch" || b.type === "audio" || b.type === "meeting" || b.type === "agenda" || b.type === "event" || Blocks.hasData(b.type) })) return ""
     function words(b) { return Blocks.isText(b.type) ? Html.plainText(htmls[b.uid] || "").replace(/\s+/g, " ").trim() : "" }
     // A table's rows are ideas: their cells' words.
     function tableIdeas(b, depth) {
@@ -1615,6 +1685,7 @@ FocusScope {
         root.checkSlash(item)
         root.checkMention(item)
         root.inlineMarkdown(item)
+        root.autoEmail(item)
       }
     })
   }
@@ -1729,6 +1800,8 @@ FocusScope {
       else if (command.action === "agent") agentRequested(s.uid)
       else if (command.action === "dictate") dictateRequested()
       else if (command.action === "template") templateRequested(s.uid)
+      else if (command.action === "event") eventRequested(s.uid)
+      else if (command.action === "synced") dataAction(s.uid, "syncedPick", null)
       return
     }
     var props = command.props || {}
@@ -1748,6 +1821,8 @@ FocusScope {
     endOp()
     // A new mind map: you write its topic first.
     if (command.type === "mindmap") { Qt.callLater(function() { root.editMindMap(made) }); return }
+    // A file, a video, a bookmark, a button: picked, typed, set up.
+    if (Blocks.hasData(command.type)) { Qt.callLater(function() { root.dataAction(made, "new", null) }); return }
     // A new meeting: it starts.
     if (command.type === "meeting") { Qt.callLater(function() { root.meetingRequested(made) }); return }
     // A new audio note: it records.
@@ -1788,9 +1863,20 @@ FocusScope {
       if (typed && !found.some(function(t) { return t.name === typed })) found.push({ kind: "tagnew", name: typed, label: "New tag " + Tags.label(query), tag: Tags.label(query) })
       return found
     }
-    if (kind === "date") return Dates.suggestions(query, new Date()).map(function(d) {
-      return { kind: "date", label: d.label, hint: d.hint, at: d.at, time: d.time, remind: d.remind }
-    })
+    if (kind === "date") {
+      // People with what's typed, then dates; a new person with a name typed.
+      var who = query.trim()
+      var people = who && typeof findPeople === "function" ? findPeople(who).slice(0, 5).map(function(p) {
+        return { kind: "person", id: p.id, label: p.name, hint: p.sub, initials: p.initials, tint: p.tint }
+      }) : []
+      var dates = Dates.suggestions(query, new Date()).map(function(d) {
+        return { kind: "date", label: d.label, hint: d.hint, at: d.at, time: d.time, remind: d.remind }
+      })
+      var add = who.length >= 2 && typeof makePerson === "function" && /^[A-Za-z\u00c0-\uffff][A-Za-z\u00c0-\uffff' .-]{0,60}$/.test(who)
+        && !people.some(function(p) { return p.label.toLowerCase() === who.toLowerCase() })
+        ? [{ kind: "personnew", label: "New contact \u201c" + who + "\u201d", name: who, hint: "Add them to People" }] : []
+      return people.concat(dates).concat(add)
+    }
     var list = findPages(query).map(function(p) { return { kind: "page", id: p.id, label: p.title || "Untitled", icon: p.icon || "", hint: p.path || "" } })
     var name = query.trim()
     if (name) list.push({ kind: "create", label: "New page \u201c" + name + "\u201d", title: name, hint: "A page with this name, at the top of Pages" })
@@ -1914,6 +2000,12 @@ FocusScope {
       if (!d) return
       href = Dates.href(d.at, d.time, entry.remind)
       text = (entry.remind ? "\u23f0 " : "@") + Dates.label(d.at, d.time, new Date())
+    } else if (entry.kind === "person" || entry.kind === "personnew") {
+      // A person: "@Sam Rivera", a link to them (a new one's made first).
+      var pid = entry.kind === "personnew" ? (typeof makePerson === "function" ? makePerson(entry.name) : "") : entry.id
+      if (!pid) return
+      href = "omanote://contact/" + pid
+      text = "@" + (entry.kind === "personnew" ? entry.name : entry.label)
     } else {
       var id = entry.kind === "create" ? makePage(entry.title) : entry.id
       if (!id) return
@@ -1980,6 +2072,30 @@ FocusScope {
     }
   }
 
+  // An email typed, then a space or a stop after it (or Enter: `ending`): a
+  // link (mailto:, or to the person it's theirs, then their card on a click).
+  function autoEmail(item, ending) {
+    if (!doc || !item || !item.edit || !item.isText || item.edit.inputMethodComposing || slash || mention) return
+    var e = item.edit
+    if (e.selectionStart !== e.selectionEnd || typeOf(item.uid) === "code") return
+    var pos = e.cursorPosition
+    var before = e.getText(Math.max(0, pos - 120), pos)
+    var m = (ending ? /(^|[\s(\[{<"'\u201c])([^\s@<>()\[\]{}"',;:]+@[^\s@<>()\[\]{}"',;:]+?)([.,;:!?)\]}>"'\u201d]*)$/
+      : /(^|[\s(\[{<"'\u201c])([^\s@<>()\[\]{}"',;:]+@[^\s@<>()\[\]{}"',;:]+?)([.,;:!?)\]}>"'\u201d]*[\s\u2028])$/).exec(before)
+    if (!m || m[2].indexOf(".") < 0) return
+    var start = pos - m[3].length - m[2].length
+    var end = start + m[2].length
+    var inner = innerOf(e, start, end)
+    if (Html.links(inner).length > 0) return
+    var linked = Html.linkEmails(inner, personOfEmail)
+    if (linked === inner) return
+    closeBurst()
+    beginOp()
+    replaceRange(item, start, end, linked)
+    endOp()
+    focusBlock(item.uid, pos)
+  }
+
   function focusChangedIn(item, focused) {
     if (focused) {
       if (slash && slash.uid !== item.uid) closeSlash()
@@ -2015,9 +2131,11 @@ FocusScope {
     scheduleFormat()
   }
 
-  function openLink(url) {
+  function openLink(url, anchor, x, y) {
     var page = Html.pageOf(url)
     if (page) { pageOpened(page); return }
+    var person = Html.contactOf(url)
+    if (person) { contactOpened(person, anchor || null, x || 0, y || 0); return }
     var tag = Tags.of(url)
     if (tag) { tagOpened(tag); return }
     var clean = Html.cleanUrl(url)
@@ -2232,6 +2350,8 @@ FocusScope {
       }
       if (shift || alt) return
       e.accepted = true
+      // (An email just typed at the end: a link first.)
+      autoEmail(item, true)
       enter(item)
       return
     }
@@ -2494,7 +2614,7 @@ FocusScope {
     // The end of a column: the next column isn't something to delete.
     if (Workspace.isStructure(next.type)) return
     // A table, a mind map or a sketch below: pick it first, so it's never lost by accident.
-    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch" || next.type === "audio" || next.type === "meeting")) {
+    if (doc && (next.type === "table" || next.type === "mindmap" || next.type === "sketch" || next.type === "audio" || next.type === "meeting" || next.type === "board" || next.type === "synced")) {
       selectBlocks(next.uid, next.uid)
       return
     }
@@ -2796,6 +2916,25 @@ FocusScope {
     var text = textNeighbor(target + 1, -1)
     if (text < 0) text = textNeighbor(target - 1, 1)
     if (text >= 0) focusBlock(uidAt(text), landing <= text ? 0 : -1)
+  }
+
+  // Blocks (with everything inside them) put in place of others, as one
+  // step: `list` (block objects) where the first of `uids` was.
+  function swapBlocks(uids, list) {
+    var all = []
+    subtreeRanges(uids).forEach(function(range) { for (var k = range[0]; k <= range[1]; k++) all.push(k) })
+    if (all.length === 0) return
+    var at = Math.min.apply(null, all)
+    beginOp()
+    clearBlockSelection()
+    all.sort(function(a, b) { return b - a }).forEach(function(i) { removeAt(i) })
+    list.forEach(function(b, n) {
+      var props = {}
+      for (var k in b) props[k] = b[k]
+      insertBlock(at + n, props, Blocks.isText(b.type) ? b.html || "" : "")
+    })
+    if (blocksModel.count === 0) insertBlock(0, { type: "p" }, "")
+    endOp()
   }
 
   function restoreFocus(info) {
@@ -3305,6 +3444,8 @@ FocusScope {
       else if (b.type === "divider") out += "<hr />"
       else if (b.type === "time") out += "<p>" + (b.label ? Html.escapeText(b.label) + " " : "") + inner + "</p>"
       else if (b.type === "table") out += tableHtml(b.table)
+      else if (b.type === "bookmark") out += b.data && b.data.url ? "<p><a href=\"" + Html.escapeAttr(b.data.url) + "\">" + Html.escapeText(b.data.title || b.data.url) + "</a></p>" : ""
+      else if (b.type === "board") out += b.data ? b.data.columns.map(function(c) { return "<p><b>" + Html.escapeText(c.name) + "</b></p><ul>" + c.cards.map(function(k) { return "<li>" + Html.escapeText(k.text) + "</li>" }).join("") + "</ul>" }).join("") : ""
       else if (b.type === "meeting") out += b.meeting && b.meeting.segments && b.meeting.segments.length ? "<p>" + Html.escapeText(Meeting.text(b.meeting)).replace(/\n/g, "<br />") + "</p>" : ""
       else if (b.type === "audio") out += b.audio && b.audio.transcript ? "<p>" + Html.escapeText(b.audio.transcript).replace(/\n/g, "<br />") + "</p>" : ""
       else if (b.type === "image" || b.type === "calendar" || b.type === "columns" || b.type === "column" || b.type === "sketch") out += ""
@@ -3421,6 +3562,14 @@ FocusScope {
       return
     }
     if (plainOnly) list = list.map(function(b) { return { type: b.type === "code" ? "code" : "p", html: Html.fromPlainText(Html.plainText(b.html || "")) } })
+    // In Pages, emails pasted in text are links.
+    if (doc) list = list.map(function(b) {
+      if (!Blocks.isText(b.type) || b.type === "code" || !b.html) return b
+      var o = {}
+      for (var k in b) o[k] = b[k]
+      o.html = Html.linkEmails(b.html, root.personOfEmail)
+      return o
+    })
     var uid = item.uid
     var index = indexOf(uid)
     var cur = blocksModel.get(index)

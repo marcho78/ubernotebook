@@ -12,6 +12,12 @@ import "../Colors.js" as Colors
 import "../Tags.js" as Tags
 import "../Audio.js" as Audio
 import "../Meeting.js" as Meeting
+import "../Calendar.js" as Calendar
+import "../Dates.js" as Dates
+import "../Board.js" as Board
+import "../Files.js" as Files
+import "../Contacts.js" as Contacts
+import "../Email.js" as Email
 
 // Pages: the other way to write in Omanote, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -54,12 +60,24 @@ FocusScope {
   property string titleHint: ""
   // A tag shown (its blocks, TagView.qml) instead of a page.
   property string tagShown: ""
+  // The calendar shown, in place of a page.
+  property bool calendarShown: false
+  // The Library (everything put on the pages), in place of a page.
+  property bool libraryShown: false
+  // People (contacts), in place of a page.
+  property bool peopleShown: false
+  // Templates (yours and Omanote's), in place of a page.
+  property bool templatesShown: false
+  // An event just made from "More" with nothing in it yet (it goes if it's left empty).
+  property string justMade: ""
 
   readonly property var index: { var r = workspace ? workspace.revision : 0; return workspace ? workspace.index : Workspace.emptyIndex() }
   readonly property var format: { var r = revision; return page && page.format ? page.format : ({ width: "normal", size: "normal", font: "sans" }) }
   readonly property bool small: format.size === "small"
   // A locked page reads but can't be changed (unlock it in its ⋯ menu).
   readonly property bool locked: format.locked === true
+  // An event's editor is open (the calendar under it doesn't take its clicks).
+  readonly property bool eventEditorOpen: eventPop.opened
   readonly property bool favorite: { var r = workspace ? workspace.revision : 0; return page && workspace ? workspace.isFavorite(page.id) : false }
   readonly property string family: theme.penFamily(Docs.font(format.font).families)
   readonly property real sidebarW: sidebarShown ? 250 : 0
@@ -68,6 +86,14 @@ FocusScope {
   readonly property alias agentBox: agentPop
   readonly property alias historyPanel: historyPanel
   readonly property alias tagView: tagView
+  readonly property alias calendarView: calendarView
+  readonly property alias libraryView: libraryView
+  readonly property alias peopleView: peopleView
+  readonly property alias templatesView: templatesView
+  readonly property alias pagePicker: picker
+  readonly property alias picturePicker: picturePicker
+  readonly property alias contactPop: contactPop
+  readonly property alias flick: flick
   readonly property var crumbs: { var r = workspace ? workspace.revision : 0; var rr = revision; return page && workspace ? Workspace.path(workspace.index, page.id) : [] }
   readonly property string cover: { var r = revision; return page ? page.cover : "" }
   // The pages that link to this one.
@@ -79,20 +105,22 @@ FocusScope {
 
   // Pages shown: the page you were on last, else the first one.
   function activate() {
-    if (tagShown) return
+    if (tagShown || libraryShown || peopleShown || templatesShown) return
     if (page) { focusPage(false); return }
     if (!workspace || !workspace.ready) { pendingActivate = true; return }
     workspace.ensureStarted()
     var ix = workspace.index
     var last = settings.lastPage || ""
     if (last && ix.pages[last] && !Workspace.inTrash(ix, last)) { open(last); return }
-    var first = ix.top.filter(function(id) { return ix.pages[id] && !ix.pages[id].trashed })[0]
+    var first = ix.top.filter(function(id) { var e = ix.pages[id]; return e && !e.trashed && !e.template && !e.archived && !e.synced })[0]
     if (first) { open(first); return }
     pendingActivate = true
   }
 
   Connections {
     target: view.workspace
+    // Another notes folder (Settings, or `omarchy-shell omanote set folder`).
+    function onFolderChanged() { view.leaveFolder() }
     function onRevisionChanged() {
       if (view.pendingActivate && view.workspace.ready && view.visible) {
         view.pendingActivate = false
@@ -111,12 +139,20 @@ FocusScope {
   function open(id, fromHistory, then) {
     if (!workspace || !id) return
     if (String(id).indexOf("tag:") === 0) { openTag(String(id).slice(4), fromHistory); return }
+    if (String(id).indexOf("calendar") === 0) { openCalendar(String(id).slice(9), fromHistory); return }
+    if (String(id).indexOf("library") === 0) { openLibrary(String(id).slice(8), fromHistory); return }
+    if (String(id).indexOf("people") === 0) { openPeople(String(id).slice(7), fromHistory); return }
+    if (id === "templates") { openTemplates(fromHistory); return }
     commit()
     workspace.readPage(id, function(p) {
       if (!p) { view.toast("That page isn't there any more"); return }
       var e = view.workspace.index.pages[id]
       if (e) p.parent = e.parent
       view.tagShown = ""
+      view.calendarShown = false
+      view.libraryShown = false
+      view.peopleShown = false
+      view.templatesShown = false
       view.show(p)
       if (!fromHistory) {
         view.history = view.history.slice(0, view.historyAt + 1).concat([id]).slice(-100)
@@ -129,6 +165,598 @@ FocusScope {
     })
   }
 
+  // ---- buttons, files, videos, bookmarks, boards, synced blocks ------------------------------
+
+  // The blocks being worked on (a bookmark's page being read): { uid: true }.
+  property var dataWork: ({})
+  function setDataWork(uid, on) {
+    var t = {}
+    for (var k in dataWork) if (k !== uid) t[k] = true
+    if (on) t[uid] = true
+    dataWork = t
+  }
+
+  // What one of them asks for.
+  function dataAction(uid, what, arg) {
+    if (what === "syncedPick") { openSyncedPick(uid); return }
+    var i = editor.indexOf(uid)
+    if (i < 0) return
+    var type = editor.model.get(i).type
+    var d = editor.dataOf(uid)
+    if (what === "colors") { openDataColors(uid, arg); return }
+    if (type === "button") {
+      if (what === "new" || what === "setup") openButtonSetup(uid, arg || editor.items[uid])
+      else if (what === "press") pressButton(uid)
+    } else if (type === "file" || type === "video") {
+      if (what === "new" || what === "pick") pickData(uid, type === "video" ? "video" : d.kind === "pdf" ? "pdf" : "any")
+      else if (what === "open" && d.src) openFileHere(d.src, d.name)
+    } else if (type === "bookmark") {
+      if (what === "new") Qt.callLater(function() { var it = editor.items[uid]; if (it && it.dataView) it.dataView.focusLink() })
+      else if (what === "fetch") fetchBookmark(uid, arg.url)
+      else if (what === "open" && d.url) workspace.files.openUrl(d.url)
+      else if (what === "copy" && d.url) { workspace.files.copyText(d.url); toast("Copied the link") }
+    } else if (type === "board") {
+      if (what === "openCard") openCard(uid, arg)
+      else if (what === "deleteCard") deleteCard(uid, arg)
+    } else if (type === "synced") {
+      if (what === "edit" && d.page) open(d.page)
+      else if (what === "unsync") unsync(uid)
+    } else if (type === "email") {
+      if (what === "new" || what === "pick") pickEmail(uid)
+      else if (what === "open" && d.src) openAsset(d.src, d.name || "email.eml")
+      else if (what === "attachment") openEmailAttachment(uid, arg)
+      else if (what === "copy") copyText(arg)
+      else if (what === "link") workspace.files.openUrl(arg)
+    } else if (type === "gallery") {
+      if (what === "new" || what === "pick") pickGalleryPictures(uid)
+      else if (what === "view") showPictures(d.images, arg)
+    } else if (type === "contact") {
+      if (what === "new") Qt.callLater(function() { var it = editor.items[uid]; if (it && it.dataView) it.dataView.focusPick() })
+      else if (what === "openPerson") openPeople(arg)
+      else if (what === "copy") copyText(arg)
+      else if (what === "email") mailTo(arg)
+      else if (what === "web") workspace.files.openUrl(arg)
+    }
+  }
+
+  // Its colors: Pages' or your own, from the color menu (and picker).
+  function openDataColors(uid, anchor) {
+    var v = editor.items[uid] ? editor.items[uid].dataView : null
+    if (!v || !anchor) return
+    tableColorTarget = uid
+    colorAt = anchor.mapToItem(view, Math.min(0, anchor.width - 250), anchor.height + 6)
+    var now = v.scopeColors()
+    tableColors.currentText = now.color
+    tableColors.currentBack = now.background
+    tableColors.subject = v.colorSubject()
+    tableColors.x = Math.max(8, Math.min(view.width - tableColors.width - 8, colorAt.x))
+    tableColors.y = Math.min(colorAt.y, view.height - 300)
+    tableColors.open()
+  }
+
+  // An email (.eml) picked or dropped, copied in and read, for a block.
+  function pickEmail(uid) {
+    if (!service || typeof service.pickFile !== "function") { toast("Files can't be picked here"); return }
+    var pageId = page ? page.id : ""
+    service.pickFile("email", function(path) { if (path) view.addEmailTo(pageId, uid, path) })
+  }
+  function addEmailTo(pageId, uid, path) {
+    workspace.importEmail(path, function(s, why) {
+      if (!s) { view.toast(why || "That email couldn't be read"); return }
+      if (!view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) { view.toast("Its page isn't open any more: the email's in Pages/assets"); return }
+      var d = editor.dataOf(uid)
+      for (var k in s) d[k] = s[k]
+      editor.setData(uid, d)
+    })
+  }
+  // An email's attachment: a calendar file's events, to put on your calendar;
+  // a contact card's people, into People; anything else written out (once;
+  // then kept), then opened in its app.
+  function openEmailAttachment(uid, at) {
+    var d = editor.dataOf(uid)
+    var a = d.attachments ? d.attachments[at] : null
+    if (!a) return
+    if (isCalendarFile(a.name) || isContactFile(a.name)) {
+      workspace.readEmail(d.src, function(m) {
+        var att = m ? m.attachments[at] : null
+        if (!att) { view.toast("That attachment couldn't be read"); return }
+        var text = Email.attachmentText(m, att.index)
+        if (view.isCalendarFile(a.name)) view.showIcs(text, a.name)
+        else view.addPeopleFrom(a.name, text)
+      })
+      return
+    }
+    if (a.src) { openAsset(a.src, a.name); return }
+    var pageId = page ? page.id : ""
+    workspace.emailAttachment(d.src, at, a.name, function(src) {
+      if (!src) { view.toast("That attachment couldn't be opened"); return }
+      view.openAsset(src, a.name)
+      if (view.page && view.page.id === pageId && editor.indexOf(uid) >= 0) {
+        var now = editor.dataOf(uid)
+        if (now.attachments && now.attachments[at]) { now.attachments[at].src = src; editor.setData(uid, now) }
+      }
+    })
+  }
+
+  // A link to a page, to another page (one step to undo).
+  function relink(uid, id) {
+    if (!id || editor.indexOf(uid) < 0 || editor.typeOf(uid) !== "link") return
+    editor.setProp(uid, "target", id)
+    markDirty()
+  }
+
+  // ---- pictures: a gallery's, and shown large here ----
+
+  // Pictures picked (several at once, shown as pictures) for a gallery; the
+  // desktop's file dialog a click away.
+  function pickGalleryPictures(uid) {
+    if (!workspace || !workspace.files) return
+    var pageId = page ? page.id : ""
+    picturePicker.choose(true, function(paths) { view.addToGallery(pageId, uid, paths) }, function() {
+      if (view.service && typeof view.service.pickPictures === "function")
+        view.service.pickPictures(function(paths) { if (paths && paths.length) view.addToGallery(pageId, uid, paths) })
+    })
+  }
+  // Pictures copied into Pages/assets, then at the gallery's end (one step to undo).
+  function addToGallery(pageId, uid, paths) {
+    var list = (paths || []).filter(function(p) { return Files.kindOf(p) === "image" }).slice(0, 100)
+    if (!list.length) { toast("Those aren't pictures"); return }
+    var got = []
+    var left = list.length
+    list.forEach(function(path, i) {
+      view.workspace.importPicture(path, function(src) {
+        got[i] = src
+        if (--left > 0) return
+        var srcs = got.filter(function(s) { return !!s })
+        if (!view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) { if (srcs.length) view.toast("Its page isn't open any more: the pictures are in Pages/assets"); return }
+        if (!srcs.length) { view.toast("Those pictures couldn't be copied in"); return }
+        var d = editor.dataOf(uid)
+        d.images = (d.images || []).concat(srcs.map(function(s) { return { src: s, caption: "" } }))
+        editor.setData(uid, d)
+      })
+    })
+  }
+  // The gallery under a point of the page's drop area, or "".
+  function galleryAt(area, x, y) {
+    for (var i = 0; i < editor.model.count; i++) {
+      var uid = editor.uidAt(i)
+      if (editor.model.get(i).type !== "gallery") continue
+      var it = editor.items[uid]
+      if (!it || !it.visible) continue
+      var p = it.mapFromItem(area, x, y)
+      if (p.x >= 0 && p.y >= 0 && p.x < it.width && p.y < it.height) return uid
+    }
+    return ""
+  }
+  // Pictures shown large, here: [{ src, caption }], from the one at `at`.
+  function showPictures(list, at) {
+    viewer.show((list || []).map(function(x) { return { src: x.src, caption: x.caption || "" } }), at || 0)
+  }
+  // A picture on the page shown large, with the page's other pictures a key away.
+  function showPagePicture(src) {
+    var list = editor.serialize().filter(function(b) { return b.type === "image" && b.src }).map(function(b) { return { src: b.src, caption: "" } })
+    var at = list.map(function(x) { return x.src }).indexOf(src)
+    showPictures(at >= 0 ? list : [{ src: src, caption: "" }], Math.max(0, at))
+  }
+
+  // ---- files that open here, or in their app ----
+
+  function isCalendarFile(name) { return /\.(ics|ical|ifb|vcs)$/i.test(String(name || "")) }
+  function isContactFile(name) { return /\.(vcf|vcard)$/i.test(String(name || "")) }
+
+  // A file in Pages/assets in its app; one with no app for it but a web
+  // browser (it would download it, and take you away from here) isn't
+  // handed to it: that's said instead.
+  function openAsset(src, name) {
+    workspace.openAsset(src, function(ok, why) {
+      if (ok) return
+      var ext = (/\.([A-Za-z0-9]{1,8})$/.exec(String(name || src)) || [])[1]
+      view.toast((ext ? "No app here opens ." + ext.toLowerCase() + " files" : "No app here opens it") + (why === "browser" ? " but your web browser" : "") + ": it's kept in Pages/assets")
+    })
+  }
+  // A file block's file: a calendar's events, a contact card's people, here; else in its app.
+  function openFileHere(src, name) {
+    if (isCalendarFile(name) || isContactFile(name)) {
+      workspace.readAsset(src, function(text) {
+        if (text === null) { view.toast("That file couldn't be read"); return }
+        if (view.isCalendarFile(name)) view.showIcs(text, name)
+        else view.addPeopleFrom(name, text)
+      })
+      return
+    }
+    openAsset(src, name)
+  }
+  // A contact card's people, into People (said how many; Undo takes them out).
+  function addPeopleFrom(name, text) {
+    workspace.addPeopleFrom(name, text, function(r) {
+      if (!r) { view.toast("There's no one in " + name); return }
+      view.toastUndo((r.added ? r.added + (r.added === 1 ? " person" : " people") + " added to People" : "No one new") + (r.updated ? ", " + r.updated + " filled in" : ""), function() { view.workspace.undoContacts() })
+    })
+  }
+
+  // An .ics file's events (an email's, a file block's, one dropped or
+  // picked), shown, to put on your calendar.
+  function showIcs(text, name) {
+    var events = Calendar.fromIcs(text)
+    if (!events.length) { toast("There are no events in " + (name || "it")); return }
+    icsPop.events = events
+    icsPop.fileName = name || ""
+    icsPop.x = Math.round((view.width - icsPop.width) / 2)
+    icsPop.y = Math.round(Math.max(40, view.height * 0.18))
+    icsPop.open()
+  }
+  function addIcsEvents() {
+    var fresh = icsPop.fresh
+    icsPop.close()
+    if (!fresh.length) return
+    var cal = workspace.calendar
+    fresh.forEach(function(e) { cal = Calendar.withEvent(cal, e) })
+    workspace.setCalendar(cal)
+    toastUndo(fresh.length + (fresh.length === 1 ? " event" : " events") + " on your calendar", function() { view.workspace.undoCalendar() })
+  }
+  // Calendar's Import .ics: a file picked, its events shown.
+  function importIcs() {
+    if (!service || typeof service.pickFile !== "function") { toast("Files can't be picked here"); return }
+    service.pickFile("calendar", function(path) {
+      if (!path) return
+      view.workspace.files.readFiles([path], function(got) {
+        if (got[path] === undefined) { view.toast("That file couldn't be read"); return }
+        view.showIcs(got[path], path.slice(path.lastIndexOf("/") + 1))
+      }, 16 * 1024 * 1024)
+    })
+  }
+  function eventWhen(e) {
+    var s = Dates.fromIso(e.start)
+    var en = Dates.fromIso(e.end)
+    if (!s) return ""
+    if (e.allDay) return Dates.label(s.at, false, new Date()) + (en && e.end !== e.start ? " \u2013 " + Dates.label(en.at, false, new Date()) : "") + "  \u00b7  all day"
+    var t = function(d) { return d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes() }
+    return Dates.label(s.at, false, new Date()) + ", " + t(s.at) + (en ? "\u2013" + t(en.at) : "")
+  }
+
+  // A file (or a video) picked and copied in, for a block.
+  function pickData(uid, kind) {
+    if (!service || typeof service.pickFile !== "function") { toast("Files can't be picked here"); return }
+    var pageId = page ? page.id : ""
+    service.pickFile(kind, function(path) {
+      if (!path) return
+      view.addFileTo(pageId, uid, path)
+    })
+  }
+  function addFileTo(pageId, uid, path) {
+    workspace.importFile(path, function(f) {
+      if (!f) { view.toast("The file couldn't be copied in"); return }
+      if (!view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) { view.toast("Its page isn't open any more: the file's in Pages/assets"); return }
+      var d = editor.dataOf(uid)
+      d.src = f.src
+      d.name = f.name
+      d.size = f.size
+      d.kind = f.kind
+      d.poster = f.poster || ""
+      editor.setData(uid, d)
+    })
+  }
+
+  // A bookmark's page read: its title, a line, its picture.
+  function fetchBookmark(uid, url) {
+    var pageId = page ? page.id : ""
+    setDataWork(uid, true)
+    workspace.fetchBookmark(url, function(data, why) {
+      view.setDataWork(uid, false)
+      if (why) view.toast(why)
+      if (!data || !view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) return
+      var d = editor.dataOf(uid)
+      for (var k in data) d[k] = data[k]
+      editor.setData(uid, d)
+    })
+  }
+
+  // A button pressed: its template put in after it, or a new page from it inside this one.
+  function pressButton(uid) {
+    var d = editor.dataOf(uid)
+    if (!d || !d.template || !page) return
+    var mine = d.template.indexOf("tpl:") === 0
+    if (d.action === "page") {
+      if (mine) newPageFromTemplate(d.template.slice(4), page.id)
+      else {
+        var t = Templates.forPages(d.template, Templates.iso(new Date()), function(x, pattern) { return Qt.formatDate(Templates.parse(x), pattern) })
+        commit()
+        var child = workspace.createPage({ parent: page.id, title: t.title, icon: t.icon, blocks: t.blocks })
+        if (!child) return
+        editor.placeBlock(editor.uidAt(editor.model.count - 1), { type: "page", id: child.id })
+        markDirty()
+        commit()
+        open(child.id, false, "title")
+      }
+      return
+    }
+    if (mine) { useTemplateHere(d.template.slice(4), "insert", uid); return }
+    var bt = Templates.forPages(d.template, Templates.iso(new Date()), function(x, pattern) { return Qt.formatDate(Templates.parse(x), pattern) })
+    var i = editor.indexOf(uid)
+    var base = editor.model.get(i).indent
+    var list = bt.blocks.slice()
+    var tail = list[list.length - 1]
+    if (list.length > 1 && tail && tail.type === "p" && Html.plainText(tail.html || "") === "") list.pop()
+    list.forEach(function(b) { b.indent = (b.indent || 0) + base })
+    editor.insertBlocksAt(editor.subtreeEnd(i) + 1, list, false)
+  }
+
+  function openButtonSetup(uid, anchor) {
+    buttonSetup.uid = uid
+    var a = anchor || main
+    var p = a.mapToItem(view, 0, a.height + 6)
+    buttonSetup.x = Math.max(8, Math.min(view.width - buttonSetup.width - 8, p.x))
+    buttonSetup.y = Math.max(8, Math.min(view.height - 460, p.y))
+    buttonSetup.open()
+  }
+
+  // A board's card: its page (made, the first time: a page inside this one).
+  function openCard(uid, arg) {
+    if (!page) return
+    if (arg.page && workspace.index.pages[arg.page] && !Workspace.inTrash(workspace.index, arg.page)) { open(arg.page); return }
+    commit()
+    var child = workspace.createPage({ parent: page.id, title: arg.text || "" })
+    if (!child) return
+    var d = editor.dataOf(uid)
+    editor.setData(uid, Board.setCard(d, arg.id, { page: child.id }))
+    markDirty()
+    commit()
+    open(child.id, false, arg.text ? "" : "title")
+  }
+
+  // A synced block's blocks made this page's own, here.
+  function unsync(uid) {
+    var d = editor.dataOf(uid)
+    if (!d || !d.page) return
+    var at = editor.indexOf(uid)
+    var base = editor.model.get(at).indent
+    workspace.readPage(d.page, function(p) {
+      if (!p || editor.indexOf(uid) < 0) return
+      var list = Workspace.flatten(p).filter(function(b) { return b.type !== "page" }).map(function(b) {
+        var c = JSON.parse(JSON.stringify(b))
+        delete c.uid
+        c.indent = (c.indent || 0) + base
+        return c
+      })
+      editor.swapBlocks([uid], list.length ? list : [{ type: "p", html: "", indent: base }])
+      view.toast("Unsynced: its blocks are this page's own, here")
+    })
+  }
+
+  // Blocks made a synced block: moved to a page of their own, the synced block in their place.
+  function makeSynced(uids) {
+    if (!page || locked || !uids.length) return
+    commit()
+    var ranges = editor.subtreeRanges(uids)
+    var list = []
+    ranges.forEach(function(r) { for (var k = r[0]; k <= r[1]; k++) list.push(editor.blockAt(k)) })
+    if (list.some(function(b) { return b.type === "page" || b.type === "synced" })) { toast("A page or a synced block is among them: move it out first"); return }
+    var base = Math.min.apply(null, list.map(function(b) { return b.indent || 0 }))
+    var blocks = list.map(function(b) { var c = JSON.parse(JSON.stringify(b)); delete c.uid; c.indent = (c.indent || 0) - base; return c })
+    var id = workspace.newSyncedPage(blocks)
+    if (!id) return
+    editor.swapBlocks(list.map(function(b) { return b.uid }), [{ type: "synced", indent: base, data: { page: id } }])
+    markDirty()
+    commit()
+    toast("A synced block: copy it (\u22ee\u22ee, Ctrl+C) and paste it anywhere; changed in one, changed in all")
+  }
+
+  // "/synced": a new one, or one there is.
+  function openSyncedPick(uid) {
+    syncedPick.uid = uid
+    var item = editor.items[uid]
+    var p = item ? item.mapToItem(view, item.bx, item.height + 4) : Qt.point(view.width / 2 - 160, 140)
+    syncedPick.x = Math.max(8, Math.min(view.width - syncedPick.width - 8, p.x))
+    syncedPick.y = Math.max(8, Math.min(view.height - 360, p.y))
+    syncedPick.open()
+  }
+  function putSynced(uid, pageId) {
+    if (!pageId) return
+    var made = editor.placeBlock(uid, { type: "synced", data: { page: pageId } })
+    markDirty()
+    commit()
+    return made
+  }
+
+  // ---- the calendar -------------------------------------------------------------------------
+
+  // The calendar, in place of a page, on a day ("2026-10-05"; "" today).
+  function openCalendar(day, fromHistory) {
+    if (!workspace) return
+    commit()
+    page = null
+    editor.load([])
+    pageDirty = false
+    tagShown = ""
+    libraryShown = false
+    peopleShown = false
+    templatesShown = false
+    calendarShown = true
+    var d = Dates.fromIso(day)
+    // The view it was in last time (the first time it opens).
+    calendarView.restoreMode(settings.calendarView)
+    calendarView.show(d ? d.at : null, "")
+    if (!fromHistory) {
+      history = history.slice(0, historyAt + 1).concat(["calendar"]).slice(-100)
+      historyAt = history.length - 1
+    }
+  }
+
+  // An event to change, beside `anchor` (a repeating one's time: `day`).
+  function closeEvent() { eventPop.close() }
+  function openEvent(id, day, anchor) {
+    if (!workspace || !workspace.eventById(id)) return
+    eventPop.openFor(id, day, anchor)
+  }
+
+  // A new event, typed: on `day` (a Date), at `minutes` (or -1), beside
+  // `anchor`; `done(id)` when it's made.
+  function quickAdd(day, minutes, anchor, done) {
+    if (!workspace) return
+    quickAddPop.openFor(day, minutes, anchor, done)
+  }
+
+  // A question with a few answers ("Just this one" / "Every one"): then(value).
+  function ask(question, options, then, anchor) {
+    askPop.question = question
+    askPop.options = options
+    askPop.then = then
+    var a = anchor || calendarView
+    var p = a.mapToItem(view, anchor ? 0 : a.width / 2 - 140, anchor ? a.height + 6 : 120)
+    askPop.x = Math.max(8, Math.min(view.width - askPop.width - 8, p.x))
+    askPop.y = Math.max(8, Math.min(view.height - 200, p.y))
+    askPop.open()
+  }
+
+  // An event's color: Pages' colors, recent ones, or your own.
+  property string eventColorTarget: ""
+  function openEventColors(id, anchor) {
+    var ev = workspace ? workspace.eventById(id) : null
+    if (!ev) return
+    eventColorTarget = id
+    colorAt = anchor.mapToItem(view, 0, anchor.height + 8)
+    eventColors.currentText = ev.color
+    eventColors.currentBack = ""
+    eventColors.x = Math.max(8, Math.min(view.width - eventColors.width - 8, colorAt.x))
+    eventColors.y = colorAt.y
+    eventColors.open()
+  }
+  function setEventColor(color) {
+    var ev = workspace ? workspace.eventById(eventColorTarget) : null
+    if (!ev) return
+    var e = JSON.parse(JSON.stringify(ev))
+    e.color = color
+    workspace.setCalendar(Calendar.withEvent(workspace.calendar, e))
+  }
+
+  // The notes for an event: its page, or a new one (from your meeting
+  // template, else the Meeting notes one) called what it is and when,
+  // linked to it.
+  function notesForEvent(id, day) {
+    var ev = workspace ? workspace.eventById(id) : null
+    if (!ev) return
+    if (ev.page && workspace.index.pages[ev.page] && !Workspace.inTrash(workspace.index, ev.page)) { open(ev.page); return }
+    commit()
+    var occ = day ? Calendar.occurrences({ events: [ev] }, Dates.fromIso(day).at, new Date(Dates.fromIso(day).at.getTime() + 86400000))[0] : null
+    var at = occ ? occ.start : Dates.fromIso(ev.start).at
+    var title = (ev.title || "Event") + " \u00b7 " + Dates.label(at, false, new Date())
+    function link(pageId) {
+      var e = JSON.parse(JSON.stringify(view.workspace.eventById(id)))
+      e.page = pageId
+      view.workspace.setCalendar(Calendar.withEvent(view.workspace.calendar, e))
+    }
+    var mine = userTemplates.filter(function(t) { return /meeting/i.test(t.title) })[0]
+    if (mine) {
+      workspace.pageFromTemplate(mine.id, "", title, templateFill(), function(made) {
+        if (!made) return
+        link(made)
+        view.open(made)
+      }, "")
+      return
+    }
+    var t = Templates.forPages("meeting", Calendar.dayIso(at), function(d, pattern) { return Qt.formatDate(Templates.parse(d), pattern) })
+    var p = workspace.createPage({ parent: "", title: title, icon: t.icon, blocks: t.blocks })
+    if (!p) return
+    link(p.id)
+    open(p.id)
+  }
+
+  function exportCalendar() {
+    if (!workspace) return
+    workspace.exportCalendar(function(path) { if (path) view.toast("The calendar is in " + path.replace(/^.*\/Omanote\//, "Omanote/")) })
+  }
+
+  // ---- people -------------------------------------------------------------------------------
+
+  // People, in place of a page: `id` picked (else the list, its search ready).
+  function openPeople(id, fromHistory) {
+    if (!workspace) return
+    commit()
+    page = null
+    editor.load([])
+    pageDirty = false
+    tagShown = ""
+    calendarShown = false
+    libraryShown = false
+    templatesShown = false
+    peopleShown = true
+    peopleView.show(id || "")
+    if (!fromHistory) {
+      history = history.slice(0, historyAt + 1).concat(["people" + (id ? ":" + id : "")]).slice(-100)
+      historyAt = history.length - 1
+    }
+    if (!id) peopleView.focusSearch()
+  }
+
+  function copyText(text) {
+    if (!workspace || !text) return
+    workspace.files.copyText(text)
+    toast("Copied " + (String(text).length > 40 ? "it" : text))
+  }
+  function mailTo(email) { if (workspace && email) workspace.files.openUrl("mailto:" + email) }
+
+  // Contacts from a file (.vcf or .csv) picked: put in, then said how many;
+  // done({ added, updated, first }) or done(null).
+  function pickContacts(done) {
+    if (!service || typeof service.pickFile !== "function") { toast("Files can't be picked here"); return }
+    service.pickFile("contacts", function(path) { if (path) view.importContactsFrom(path, done) })
+  }
+  function importContactsFrom(path, done) {
+    var before = workspace.contacts.contacts.map(function(c) { return c.id })
+    workspace.importContacts(path, function(r, why) {
+      if (!r) { view.toast(why || "No contacts were read"); if (done) done(null); return }
+      var first = view.workspace.contacts.contacts.filter(function(c) { return before.indexOf(c.id) < 0 })[0]
+      view.toast(r.added + (r.added === 1 ? " person" : " people") + " added" + (r.updated ? ", " + r.updated + " filled in" : ""))
+      if (done) done({ added: r.added, updated: r.updated, first: first ? first.id : "" })
+    })
+  }
+  function exportContacts() {
+    workspace.exportContacts(function(path) { view.toast(path ? "Everyone's in " + path.replace(/^.*\/Omanote\//, "Omanote/") : "They couldn't be exported") })
+  }
+
+  // People for the "@" menu: [{ id, name, sub, initials, tint }].
+  function findPeople(query) {
+    if (!workspace) return []
+    return Contacts.find(workspace.contacts, query, 6).map(function(c) {
+      return { id: c.id, name: Contacts.nameOf(c), sub: Contacts.subtitle(c), initials: Contacts.initials(c), tint: Contacts.tintOf(c) }
+    })
+  }
+  // Someone new from the "@" menu: their id.
+  function makePerson(name) {
+    if (!workspace || !String(name || "").trim()) return ""
+    var c = { id: Contacts.newId(), name: String(name).trim(), phones: [], emails: [] }
+    workspace.saveContact(c)
+    return workspace.contactById(c.id) ? c.id : ""
+  }
+  // An email that's someone's: a link to them ("" if it's no one's).
+  function personOfEmail(email) {
+    var c = workspace ? Contacts.byEmail(workspace.contacts, email) : null
+    return c ? Contacts.href(c.id) : ""
+  }
+
+  // ---- the Library ----------------------------------------------------------------------------
+
+  // Everything put on the pages (links, files, videos, pictures, audio
+  // notes, meetings, sketches), in place of a page; `kind` ("file"...) picked.
+  function openLibrary(kind, fromHistory) {
+    if (!workspace) return
+    commit()
+    page = null
+    editor.load([])
+    pageDirty = false
+    tagShown = ""
+    calendarShown = false
+    peopleShown = false
+    templatesShown = false
+    libraryShown = true
+    libraryView.reset(kind)
+    if (!fromHistory) {
+      history = history.slice(0, historyAt + 1).concat(["library"]).slice(-100)
+      historyAt = history.length - 1
+    }
+    libraryView.focusSearch()
+  }
+
   // ---- tags ---------------------------------------------------------------------------------
 
   // A tag's blocks, in place of the page.
@@ -139,6 +767,10 @@ FocusScope {
     page = null
     editor.load([])
     pageDirty = false
+    calendarShown = false
+    libraryShown = false
+    peopleShown = false
+    templatesShown = false
     tagShown = n
     if (!fromHistory) {
       history = history.slice(0, historyAt + 1).concat(["tag:" + n]).slice(-100)
@@ -295,6 +927,11 @@ FocusScope {
     flick.contentY = 0
     findBar.refresh()
     revision++
+    if (startWith && startWith.page === p.id) {
+      var t = startWith.template
+      startWith = null
+      applyTemplate(t)
+    }
   }
 
   function updateBlank() {
@@ -316,6 +953,24 @@ FocusScope {
   function markDirty() {
     pageDirty = true
     saveTimer.restart()
+  }
+
+  // The notes folder changed: nothing from the one before stays on screen,
+  // or is written into this one (a change not written yet is the old
+  // folder's), and Pages opens on what's here: the examples, in an empty one.
+  function leaveFolder() {
+    saveTimer.stop()
+    pageDirty = false
+    page = null
+    history = []
+    historyAt = -1
+    tagShown = ""
+    calendarShown = false
+    libraryShown = false
+    peopleShown = false
+    templatesShown = false
+    startWith = null
+    pendingActivate = true
   }
 
   Timer {
@@ -721,11 +1376,11 @@ FocusScope {
   // is ("replace"); else its blocks go in after the block you're in
   // ("insert"). The pages in it are made inside this one. Undo takes the
   // blocks back off.
-  function useTemplateHere(template, mode) {
+  function useTemplateHere(template, mode, afterUid) {
     if (!page || locked || !workspace) return
     commit()
     var pageId = page.id
-    var atUid = editor.focusUid
+    var atUid = afterUid || editor.focusUid
     workspace.useTemplate(template, pageId, templateFill(), function(top) {
       if (!view.page || view.page.id !== pageId) return
       if (mode === "replace") {
@@ -786,6 +1441,19 @@ FocusScope {
       if (!made) { view.toast("It couldn't be saved as a template"); return }
       view.toastUndo("\u201c" + title + "\u201d is a template: in Templates at the sidebar's foot", function() { view.workspace.trashPage(made, false) })
     })
+  }
+
+  // A new page from a template (Templates): one of yours by its id, or one
+  // of Omanote's ("daily"...), put on it once it's open.
+  property var startWith: null
+  function newPageWith(template) {
+    if (!workspace) return
+    if (Workspace.isUuid(template)) { newPageFromTemplate(template, ""); return }
+    commit()
+    var child = workspace.createPage({ parent: "" })
+    if (!child) return
+    startWith = { page: child.id, template: template }
+    open(child.id)
   }
 
   // A new, empty template, opened to write.
@@ -1161,6 +1829,20 @@ FocusScope {
     })
   }
 
+  // An agenda's or an event block's colors.
+  function openCalColors(uid, anchor) {
+    var v = editor.items[uid] ? editor.items[uid].calView : null
+    if (!v) return
+    tableColorTarget = uid
+    colorAt = anchor.mapToItem(view, anchor.width - 250, anchor.height + 6)
+    var now = v.scopeColors()
+    tableColors.currentText = now.color
+    tableColors.currentBack = now.background
+    tableColors.x = Math.max(8, Math.min(view.width - tableColors.width - 8, colorAt.x))
+    tableColors.y = colorAt.y
+    tableColors.open()
+  }
+
   // Its colors (its own, the card's), beside its button.
   function openMeetingColors(uid, anchor) {
     var v = editor.items[uid] ? editor.items[uid].meetingView : null
@@ -1336,7 +2018,7 @@ FocusScope {
     workspace.files.copyText(Markdown.fromDocPage(page, function(id) {
       var e = view.workspace.index.pages[id]
       return e ? { title: e.title || "Untitled", icon: e.icon, file: "" } : null
-    }))
+    }, { calendar: workspace.calendar, syncedPage: function(id) { return view.workspace.readPageNow(id) }, contactOf: function(id) { return view.workspace.contactById(id) } }))
     toast("Copied the page as Markdown")
   }
 
@@ -1381,7 +2063,25 @@ FocusScope {
 
   function openFind() { quickFind.start() }
   function openTrash() { trashPop.x = 12; trashPop.y = view.height - trashPop.height - 60; trashPop.open() }
-  function openTemplates() { templatesPop.x = 12; templatesPop.y = view.height - templatesPop.height - 150; templatesPop.open() }
+  // Templates (yours, then Omanote's), in place of a page.
+  function openTemplates(fromHistory) {
+    if (!workspace) return
+    commit()
+    page = null
+    editor.load([])
+    pageDirty = false
+    tagShown = ""
+    calendarShown = false
+    libraryShown = false
+    peopleShown = false
+    templatesShown = true
+    templatesView.reset()
+    templatesView.focusSearch()
+    if (!fromHistory) {
+      history = history.slice(0, historyAt + 1).concat(["templates"]).slice(-100)
+      historyAt = history.length - 1
+    }
+  }
   function openArchive() { archivePop.x = 12; archivePop.y = view.height - archivePop.height - 90; archivePop.open() }
   function openRowMenu(id, anchor) {
     rowMenu.pageId = id
@@ -1460,6 +2160,17 @@ FocusScope {
         IconButton { theme: view.theme; icon: view.theme.icons.back; size: 30; iconSize: 16; tip: "Back  Alt+\u2190"; active: view.historyAt > 0; onClicked: view.back() }
         IconButton { theme: view.theme; icon: view.theme.icons.forward; size: 30; iconSize: 16; tip: "Forward  Alt+\u2192"; active: view.historyAt < view.history.length - 1; onClicked: view.forward() }
         Item { width: 6; height: 1 }
+        // The calendar shown, the Library, or People.
+        Text {
+          visible: view.calendarShown || view.libraryShown || view.peopleShown || view.templatesShown
+          anchors.verticalCenter: parent.verticalCenter
+          leftPadding: 6
+          textFormat: Text.PlainText
+          text: view.templatesShown ? "Templates" : view.peopleShown ? "People" : view.libraryShown ? "Library" : "Calendar"
+          font.family: view.theme.uiFont
+          font.pixelSize: 13
+          color: view.theme.text
+        }
         // A tag shown: "Tags / #idea".
         Text {
           visible: view.tagShown !== ""
@@ -1571,9 +2282,10 @@ FocusScope {
           tip: view.dictating ? "Done dictating  Ctrl+Shift+D" : view.recorder && view.recorder.checked && !view.recorder.canTranscribe ? "Dictation needs voxtype (Omarchy's dictation)" : "Dictate: say it, and it's written where you are  Ctrl+Shift+D"
           onClicked: view.dictate()
         }
-        IconButton { visible: view.tagShown === ""; theme: view.theme; icon: view.theme.icons.search; size: 30; iconSize: 16; tip: "Find on this page  Ctrl+F"; checked: findBar.shown; onClicked: findBar.toggle() }
+        IconButton { visible: view.tagShown === "" && !view.calendarShown && !view.libraryShown && !view.peopleShown && !view.templatesShown; theme: view.theme; icon: view.theme.icons.search; size: 30; iconSize: 16; tip: "Find on this page  Ctrl+F"; checked: findBar.shown; onClicked: findBar.toggle() }
         IconButton {
           id: moreButton
+          visible: !view.calendarShown && !view.libraryShown && !view.peopleShown && !view.templatesShown
           theme: view.theme; icon: view.theme.icons.more; size: 30; iconSize: 16; tip: "Font, width, export, trash"
           active: view.page !== null
           onClicked: pageMenu.open()
@@ -1607,6 +2319,62 @@ FocusScope {
       onRemoveRequested: view.removeTag()
     }
 
+    // People, in place of a page.
+    PeopleView {
+      id: peopleView
+      objectName: "peopleView"
+      z: 2
+      anchors.top: topBar.bottom
+      anchors.bottom: parent.bottom
+      width: parent.width
+      visible: view.peopleShown
+      theme: view.theme
+      workspace: view.workspace
+      view: view
+    }
+
+    // The Library, in place of a page.
+    LibraryView {
+      id: libraryView
+      objectName: "libraryView"
+      z: 2
+      anchors.top: topBar.bottom
+      anchors.bottom: parent.bottom
+      width: parent.width
+      visible: view.libraryShown
+      theme: view.theme
+      workspace: view.workspace
+      view: view
+    }
+
+    // Templates, in place of a page.
+    TemplatesView {
+      id: templatesView
+      objectName: "templatesView"
+      z: 2
+      anchors.top: topBar.bottom
+      anchors.bottom: parent.bottom
+      width: parent.width
+      visible: view.templatesShown
+      theme: view.theme
+      workspace: view.workspace
+      view: view
+    }
+
+    // The calendar, in place of a page.
+    CalendarView {
+      id: calendarView
+      objectName: "calendarView"
+      z: 2
+      anchors.top: topBar.bottom
+      anchors.bottom: parent.bottom
+      width: parent.width
+      visible: view.calendarShown
+      theme: view.theme
+      workspace: view.workspace
+      view: view
+    }
+
     Flickable {
       id: flick
       anchors.top: topBar.bottom
@@ -1617,7 +2385,7 @@ FocusScope {
       interactive: false
       clip: true
       visible: view.page !== null
-      Behavior on contentY { enabled: !wheel.active; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+      Behavior on contentY { enabled: scroller.animate; NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
       // The cover, across the whole page.
       Item {
@@ -1763,6 +2531,73 @@ FocusScope {
           }
         }
 
+        // A synced block's blocks: it says so; back where you were.
+        Rectangle {
+          id: syncedNote
+          objectName: "syncedNote"
+          readonly property bool shown: { var r = view.workspace ? view.workspace.revision : 0; return view.page !== null && view.workspace !== null && view.workspace.index.pages[view.page.id] !== undefined && view.workspace.index.pages[view.page.id].synced === true }
+          readonly property int places: { var r = view.workspace ? view.workspace.revision : 0; return shown ? Workspace.backlinks(view.workspace.index, view.page.id).length : 0 }
+          visible: shown
+          width: syncedRow2.implicitWidth + 24
+          height: visible ? 32 : 0
+          radius: 8
+          color: Qt.alpha("#e5904d", 0.14)
+          Row {
+            id: syncedRow2
+            anchors.centerIn: parent
+            spacing: 8
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: view.theme.icons.synced; font.family: view.theme.iconFont; font.pixelSize: 14; color: "#c86f2a" }
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: "A synced block's blocks: what you change here changes on " + (syncedNote.places === 1 ? "the page it's on" : "the " + syncedNote.places + " pages it's on"); font.family: view.theme.uiFont; font.pixelSize: 13; color: view.theme.text }
+            Text {
+              visible: view.historyAt > 0
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: "Back"
+              font.family: view.theme.uiFont
+              font.pixelSize: 13
+              font.weight: Font.DemiBold
+              color: view.theme.accent
+              HoverHandler { cursorShape: Qt.PointingHandCursor }
+              TapHandler { onTapped: view.back() }
+            }
+          }
+        }
+
+        // The notes for an event: it says which (a click opens it).
+        Rectangle {
+          id: eventNote
+          objectName: "eventNote"
+          readonly property var ev: {
+            var r = view.workspace ? view.workspace.calendarRevision : 0
+            if (!view.page || !view.workspace) return null
+            var list = view.workspace.calendar.events
+            for (var i = 0; i < list.length; i++) if (list[i].page === view.page.id) return list[i]
+            return null
+          }
+          readonly property var next: ev ? Calendar.nextOf(ev, new Date()) : null
+          visible: ev !== null
+          width: eventRow2.implicitWidth + 24
+          height: visible ? 32 : 0
+          radius: 8
+          color: Qt.alpha(view.theme.text, 0.06)
+          Row {
+            id: eventRow2
+            anchors.centerIn: parent
+            spacing: 8
+            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: view.theme.icons.calendar; font.family: view.theme.iconFont; font.pixelSize: 14; color: view.theme.accent }
+            Text {
+              anchors.verticalCenter: parent.verticalCenter
+              textFormat: Text.PlainText
+              text: eventNote.next ? Calendar.line(eventNote.next, new Date()) : ""
+              font.family: view.theme.uiFont
+              font.pixelSize: 13
+              color: view.theme.text
+            }
+          }
+          HoverHandler { cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: view.openEvent(eventNote.ev.id, eventNote.next ? eventNote.next.day : "", eventNote) }
+        }
+
         // A template: it says so; a new page from it, or a page again.
         Rectangle {
           id: templateNote
@@ -1791,6 +2626,42 @@ FocusScope {
               HoverHandler { cursorShape: Qt.PointingHandCursor }
               TapHandler { onTapped: view.newPageFromTemplate(templateNote.root, "") }
             }
+          }
+        }
+
+        // A template's own page: what it's for, in a line (Templates shows it).
+        Item {
+          id: aboutTemplate
+          objectName: "templateAbout"
+          readonly property string saved: { var r = view.workspace ? view.workspace.revision : 0; return visible && view.workspace.index.pages[view.page.id] ? view.workspace.index.pages[view.page.id].description || "" : "" }
+          visible: view.page !== null && templateNote.root === view.page.id
+          width: parent.width
+          height: visible ? 28 : 0
+          onSavedChanged: if (!aboutInput.activeFocus) aboutInput.text = saved
+          onVisibleChanged: if (visible) aboutInput.text = saved
+          TextInput {
+            id: aboutInput
+            objectName: "templateAboutInput"
+            width: parent.width
+            anchors.verticalCenter: parent.verticalCenter
+            clip: true
+            maximumLength: 200
+            selectByMouse: true
+            font.family: view.theme.uiFont
+            font.pixelSize: 14
+            color: view.theme.text
+            selectionColor: Qt.alpha(view.theme.accent, 0.35)
+            onEditingFinished: if (view.page) view.workspace.setDescription(view.page.id, text)
+            onActiveFocusChanged: if (!activeFocus && view.page) view.workspace.setDescription(view.page.id, text)
+            Keys.onEscapePressed: { text = aboutTemplate.saved; view.forceActiveFocus() }
+            Text {
+              visible: aboutInput.text === ""
+              textFormat: Text.PlainText
+              text: "What it's for, in a line (shown in Templates)"
+              font: aboutInput.font
+              color: view.theme.faint
+            }
+            HoverHandler { cursorShape: Qt.IBeamCursor }
           }
         }
 
@@ -1871,6 +2742,10 @@ FocusScope {
           pageInfo: function(id) { return view.workspace ? view.workspace.pageMeta(id) : null }
           pagesRevision: view.workspace ? view.workspace.revision : 0
           findPages: function(query) { return view.findPages(query) }
+          findPeople: function(query) { return view.findPeople(query) }
+          makePerson: function(name) { return view.makePerson(name) }
+          personOfEmail: function(email) { return view.personOfEmail(email) }
+          onContactOpened: function(id, anchor, x, y) { contactPop.openAt(id, anchor, x, y) }
           makePage: function(title) {
             var made = view.workspace ? view.workspace.createPage({ parent: "", title: title }) : null
             return made ? made.id : ""
@@ -1887,10 +2762,19 @@ FocusScope {
             picker.allowTop = false
             picker.openAt(main, "Link to page")
           }
+          onPageRelinkRequested: function(uid) {
+            view.pickFor = uid
+            picker.purpose = "relink"
+            picker.exclude = ""
+            picker.allowTop = false
+            picker.openAt(main, "Link to another page")
+          }
           onImageRequested: function(uid) {
-            view.pictureRequested(function(path) {
+            var place = function(path) {
               if (path) view.workspace.importPicture(path, function(src) { if (src) editor.placeBlock(uid, { type: "image", src: src, width: 1, align: "center" }) })
-            })
+            }
+            // A picture, shown as pictures (the desktop's file dialog a click away).
+            picturePicker.choose(false, function(paths) { place(paths[0]) }, function() { view.pictureRequested(place) })
           }
           onIconRequested: function(uid) {
             if (view.locked) return
@@ -1920,7 +2804,7 @@ FocusScope {
           }
           onTextCopied: function(text) { view.workspace.files.copyText(text); view.toast("Copied") }
           onLinkOpened: function(url) { view.workspace.files.openUrl(url) }
-          onPictureOpened: function(src) { view.workspace.files.openUrl(view.workspace.assetUrl(src)) }
+          onPictureOpened: function(src) { view.showPagePicture(src) }
           onPastePicture: function(afterUid) { view.workspace.pastePicture(function(src) { if (src) editor.insertPicture(afterUid, src, 0) }) }
           onLinkRequested: linkPop.openAt(bubble)
           onMindMapColorsRequested: function(uid, anchor) { view.openIdeaColors(uid, anchor) }
@@ -1935,6 +2819,21 @@ FocusScope {
           onDictateRequested: view.dictate()
           onRecordRequested: view.newAudioNote()
           onTemplateRequested: function(uid) { view.openTemplatePick("insert", "", editor.items[uid] || null) }
+          calendarSource: view.workspace
+          dataWork: view.dataWork
+          onDataAction: function(uid, what, arg) { view.dataAction(uid, what, arg) }
+          onCalendarAction: function(uid, what, arg) {
+            if (what === "add") view.quickAdd(arg.day, -1, arg.anchor)
+            else if (what === "open") view.openEvent(arg.id, arg.day, arg.anchor)
+            else if (what === "colors") view.openCalColors(uid, arg)
+          }
+          onEventRequested: function(uid) {
+            var item = editor.items[uid]
+            var n = new Date()
+            view.quickAdd(new Date(n.getFullYear(), n.getMonth(), n.getDate()), -1, item || null, function(id) {
+              editor.placeBlock(uid, { type: "event", calendar: { id: id } })
+            })
+          }
           meetings: view.meetings
           meetingWork: view.meetingWork
           onMeetingAction: function(uid, what, arg) { view.meetingAction(uid, what, arg) }
@@ -2003,17 +2902,49 @@ FocusScope {
       }
 
       DropArea {
+        id: pageDrop
         anchors.fill: parent
         onEntered: function(drag) { drag.accepted = drag.hasUrls }
         onDropped: function(drop) {
           if (!drop.hasUrls) return
+          // Pictures dropped on a gallery: into it.
+          var onGallery = view.page && !view.locked ? view.galleryAt(pageDrop, drop.x, drop.y) : ""
+          if (onGallery) {
+            var pics = []
+            for (var g = 0; g < drop.urls.length && g < 100; g++) {
+              var gp = decodeURIComponent(String(drop.urls[g]).replace(/^file:\/\//, ""))
+              if (Files.kindOf(gp) === "image") pics.push(gp)
+            }
+            if (pics.length) { view.addToGallery(view.page.id, onGallery, pics); return }
+          }
           var after = editor.focusUid
           var notes = []
           for (var i = 0; i < drop.urls.length && i < 100; i++) {
             var path = decodeURIComponent(String(drop.urls[i]).replace(/^file:\/\//, ""))
+            // An email (.eml): an email block.
+            if (/\.eml$/i.test(path) && i < 12 && view.page && !view.locked) {
+              var mail = editor.placeBlock(after || editor.uidAt(editor.model.count - 1), { type: "email" })
+              after = mail
+              view.addEmailTo(view.page.id, mail, path)
+              continue
+            }
+            // Contacts (.vcf): into People.
+            if (/\.(vcf|vcard)$/i.test(path)) { view.importContactsFrom(path, function(r) { if (r) view.openPeople(r.first) }); continue }
+            // A calendar file (.ics): its events, to put on your calendar.
+            if (view.isCalendarFile(path)) {
+              var icsPath = path
+              view.workspace.files.readFiles([icsPath], function(got) { if (got[icsPath] !== undefined) view.showIcs(got[icsPath], icsPath.slice(icsPath.lastIndexOf("/") + 1)) }, 16 * 1024 * 1024)
+              continue
+            }
             // Notes dropped on a page come in as pages inside it; pictures, on it.
             if (Import.kindOf(path) !== "") notes.push(path)
-            else if (i < 12) view.workspace.importPicture(path, function(src) { if (src) editor.insertPicture(after, src, 0) })
+            else if (i < 12 && Files.kindOf(path) === "image") view.workspace.importPicture(path, function(src) { if (src) editor.insertPicture(after, src, 0) })
+            else if (i < 12 && view.page && !view.locked) {
+              // Any other file: a file block (a video's, a video block).
+              var made = editor.placeBlock(after || editor.uidAt(editor.model.count - 1), { type: Files.kindOf(path) === "video" ? "video" : "file" })
+              after = made
+              view.addFileTo(view.page.id, made, path)
+            }
           }
           if (notes.length && view.page) view.importPaths(notes, view.page.id)
         }
@@ -2024,16 +2955,14 @@ FocusScope {
       id: wheel
       target: null
       acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-      onWheel: function(event) {
-        var dy = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y / 120 * 90
-        var max = Math.max(0, flick.contentHeight - flick.height)
-        flick.contentY = Math.round(Math.max(0, Math.min(max, flick.contentY - dy)))
-      }
+      onWheel: function(event) { scroller.wheel(event) }
     }
+    // A trackpad as the fingers move (and on, gliding, when they lift); a wheel a step a notch.
+    SmoothScroll { id: scroller; flick: flick; step: 90; notchMs: 120; speed: view.settings.scrollSpeed || "normal" }
 
     // No page open (none yet, or every one in the trash).
     Column {
-      visible: view.page === null && view.tagShown === "" && view.workspace !== null && view.workspace.ready
+      visible: view.page === null && view.tagShown === "" && !view.calendarShown && !view.libraryShown && !view.peopleShown && !view.templatesShown && view.workspace !== null && view.workspace.ready
       anchors.centerIn: parent
       spacing: 12
       Text {
@@ -2170,6 +3099,7 @@ FocusScope {
     theme: view.theme
     editor: editor
     onToPageRequested: function(uid) { view.turnIntoPage(uid) }
+    onSyncedRequested: function(uids) { view.makeSynced(uids) }
     onMindMapRequested: function(uids) {
       if (!editor.toMindMap(uids)) view.toast("A page or a sketch is among those blocks, and it would be lost: move it out first")
     }
@@ -2238,7 +3168,7 @@ FocusScope {
   // (An audio note's colors use them too.)
   function colorTable() {
     var item = editor.items[tableColorTarget]
-    return item ? item.tableView || item.audioView || item.meetingView || null : null
+    return item ? item.tableView || item.audioView || item.meetingView || item.calView || item.dataView || null : null
   }
 
   // The colors for a table's cells, beside the button or handle they were
@@ -2463,6 +3393,18 @@ FocusScope {
     }
   }
 
+  // A person named on a page, clicked: their card.
+  ContactPop {
+    id: contactPop
+    objectName: "contactPop"
+    theme: view.theme
+    workspace: view.workspace
+    parent: view
+    onCopied: function(what) { view.copyText(what) }
+    onEmailRequested: function(email) { view.mailTo(email) }
+    onPeopleRequested: function(id) { view.openPeople(id) }
+  }
+
   // A color of your own for them: shown in the table as you pick, kept with
   // Apply, put back with Cancel.
   ColorPicker {
@@ -2556,6 +3498,7 @@ FocusScope {
     property string purpose: "link"
     onPicked: function(id) {
       if (purpose === "link") editor.placeBlock(view.pickFor, { type: "link", target: id })
+      else if (purpose === "relink") view.relink(view.pickFor, id)
       else if (purpose === "moveBlocks") view.moveBlocks(view.movingBlocks, id)
       else if (purpose === "movePage") view.movePage(view.moving, id)
     }
@@ -2602,16 +3545,314 @@ FocusScope {
     }
   }
 
-  // Your templates (the sidebar's foot).
-  TemplatesPop {
-    id: templatesPop
-    objectName: "templatesPop"
+  // A button set up: its words, what it does, its template.
+  Pop {
+    id: buttonSetup
+    objectName: "buttonSetup"
+    theme: view.theme
+    property string uid: ""
+    property int tick: 0
+    readonly property var d: { var t = tick; return uid ? editor.dataOf(uid) : null }
+    focus: true
+    width: 340
+    onOpened: buttonLabel.text = d ? d.label : ""
+    onClosed: if (d && buttonLabel.text !== d.label) set({ label: buttonLabel.text })
+    function set(fields) {
+      var n = editor.dataOf(uid)
+      if (!n) return
+      for (var k in fields) n[k] = fields[k]
+      editor.setData(uid, n)
+      tick++
+    }
+    onUidChanged: tick++
+    contentItem: Column {
+      spacing: 8
+      Field {
+        id: buttonLabel
+        objectName: "buttonLabel"
+        theme: view.theme
+        width: parent.width
+        height: 34
+        placeholder: "Its words (else the template's name)"
+        onAccepted: buttonSetup.set({ label: text })
+      }
+      Row {
+        spacing: 6
+        Chip { objectName: "buttonInsert"; theme: view.theme; text: "Puts it in, here"; checked: buttonSetup.d && buttonSetup.d.action !== "page"; onClicked: buttonSetup.set({ action: "insert" }) }
+        Chip { objectName: "buttonPage"; theme: view.theme; text: "Makes a page inside"; checked: buttonSetup.d && buttonSetup.d.action === "page"; onClicked: buttonSetup.set({ action: "page" }) }
+      }
+      Text { textFormat: Text.PlainText; leftPadding: 4; text: "Your templates"; visible: view.userTemplates.length > 0; font.family: view.theme.uiFont; font.pixelSize: 11; color: view.theme.muted }
+      Repeater {
+        model: view.userTemplates
+        delegate: MenuRow {
+          required property var modelData
+          objectName: "buttonTemplate"
+          width: parent.width; theme: view.theme
+          icon: modelData.icon ? "" : view.theme.icons.templates
+          text: (modelData.icon ? modelData.icon + "  " : "") + modelData.title
+          checked: buttonSetup.d && buttonSetup.d.template === "tpl:" + modelData.id
+          onClicked: buttonSetup.set({ template: "tpl:" + modelData.id })
+        }
+      }
+      Text { textFormat: Text.PlainText; leftPadding: 4; text: "Omanote's"; font.family: view.theme.uiFont; font.pixelSize: 11; color: view.theme.muted }
+      Flow {
+        objectName: "buttonBuiltins"
+        width: parent.width
+        spacing: 5
+        Repeater {
+          model: view.templates
+          delegate: Chip {
+            required property var modelData
+            theme: view.theme
+            icon: view.theme.icons[modelData.icon] || ""
+            text: modelData.label
+            checked: buttonSetup.d && buttonSetup.d.template === modelData.id
+            onClicked: buttonSetup.set({ template: modelData.id })
+          }
+        }
+      }
+      Chip {
+        objectName: "buttonDone"
+        anchors.right: parent.right
+        theme: view.theme
+        text: "Done"
+        checked: true
+        onClicked: buttonSetup.close()
+      }
+    }
+  }
+
+  // "/synced": a new synced block, or one there is.
+  Pop {
+    id: syncedPick
+    objectName: "syncedPick"
+    theme: view.theme
+    property string uid: ""
+    focus: false
+    width: 340
+    readonly property var list: { var r = view.workspace ? view.workspace.revision : 0; return view.workspace ? Workspace.syncedPages(view.workspace.index).slice(0, 12) : [] }
+    contentItem: Column {
+      spacing: 2
+      MenuRow {
+        objectName: "syncedNew"
+        width: parent.width; theme: view.theme; icon: view.theme.icons.plus; text: "A new synced block"
+        hint: "write in it, then put it anywhere"
+        onClicked: {
+          syncedPick.close()
+          var id = view.workspace.newSyncedPage([])
+          view.putSynced(syncedPick.uid, id)
+          view.open(id, false, { block: "" })
+        }
+      }
+      Text { visible: syncedPick.list.length > 0; textFormat: Text.PlainText; leftPadding: 8; topPadding: 4; text: "Or one there is"; font.family: view.theme.uiFont; font.pixelSize: 11; color: view.theme.muted }
+      Repeater {
+        model: syncedPick.list
+        delegate: MenuRow {
+          required property var modelData
+          objectName: "syncedChoice"
+          width: parent.width; theme: view.theme; icon: view.theme.icons.synced
+          text: { var t = view.workspace.texts[modelData.id] || ""; t = t.replace(/^Synced block\s*/, "").replace(/\s+/g, " ").trim(); return t.slice(0, 60) || "(empty)" }
+          hint: { var n = Workspace.backlinks(view.workspace.index, modelData.id).length; return n === 1 ? "on 1 page" : "on " + n + " pages" }
+          onClicked: { syncedPick.close(); view.putSynced(syncedPick.uid, modelData.id) }
+        }
+      }
+    }
+  }
+
+  // The calendar's: an event to change, a new one typed, a question, its color.
+  EventPop {
+    id: eventPop
+    objectName: "eventPop"
     theme: view.theme
     workspace: view.workspace
+    view: view
     parent: view
-    onOpenRequested: function(id) { view.open(id) }
-    onUseRequested: function(id) { view.newPageFromTemplate(id, "") }
-    onNewRequested: view.newTemplate()
+  }
+  QuickAddPop {
+    id: quickAddPop
+    objectName: "quickAddPop"
+    theme: view.theme
+    workspace: view.workspace
+    view: view
+    parent: view
+  }
+  Pop {
+    id: askPop
+    objectName: "askPop"
+    theme: view.theme
+    property string question: ""
+    property var options: []
+    property var then: null
+    focus: false
+    width: 280
+    contentItem: Column {
+      spacing: 2
+      Text {
+        textFormat: Text.PlainText
+        leftPadding: 8
+        bottomPadding: 4
+        width: parent.width
+        wrapMode: Text.Wrap
+        text: askPop.question
+        font.family: view.theme.uiFont
+        font.pixelSize: 12
+        color: view.theme.muted
+      }
+      Repeater {
+        model: askPop.options
+        delegate: MenuRow {
+          required property var modelData
+          objectName: "askOption"
+          width: parent.width
+          theme: view.theme
+          icon: ""
+          text: modelData.label
+          onClicked: { var t = askPop.then; askPop.close(); if (t) t(modelData.value) }
+        }
+      }
+    }
+  }
+  ColorPop {
+    id: eventColors
+    objectName: "eventColors"
+    theme: view.theme
+    editor: editor
+    mode: "tag"
+    noneLabel: "Accent"
+    parent: view
+    recent: view.recentColors
+    onIdeaPicked: function(kind, color) { view.setEventColor(color) }
+    onCustomRequested: function(kind) {
+      var ev = view.workspace.eventById(view.eventColorTarget)
+      eventCustom.recent = view.recentColors
+      eventCustom.x = view.colorAt.x
+      eventCustom.y = view.colorAt.y
+      eventCustom.start("color", ev && Colors.isHex(ev.color) ? ev.color : "", { text: ev ? ev.title || "Event" : "Event", fill: String(view.theme.background), ownInk: "", pageInk: String(view.theme.text) })
+    }
+  }
+  ColorPicker {
+    id: eventCustom
+    objectName: "eventCustom"
+    theme: view.theme
+    parent: view
+    property string had: ""
+    onPicked: function(hex) { view.setEventColor(hex); view.rememberColor(hex) }
+  }
+
+  // Pictures to choose, shown as pictures (a gallery's several, /image's one).
+  PicturePicker {
+    id: picturePicker
+    anchors.fill: parent
+    z: 62
+    theme: view.theme
+    files: view.workspace ? view.workspace.files : null
+    onVisibleChanged: if (!visible) view.forceActiveFocus()
+  }
+
+  // Pictures shown large (a picture's, a gallery's), over the whole view.
+  PictureViewer {
+    id: viewer
+    anchors.fill: parent
+    z: 60
+    theme: view.theme
+    urlOf: function(src) { return view.workspace ? view.workspace.assetUrl(src) : src }
+    onOpenRequested: function(src) { view.openAsset(src, src) }
+    onVisibleChanged: if (!visible) view.forceActiveFocus()
+  }
+
+  // An .ics file's events: what they are, which are on your calendar
+  // already, and Add (those that aren't).
+  Pop {
+    id: icsPop
+    objectName: "icsPop"
+    theme: view.theme
+    property var events: []
+    property string fileName: ""
+    readonly property var fresh: { var r = view.workspace ? view.workspace.calendarRevision : 0; return view.workspace ? events.filter(function(e) { return !Calendar.hasLike(view.workspace.calendar, e) }) : [] }
+    width: 420
+    padding: 18
+    contentItem: Column {
+      spacing: 10
+      Column {
+        width: parent.width
+        spacing: 2
+        Text {
+          textFormat: Text.PlainText
+          text: icsPop.events.length === 1 ? "An event" : icsPop.events.length + " events"
+          font.family: view.theme.uiFont
+          font.pixelSize: 15
+          font.weight: Font.DemiBold
+          color: view.theme.text
+        }
+        Text {
+          visible: icsPop.fileName !== ""
+          width: parent.width
+          elide: Text.ElideMiddle
+          textFormat: Text.PlainText
+          text: icsPop.fileName
+          font.family: view.theme.uiFont
+          font.pixelSize: 12
+          color: view.theme.muted
+        }
+      }
+      Repeater {
+        model: icsPop.events.slice(0, 6)
+        delegate: Row {
+          required property var modelData
+          readonly property bool there: { var r = view.workspace ? view.workspace.calendarRevision : 0; return Calendar.hasLike(view.workspace.calendar, modelData) }
+          objectName: "icsEvent"
+          width: parent.width
+          spacing: 10
+          Rectangle { width: 3; height: eventText.height; radius: 1.5; color: Qt.alpha(view.theme.text, 0.3) }
+          Column {
+            id: eventText
+            width: parent.width - 13
+            spacing: 1
+            Text { width: parent.width; elide: Text.ElideRight; textFormat: Text.PlainText; text: parent.parent.modelData.title; font.family: view.theme.uiFont; font.pixelSize: 13; font.weight: Font.Medium; color: view.theme.text }
+            Text {
+              width: parent.width
+              elide: Text.ElideRight
+              textFormat: Text.PlainText
+              text: view.eventWhen(parent.parent.modelData) + (parent.parent.modelData.place ? "  \u00b7  " + parent.parent.modelData.place : "") + (parent.parent.there ? "  \u00b7  on your calendar" : "")
+              font.family: view.theme.uiFont
+              font.pixelSize: 12
+              color: view.theme.muted
+            }
+          }
+        }
+      }
+      Text {
+        visible: icsPop.events.length > 6
+        textFormat: Text.PlainText
+        text: "and " + (icsPop.events.length - 6) + " more"
+        font.family: view.theme.uiFont
+        font.pixelSize: 12
+        color: view.theme.muted
+      }
+      Text {
+        visible: icsPop.fresh.length === 0
+        width: parent.width
+        wrapMode: Text.Wrap
+        textFormat: Text.PlainText
+        text: icsPop.events.length === 1 ? "It's on your calendar already." : "They're on your calendar already."
+        font.family: view.theme.uiFont
+        font.pixelSize: 12
+        color: view.theme.muted
+      }
+      Item { width: 1; height: 2 }
+      Row {
+        spacing: 8
+        TextButton {
+          objectName: "icsAdd"
+          visible: icsPop.fresh.length > 0
+          theme: view.theme
+          primary: true
+          text: icsPop.fresh.length === icsPop.events.length ? "Add to calendar" : "Add the " + icsPop.fresh.length + " new"
+          onClicked: view.addIcsEvents()
+        }
+        TextButton { theme: view.theme; text: icsPop.fresh.length > 0 ? "Cancel" : "Close"; onClicked: icsPop.close() }
+      }
+    }
   }
 
   // A template to pick: to put here, for a new page inside one, or what new pages inside one start from.
@@ -2771,6 +4012,7 @@ FocusScope {
     if (ctrl && !shift && !alt && e.key === Qt.Key_J) { openAgent("auto"); return true }
     if (ctrl && shift && !alt && e.key === Qt.Key_D) { dictate(); return true }
     if (ctrl && shift && !alt && e.key === Qt.Key_R) { newAudioNote(); return true }
+    if (ctrl && shift && !alt && e.key === Qt.Key_C) { openCalendar("", false); return true }
     if (alt && !ctrl && e.key === Qt.Key_Left) { back(); return true }
     if (alt && !ctrl && e.key === Qt.Key_Right) { forward(); return true }
     return false

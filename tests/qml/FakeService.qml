@@ -21,8 +21,30 @@ QtObject {
     next[key] = value
     user = next
   }
+  function setSettings(changes) {
+    var next = JSON.parse(JSON.stringify(user))
+    for (var k in changes) next[k] = changes[k]
+    user = next
+  }
+  property string home: "/tmp"
+  // Profiles (Profiles.qml), when a test has them (else none: no switch, no first run).
+  property var profiles: null
+  // What's open written before another profile opens (how many times), and
+  // the folder a pick gets ("" as if it was called off).
+  property int savedOpen: 0
+  function saveOpen() { savedOpen++ }
+  property string nextFolder: ""
+  property string pickedFolder: ""
+  function pickFolder(title, done) { pickedFolder = title; done(nextFolder) }
   function shortcutNote(event) { return event === "toggle" ? "Super + N" : "Super + Alt + N" }
   function pickPicture(done) { done("") }
+  // The file a pick gets ("" as if it was called off), and what was asked for.
+  property string nextFile: ""
+  property string pickedKind: ""
+  function pickFile(kind, done) { pickedKind = kind; done(nextFile) }
+  // The pictures a pick gets ([] as if it was called off).
+  property var nextPictures: []
+  function pickPictures(done) { done(nextPictures) }
   // The microphone (FakeRecorder.qml).
   property var recorder: FakeRecorder { input: fake.settings.audioInput || ""; boost: fake.settings.audioBoost !== false }
   // voxtype's meetings (FakeMeetings.qml).

@@ -53,6 +53,7 @@ Item {
     function fresh() {
       files.reset()
       view.page = null
+      view.templatesShown = false
       ws.welcomed = false
       ws.written = ({})
       ws.load()
@@ -117,15 +118,36 @@ Item {
       verify(titles.indexOf(t.id) < 0, "not in the tree")
       verify(titles.indexOf(p.id) >= 0)
       verify(root.lastToast.indexOf("is a template") >= 0, root.lastToast)
-      // In Templates, at the sidebar's foot.
+      // In Templates, at the sidebar's foot: a card, in place of a page.
       wait(200)
       click(named(win(), "templatesRow"))
-      var row = null
-      tryVerify(function() { row = named(win(), "templateRow"); return row !== null }, 1000)
-      wait(200)
-      mouseClick(row)
-      tryVerify(function() { return view.page && view.page.id === t.id }, 2000, "opened, to change it")
+      tryVerify(function() { return view.templatesShown && view.page === null }, 1000)
+      verify(named(win(), "templatesRow").checked, "the sidebar says where you are")
+      var card = null
+      tryVerify(function() { card = find(view.templatesView, function(it) { return it.objectName === "templateCard" && it.yours }); return card !== null }, 1000)
+      compare(card.title, "Standup " + today("ddd d MMM"), "named as a page from it will be")
+      verify(card.about.indexOf(today("dddd")) >= 0, "no description yet: how it starts, filled in: " + card.about)
+      compare(card.meta, "1 page in it")
+      verify(find(view.templatesView, function(it) { return it.objectName === "templateCard" && !it.yours && it.title === "Daily planner" }) !== null, "and Omanote's")
+      // Edit (under the pointer) opens it, to change it like any page.
+      mouseMove(card, card.width / 2, card.height / 2)
+      var edit = null
+      tryVerify(function() { edit = find(card, function(it) { return it.objectName === "templateEdit" }); return edit !== null }, 1000)
+      click(edit)
+      tryVerify(function() { return view.page && view.page.id === t.id && !view.templatesShown }, 2000, "opened, to change it")
       tryVerify(function() { return named(win(), "templateNote") !== null }, 1000, "it says it's a template")
+      // What it's for, written at its top: on its card.
+      var about = null
+      tryVerify(function() { about = named(win(), "templateAboutInput"); return about !== null }, 1000)
+      wait(150)
+      mouseClick(about)
+      tryVerify(function() { return about.activeFocus }, 1000)
+      type("Yesterday today blockers")
+      keyClick(Qt.Key_Return)
+      tryCompare(ws.index.pages[t.id], "description", "Yesterday today blockers")
+      view.back()
+      tryVerify(function() { return view.templatesShown }, 1000, "back to Templates")
+      tryVerify(function() { card = find(view.templatesView, function(it) { return it.objectName === "templateCard" && it.yours }); return card !== null && card.about === "Yesterday today blockers" }, 1000)
     }
 
     function test_2_a_blank_page_from_it_filled_in() {
@@ -187,12 +209,12 @@ Item {
       var made = ""
       ws.saveAsTemplate(p.id, function(id) { made = id })
       tryVerify(function() { return made !== "" }, 2000)
-      // From Templates.
+      // From Templates: a click on its card.
       click(named(win(), "templatesRow"))
       var use = null
-      tryVerify(function() { use = named(win(), "useTemplate"); return use !== null }, 1000)
+      tryVerify(function() { use = find(view.templatesView, function(it) { return it.objectName === "templateCard" && it.yours }); return use !== null }, 1000)
       wait(200)
-      mouseClick(use)
+      mouseClick(use, 30, use.height - 20)
       tryVerify(function() { return view.page && view.page.title === "Standup " + today("ddd d MMM") && !Workspace.inTemplates(ws.index, view.page.id) }, 2000, "a new page from it")
       compare(ws.index.pages[view.page.id].parent, "")
       // New pages inside "Meetings" start from it.
@@ -205,6 +227,67 @@ Item {
       view.commit()
       var onMeetings = Workspace.childPages(ws.readPageNow(meetings.id))
       verify(onMeetings.indexOf(view.page.id) >= 0, "its block on the page it's in")
+    }
+
+    // One of Omanote's, from its card: a new page, laid out.
+    function test_4b_omanotes_from_templates() {
+      fresh()
+      view.openTemplates()
+      var card = null
+      tryVerify(function() { card = find(view.templatesView, function(it) { return it.objectName === "templateCard" && it.title === "Recipe" }); return card !== null }, 1000)
+      compare(card.about, "Ingredients, method, notes")
+      var before = Object.keys(ws.index.pages).length
+      wait(150)
+      mouseClick(card, 30, card.height - 20)
+      tryVerify(function() { return view.page !== null && !view.templatesShown && view.editor.model.count > 3 }, 2000, "a new page, laid out")
+      compare(Object.keys(ws.index.pages).length, before + 1)
+      compare(view.page.icon, "\u{1f373}")
+      compare(ws.index.pages[view.page.id].parent, "")
+    }
+
+    // Found by words in their names or what they're for, yours and
+    // Omanote's; none found, it says so; Esc shows them all; Enter, a new
+    // page from the first.
+    function test_4c_finding_a_template() {
+      fresh()
+      var p = standup()
+      var made = ""
+      ws.saveAsTemplate(p.id, function(id) { made = id })
+      tryVerify(function() { return made !== "" }, 2000)
+      ws.setDescription(made, "Yesterday, today, what's in the way")
+      view.openTemplates()
+      var field = named(view.templatesView, "templateSearch")
+      tryVerify(function() { return field.input.activeFocus }, 1000, "ready to type in")
+      function cards() {
+        var out = []
+        function walk(it) { if (it.objectName === "templateCard" && it.visible) out.push(it.title); for (var i = 0; i < it.children.length; i++) walk(it.children[i]) }
+        walk(view.templatesView)
+        return out
+      }
+      var all = cards().length
+      compare(all, 13, "yours and Omanote's 12")
+      type("planner")
+      tryVerify(function() { return cards().length === 3 }, 1000)
+      compare(cards().join(", "), "Daily planner, Weekly planner, Monthly planner")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return cards().length === all }, 1000, "Esc shows them all")
+      type("in the way")
+      tryVerify(function() { return cards().length === 1 }, 1000, "by what it's for")
+      compare(cards()[0], "Standup " + today("ddd d MMM"))
+      keyClick(Qt.Key_Escape)
+      type("standup")
+      tryVerify(function() { return cards().length === 1 }, 1000, "by its name")
+      keyClick(Qt.Key_Escape)
+      type("zebra")
+      tryVerify(function() { return cards().length === 0 && named(view.templatesView, "templateNone") !== null }, 1000, "none: it says so")
+      keyClick(Qt.Key_Escape)
+      type("recipe")
+      tryVerify(function() { return cards().length === 1 }, 1000)
+      keyClick(Qt.Key_Return)
+      tryVerify(function() { return view.page !== null && !view.templatesShown && view.page.icon === "\u{1f373}" }, 2000, "Enter: a new page from it")
+      // Opened again: all of them, the words gone.
+      view.openTemplates()
+      tryVerify(function() { return cards().length === all && view.templatesView.query === "" }, 1000)
     }
 
     function test_5_a_page_again_and_kept_apart() {

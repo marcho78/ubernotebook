@@ -1,0 +1,9 @@
+[
+ { "key": "sync", "title": "Weekly sync", "on": "tue", "time": "10:00", "end": "10:45", "repeat": "weekly",
+   "place": "Video call", "page": "weekly-sync", "notes": "Shop build, photos, launch date." },
+ { "key": "lunch", "title": "Lunch with Sam", "on": "+1", "time": "12:30", "end": "13:30", "place": "Harbour Street" },
+ { "key": "focus", "title": "Focus: the launch post", "on": "0", "time": "14:00", "end": "16:00", "color": "purple" },
+ { "key": "dentist", "title": "Dentist", "on": "+3", "time": "15:00", "end": "15:30", "place": "Dr. Lee, 4 Main Street" },
+ { "key": "run", "title": "Run club", "on": "sat", "time": "08:00", "end": "09:00", "repeat": "weekly", "place": "The park gates" },
+ { "key": "lisbon", "title": "Weekend in Lisbon", "on": "+9", "until": "+11", "color": "orange", "page": "lisbon" }
+]

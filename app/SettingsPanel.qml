@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
 import "../Audio.js" as Audio
+import "../Colors.js" as Colors
 
 // Omanote's settings. They apply as you change them and are kept on
 // Omanote's entry in ~/.config/omarchy/shell.json.
@@ -19,6 +20,9 @@ Popup {
   property string heard: ""
   // voxtype's meeting mode (Meetings.qml).
   readonly property var meetings: service && service.meetings ? service.meetings : null
+  // Profiles (Profiles.qml): notes kept apart, each in a folder of its own.
+  readonly property var profiles: service && service.profiles ? service.profiles : null
+  property bool addingProfile: false
 
   anchors.centerIn: Overlay.overlay
   width: Math.min(620, (parent ? parent.width : 620) - 40)
@@ -36,11 +40,55 @@ Popup {
     if (recorder) recorder.listSources()
     toggleField.text = s.shortcut || ""
     quickField.text = s.quickShortcut || ""
-    folderField.text = s.folder || ""
+    addingProfile = false
     mirrorField.text = s.mirrorFolder || ""
   }
 
   function set(key, value) { if (service) service.setSetting(key, value) }
+
+  // ---- appearance ----
+
+  // The colors of your own over the theme's: which setting, what it's
+  // called, what it colors, and the theme's color it stands in for.
+  readonly property var colorRoles: [
+    { key: "colorSidebar", label: "Sidebar", note: "Behind the list of pages", role: "sidebar", kind: "background" },
+    { key: "colorPage", label: "Page background", note: "Behind your pages, the calendar, People and the Library", role: "background", kind: "background" },
+    { key: "colorCards", label: "Sections and cards", note: "The sidebar's sections as cards (Projects, Pages, Tags\u2026), and cards and menus", role: "surface", kind: "background" },
+    { key: "colorText", label: "Text", note: "All the text; the dimmer text follows it", role: "text", kind: "color" }
+  ]
+  function hexOf(c) { return Colors.normalize(String(c)) || "#000000" }
+  // How well the text reads on a color (and the text, on the page).
+  function contrastOf(r) {
+    return r.kind === "color" ? Colors.contrast(hexOf(theme.text), hexOf(theme.background)) : Colors.contrast(hexOf(theme.text), hexOf(theme[r.role]))
+  }
+  readonly property bool anyColor: !!(s.colorSidebar || s.colorPage || s.colorCards || s.colorText)
+  property var picking: null
+  property string pickedBefore: ""
+  function pickColor(r, anchor) {
+    picking = r
+    pickedBefore = s[r.key] || ""
+    var fill = r.kind === "color" ? hexOf(theme.background) : hexOf(theme[r.role])
+    colorPicker.recent = String(s.recentColors || "").split(",").filter(function(c) { return /^#[0-9a-f]{6}$/i.test(c) })
+    colorPicker.start(r.kind, r.kind === "color" ? hexOf(theme.text) : fill, { text: "Sample text", fill: fill, ownInk: r.kind === "color" ? hexOf(theme.text) : "", pageInk: hexOf(theme.text) })
+  }
+  function remember(hex) {
+    var list = [hex].concat(String(s.recentColors || "").split(",").filter(function(c) { return /^#[0-9a-f]{6}$/i.test(c) && c.toLowerCase() !== hex.toLowerCase() }))
+    set("recentColors", list.slice(0, 8).join(","))
+  }
+
+  // The color picker: what's picked shows at once; Apply keeps it, Cancel
+  // puts back what was there.
+  ColorPicker {
+    id: colorPicker
+    objectName: "appearancePicker"
+    theme: panel.theme
+    parent: panel.contentItem
+    x: (panel.width - width) / 2
+    y: 70
+    onPreview: function(hex) { if (panel.picking) panel.set(panel.picking.key, hex) }
+    onPicked: function(hex) { if (panel.picking) { panel.set(panel.picking.key, hex); panel.remember(hex) } panel.picking = null }
+    onCanceled: { if (panel.picking) panel.set(panel.picking.key, panel.pickedBefore); panel.picking = null }
+  }
 
   // A few seconds of the microphone, its level shown, then how it sounded.
   function testMicrophone() {
@@ -79,6 +127,136 @@ Popup {
     font.capitalization: Font.AllUppercase
     font.letterSpacing: 0.8
     color: panel.theme.muted
+  }
+
+  // A profile: its name (written in place), its folder, and Open (or that
+  // it's open), Folder… (its notes looked for elsewhere: nothing's moved),
+  // the folder in the file manager, and Remove (its notes stay; asked
+  // first); the demo's, Start over (asked first).
+  component ProfileRow: Item {
+    id: prow
+    required property var modelData
+    readonly property bool open: panel.profiles.current !== null && panel.profiles.current.id === modelData.id
+    property string error: ""
+    property string asking: ""
+    objectName: "settingsProfile"
+    width: parent ? parent.width : 400
+    height: Math.max(58, rowBody.implicitHeight + 14)
+    Column {
+      id: rowBody
+      anchors.left: parent.left
+      anchors.right: rowTools.left
+      anchors.rightMargin: 12
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 3
+      Row {
+        spacing: 8
+        Field {
+          id: nameEdit
+          objectName: "settingsProfileName"
+          theme: panel.theme
+          width: 170
+          height: 30
+          fontSize: 13
+          maximumLength: 60
+          text: prow.modelData.name
+          onAccepted: { prow.error = panel.profiles.rename(prow.modelData.id, text); if (prow.error) text = prow.modelData.name }
+          onEscaped: text = prow.modelData.name
+          input.onActiveFocusChanged: if (!input.activeFocus && text !== prow.modelData.name) { prow.error = panel.profiles.rename(prow.modelData.id, text); if (prow.error) text = prow.modelData.name }
+        }
+        Text {
+          visible: prow.open || prow.modelData.demo
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: prow.open ? (prow.modelData.demo ? "open · demo" : "open") : "demo"
+          font.family: panel.theme.uiFont
+          font.pixelSize: 11
+          color: panel.theme.muted
+        }
+      }
+      Text {
+        objectName: "settingsProfileFolder"
+        width: parent.width
+        elide: Text.ElideMiddle
+        textFormat: Text.PlainText
+        leftPadding: 2
+        text: prow.modelData.folder || "~/Documents/Omanote"
+        font.family: panel.theme.uiFont
+        font.pixelSize: 12
+        color: panel.theme.muted
+      }
+      Text {
+        visible: prow.error !== "" || prow.asking !== ""
+        width: parent.width
+        wrapMode: Text.Wrap
+        textFormat: Text.PlainText
+        leftPadding: 2
+        text: prow.error || (prow.asking === "remove" ? "Take \u201c" + prow.modelData.name + "\u201d off the list? Its notes stay in their folder, to add again." : "Start the demo over? What you changed in it goes to the trash.")
+        font.family: panel.theme.uiFont
+        font.pixelSize: 12
+        color: prow.error ? panel.theme.urgent : panel.theme.text
+      }
+    }
+    Row {
+      id: rowTools
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 4
+      // Asked first: yes, or no.
+      TextButton {
+        visible: prow.asking !== ""
+        objectName: "settingsProfileYes"
+        theme: panel.theme
+        primary: true
+        text: prow.asking === "remove" ? "Remove" : "Start over"
+        onClicked: {
+          var what = prow.asking
+          prow.asking = ""
+          if (what === "remove") prow.error = panel.profiles.remove(prow.modelData.id)
+          else { panel.close(); panel.profiles.restartDemo() }
+        }
+      }
+      TextButton { visible: prow.asking !== ""; theme: panel.theme; text: "Cancel"; onClicked: prow.asking = "" }
+      TextButton {
+        visible: prow.asking === "" && !prow.open
+        objectName: "settingsProfileOpen"
+        theme: panel.theme
+        text: "Open"
+        onClicked: { panel.close(); panel.profiles.use(prow.modelData.id) }
+      }
+      TextButton {
+        visible: prow.asking === "" && !prow.modelData.demo
+        objectName: "settingsProfileMove"
+        theme: panel.theme
+        text: "Folder\u2026"
+        onClicked: panel.service.pickFolder("Where " + prow.modelData.name + "'s notes are", function(path) {
+          if (!path) return
+          var home = panel.service.home || ""
+          prow.error = panel.profiles.setFolder(prow.modelData.id, home && path.indexOf(home + "/") === 0 ? "~" + path.slice(home.length) : path)
+        })
+      }
+      IconButton {
+        visible: prow.asking === ""
+        theme: panel.theme; icon: panel.theme.icons.folder; size: 30; iconSize: 14
+        tip: "Open the folder"
+        onClicked: panel.service.store.openUrl("file://" + panel.profiles.pathOf(prow.modelData.folder))
+      }
+      IconButton {
+        visible: prow.asking === "" && prow.modelData.demo
+        objectName: "settingsDemoRestart"
+        theme: panel.theme; icon: panel.theme.icons.undo || panel.theme.icons.back; size: 30; iconSize: 14
+        tip: "Start the demo over"
+        onClicked: { prow.error = ""; prow.asking = "restart" }
+      }
+      IconButton {
+        visible: prow.asking === "" && !prow.open
+        objectName: "settingsProfileRemove"
+        theme: panel.theme; icon: panel.theme.icons.trash; size: 30; iconSize: 14
+        tip: "Take it off the list (its notes stay)"
+        onClicked: { prow.error = ""; prow.asking = "remove" }
+      }
+    }
+    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: panel.theme.line; opacity: 0.6 }
   }
 
   component Line: Item {
@@ -141,6 +319,133 @@ Popup {
         id: body
         width: flick.width
         spacing: 2
+
+        Heading { text: "Profiles"; visible: panel.profiles !== null }
+        Text {
+          visible: panel.profiles !== null
+          width: parent.width
+          wrapMode: Text.Wrap
+          textFormat: Text.PlainText
+          bottomPadding: 6
+          text: "Notes kept apart: each profile has a folder of its own, with its notebooks, pages, calendar, people and templates. Switch at the top of the sidebar or the shelf."
+          font.family: panel.theme.uiFont
+          font.pixelSize: 12
+          color: panel.theme.muted
+        }
+        Repeater {
+          model: panel.profiles ? panel.profiles.shown : []
+          delegate: ProfileRow {}
+        }
+        Item {
+          visible: panel.profiles !== null
+          width: parent.width
+          height: panel.addingProfile ? addForm.height + 20 : 44
+          TextButton {
+            objectName: "settingsNewProfile"
+            visible: !panel.addingProfile
+            anchors.verticalCenter: parent.verticalCenter
+            theme: panel.theme
+            icon: panel.theme.icons.plus
+            text: "New profile"
+            onClicked: { panel.addingProfile = true; addForm.reset(""); Qt.callLater(addForm.focusName) }
+          }
+          TextButton {
+            visible: !panel.addingProfile && panel.profiles !== null && panel.profiles.demo === null
+            x: 140
+            anchors.verticalCenter: parent.verticalCenter
+            theme: panel.theme
+            text: "Explore the demo"
+            onClicked: { panel.close(); panel.profiles.openDemo() }
+          }
+          ProfileForm {
+            id: addForm
+            visible: panel.addingProfile
+            y: 10
+            width: Math.min(420, parent.width)
+            theme: panel.theme
+            service: panel.service
+            onCreated: { panel.addingProfile = false; panel.close() }
+            onCancelled: panel.addingProfile = false
+          }
+        }
+
+        Heading { text: "Appearance" }
+        Repeater {
+          model: panel.colorRoles
+          delegate: Line {
+            id: roleLine
+            required property var modelData
+            readonly property bool own: !!panel.s[modelData.key]
+            readonly property real ratio: panel.contrastOf(modelData)
+            label: modelData.label
+            note: modelData.note + (ratio < 4.5 ? "  \u00b7  Text is hard to read on it (" + ratio.toFixed(1) + ":1)" : "")
+            Row {
+              spacing: 10
+              Text {
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: roleLine.own ? panel.s[roleLine.modelData.key] : "Theme"
+                font.family: panel.theme.uiFont
+                font.pixelSize: 12
+                color: panel.theme.muted
+              }
+              Rectangle {
+                id: swatch
+                objectName: "appearanceSwatch_" + roleLine.modelData.key
+                anchors.verticalCenter: parent.verticalCenter
+                width: 44
+                height: 26
+                radius: 7
+                // (The text's: "Aa" in it, on the page.)
+                color: roleLine.modelData.kind === "color" ? panel.theme.background : panel.theme[roleLine.modelData.role]
+                border.width: 1
+                border.color: swatchHover.hovered ? Qt.alpha(panel.theme.text, 0.5) : panel.theme.line
+                Text {
+                  visible: roleLine.modelData.kind === "color"
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  text: "Aa"
+                  font.family: panel.theme.uiFont
+                  font.pixelSize: 12
+                  font.weight: Font.DemiBold
+                  color: panel.theme.text
+                }
+                HoverHandler { id: swatchHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: panel.pickColor(roleLine.modelData, swatch) }
+                ToolTip.visible: swatchHover.hovered
+                ToolTip.delay: 500
+                ToolTip.text: "Pick a color"
+              }
+              Text {
+                objectName: "appearanceReset_" + roleLine.modelData.key
+                visible: roleLine.own
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: "Reset"
+                font.family: panel.theme.uiFont
+                font.pixelSize: 12
+                font.underline: resetHover.hovered
+                color: panel.theme.muted
+                HoverHandler { id: resetHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { onTapped: panel.set(roleLine.modelData.key, "") }
+              }
+            }
+          }
+        }
+        Text {
+          objectName: "appearanceResetAll"
+          visible: panel.anyColor
+          topPadding: 2
+          bottomPadding: 6
+          textFormat: Text.PlainText
+          text: "Back to the theme's colors"
+          font.family: panel.theme.uiFont
+          font.pixelSize: 12
+          font.underline: resetAllHover.hovered
+          color: panel.theme.muted
+          HoverHandler { id: resetAllHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler { onTapped: { panel.set("colorSidebar", ""); panel.set("colorPage", ""); panel.set("colorCards", ""); panel.set("colorText", "") } }
+        }
 
         Heading { text: "Shortcuts" }
         Line {
@@ -214,21 +519,6 @@ Popup {
         }
 
         Heading { text: "Notebooks" }
-        Line {
-          label: "Folder"
-          note: panel.service ? panel.service.rootPath : ""
-          Row {
-            spacing: 6
-            Field {
-              id: folderField
-              theme: panel.theme
-              width: 190
-              placeholder: "~/Documents/Omanote"
-              onAccepted: panel.set("folder", text)
-            }
-            IconButton { theme: panel.theme; icon: panel.theme.icons.folder; tip: "Open the folder"; onClicked: panel.service.store.openFolder() }
-          }
-        }
         Line {
           label: "Exports"
           note: panel.s.exportTo === "folder" ? (panel.service ? panel.service.rootPath + "/Exports" : "The Exports folder") : "A folder picker asks where, each time."
@@ -419,6 +709,24 @@ Popup {
           label: "Paper sounds"
           note: "A soft rustle when a page turns and a notebook opens."
           Toggle { theme: panel.theme; checked: panel.s.sounds !== false; onToggled: function(on) { panel.set("sounds", on) } }
+        }
+        Line {
+          label: "Scrolling speed"
+          note: "With a trackpad or a mouse wheel. A trackpad's quick strokes go further, as on a MacBook."
+          Row {
+            spacing: 6
+            Repeater {
+              model: [{ label: "Slower", value: "slower" }, { label: "Normal", value: "normal" }, { label: "Faster", value: "faster" }]
+              delegate: Chip {
+                required property var modelData
+                objectName: "scrollSpeed_" + modelData.value
+                theme: panel.theme
+                text: modelData.label
+                checked: (panel.s.scrollSpeed || "normal") === modelData.value
+                onClicked: panel.set("scrollSpeed", modelData.value)
+              }
+            }
+          }
         }
         Line {
           label: "Reduce motion"

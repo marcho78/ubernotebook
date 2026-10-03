@@ -132,8 +132,29 @@ left`. Omarchy keeps a plugin with a bar icon on for as long as the icon is in
 the bar, so to keep Omanote without the icon, turn off **Show Omanote in the
 top bar** in its settings: the icon then takes no space.
 
-The first time it opens, Omanote makes a notebook for you with a page of
-things to try.
+**Profiles.** Notes kept apart: personal, work, a client, the demo. Each
+profile is a folder of its own, with its notebooks, Pages, calendar, People,
+templates and Markdown copy; the one open is at the top of Pages' sidebar
+and under *Notebooks* on the shelf, and a click there switches (what's open
+is written first), makes a new one (its name, and the folder its notes go
+in: picked, or suggested from its name), or opens **Manage profiles**
+(Settings: rename one in place, give it another folder, open its folder,
+take it off the list; its notes stay where they are). Each keeps its own
+Inbox for agents, the page and notebook you were on, and its Markdown copy;
+the rest of Settings is for all of them. Agents' commands work on the open
+one; `omarchy-shell omanote profiles` lists them, `profile Work` opens one,
+and `addProfile`, `renameProfile`, `profileFolder`, `removeProfile`, `demo`
+and `restartDemo` do the rest (a new install's first profile too).
+
+The first time it opens, Omanote asks for your first profile: its name and
+the folder its notes go in (`~/Documents/Omanote` to start with). Nothing is
+made anywhere until then. Or **Explore the demo** first: the demo is a
+profile of its own, in Omanote's data folder (`~/.local/share/omanote`),
+with a notebook of things to try and Pages full of examples of what it can
+do (see [Pages](#pages)); *Start over* in Settings makes it new again (the
+old one goes to the trash). A profile of your own starts empty, with the
+templates. An Omanote from before profiles opens as it was: its folder is a
+profile, *Personal*.
 
 ## Use
 
@@ -261,6 +282,21 @@ Pages is the other way to write in Omanote: not a notebook on a desk, but a
 workspace of pages, the way Notion does it. Switch to it with *Pages* at the
 top right of the shelf; Omanote opens where you were last, notebooks or pages.
 
+**The demo's examples.** The demo profile's Pages has pages that show what it can do, each a different kind of page:
+*Welcome to Omanote* (and pages inside it on writing, staying organized and
+your AI agent, and the keyboard shortcuts as a PDF), *This week* (agendas,
+habits, a month), *Website relaunch* (a project with its board, milestones,
+team, and meeting notes with the meeting in them), *Weekend in Lisbon* (the
+flight's email, a plan, bookmarks, a budget), *Podcast ideas* (a mind map and
+a sketch), a reading list, a recipe, a journal with a button for today's
+entry, people to follow up, and an Omarchy cheatsheet. The people and events
+they name are in People and on the calendar, dated from the day you start
+(none of them sends a notification, and their emails and numbers reach
+nobody), and *Templates* has six to start from (a weekly review, a 1:1, a
+project brief, a trip, book notes, a decision). They're ordinary pages:
+change them, or put them in the trash. They're made from `starter/`
+(Markdown files, people, events and files: see `starter/README.md`).
+
 **Everything is a block.** A line of text, a heading, a to-do, a toggle, a
 callout, a picture, a page: each is an atomic record with its own id (a UUID
 v4), its type, what it says, the blocks inside it and the block it's in. A
@@ -282,16 +318,29 @@ takes them along.
 | Move a block up or down | **Alt+Shift+↑/↓** |
 | A new page | **Ctrl+N**, *New page* in the sidebar, or **+** beside a page there for one inside it |
 | A page inside this page | `/page` |
+| An email | `/email` (or drop an `.eml` on a page): a saved email, kept in `Pages/assets`, shown as a card: its subject, who it's from and to, when, its first lines and its attachments. **Show email** reads it in full: From, To, Cc and Date, then the message (an HTML email with its formatting and links, but no scripts, styles or pictures from the web, which would tell the sender you opened it). Click an attachment to open it in its app (it's saved beside the email the first time); a calendar file (`.ics`, a booking's or an invitation's) shows its events here instead, with *Add to calendar* (those already on it aren't added twice), and a contact card (`.vcf`) puts its people in People (*Undo* on the message takes them out); ↗ opens the `.eml` in your mail app. A file whose only app is a web browser (or that has none, like an `.eml` with no mail app set up) isn't handed to it, which would download it and take you away from Omanote: a message says so, and it stays in `Pages/assets`. Its colors are Pages' or your own. In the Library, under **Emails**, with who it's from and to and the page it's on; found by subject, sender or recipient. `.eml` is the standard format every mail app saves (Thunderbird, Apple Mail, Outlook, Gmail's *Download message*); Outlook's own `.msg` isn't read |
+| A person in a line | **@** and a name: the people in *People* who match come first (with *New contact* for a name that isn't there yet). It's drawn as `@Sam Rivera`; click it for their card: their numbers and emails (a click copies one, ✉ opens your mail app) and *Open in People* |
+| An email in a line | An email typed (then a space) or pasted becomes a link by itself: to your mail app, or, when it's someone's in *People*, to them (their card on a click) |
 | A date in a line | **@** and a date: `@tomorrow`, `@fri 3pm`, `@in 2 hours`, `@oct 3`, `@2026-12-24` |
 | A reminder | **@** and a date, then *Remind me*: an Omarchy notification then (click it to open the page) |
 | A tag | **#** and a name, anywhere in a line: `#errand`, `#project/omanote` (letters, digits, `-`, `_` and `/`; not only digits). The **#** menu offers the tags you have (and a new one with what's typed); a space or a stop after a name makes it a tag too. A tag is drawn in its color; click it (or it in the sidebar's *Tags*, or find it with **Ctrl+P** and `#`) for every block with it, page by page: tick to-dos there, click a block to go to it on its page. At the top of that view: the tag's color (Pages' colors, or **Custom…**, the color picker), renaming it on every page (renamed to a tag you have, the two are one), and taking it off every page (each page keeps the version before in its *Page history*) |
 | Color-code tags | A tag's **⋯** in the sidebar (or a right-click on it): *Color*, *Rename…*, *Take it off every page*; or the palette at the top of its blocks. A tag inside another (`#work/acme`) takes the color of the one it's in (`#work`) until it has its own, and sits under it in the sidebar. *A–Z* at the top of the sidebar's *Tags* sorts them by color instead (Pages' colors in order, then yours, then gray). The **#** menu shows each tag in its color |
+| A link to a page, as a block | `/link`, then pick the page. Under the pointer, *Change* beside it picks another page (one step **Ctrl+Z** takes back); a link whose page is gone says so, and *Link to a page* fixes it |
 | A link to a page in a line | **[[** and part of its name (or a new name, for a new page); click the link to go there |
 | An emoji | **:** and part of its name: `:rocket`, `:tada`, `:+1` (pick one, or type the whole name and a closing `:`) |
 | Ask your agent | The AI button at the top of the page, **Ctrl+J**, `/agent`, or *Ask agent* in a block's ⋮⋮ menu, on the toolbar over selected words, or in the page's ⋯ menu: Omarchy's default coding agent (Claude Code, Codex, OpenCode...) does it, and its changes show up on the page (see [For AI agents and scripts](#for-ai-agents-and-scripts)) |
 | Start a page from a template | On a new, empty page: pick one under *Start with a template* (a daily, weekly or monthly planner, a journal, a habit tracker, meeting or lecture notes, a project plan, a to-do list, a reading log, a recipe, a packing list). Each is laid out as a page: sections side by side, a callout for the one thing that matters, the day hour by hour, habits to tick, the month's calendar, and on every empty line, faintly, what goes there. **Ctrl+Z** takes it back off |
 | A mind map | `/mindmap`, or *Turn into mind map* in a nested list's ⋮⋮ menu (the top item is the topic, the items inside it the ideas). Click an idea to write on it: **Enter** adds the next idea, **Tab** one branching from it, **Shift+Tab** moves it out a level, **↑ ↓** move between ideas, **Backspace** on an empty idea takes it away, **Ctrl+Backspace** an idea and its branch, **Esc** stops. The color button over the idea you're writing on gives it a text color and a background (a main idea's color is its whole branch's): one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, a color picker (saturation and brightness, hue, a hex to type or paste, and how well the idea's text reads on it) that shows the color on the map as you pick it; **Enter** or *Apply* keeps it, **Esc** or *Cancel* puts back what was there. Text on a background with no text color of its own is made readable. The circle at an idea's end folds its branch. The block's own ⋮⋮ *Color* puts a background behind the whole map, or sets the text color of ideas with none of their own. *Turn into list* (⋮⋮) makes it a nested list again |
 | A table | `/table` (or paste cells from a spreadsheet, or a Markdown table). Click a cell to write in it: **Tab** and **Shift+Tab** go to the next and previous cell (**Tab** in the last one makes a new row), **Enter** goes down a row (past the last, a new one), **Shift+Enter** is a new line in the cell, the arrows cross into the next cell at a cell's ends and leave the table at its top and bottom, **Esc** picks the whole table. **Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+Shift+X** and **Ctrl+E** format what's selected in a cell (the toolbar over selected words is for text blocks). Point at a cell: the handle on its row's left and on its column's top open their menus (insert above or below, left or right; move; delete; *Header row* on or off), the **+** bars along the bottom and the right add a row or a column, and the lines between columns drag to make them wider. Colors: the color button on the cell you're in, or *Color* in a row's or a column's menu, gives a text color and a background: one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, the color picker (shown in the table as you pick, with how well the text reads; **Enter** keeps it, **Esc** puts back what was there). Cells pasted from a spreadsheet into a cell fill the table from there, and it grows to take them |
+| A board | `/board`: cards in columns (To do, Doing, Done to start). A click on a card writes in it (Enter keeps it, Esc puts it back); *New* under a column adds one; a card drags to another place or column. Each card and each column has its own colors, its text's and its box's background (Pages' or your own): point at it and click its palette; the color menu says what it's coloring. A card's ⋯ (or a right-click on it): *Rename*, *Open as page* (it becomes a page inside this one, in the tree, and opens; after, *Open page*), *Delete*. A column's name is shaded under the pointer and a click renames it (or its ⋯, *Rename*); its ⋯ (or a right-click on it) also has moving it left or right, deleting it; **+** adds a column and puts you in its name. Drag a column's right edge to make it wider or narrower, and the board's bottom edge to make it taller or shorter (then it scrolls inside); a double-click on either edge puts it back as it fits. The palette at the board's corner colors the whole board. Each change is a step to undo; as Markdown, a column a bold line and its cards a list |
+| A picture | `/image`: one picture, from the picture picker (a click on it), or *The file dialog…* there |
+| Size a picture | Point at it: a handle at each corner, dragged any way (it keeps its shape), and one on each side; how wide it is shows as you drag, one step **Ctrl+Z** takes back; a double-click on a side's handle makes it the page's width. Click it for left, centered or right. A double-click on a picture shows it large, here in Omanote: **←** **→** for the page's other pictures, **Esc** to close, ↗ to open it in its app |
+| A gallery | `/gallery`: pictures side by side, 2, 3 or 4 to a row (the numbers at its corner, under the pointer). Pick several at once in Omanote's picture picker (your pictures shown as pictures, Pictures' newest first, its folders first: a click chooses one, another lets it go, **Shift**+click a run of them, **Ctrl+A** all of them, then *Add 3 pictures*; Pictures, Downloads, Desktop and Home at its top; *The file dialog…* for the desktop's), or drop them on it; *Add pictures* under it for more. Under the pointer, a picture moves earlier or later, gets a caption, or goes; drag the gallery's bottom edge to make them taller or shorter (a double-click puts them back as they were). A click on one shows it large, the gallery's others a key away. Its colors (the palette at its corner): the captions', and behind it. Each picture is in the Library; Markdown has them as pictures, captions and all |
+| A file, a PDF | `/file` or `/pdf` (or drop a file on the page): it's copied into `Pages/assets`, shown with what it is, its name and how big, and *Open* opens it in its app. A PDF shows its pages here too, one under another, with the page you're on, in a frame whose bottom edge drags; *Hide pages* folds them away. Colors, Pages' or your own |
+| A video | `/video` (or drop one on the page): copied into `Pages/assets`, a still from it until it plays; play and pause, where it is (click or drag the bar), the time, the sound on or off; *Open* in your video player |
+| A web bookmark | `/bookmark`, then paste a link: a card with its page's title, a line about it, the site and its picture. The page is read once, when it's added (with `curl`; nothing's fetched when the page is shown), and its picture kept in `Pages/assets`. A click opens the link; its tools change the link (✎: the link in its field, Enter reads the new page, Esc keeps it as it was), read it again, or copy it |
+| A button | `/button`: its words, and what a click does: puts in a template (yours, or one of Omanote's) right after it, or makes a new page from it inside this page. Its gear sets it up again; its colors, Pages' or your own |
+| A synced block | Pick blocks, then *Turn into a synced block* in their ⋮⋮ menu (or `/synced`: a new one, or one there is): the blocks go on a page of their own and are shown where they were, outlined; copy the synced block (⋮⋮, Ctrl+C) and paste it on other pages. *Edit* opens its blocks (the page says it's a synced block's, and on how many pages): changed there, changed everywhere it is. *Unsync* makes them a page's own plain blocks again. Markdown has its blocks where it is |
 | An audio note | The red dot at the top right of a page (**Ctrl+Shift+R**), or `/audio`: a note where you are, recording at once (the time, your voice's level as you speak). **Enter** or the square stops it, **Esc** or ✕ throws it away. Then it's a player: play and pause, the waveform (the part played in its color; click or drag to go there), the time, the speed (1×, 1.25×, 1.5×, 2×). What you said is written out under it by voxtype as soon as it's recorded (Settings → *Write out audio notes*; else *Write it out*), to read, search, copy and correct; the button at its right hides and shows it. Its colors (the player's and the card's) are Pages' colors or your own (**Custom…**). Each change is a step **Ctrl+Z** takes back. The recording is an Opus file in `Pages/assets`; a page as Markdown links to it, with what was said quoted under it. Recording on another page, a bar at the foot says so, to stop it there. Your voice is evened out once it's recorded, so a quiet laptop microphone comes out loud and clear (Settings → Audio); a quiet note from before offers *Louder*, which makes a louder copy (Undo goes back to the first) |
 | A meeting | `/meeting`, or the people at the top right of a page: voxtype's meeting mode records your microphone and what the computer plays (the other side of a call), with the time, **Pause** and **Stop** on the meeting (and a bar at the foot on other pages). When it ends voxtype writes it out, and it's in the meeting: who said what, turn by turn, each speaker in a color; click a name to name them ("Remote" is Sam). **Summarize** asks your agent for the summary, the decisions and the to-dos, under it. *Bring one in* puts a meeting voxtype recorded (from its own shortcut) on the page. Meeting mode is off in voxtype until you turn it on, from the meeting or Settings → Audio (that sets `meeting.enabled` in voxtype's settings and restarts it). Pages search finds what was said; Markdown has it, a turn a line |
 | The microphone | Settings → Audio: which microphone audio notes and dictation record from, *Make my voice louder*, and *Test the microphone* (a few seconds of your voice's level, then whether it's quiet, good or too loud) |
@@ -303,7 +352,10 @@ takes them along.
 | Turn a block into a page | **⋮⋮** → *Turn into page*: its text is the page's name, and what's inside it goes along |
 | Reorganize pages | Drag a page in the sidebar: a line shows where it goes (before or after another page, as deep as it), or the page it goes inside lights up; below every page is the end of the top. A page can't go inside a page that's inside it. Its block moves to its place on the page it goes on, the page open is shown as it is then, and **Undo** on the message puts it back. Dropped on **Projects**, a page is a project; a project dropped in **Pages** is a page again |
 | A project | **+** on the sidebar's **Projects** makes one; so does dragging a page there, or *Make it a project* in a page's ⋯ menu or its menu in the sidebar (the *Project plan* template is one already): a line under its title with its status (Planning, Active, Paused, Done; click it to change it), when it's due (click: a date, typed as `fri`, `oct 20`, `in 2 weeks`, or Today, Tomorrow, Next week...; late, it says so in red) and how far along it is (the to-dos on it and on the pages inside it). The sidebar's **Projects** has every project, with the pages in it under it (they're not in **Pages**): what's on now first, late first, then by when they're due, done ones last, each with a ring for its progress in its status's color. Done, it offers to go in the archive |
-| Your own templates | *Save as template* in a page's ⋯ menu (a copy of it, and the pages in it), or *New template* in **Templates** at the sidebar's foot. A template is a page kept apart: open it there and change it like any page (out of the tree, search, tags, backlinks, reminders and the Projects; it says it's a template, with *New page from it*). Use one: on a blank page (yours come first among the templates), `/template` (its blocks where you are, the pages in it made inside this one), *New page from it* (Templates, or *A page inside it, from a template…* in a page's menu in the sidebar), or *Pages inside start from…* in a page's ⋯ menu (every new page inside it starts from that template). In it, `{{date}}` (a date, "@Fri 2 Oct"), `{{weekday}}`, `{{time}}`, `{{month}}`, `{{year}}` and `{{week}}` are filled in when it's used, in its title too; a meeting in it is a new one each time. *Not a template* puts it back in the tree; **Undo** on the message puts it back |
+| People | **People** in the Pages sidebar: your contacts, on your computer (`Pages/contacts.json`, no account), A to Z, as a list beside the one you pick or as cards (the switch at the top; it's kept), found by a name, a company, an email or a number. The one you pick is a card: their name and what they do, then each number and email with what it is (a click copies one; ✉ opens your mail app), birthday (and how long until it), address, website, notes, and the pages they're named on. **Edit** opens a form, each field named above it (what's wrong is said under it; **Save** or Ctrl+S keeps it, **Cancel** or Esc leaves it); **New person** opens it empty. **Import** a `.vcf` (from a phone, Google Contacts, iCloud or Outlook: one card or thousands) or a `.csv` (Google's or Outlook's), or drop a `.vcf` on the window: those already there (the same email or number) are filled in, not added twice. ⋯ exports everyone as a `.vcf`. ⋯ on someone's page deletes them, taken back with *Undo*. `/contact` puts someone's card on a page |
+| The Library | **Library** in the Pages sidebar: everything you've put on your pages, in one place, newest first: links (bookmark cards, and links written in text or tables), files and PDFs, videos, pictures, audio notes, meetings, sketches, the people you've named and emails, each with what it is (a PDF, its size, the site) and the page it's on. Pick a kind (*Links*, *Files*, *Videos*...) or type to find one by its name, its link or its page. Click one to go to it on its page; under the pointer, **Open** opens the link in your browser or the file in its app, and **Copy** copies a link. The trash's and templates' pages aren't in it; **Back** comes back to it. Each page keeps a list of what's on it in Pages' index as it's saved, so the Library opens at once |
+| The calendar | **Calendar** in the Pages sidebar (**Ctrl+Shift+C**): yours, on your computer, no account. By **month**, by **week** (hour by hour, events side by side when they overlap, a line at now), as an **agenda**, or **compact**: a small month with a dot for each event, and beside it (under it, in a narrow window) the days from the one you pick, + on a day adding an event there; **Today**, ←/→, M, W, A, C. It opens in the view you used last; in a narrow window the views fold into one menu. Click a day or a time and type: "Lunch with Sam fri 12:30", "Standup 9:30-9:45", "Dentist oct 12 3pm for 30 min", "Holiday dec 24" (a time alone, "Call Sam 17:00", is on the day you clicked). Click an event to change it: its title, all day or a start and an end ("fri", "9:30"), a repeat (daily, weekdays, weekly, monthly, yearly; every few, until a day), an alert (an Omarchy notification before it; a click opens its notes or the calendar), a color (Pages' or your own), a place, a few words. Drag an event to another day or time, its bottom edge to make it longer; a repeating one asks: just this one, or every one (and taking one off: this one, the ones after, or all). **Ctrl+Z** takes a change back. Reminders on your pages and projects' due dates are on it too, a click away from their pages. **Today** in the sidebar has what's left of today. *Notes for it* makes a page for an event (from your template with "meeting" in its name, else Meeting notes), and the page says which event it's for. `/agenda` puts a day's events on a page (today's, or a day you go to), `/event` puts an event on the calendar and on the page. ⋯ exports it as an `.ics` file for another calendar app, or imports one (*Import .ics…*: its events shown first, then *Add to calendar*); so does dropping an `.ics` on a page, or clicking one on a page. It's kept in `Pages/calendar.json` |
+| Your own templates | *Save as template* in a page's ⋯ menu (a copy of it, and the pages in it), or *New template* in **Templates** at the sidebar's foot. **Templates** shows every template as a card in place of a page, yours and then Omanote's, each with its name and what it's for (a line you write at the top of your template; else how it starts), found by typing words from either (**Enter** makes a page from the first, **Esc** shows them all again): a click makes a new page from it, and *Edit* (under the pointer) opens one of yours. A template is a page kept apart: open it there and change it like any page (out of the tree, search, tags, backlinks, reminders and the Projects; it says it's a template, with *New page from it*). Use one: on a blank page (yours come first among the templates), `/template` (its blocks where you are, the pages in it made inside this one), *New page from it* (Templates, or *A page inside it, from a template…* in a page's menu in the sidebar), or *Pages inside start from…* in a page's ⋯ menu (every new page inside it starts from that template). In it, `{{date}}` (a date, "@Fri 2 Oct"), `{{weekday}}`, `{{time}}`, `{{month}}`, `{{year}}` and `{{week}}` are filled in when it's used, in its title too; a meeting in it is a new one each time. *Not a template* puts it back in the tree; **Undo** on the message puts it back |
 | Put a page away | *Archive* in its ⋯ menu: it leaves the tree (with the pages in it) and the Projects, and is in **Archive** at the sidebar's foot, still there to open, search and link to. Open, it says it's in the archive, with *Bring it back*; so does the archive's arrow. **Undo** on the message takes it back too |
 | Keep a page at hand | The ☆ at the top right, or *Add to Favorites* in its menu: it's under *Favorites* at the top of the sidebar |
 | Copy a page | *Duplicate* in its ⋯ menu (or in the sidebar's): a copy of it and the pages in it, right after it |
@@ -406,6 +458,7 @@ Omanote/
     assets/20260930-150412-p7wq.png
   Pages/
     index.json                  the tree of pages: titles, icons, which page is in which
+    calendar.json               the calendar's events
     6f1c2b9e-….json             a page of Pages, named by its UUID
     history/6f1c2b9e-…/         its earlier versions, a file each, named for when they were kept (the newest 100)
     assets/                     pictures and covers on Pages' pages
@@ -455,6 +508,9 @@ in `Defaults.js`.
 
 | Setting | Default | Values |
 |---|---|---|
+| `colorSidebar`, `colorPage`, `colorCards`, `colorText` | `""` | Settings → **Appearance**: your own colors (`#rrggbb`) for the sidebar, the page (behind your pages, the calendar, People and the Library, and the notebooks' desk), the sections and cards (the sidebar's sections become cards in it; cards and menus take it), and all the text (the dimmer text follows it). `""` follows the Omarchy theme, as it changes. Each is picked with the color picker, shown as you pick, and has *Reset*; Settings warns when the text won't read well on a color |
+| `peopleLayout` | `list` | how People shows everyone: `list` (beside the one picked) or `cards` |
+| `calendarView` | `month` | the view the calendar opens in: `month`, `week`, `agenda` or `compact` |
 | `shortcut` | `SUPER + N` | any modifiers and a key, or empty |
 | `quickShortcut` | `SUPER + ALT + N` | any modifiers and a key, or empty |
 | `mirror` | `false` | keep a Markdown copy of every page (see [A Markdown copy](#a-markdown-copy)) |
@@ -470,6 +526,7 @@ in `Defaults.js`.
 | `width`, `height` | `1320`, `900` | the floating window's size |
 | `strikeDone` | `true` | cross off checked items |
 | `sounds` | `true` | a soft paper sound when a page turns and a notebook opens |
+| `scrollSpeed` | `"normal"` | how fast a page scrolls with a trackpad or a wheel: `slower`, `normal`, `faster` (a trackpad's quick strokes go further, as on a MacBook) |
 | `reduceMotion` | `false` | fade instead of turning pages and swinging covers |
 | `zoom` | `100` | 60 to 200 |
 | `space` | `notebooks` | which Omanote opens in: `notebooks` or `pages` (the one you were in) |
@@ -490,6 +547,7 @@ omarchy-shell omanote quick "Buy milk"    # straight into Quick notes (or the Pa
 omarchy-shell omanote search "tram 28"
 omarchy-shell omanote shelf
 omarchy-shell omanote pages               # straight to Pages
+omarchy-shell omanote calendar ""         # the calendar (or on a day: 2026-10-12)
 omarchy-shell omanote open <page id>      # a page in Pages (what a reminder's notification does)
 omarchy-shell omanote importNotes ~/notes # files or a folder (a Notion or Obsidian export) into Pages
 omarchy-shell omanote settings
@@ -562,11 +620,40 @@ omarchy-shell omanote trash <page id>             # to the trash, where it can b
 omarchy-shell omanote tags                        # every tag: how many pages and blocks have it
 omarchy-shell omanote tagged "#errand"            # every block with the tag: page, block id, text (Markdown), ticked
 omarchy-shell omanote tagColor "#work" blue       # a tag's color (Pages' colors, a hex, or "" for none)
+omarchy-shell omanote library files "spec"        # what's on the pages (the Library): links, files, videos, pictures... ("" "" for all)
+omarchy-shell omanote contacts "acme"             # your people: name, company, numbers, emails ("" for everyone)
+omarchy-shell omanote contact "Sam"               # one person, everything kept about them, and the pages they're named on
+omarchy-shell omanote addContact "Kim Park" "+82 2 555 0100" ""   # someone new (or filled in, by email or number)
+omarchy-shell omanote importContacts ~/contacts.vcf   # a .vcf or .csv into People
 omarchy-shell omanote projects                    # every project: status, due date, progress, late or not
 omarchy-shell omanote project <page id> active 2026-10-12   # a page made a project, or changed ("" keeps, "-" keeps the date, none: a page again)
 omarchy-shell omanote archive <page id>           # put away in the archive (unarchive <page id> brings it back)
-omarchy-shell omanote templates                   # your templates: id, title, icon, how many pages
+omarchy-shell omanote templates                   # your templates: id, title, icon, what it's for, how many pages
+omarchy-shell omanote addTemplate "" retro.md "A sprint's look back"   # a template from Markdown ({{date}} and the like filled in when used)
+omarchy-shell omanote describeTemplate "Retro" "Looking back on a sprint"   # what a template's for, on its card
+omarchy-shell omanote events "" ""                # the calendar's events this week (from, to: 2026-10-05), and your notes' dates
+omarchy-shell omanote addEvent "Dentist oct 12 3pm" ""   # an event on the calendar (repeat: daily, weekdays, weekly, monthly, yearly)
+omarchy-shell omanote removeEvent <event id>      # off the calendar
 omarchy-shell omanote fromTemplate "Standup" "" ""   # a new page from a template (name or id), its title ("" the template's), in the Inbox ("top", or a page id)
+omarchy-shell omanote rename <page id> "New title"   # its title (move, icon, cover, lock, favorite: its place and looks)
+omarchy-shell omanote move <page id> top 0        # inside another page ("top": the top of Pages), at a place ("" the end)
+omarchy-shell omanote trashed                     # what's in the trash (restore <page id> puts one back)
+omarchy-shell omanote duplicate <page id>         # a copy, right after it (makeTemplate <page id>: one of your templates)
+omarchy-shell omanote history <page id>           # its kept versions (version <page id> <name> reads one, restoreVersion puts it back)
+omarchy-shell omanote check <page id> <block id> true   # a to-do ticked (color <page id> <block id> blue: a block's color)
+omarchy-shell omanote removeBlock <page id> <block id>  # a block off the page
+omarchy-shell omanote board <page id> <block id> add "Ship it" "Doing"   # a board's cards and columns (move, edit, remove, addColumn, renameColumn, removeColumn, height, columnWidth, cardColor, columnColor)
+omarchy-shell omanote attach <page id> ~/ticket.pdf   # a file on a page: a picture, a video, an .eml, a PDF, anything
+omarchy-shell omanote picture <page id> <block id> 50 right   # a picture's width (a percent of the page's) and side ("" keeps either)
+omarchy-shell omanote addGallery <page id> ~/Pictures/Lisbon 3   # a gallery of a folder's pictures (or paths, | between them), 2-4 to a row
+omarchy-shell omanote gallery <page id> <block id> caption 2 "Tram 28"   # a gallery changed: add, remove, move, caption, columns, height
+omarchy-shell omanote bookmark <page id> https://example.com   # a link as a card
+omarchy-shell omanote setLink <page id> <block id> https://example.org   # a bookmark's link (or a link's page: its id or title)
+omarchy-shell omanote preferences                 # every setting, its value and what it can be (set <key> <value> changes one)
+omarchy-shell omanote editEvent <event id> when "fri 3pm"   # an event changed: title, when, start, end, allDay, place, notes, repeat, alert, color
+omarchy-shell omanote editContact "Sam" phone "mobile: +1 555 0100"   # someone changed (removeContact <id>: taken out)
+omarchy-shell omanote renameTag "#idea" "#ideas"  # on every page (removeTag "#idea": off every page)
+omarchy-shell omanote notebooks                   # the shelf's notebooks (notebook <id>, readNotebook <id> <page id>, addToNotebook <id> note.md)
 ```
 
 Pages come in as Markdown files, since an argument can't carry a page. They
@@ -579,7 +666,14 @@ go in braces after it: `Marketing {red}`, `Marketing {blue background}`,
 table, its first row the header. Front matter's `status:` (planning, active, paused, done) and `due:` (2026-10-12) make the page a project, and a project's page is read and exported with them. `[[Page title]]` links to the page called that, and `#tag` is a tag. A date is
 `[@Fri 2 Oct](omanote://date/2026-10-02)`, and a reminder is
 `[⏰ Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30)`: a notification at
-that time. `add` puts pages in an Inbox page at the top of Pages, made the first
+that time. Boards, bookmarks, links to pages, galleries, people, a day's
+agenda and events are fenced code, read and written the same way:
+```` ```board ```` (`## Column` lines, `- card` lines under them),
+```` ```bookmark ```` (a link), ```` ```link ```` (a page's title or id),
+```` ```gallery ```` (`columns: 3`, then a `![caption](assets/...)` line a
+picture, pictures already in Pages), ```` ```contact ```` (a name, email or
+id in People), ```` ```agenda ```` (`2026-10-05` or `today`) and
+```` ```event ```` (an event's id). `add` puts pages in an Inbox page at the top of Pages, made the first
 time it's needed; move them anywhere. Nothing is deleted for good, a locked
 page isn't changed, and the page as it was is kept in its *Page history*
 before a command changes it. On the page you have open, what's added goes in as one step
@@ -687,7 +781,33 @@ quick-note card (`Notebook.qml`, `app/`), and the icon in the bar.
   what was said; `Audio.js` cleans it, reads ffmpeg's levels and voxtype's
   output, `Recorder.qml` runs the microphone (one recording at a time) and
   voxtype, `app/AudioBlock.qml` records and plays it, and
-  `app/RecordingBar.qml` is the bar at the foot while dictating. A meeting
+  `app/RecordingBar.qml` is the bar at the foot while dictating. The calendar
+  keeps its events in `Pages/calendar.json` (in the computer's own time);
+  `Calendar.js` cleans them, works out repeats, lays out a day, reads what's
+  typed ("Lunch fri 12:30"), finds the alerts and writes `.ics`;
+  `app/CalendarView.qml` is the month, the week and the agenda,
+  `app/EventPop.qml` changes an event, `app/QuickAddPop.qml` adds one, and
+  `app/CalendarBlock.qml` is an agenda or an event on a page. The newer
+  blocks keep what they are in `data`: `Board.js`, `Files.js` and
+  `Bookmark.js` clean and change theirs, and `app/BoardBlock.qml`,
+  `app/FileBlock.qml` (with Qt's PDF view), `app/VideoBlock.qml`,
+  `app/BookmarkBlock.qml`, `app/ButtonBlock.qml` and `app/SyncedBlock.qml`
+  (an editor of its own, showing the page its blocks are on) draw them, on
+  `app/DataCard.qml`'s data and colors. The Library is `Collection.js`
+  (what each kind of block puts in it, kept in each page's index entry as
+  the page is saved, then gathered, sorted and filtered) and
+  `app/LibraryView.qml`; a new kind of block with something worth finding
+  again is a line in `Collection.ofBlock`. People are `Contacts.js` (they're
+  kept in `Pages/contacts.json`; it reads vCard 2.1 to 4.0 and Google's and
+  Outlook's CSV, matches an import to who's there, writes vCard, and finds
+  people), `app/PeopleView.qml` (the list and the card), `app/ContactPop.qml`
+  (a person named on a page, clicked), `app/ContactBlock.qml` (/contact) and
+  `app/Avatar.qml`; a person on a page is a link to `omanote://contact/<id>`,
+  and `Html.linkEmails` makes emails links. An email block is `Email.js`
+  (it reads an .eml: headers in any charset, plain and HTML bodies in
+  base64 or quoted-printable, attachments; makes its HTML safe; and says
+  what the block keeps) and `app/EmailBlock.qml`; its attachments are
+  written out with `base64 -d`. A meeting
   keeps voxtype's id for it, what voxtype wrote out and the names you gave
   its speakers; `Meeting.js` cleans it and reads voxtype's export, list and
   state file, `Meetings.qml` follows voxtype's meeting
@@ -733,6 +853,8 @@ open in your browser; Omanote itself never connects anywhere.
 | `/usr/bin/soffice` or `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown, in that same folder |
 | `/usr/bin/ffmpeg` | record from your microphone (PipeWire's, through its Pulse server) while an audio note, dictation or a test of the microphone records, printing its level ten times a second; even out a voice once it's recorded; make a recording a 16 kHz WAV for voxtype |
 | `/usr/bin/pactl` | list the microphones, for Settings |
+| `/usr/bin/curl` | read a web bookmark's page (http and https only, at most 2 MB, 15 seconds) and its picture (at most 5 MB), once, when you add it |
+| `/usr/bin/cp`, `/usr/bin/stat` | copy a file you put on a page into `Pages/assets`, and say how big it is |
 | `/usr/bin/voxtype` | `transcribe`: write out what was said in a recording, the way voxtype's settings say (its model, on your computer as Omarchy sets it up); `meeting start`, `stop`, `pause`, `resume`, `list` and `export`: record a meeting and get what voxtype wrote out; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on |
 | `/usr/bin/systemctl` | `--user restart voxtype.service`, once, when you turn voxtype's meeting mode on |
 | `/usr/bin/rm` | take Omanote's launcher entry out when it stops; take away dictation's recordings (in a folder of Omanote's own under `$XDG_RUNTIME_DIR`) once they're written out |
@@ -780,6 +902,7 @@ drawn as plain text.
 ## Development
 
 ```bash
+dev/starter        # starter/ (the examples a new Pages starts with) into StarterContent.js
 tests/run          # settings, HTML, blocks, papers, library, Markdown,
                    # templates, Pages and the Hyprland module (node, lua),
                    # and the editor, notebook and Pages
@@ -806,7 +929,9 @@ at all).
   text editor has none), and no printing or PDF export: export as Markdown,
   or copy a page.
 * Pages has no databases (on purpose: a table is rows and columns of text,
-  and a project is a page with a status, a due date and its to-dos),
+  a board columns of cards, and a project a page with a status, a due date
+  and its to-dos), no live embeds of other websites (a link is a bookmark
+  card), no equations,
   no merged cells, no @-mentions of
   people (Omanote has one writer), and no syncing between computers; pages move into other pages with *Move to…*, not by
   dragging them in the sidebar. Columns are at the top of a page (not inside

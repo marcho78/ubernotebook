@@ -480,12 +480,18 @@ function normalizeLinks(inner) {
 //   omanote://date/2026-10-05, omanote://date/2026-10-05T09:30
 //   omanote://remind/2026-10-05T09:30
 //   omanote://tag/idea (its name, encoded: Tags.js)
-var INTERNAL = /^omanote:\/\/(page\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(date|remind)\/\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?|tag\/[A-Za-z0-9%_-]{1,400})$/
+var INTERNAL = /^omanote:\/\/(page\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(date|remind)\/\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?|tag\/[A-Za-z0-9%_-]{1,400}|contact\/[A-Za-z0-9_-]{1,40})$/
 
 function isTag(url) { return /^omanote:\/\/tag\//.test(String(url || "")) }
 
 function isInternal(url) {
   return INTERNAL.test(String(url || ""))
+}
+
+// The person a link names (Contacts.js), or "".
+function contactOf(url) {
+  var m = /^omanote:\/\/contact\/([A-Za-z0-9_-]{1,40})$/.exec(String(url || ""))
+  return m ? m[1] : ""
 }
 
 // The page a link goes to, or "".
@@ -508,11 +514,38 @@ function decorateLinks(inner, color, tagStyle) {
         if (t && normalColor(t.color)) run.style.color = normalColor(t.color)
         if (t && normalColor(t.background)) run.style["background-color"] = normalColor(t.background)
         run.style["text-decoration"] = "none"
-      } else if (/^omanote:\/\/(date|remind)\//.test(run.href)) run.style["text-decoration"] = "none"
+      } else if (/^omanote:\/\/(date|remind|contact)\//.test(run.href)) run.style["text-decoration"] = "none"
       else setDecoration(run.style, "underline", true)
     }
     return run
   })
+}
+
+// Emails written in it, as links: mailto:, or what hrefFor(email) gives (a
+// person's, when it's theirs); not in code, not in a link already.
+var EMAIL_IN_TEXT = /(^|[^A-Za-z0-9._%+\-@])([A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,})(?![A-Za-z0-9\-@])/g
+function linkEmails(inner, hrefFor) {
+  if (String(inner || "").indexOf("@") < 0) return inner
+  var changed = false
+  var out = []
+  parse(inner).forEach(function(run) {
+    if (run.text === undefined || run.href || isCode(run.style || {})) { out.push(run); return }
+    var t = run.text
+    var last = 0
+    var m
+    EMAIL_IN_TEXT.lastIndex = 0
+    while ((m = EMAIL_IN_TEXT.exec(t)) !== null) {
+      var start = m.index + m[1].length
+      var email = m[2]
+      if (start > last) out.push({ text: t.slice(last, start), style: run.style, href: "" })
+      var own = typeof hrefFor === "function" ? hrefFor(email.toLowerCase()) : ""
+      out.push({ text: email, style: run.style, href: own || "mailto:" + email.toLowerCase() })
+      last = start + email.length
+      changed = true
+    }
+    if (last < t.length) out.push({ text: t.slice(last), style: run.style, href: "" })
+  })
+  return changed ? serialize(out) : inner
 }
 
 // Every link in it: [{ href, text }], a link split into runs as one.

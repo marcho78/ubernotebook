@@ -15,6 +15,11 @@
 .import "Sketch.js" as Sketch
 .import "Audio.js" as Audio
 .import "Meeting.js" as Meeting
+.import "Calendar.js" as Calendar
+.import "Files.js" as Files
+.import "Bookmark.js" as Bookmark
+.import "Board.js" as Board
+.import "Email.js" as Email
 
 // Every kind of block. `rows` is how many ruled lines one line of its text
 // takes (a big heading takes two, so the text below stays on the lines).
@@ -55,7 +60,29 @@ var KINDS = {
   // An audio note (Pages only): a recording, and what was said (Audio.js).
   audio:   { label: "Audio",       text: false, rows: 1 },
   // A meeting (Pages only): recorded by voxtype, who said what (Meeting.js).
-  meeting: { label: "Meeting",     text: false, rows: 1 }
+  meeting: { label: "Meeting",     text: false, rows: 1 },
+  // A day's events (Pages only), and one event, from the calendar (Calendar.js).
+  agenda:  { label: "Agenda",      text: false, rows: 1 },
+  event:   { label: "Event",       text: false, rows: 1 },
+  // Pages only, each keeping what it is in `data`: a button that puts in a
+  // template, a file (a PDF shown page by page), a video, a link as a card,
+  // a board of cards in columns, and a synced block (blocks kept on a page
+  // of their own, shown wherever it is).
+  button:  { label: "Button",      text: false, rows: 1 },
+  file:    { label: "File",        text: false, rows: 1 },
+  video:   { label: "Video",       text: false, rows: 1 },
+  bookmark: { label: "Bookmark",   text: false, rows: 1 },
+  board:   { label: "Board",       text: false, rows: 1 },
+  synced:  { label: "Synced block", text: false, rows: 1 },
+  // A person's card (Pages only): who from People (Contacts.js), and their
+  // name then (if they're taken out of People, it's still there).
+  contact: { label: "Contact",     text: false, rows: 1 },
+  // An email (Pages only): its .eml in Pages/assets, and who, when and what
+  // it's about (Email.js).
+  email:   { label: "Email",       text: false, rows: 1 },
+  // Pictures side by side in a grid (Pages only): each in Pages/assets, with
+  // a caption; how many to a row, and how tall.
+  gallery: { label: "Gallery",     text: false, rows: 1 }
 }
 
 // Colors a block (or its background) can have in Pages: "blue" is blue text,
@@ -254,7 +281,57 @@ function clean(raw, options) {
     if (!nest) return null
     block.meeting = Meeting.clean(raw.meeting) || Meeting.make()
   }
+  if (type === "agenda" || type === "event") {
+    // Only in Pages.
+    if (!nest) return null
+    block.calendar = Calendar.cleanRef(raw.calendar)
+  }
+  if (hasData(type)) {
+    if (!nest) return null
+    block.data = cleanData(type, raw.data)
+  }
   return block
+}
+
+// ---- what the newer Pages blocks keep ---------------------------------------------------
+
+var DATA_KINDS = ["button", "file", "video", "bookmark", "board", "synced", "contact", "email", "gallery"]
+
+// A gallery's: its pictures (at most 200, each in assets, with a caption),
+// 2, 3 or 4 to a row, how tall each is (0: three quarters as tall as wide,
+// else 80 to 800), its colors.
+var GALLERY_MAX = 200
+function cleanGallery(r) {
+  var images = (Array.isArray(r.images) ? r.images : []).slice(0, GALLERY_MAX).map(function(x) {
+    var src = cleanAsset(x && x.src)
+    return src ? { src: src, caption: cleanLine(x.caption, 200) } : null
+  }).filter(function(x) { return x !== null })
+  var cols = Number(r.columns)
+  var h = Number(r.height)
+  return { images: images, columns: cols === 2 || cols === 4 ? cols : 3, height: isFinite(h) && h >= 80 ? Math.round(Math.min(800, h)) : 0,
+    color: Files.cleanColor(r.color), background: Files.cleanColor(r.background) }
+}
+function hasData(type) { return DATA_KINDS.indexOf(type) >= 0 }
+
+var UUID_ = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+// A block's `data`, as it may be used (a new one's, when there's none).
+function cleanData(type, raw) {
+  var r = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
+  if (type === "button") {
+    var tpl = typeof r.template === "string" && /^(tpl:[0-9a-f-]{36}|[a-z]{2,20})$/.test(r.template) ? r.template : ""
+    return { label: cleanLine(r.label, 80), template: tpl, action: r.action === "page" ? "page" : "insert",
+      color: Files.cleanColor(r.color), background: Files.cleanColor(r.background) }
+  }
+  if (type === "file" || type === "video") return Files.clean(r) || Files.make()
+  if (type === "bookmark") return Bookmark.clean(r) || Bookmark.make()
+  if (type === "board") { var b = Board.clean(r) || Board.make(); b.color = Files.cleanColor(r.color); b.background = Files.cleanColor(r.background); return b }
+  if (type === "synced") return { page: UUID_.test(r.page) ? r.page : "", color: Files.cleanColor(r.color), background: Files.cleanColor(r.background) }
+  if (type === "email") return Email.clean(r)
+  if (type === "gallery") return cleanGallery(r)
+  if (type === "contact") return { contact: typeof r.contact === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(r.contact) ? r.contact : "", name: cleanLine(r.name, 120),
+    color: Files.cleanColor(r.color), background: Files.cleanColor(r.background) }
+  return {}
 }
 
 // A picture lives in the notebook's own assets folder: "assets/<name>".

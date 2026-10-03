@@ -27,6 +27,9 @@ Pop {
   property string noneLabel: ""
   property string currentBack: ""
   property var recent: []
+  // What's being colored, said at the top ("Card: Book the venue"), if anything.
+  property string subject: ""
+  onClosed: subject = ""
 
   // A row's colors of your own: the idea's (if it has one), then the
   // recent ones, four in all (Custom… is the fifth).
@@ -172,6 +175,18 @@ Pop {
 
   contentItem: Column {
     spacing: 8
+    Text {
+      objectName: "colorSubject"
+      visible: pop.subject !== ""
+      width: parent.width
+      elide: Text.ElideRight
+      textFormat: Text.PlainText
+      text: pop.subject
+      font.family: pop.theme.uiFont
+      font.pixelSize: 13
+      font.weight: Font.DemiBold
+      color: pop.theme.text
+    }
     Heading { text: pop.mode === "blocks" ? "Color" : pop.mode === "tag" ? "Tag color" : pop.pen ? "Ink" : "Text color" }
     Flow {
       width: parent.width

@@ -42,5 +42,6 @@ Rectangle {
   }
 
   HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-  TapHandler { onTapped: chip.clicked() }
+  // (Its press is its own: not a click on what's under a menu it's in.)
+  TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: chip.clicked() }
 }

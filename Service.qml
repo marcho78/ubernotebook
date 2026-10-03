@@ -65,6 +65,35 @@ Item {
     if (entryBeforeSave !== "" && JSON.stringify(entry) === entryBeforeSave) return
     entryBeforeSave = ""
     user = entry
+    // (The profiles are settled once the shell's configuration is in.)
+    if (shell && shell.barConfig && typeof shell.barConfig === "object" && shell.barConfig.layout) settleTimer.restart()
+  }
+  Timer {
+    id: settleTimer
+    interval: 400
+    onTriggered: profilesItem.settle()
+  }
+
+  // ---- profiles ----------------------------------------------------------------------
+
+  // Notes kept apart (Profiles.qml): the open one's folder is the notebooks'
+  // and Pages'. None yet (the first run): nothing's made anywhere until
+  // there's one.
+  Profiles {
+    id: profilesItem
+    service: root
+    files: storeItem
+    dataFolder: { var d = Quickshell.env("XDG_DATA_HOME"); return d && d.indexOf("/") === 0 ? d.replace(/\/+$/, "") + "/omanote" : "~/.local/share/omanote" }
+  }
+  property alias profiles: profilesItem
+
+  // What's open in the window, written (before another profile opens).
+  function saveOpen() { if (ui && typeof ui.saveNow === "function") ui.saveNow() }
+
+  // A folder picked in the window: done(path), or done("").
+  function pickFolder(title, done) {
+    if (ui && typeof ui.pickFolder === "function") ui.pickFolder(title, done)
+    else done("")
   }
 
   onShellChanged: loadEntry()
@@ -76,15 +105,23 @@ Item {
   }
 
   function setSetting(key, value) {
-    if (!defaults || defaults[key] === undefined) return
+    var changes = {}
+    changes[key] = value
+    setSettings(changes)
+  }
+  // Several at once ({ key: value }), as one change.
+  function setSettings(changes) {
     var next = Settings.clone(user)
-    next[key] = value
+    for (var key in changes) if (defaults && defaults[key] !== undefined) next[key] = changes[key]
     user = Settings.overrides(defaults, Settings.merge(defaults, next, schema))
     persistTimer.restart()
   }
 
+  // Every setting as it started, but the profiles and what's each one's own.
   function resetSettings() {
-    user = ({})
+    var keep = {}
+    ;["profiles", "profile", "folder"].concat(Settings.PROFILE_KEYS).forEach(function(k) { if (root.user[k] !== undefined) keep[k] = root.user[k] })
+    user = keep
     persistTimer.restart()
   }
 
@@ -108,6 +145,10 @@ Item {
   Store {
     id: storeItem
     folder: root.settings.folder
+    // No profile yet: no folder, nothing made.
+    active: profilesItem.current !== null
+    // A first notebook with things to try: the demo's; a profile of your own starts empty.
+    welcome: profilesItem.current !== null && profilesItem.current.demo === true
     exportFolder: function(done) { root.exportFolder(done) }
   }
 
@@ -118,6 +159,9 @@ Item {
   Workspace {
     id: workspaceItem
     files: storeItem
+    // A new Pages: the demo's starts with the examples (Starter.js); one of
+    // your own, with the templates.
+    starter: profilesItem.current !== null && profilesItem.current.demo === true ? "examples" : "templates"
   }
 
   property alias workspace: workspaceItem
@@ -175,6 +219,9 @@ Item {
     files: storeItem
     ui: root.ui
     inbox: root.settings.inbox || ""
+    noProfile: profilesItem.firstRun
+    profiles: profilesItem
+    settings: root.settings
     onInboxMade: function(id) { root.setSetting("inbox", id) }
   }
 
@@ -333,6 +380,8 @@ Item {
   // A quick note: with text, straight into the Quick notes notebook (or the
   // Pages Inbox, as Settings says); without, the quick-note card opens.
   function quick(text) {
+    // (No profile yet: the window, to make one.)
+    if (profilesItem.firstRun) { show({}); return }
     var value = String(text || "").trim()
     if (value) {
       if (settings.quickTo === "pages") quickToPages(value)
@@ -399,6 +448,18 @@ Item {
   }
 
   // The desktop's file picker, for a picture (the window shows it).
+  // A file to put on a page: "any", "pdf" or "video". done(path), or done("").
+  function pickFile(kind, done) {
+    if (ui && typeof ui.pickFile === "function") ui.pickFile(kind, done)
+    else done("")
+  }
+
+  // Pictures (several at once): done([paths]), or done([]).
+  function pickPictures(done) {
+    if (ui && typeof ui.pickPictures === "function") ui.pickPictures(done)
+    else done([])
+  }
+
   function pickPicture(done) {
     if (ui && typeof ui.pickPicture === "function") ui.pickPicture(done)
     else done("")
@@ -455,6 +516,8 @@ Item {
     function shelf(): void { root.show({ shelf: true }) }
     // omanote pages: straight to Pages.
     function pages(): void { root.show({ pages: true }) }
+    // The calendar, on a day ("" is today).
+    function calendar(day: string): void { root.show({ calendar: /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) ? String(day) : "today" }) }
     // omanote importNotes ~/notes: files or a folder (a Notion or Obsidian export) into Pages.
     function importNotes(path: string): void {
       var p = String(path || "")
@@ -494,10 +557,18 @@ Item {
     function append(id: string, file: string): string { return apiItem.append(id, file) }
     function blocks(id: string): string { return apiItem.blocks(id) }
     function tags(): string { return apiItem.tags() }
+    function library(kind: string, words: string): string { return apiItem.library(kind, words) }
+    function contacts(words: string): string { return apiItem.contacts(words) }
+    function contact(which: string): string { return apiItem.contact(which) }
+    function addContact(name: string, phone: string, email: string): string { return apiItem.addContact(name, phone, email) }
+    function importContacts(file: string): string { return apiItem.importContacts(file) }
     function tagged(tag: string): string { return apiItem.tagged(tag) }
     function tagColor(tag: string, color: string): string { return apiItem.tagColor(tag, color) }
     function projects(): string { return apiItem.projects() }
     function templates(): string { return apiItem.templates() }
+    function events(from: string, to: string): string { return apiItem.events(from, to) }
+    function addEvent(what: string, repeat: string): string { return apiItem.addEvent(what, repeat) }
+    function removeEvent(id: string): string { return apiItem.removeEvent(id) }
     function fromTemplate(template: string, title: string, parent: string): string { return apiItem.fromTemplate(template, title, parent) }
     function project(id: string, status: string, due: string): string { return apiItem.project(id, status, due) }
     function archive(id: string): string { return apiItem.archive(id, true) }
@@ -505,12 +576,59 @@ Item {
     function replace(page: string, block: string, file: string): string { return apiItem.replace(page, block, file) }
     function insertAfter(page: string, block: string, file: string): string { return apiItem.insertAfter(page, block, file) }
     function trash(id: string): string { return apiItem.trash(id) }
+    function rename(id: string, title: string): string { return apiItem.rename(id, title) }
+    function move(id: string, parent: string, position: string): string { return apiItem.move(id, parent, position) }
+    function icon(id: string, emoji: string): string { return apiItem.icon(id, emoji) }
+    function cover(id: string, cover: string): string { return apiItem.cover(id, cover) }
+    function lock(id: string, on: string): string { return apiItem.lock(id, on) }
+    function favorite(id: string, on: string): string { return apiItem.favorite(id, on) }
+    function trashed(): string { return apiItem.trashed() }
+    function restore(id: string): string { return apiItem.restore(id) }
+    function duplicate(id: string): string { return apiItem.duplicate(id) }
+    function makeTemplate(id: string): string { return apiItem.makeTemplate(id) }
+    function history(id: string): string { return apiItem.history(id) }
+    function version(id: string, name: string): string { return apiItem.version(id, name) }
+    function restoreVersion(id: string, name: string): string { return apiItem.restoreVersion(id, name) }
+    function check(page: string, block: string, on: string): string { return apiItem.check(page, block, on) }
+    function color(page: string, block: string, color: string): string { return apiItem.color(page, block, color) }
+    function removeBlock(page: string, block: string): string { return apiItem.removeBlock(page, block) }
+    function board(page: string, block: string, action: string, a: string, b: string): string { return apiItem.board(page, block, action, a, b) }
+    function attach(page: string, file: string): string { return apiItem.attach(page, file) }
+    function bookmark(page: string, url: string): string { return apiItem.bookmark(page, url) }
+    function editEvent(id: string, field: string, value: string): string { return apiItem.editEvent(id, field, value) }
+    function editContact(which: string, field: string, value: string): string { return apiItem.editContact(which, field, value) }
+    function removeContact(id: string): string { return apiItem.removeContact(id) }
+    function importCalendar(file: string): string { return apiItem.importCalendar(file) }
+    function picture(page: string, block: string, width: string, align: string): string { return apiItem.picture(page, block, width, align) }
+    function addGallery(page: string, pictures: string, columns: string): string { return apiItem.addGallery(page, pictures, columns) }
+    function gallery(page: string, block: string, action: string, a: string, b: string): string { return apiItem.gallery(page, block, action, a, b) }
+    function setLink(page: string, block: string, link: string): string { return apiItem.setLink(page, block, link) }
+    function describeTemplate(template: string, text: string): string { return apiItem.describeTemplate(template, text) }
+    function addTemplate(title: string, file: string, description: string): string { return apiItem.addTemplate(title, file, description) }
+    function preferences(): string { return apiItem.preferences() }
+    function renameTag(tag: string, to: string): string { return apiItem.renameTag(tag, to) }
+    function removeTag(tag: string): string { return apiItem.removeTag(tag) }
+    function notebooks(): string { return apiItem.notebooks() }
+    function notebook(id: string): string { return apiItem.notebook(id) }
+    function readNotebook(id: string, page: string): string { return apiItem.readNotebook(id, page) }
+    function addToNotebook(id: string, file: string): string { return apiItem.addToNotebook(id, file) }
+    // omarchy-shell omanote profiles: [{ id, name, folder, open, demo }].
+    function profiles(): string { return apiItem.profileList() }
+    // omarchy-shell omanote profile Business: another profile open (its name or id).
+    function profile(which: string): string { return apiItem.openProfile(which) }
+    function addProfile(name: string, folder: string, open: string): string { return apiItem.addProfile(name, folder, open) }
+    function renameProfile(which: string, name: string): string { return apiItem.renameProfile(which, name) }
+    function profileFolder(which: string, folder: string): string { return apiItem.profileFolder(which, folder) }
+    function removeProfile(which: string): string { return apiItem.removeProfile(which) }
+    function demo(): string { return apiItem.demo(false) }
+    function restartDemo(): string { return apiItem.demo(true) }
     function status(): string {
       return JSON.stringify({
         open: root.windowOpen,
         hyprland: root.hyprStatus,
         takenShortcuts: root.takenBinds,
         folder: root.rootPath,
+        profile: profilesItem.current ? profilesItem.current.name : "",
         notebooks: storeItem.notebooks.length,
         pages: Object.keys(workspaceItem.index.pages).length,
         ready: storeItem.ready,

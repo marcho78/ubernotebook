@@ -1,0 +1,21 @@
+[
+ { "key": "sam", "name": "Sam Rivera", "company": "Northwind Studio", "title": "Designer",
+   "phones": [{ "label": "mobile", "value": "+1 202 555 0142" }],
+   "emails": [{ "label": "work", "value": "sam@northwind.example" }],
+   "birthday": "--05-14", "website": "https://northwind.example",
+   "notes": "Design lead on the Lumen Coffee relaunch. Best reached in the morning." },
+ { "key": "priya", "name": "Priya Natarajan", "company": "Northwind Studio", "title": "Developer",
+   "phones": [{ "label": "work", "value": "+1 202 555 0187" }],
+   "emails": [{ "label": "work", "value": "priya@northwind.example" }],
+   "notes": "Builds the shop and the checkout. Ask her about anything on staging." },
+ { "key": "jonas", "name": "Jonas Weber", "company": "Lumen Coffee", "title": "Owner",
+   "phones": [{ "label": "mobile", "value": "+1 202 555 0123" }, { "label": "work", "value": "+1 202 555 0100" }],
+   "emails": [{ "label": "work", "value": "jonas@lumen-coffee.example" }],
+   "address": "12 Harbour Street", "website": "https://lumen-coffee.example",
+   "notes": "The client. Roasts on Tuesdays, so no calls before noon then." },
+ { "key": "ana", "name": "Ana Costa", "title": "Architect",
+   "phones": [{ "label": "mobile", "value": "+1 202 555 0168" }],
+   "emails": [{ "label": "home", "value": "ana.costa@example.org" }],
+   "birthday": "1991-09-03", "address": "Rua das Flores 28, Lisbon",
+   "notes": "Old friend from university, lives in Lisbon. Knows every bakery in Alfama." }
+]

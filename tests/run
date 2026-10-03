@@ -35,6 +35,13 @@ node tests/drag.test.cjs
 node tests/audio.test.cjs
 node tests/meeting.test.cjs
 node tests/usertemplates.test.cjs
+node tests/calendar.test.cjs
+node tests/moreblocks.test.cjs
+node tests/collection.test.cjs
+node tests/contacts.test.cjs
+node tests/email.test.cjs
+node tests/starter.test.cjs
+node tests/profiles.test.cjs
 lua tests/hypr.test.lua
 
 runner=/usr/lib/qt6/bin/qmltestrunner

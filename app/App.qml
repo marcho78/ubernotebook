@@ -52,10 +52,15 @@ FocusScope {
 
   Theme {
     id: themeObject
-    background: root.background
-    foreground: root.foreground
+    baseBackground: root.background
+    baseForeground: root.foreground
     accent: root.accent
     urgent: root.urgent
+    // Settings → Appearance.
+    pageColor: root.settings.colorPage || ""
+    textColor: root.settings.colorText || ""
+    sidebarColor: root.settings.colorSidebar || ""
+    cardColor: root.settings.colorCards || ""
   }
 
   // The fonts Omanote brings with it (the notebook window loads them once
@@ -105,6 +110,7 @@ FocusScope {
     anchors.fill: parent
     theme: themeObject
     store: root.store
+    service: root.service
     visible: opacity > 0 && root.space === "notebooks"
     enabled: root.mode === "shelf"
     onSpaceRequested: function(next) { root.showSpace(next) }
@@ -336,6 +342,28 @@ FocusScope {
         root.store.deleteNotebook(notebook.id)
         root.toast("\u201c" + notebook.title + "\u201d is in the trash")
       })
+  }
+
+  // The first time: your first profile, or the demo (nothing made until then).
+  FirstRun {
+    anchors.fill: parent
+    z: 50
+    theme: themeObject
+    service: root.service
+    visible: root.service !== null && root.service.profiles !== undefined && root.service.profiles !== null && root.service.profiles.firstRun
+  }
+
+  // Another profile (another folder): an open notebook was the one before's,
+  // so it's the shelf (what was written is written: the switch saved it).
+  Connections {
+    target: root.store
+    ignoreUnknownSignals: true
+    function onRootPathChanged() {
+      if (root.mode !== "notebook") return
+      view.pageDirty = false
+      root.mode = "shelf"
+      shelf.opacity = 1
+    }
   }
 
   Confirm { id: confirm; theme: themeObject; parent: root }

@@ -6,6 +6,12 @@ import "Html.js" as Html
 import "Markdown.js" as Markdown
 import "Sketch.js" as Sketch
 import "Tags.js" as Tags
+import "Calendar.js" as Calendar
+import "Contacts.js" as Contacts
+import "Email.js" as Email
+import "Files.js" as Files
+import "Bookmark.js" as Bookmark
+import "Starter.js" as Starter
 
 // Pages on disk: the workspace in the Pages folder of your notebooks folder
 // (~/Documents/Omanote/Pages), a JSON file per page, named by its UUID, and
@@ -34,7 +40,12 @@ Item {
   // A page was written (the Markdown copy follows).
   signal saved(string id)
 
-  onFolderChanged: if (folder) loadTimer.restart()
+  // Another folder: its own first start (the examples, if it's empty).
+  onFolderChanged: {
+    welcomed = false
+    startingPeople = null
+    if (folder) loadTimer.restart()
+  }
   Timer {
     id: loadTimer
     interval: 50
@@ -49,6 +60,13 @@ Item {
   // Every page file's name in the folder, one a line.
   readonly property string listScript: "shopt -s nullglob; for f in \"$1\"/*.json; do printf '%s\\n' \"${f##*/}\"; done"
   property bool welcomed: false
+  // What a new Pages starts with: "examples" (Starter.js: pages that show
+  // what it can do, their people and events, templates), "templates" (just
+  // the templates), or "" (one page to start from; the tests keep it).
+  property string starter: ""
+  // The examples' people and events, waiting for People and the calendar
+  // to be read (so they're added to what's there, not written over).
+  property var startingPeople: null
 
   // The Pages folder is made when something is first written to it, so
   // there's none until you use Pages.
@@ -66,6 +84,8 @@ Item {
   function load() {
     if (!folder) return
     ready = false
+    calendarLoaded = false
+    contactsLoaded = false
     var gen = ++generation
     folderMade = false
     texts = ({})
@@ -101,6 +121,8 @@ Item {
           ws.scanLinks()
           ws.scanTexts()
           ws.scheduleReminders()
+          ws.loadCalendar()
+          ws.loadContacts()
         })
       }, { okCodes: [0, 1] })
     })
@@ -110,7 +132,8 @@ Item {
   function ensureStarted() {
     if (!ready || welcomed || Object.keys(index.pages).length > 0) return false
     welcomed = true
-    createWelcome()
+    if (starter === "examples" || starter === "templates") createExamples(starter === "templates")
+    else createWelcome()
     return true
   }
 
@@ -232,6 +255,9 @@ Item {
     if (JSON.stringify(reminders) !== JSON.stringify(e.reminders)) { e.reminders = reminders; scheduleReminders() }
     var tags = Workspace.pageTags(page)
     if (JSON.stringify(tags) !== JSON.stringify(e.tags)) { e.tags = tags; changed = true }
+    // What's been put on it, for the Library.
+    var collected = Workspace.pageCollected(page)
+    if (JSON.stringify(collected) !== JSON.stringify(e.collected)) { e.collected = collected; changed = true }
     // A project's status and due date, and the to-dos (its progress).
     var project = page.project || null
     if (JSON.stringify(project) !== JSON.stringify(e.project)) { e.project = project; changed = true }
@@ -334,8 +360,10 @@ Item {
     var text = JSON.stringify({ kept: new Date(now).toISOString(), why: why || "edit", page: JSON.parse(json) })
     files.mkdirs([dir], function(ok) {
       if (!ok) return
-      files.writeFile(dir + "/" + Workspace.versionName(new Date(now)), text, function(written) {
+      var name = Workspace.versionName(new Date(now))
+      files.writeFile(dir + "/" + name, text, function(written) {
         if (!written) return
+        if (ws.versionNames[id]) ws.versionNames[id] = [name].concat(ws.versionNames[id])
         ws.versionKept(id)
         ws.pruneVersions(id)
       })
@@ -343,11 +371,15 @@ Item {
     return true
   }
 
-  // A page's versions, newest first: done([{ name, date }]).
+  // A page's versions, newest first: done([{ name, date }]). (What's found
+  // is kept, so the commands agents use can answer at once.)
+  property var versionNames: ({})
   function listVersions(id, done) {
     if (!Workspace.isUuid(id)) { done([]); return }
     files.exec(["/usr/bin/bash", "-c", listScript, "omanote-list", Workspace.historyDir(files.rootPath, id)], function(ok, output) {
-      done(ok ? Workspace.versionList(String(output || "").split("\n")) : [])
+      var list = ok ? Workspace.versionList(String(output || "").split("\n")) : []
+      ws.versionNames[id] = list.map(function(v) { return v.name })
+      done(list)
     })
   }
 
@@ -375,7 +407,7 @@ Item {
   // Pages written before links and reminders were kept in the tree (or
   // changed elsewhere): read once, in the background, to fill them in.
   function scanLinks() {
-    var ids = Object.keys(index.pages).filter(function(id) { return index.pages[id].links === null || index.pages[id].reminders === null || index.pages[id].tags === null || index.pages[id].checks === null })
+    var ids = Object.keys(index.pages).filter(function(id) { return index.pages[id].links === null || index.pages[id].reminders === null || index.pages[id].tags === null || index.pages[id].checks === null || index.pages[id].collected === null })
     if (ids.length === 0) return
     readPages(ids.slice(0, 2000), function(pages) {
       pages.forEach(function(p) {
@@ -384,6 +416,7 @@ Item {
         e.links = Workspace.linkedPages(p)
         e.reminders = Workspace.pageReminders(p)
         e.tags = Workspace.pageTags(p)
+        e.collected = Workspace.pageCollected(p)
         e.checks = Workspace.pageChecks(p)
         e.project = p.project || null
       })
@@ -399,11 +432,25 @@ Item {
   // comes when it starts, if it was in the last 12 hours.
   readonly property int lateness: 12 * 3600000
 
+  // What's to come: the pages' reminders and the calendar's alerts (the
+  // next two days of them), soonest first: [{ key, at, title, text, page, day }].
+  function pendingAlerts() {
+    var now = Date.now()
+    var list = Workspace.pendingReminders(index).map(function(r) {
+      var e = ws.index.pages[r.page]
+      return { key: r.key, at: r.at, title: e && e.title ? e.title : "Reminder", text: r.text || "Reminder", page: r.page, day: "" }
+    })
+    Calendar.alerts(calendar, new Date(now - lateness), new Date(now + 2 * 86400000)).forEach(function(a) {
+      if (!ws.index.fired[a.key]) list.push(a)
+    })
+    return list.sort(function(a, b) { return a.at - b.at })
+  }
+
   function scheduleReminders() {
     if (!ready) return
-    var pending = Workspace.pendingReminders(index)
-    if (pending.length === 0) { reminderTimer.stop(); return }
-    var wait = pending[0].at.getTime() - Date.now()
+    var pending = pendingAlerts()
+    // (Alerts further on come into the next two days: a look every hour.)
+    var wait = pending.length ? pending[0].at.getTime() - Date.now() : 3600000
     reminderTimer.interval = Math.max(500, Math.min(3600000, wait))
     reminderTimer.restart()
   }
@@ -416,17 +463,174 @@ Item {
   function checkReminders() {
     var now = Date.now()
     var any = false
-    Workspace.pendingReminders(index).forEach(function(r) {
+    pendingAlerts().forEach(function(r) {
       if (r.at.getTime() > now + 1000) return
-      if (now - r.at.getTime() <= ws.lateness) {
-        var e = ws.index.pages[r.page]
-        ws.files.notify(e && e.title ? e.title : "Reminder", r.text || "Reminder", r.page)
-      }
+      if (now - r.at.getTime() <= ws.lateness) ws.files.notify(r.title, r.text, r.page, r.day)
       ws.index.fired[r.key] = true
       any = true
     })
+    // (A calendar alert's key goes once its day's long gone.)
+    var old = Calendar.dayIso(new Date(now - 4 * 86400000))
+    Object.keys(index.fired).forEach(function(k) {
+      var m = /^cal\|[^|]+\|(\d{4}-\d{2}-\d{2})\|/.exec(k)
+      if (m && m[1] < old) { delete ws.index.fired[k]; any = true }
+    })
     if (any) saveIndex()
     scheduleReminders()
+  }
+
+  // ---- the calendar --------------------------------------------------------------------------
+
+  // Pages/calendar.json: your events (Calendar.js), and the steps Undo takes back.
+  property var calendar: Calendar.make()
+  property int calendarRevision: 0
+  property bool calendarLoaded: false
+  property var calendarUndo: []
+  property var calendarRedo: []
+  function calendarPath() { return folder + "/calendar.json" }
+
+  function loadCalendar() {
+    if (!folder) return
+    files.readFiles([calendarPath()], function(got) {
+      var raw = got[ws.calendarPath()]
+      ws.calendar = Calendar.clean(raw ? files.parseJson(raw) : null)
+      ws.calendarUndo = []
+      ws.calendarRedo = []
+      ws.calendarLoaded = true
+      ws.calendarRevision++
+      ws.scheduleReminders()
+      ws.addStartingPeople()
+    })
+  }
+
+  function writeCalendar() {
+    if (!folder) return
+    files.writeFile(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
+  }
+
+  // The calendar changed (`next`, a new copy), kept, as a step Undo takes back.
+  function setCalendar(next) {
+    calendarUndo = calendarUndo.concat([calendar]).slice(-100)
+    calendarRedo = []
+    calendar = Calendar.clean(next)
+    calendarRevision++
+    writeCalendar()
+    scheduleReminders()
+  }
+
+  function undoCalendar() {
+    if (calendarUndo.length === 0) return false
+    calendarRedo = calendarRedo.concat([calendar])
+    calendar = calendarUndo[calendarUndo.length - 1]
+    calendarUndo = calendarUndo.slice(0, -1)
+    calendarRevision++
+    writeCalendar()
+    scheduleReminders()
+    return true
+  }
+
+  function redoCalendar() {
+    if (calendarRedo.length === 0) return false
+    calendarUndo = calendarUndo.concat([calendar])
+    calendar = calendarRedo[calendarRedo.length - 1]
+    calendarRedo = calendarRedo.slice(0, -1)
+    calendarRevision++
+    writeCalendar()
+    scheduleReminders()
+    return true
+  }
+
+  function eventById(id) { return Calendar.byId(calendar, id) }
+
+  // The calendar as an .ics file, where exports go: done(its path, or "").
+  function exportCalendar(done) {
+    function to(base) {
+      var path = base + "/Omanote calendar " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".ics"
+      files.mkdirs([base], function() {
+        files.writeFile(path, Calendar.toIcs(calendar, new Date()), function(ok) {
+          if (ok && typeof files.exported === "function") files.exported(path)
+          if (done) done(ok ? path : "")
+        })
+      })
+    }
+    if (typeof files.exportBase === "function") files.exportBase(function(base) { if (base) to(base); else if (done) done("") })
+    else to(files.rootPath + "/Exports")
+  }
+
+  // ---- people -------------------------------------------------------------------------------
+
+  // Pages/contacts.json: the people (Contacts.js), and the steps Undo takes back.
+  property var contacts: Contacts.make()
+  property int contactsRevision: 0
+  property bool contactsLoaded: false
+  property var contactsUndo: []
+  function contactsPath() { return folder + "/contacts.json" }
+
+  function loadContacts() {
+    if (!folder) return
+    files.readFiles([contactsPath()], function(got) {
+      var raw = got[ws.contactsPath()]
+      ws.contacts = Contacts.clean(raw ? files.parseJson(raw) : null)
+      ws.contactsUndo = []
+      ws.contactsLoaded = true
+      ws.contactsRevision++
+      ws.addStartingPeople()
+    })
+  }
+
+  function writeContacts() {
+    if (!folder) return
+    withFolder(function() { files.writeFile(ws.contactsPath(), JSON.stringify(ws.contacts, null, 1) + "\n") })
+  }
+
+  // The people changed (`next`, a new copy), kept, as a step Undo takes back.
+  function setContacts(next) {
+    contactsUndo = contactsUndo.concat([contacts]).slice(-50)
+    contacts = Contacts.clean(next)
+    contactsRevision++
+    writeContacts()
+  }
+
+  function undoContacts() {
+    if (contactsUndo.length === 0) return false
+    contacts = contactsUndo[contactsUndo.length - 1]
+    contactsUndo = contactsUndo.slice(0, -1)
+    contactsRevision++
+    writeContacts()
+    return true
+  }
+
+  function contactById(id) { return Contacts.byId(contacts, id) }
+  // A person changed or added (as typed in their card): kept.
+  function saveContact(c) { setContacts(Contacts.withContact(contacts, c, new Date())) }
+
+  // A .vcf or .csv file's people put in (those there already filled in, not
+  // added twice): done({ added, updated }), or done(null, why).
+  function importContacts(path, done) {
+    files.readFiles([path], function(got) {
+      var raw = got[path]
+      if (raw === undefined || raw === null) { done(null, "It couldn't be read"); return }
+      var people = Contacts.fromFile(path, raw)
+      if (people.length === 0) { done(null, "There are no contacts in it (a .vcf or a .csv of contacts)"); return }
+      var r = Contacts.merge(ws.contacts, people, new Date())
+      ws.setContacts(r.book)
+      done({ added: r.added, updated: r.updated })
+    }, 64 * 1024 * 1024)
+  }
+
+  // Everyone as a .vcf file, where exports go: done(its path, or "").
+  function exportContacts(done) {
+    function to(base) {
+      var path = base + "/Omanote contacts " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".vcf"
+      files.mkdirs([base], function() {
+        files.writeFile(path, Contacts.toVcard(ws.contacts), function(ok) {
+          if (ok && typeof files.exported === "function") files.exported(path)
+          if (done) done(ok ? path : "")
+        })
+      })
+    }
+    if (typeof files.exportBase === "function") files.exportBase(function(base) { if (base) to(base); else if (done) done("") })
+    else to(files.rootPath + "/Exports")
   }
 
   // A new page (written straight away): { parent, at, title, icon, cover,
@@ -537,6 +741,159 @@ Item {
     e.template = !!on
     e.modified = new Date().toISOString()
     touched()
+  }
+
+  // What a template's for (Templates shows it under its name).
+  function setDescription(id, text) {
+    var e = index.pages[id]
+    var d = Workspace.cleanDescription(String(text || ""))
+    if (!e || (e.description || "") === d) return
+    e.description = d
+    touched()
+  }
+
+  // A synced block's page, or not.
+  function setSynced(id, on) {
+    var e = index.pages[id]
+    if (!e || e.synced === !!on) return
+    e.synced = !!on
+    touched()
+  }
+
+  // A synced block's page, made with blocks (editor blocks: { type, html,
+  // indent... }); returns its id.
+  function newSyncedPage(blocks) {
+    var p = createPage({ parent: "", title: "Synced block", blocks: blocks && blocks.length ? blocks : undefined })
+    if (!p) return ""
+    setSynced(p.id, true)
+    return p.id
+  }
+
+  // ---- files and bookmarks ----------------------------------------------------------------
+
+  // A file copied into Pages/assets: done({ src, name, size, kind }) or done(null).
+  readonly property string importFileScript: "/usr/bin/cp -- \"$1\" \"$2\" && /usr/bin/stat -c %s -- \"$2\""
+  function importFile(path, done) {
+    var p = String(path || "")
+    var name = p.slice(p.lastIndexOf("/") + 1)
+    if (!p || !name || !folder) { done(null); return }
+    var asset = Files.assetName(name, new Date())
+    var dest = Workspace.assetsDir(files.rootPath) + "/" + asset
+    files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
+      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "omanote-import-file", p, dest], function(ok, out) {
+        if (!ok) { done(null); return }
+        var f = { src: "assets/" + asset, name: name, size: Number(String(out).trim()) || 0, kind: Files.kindOf(name), poster: "" }
+        if (f.kind !== "video") { done(f); return }
+        // A video's still: a frame from a second in (or its first).
+        var still = asset.replace(/\.[A-Za-z0-9]+$/, "") + "-still.jpg"
+        files.exec(["/usr/bin/bash", "-c", ws.stillScript, "omanote-still", dest, Workspace.assetsDir(files.rootPath) + "/" + still], function(ok2) {
+          if (ok2) f.poster = "assets/" + still
+          done(f)
+        }, { timeoutMs: 30000, maxBytes: 4096 })
+      }, { timeoutMs: 120000, maxBytes: 4096 })
+    })
+  }
+  // An .eml copied into Pages/assets and read: done({ src, name, size,
+  // subject, from, to, cc, date, preview, attachments }), or done(null, why).
+  function importEmail(path, done) {
+    var p = String(path || "")
+    var name = p.slice(p.lastIndexOf("/") + 1)
+    if (!p || !name || !folder) { done(null, "There's no file"); return }
+    var asset = Email.assetName(name, new Date())
+    var dir = Workspace.assetsDir(files.rootPath)
+    files.mkdirs([dir], function() {
+      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "omanote-import-file", p, dir + "/" + asset], function(ok, out) {
+        if (!ok) { done(null, "It couldn't be copied in"); return }
+        files.readFiles([dir + "/" + asset], function(got) {
+          var m = Email.parse(got[dir + "/" + asset] || "")
+          if (!m) { done(null, "That isn't an email (.eml)"); return }
+          var s = Email.summary(m)
+          s.src = "assets/" + asset
+          s.name = name
+          s.size = Number(String(out).trim()) || 0
+          done(s)
+        }, 64 * 1024 * 1024)
+      }, { timeoutMs: 60000, maxBytes: 4096 })
+    })
+  }
+
+  // A file in Pages/assets in its app (not a web browser's): done(ok, why).
+  function openAsset(src, done) {
+    if (!Files.cleanSrc(src) || !folder) { if (done) done(false, "none"); return }
+    files.openFile(folder + "/" + src, done)
+  }
+  // A file in Pages/assets, read as words: done(text), or done(null).
+  function readAsset(src, done) {
+    if (!Files.cleanSrc(src) || !folder) { done(null); return }
+    var path = folder + "/" + src
+    files.readFiles([path], function(got) { done(got[path] !== undefined ? got[path] : null) }, 16 * 1024 * 1024)
+  }
+  // People from a contact card's words (an email's .vcf), put in: done({ added, updated, first }), or done(null).
+  function addPeopleFrom(name, text, done) {
+    var people = Contacts.fromFile(name, String(text || ""))
+    if (!people.length) { done(null); return }
+    var before = contacts.contacts.map(function(c) { return c.id })
+    var r = Contacts.merge(contacts, people, new Date())
+    setContacts(r.book)
+    var first = contacts.contacts.filter(function(c) { return before.indexOf(c.id) < 0 })[0]
+    done({ added: r.added, updated: r.updated, first: first ? first.id : "" })
+  }
+
+  // An email in Pages/assets, read: done(the message, Email.parse's), or done(null).
+  function readEmail(src, done) {
+    if (!Files.cleanSrc(src) || !folder) { done(null); return }
+    var path = folder + "/" + src
+    files.readFiles([path], function(got) { done(got[path] !== undefined ? Email.parse(got[path]) : null) }, 64 * 1024 * 1024)
+  }
+
+  // An email's attachment written out into Pages/assets (from its base64,
+  // through a file beside it, then decoded): done("assets/<name>"), or done("").
+  readonly property string unpackScript: "/usr/bin/base64 -d -- \"$1\" > \"$2\"; s=$?; /usr/bin/rm -f -- \"$1\"; exit $s"
+  // (`at`: which of its attachments, in the order the block lists them.)
+  function emailAttachment(src, at, name, done) {
+    readEmail(src, function(m) {
+      var a = m ? m.attachments[at] : null
+      if (!a) { done(""); return }
+      var data = Email.attachmentBase64(m, a.index)
+      var out = Files.assetName(name || a.name, new Date()).replace(/^file-/, "mail-")
+      var dir = Workspace.assetsDir(files.rootPath)
+      var tmp = dir + "/.unpack-" + Math.random().toString(36).slice(2, 10) + ".b64"
+      files.writeFile(tmp, data, function(ok) {
+        if (!ok) { done(""); return }
+        files.exec(["/usr/bin/bash", "-c", ws.unpackScript, "omanote-unpack", tmp, dir + "/" + out], function(ok2) {
+          done(ok2 ? "assets/" + out : "")
+        }, { timeoutMs: 60000, maxBytes: 4096 })
+      })
+    })
+  }
+
+  readonly property string stillScript: "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -ss 1 -i \"$1\" -frames:v 1 -vf 'scale=min(1280\\,iw):-2' \"$2\" || /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -i \"$1\" -frames:v 1 \"$2\""
+
+  // A link's page read (its title, a line about it, its picture, kept in
+  // assets): done(bookmark data, or null and why). Only http and https;
+  // a page of at most 2 MB, a picture of at most 5 MB, 15 seconds each.
+  readonly property string fetchScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 2000000 -A 'Mozilla/5.0 (X11; Linux) Omanote' -H 'Accept: text/html' -- \"$1\" | /usr/bin/head -c 2000000"
+  readonly property string imageScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 5000000 -A 'Mozilla/5.0 (X11; Linux) Omanote' -o \"$2\" -w '%{content_type}' -- \"$1\""
+  function fetchBookmark(url, done) {
+    var u = Bookmark.cleanUrl(url)
+    if (!u) { done(null, "That isn't a web link (https://...)"); return }
+    files.exec(["/usr/bin/bash", "-c", fetchScript, "omanote-fetch", u], function(ok, html) {
+      if (!ok || !String(html || "").trim()) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, "The page couldn't be read: the link's kept"); return }
+      var meta = Bookmark.parse(html, u)
+      var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
+      if (!meta.image || !Bookmark.cleanUrl(meta.image)) { done(data, ""); return }
+      var tmp = Workspace.assetsDir(files.rootPath) + "/.bm-" + Date.now().toString(36)
+      files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
+        files.exec(["/usr/bin/bash", "-c", ws.imageScript, "omanote-fetch-image", meta.image, tmp], function(ok2, type) {
+          var name = ok2 ? Bookmark.imageName(String(type || ""), meta.image, new Date()) : ""
+          if (!name) { files.exec(["/usr/bin/rm", "-f", "--", tmp], null); done(data, ""); return }
+          files.exec(["/usr/bin/mv", "-f", "--", tmp, Workspace.assetsDir(files.rootPath) + "/" + name], function(ok3) {
+            if (ok3) data.image = "assets/" + name
+            done(data, "")
+          })
+        }, { timeoutMs: 20000, maxBytes: 4096 })
+      })
+    }, { timeoutMs: 20000, maxBytes: 2200000 })
   }
 
   // The template new pages inside a page start from ("" for none).
@@ -1110,6 +1467,63 @@ Item {
       savePage(inner)
     }
     touched()
+  }
+
+  // The examples (Starter.js), made for today: their files copied into
+  // Pages/assets, their pages (and templates) in the tree, the first two in
+  // Favorites; their people and events once People and the calendar are read.
+  function createExamples(templatesOnly) {
+    var home = files.home || ""
+    var root = files.rootPath
+    var made = Starter.build(new Date(), { folder: home && root.indexOf(home + "/") === 0 ? "~" + root.slice(home.length) : root, templatesOnly: templatesOnly === true })
+    var dir = Workspace.assetsDir(files.rootPath)
+    files.mkdirs([dir], function(ok) {
+      if (!ok) return
+      // (The page open, and the Library, show the pictures once they're here.)
+      var left = made.assets.length
+      if (!left) return
+      function copied() {
+        if (--left > 0) return
+        made.pages.forEach(function(m) { ws.pageChanged(m.page.id) })
+        ws.revision++
+      }
+      made.assets.forEach(function(a) {
+        if (a.text !== undefined) files.writeFile(dir + "/" + a.name, a.text, copied)
+        else files.exec(["/usr/bin/cp", "--", ws.starterFile(a.file), dir + "/" + a.name], copied)
+      })
+    })
+    made.pages.forEach(function(m) {
+      var p = m.page
+      index.pages[p.id] = { title: p.title, icon: p.icon, parent: "", children: [], trashed: false, created: p.created, modified: p.modified, links: null, reminders: null }
+    })
+    made.pages.forEach(function(m) {
+      Workspace.attach(index, m.page.id, m.page.parent, -1)
+      if (m.template) index.pages[m.page.id].template = true
+      if (m.description) index.pages[m.page.id].description = Workspace.cleanDescription(m.description)
+    })
+    made.pages.forEach(function(m) { savePage(m.page) })
+    index.favorites = (index.favorites || []).concat(made.favorites)
+    touched()
+    startingPeople = { contacts: made.contacts, events: made.events }
+    addStartingPeople()
+  }
+  function starterFile(name) {
+    return decodeURIComponent(Qt.resolvedUrl("starter/assets/" + name).toString().replace(/^file:\/\//, ""))
+  }
+  function addStartingPeople() {
+    if (!startingPeople || !calendarLoaded || !contactsLoaded) return
+    var s = startingPeople
+    startingPeople = null
+    var now = new Date()
+    var book = contacts
+    s.contacts.forEach(function(c) { book = Contacts.withContact(book, c, now) })
+    setContacts(book)
+    var cal = calendar
+    s.events.forEach(function(e) { cal = Calendar.withEvent(cal, e) })
+    setCalendar(cal)
+    // (Not a step Undo takes back: they're where you start.)
+    contactsUndo = []
+    calendarUndo = []
   }
 
   // Everything still waiting is written (the shell stopping).

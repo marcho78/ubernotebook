@@ -42,6 +42,9 @@ Item {
   required property string sketch
   required property string audio
   required property string meeting
+  required property string calref
+  // (A block's data, as JSON: `data` is every item's own.)
+  required property string extra
 
   property var editor: null
 
@@ -122,6 +125,8 @@ Item {
     : type === "sketch" ? (sketchLoader.item ? sketchLoader.item.height : st.lineHeight)
     : type === "audio" ? (audioLoader.item ? audioLoader.item.height : 60)
     : type === "meeting" ? (meetingLoader.item ? meetingLoader.item.height : 80)
+    : type === "agenda" || type === "event" ? (calLoader.item ? calLoader.item.height : 40)
+    : Blocks.hasData(type) ? (dataLoader.item ? dataLoader.item.height : 40)
     : st.lineHeight
 
   property alias edit: textEdit
@@ -159,13 +164,21 @@ Item {
   readonly property var sketchView: sketchLoader.item
   // A table or a sketch tells where the pointer is itself (the block's own
   // pointer zone would keep it from knowing).
-  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio" || type === "meeting"
+  property bool pictureHovered: false
+  // (A picture's own handles, at its sides, need the pointer over it.)
+  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio" || type === "meeting" || type === "agenda" || type === "event" || type === "image" || Blocks.hasData(type)
   readonly property bool contentHovered: (tableLoader.item !== null && tableLoader.item.pointerIn) || (sketchLoader.item !== null && sketchLoader.item.pointerIn)
     || (audioLoader.item !== null && audioLoader.item.pointerIn) || (meetingLoader.item !== null && meetingLoader.item.pointerIn)
+    || (calLoader.item !== null && calLoader.item.pointerIn) || (dataLoader.item !== null && dataLoader.item.pointerIn)
+    || (type === "image" && pictureHovered)
   // An audio note: recorded into, played, written out.
   readonly property var audioView: audioLoader.item
   // A meeting: started, stopped, written out.
   readonly property var meetingView: meetingLoader.item
+  // An agenda or an event block.
+  readonly property var calView: calLoader.item
+  // A button, a file, a video, a bookmark, a board, a synced block.
+  readonly property var dataView: dataLoader.item
 
   function reload() {
     if (!isText) return
@@ -471,23 +484,23 @@ Item {
     HoverHandler {
       id: hover
       readonly property string link: textEdit.linkAt(hover.point.position.x, hover.point.position.y)
-      cursorShape: (link !== "" && (hover.point.modifiers & Qt.ControlModifier)) || Html.pageOf(link) !== "" || Html.isTag(link)
+      cursorShape: (link !== "" && (hover.point.modifiers & Qt.ControlModifier)) || Html.pageOf(link) !== "" || Html.isTag(link) || Html.contactOf(link) !== ""
         ? Qt.PointingHandCursor : Qt.IBeamCursor
     }
     TapHandler {
       acceptedModifiers: Qt.ControlModifier
       onTapped: function(eventPoint) {
         var link = textEdit.linkAt(eventPoint.position.x, eventPoint.position.y)
-        if (link) block.editor.openLink(link)
+        if (link) block.editor.openLink(link, textEdit, eventPoint.position.x, eventPoint.position.y)
       }
     }
-    // A link to a page opens with a plain click, as in Notion, and a tag
-    // shows every block with it.
+    // A link to a page opens with a plain click, as in Notion, a tag shows
+    // every block with it, and a person their card.
     TapHandler {
       acceptedModifiers: Qt.NoModifier
       onTapped: function(eventPoint) {
         var link = textEdit.linkAt(eventPoint.position.x, eventPoint.position.y)
-        if (Html.pageOf(link) || Html.isTag(link)) block.editor.openLink(link)
+        if (Html.pageOf(link) || Html.isTag(link) || Html.contactOf(link)) block.editor.openLink(link, textEdit, eventPoint.position.x, eventPoint.position.y)
       }
     }
   }
@@ -606,6 +619,53 @@ Item {
       available: block.width - block.bx - block.boxRight
     }
   }
+
+  // ---- the calendar: a day's events, or one -----------------------------------------------------
+
+  Loader {
+    id: calLoader
+    active: block.type === "agenda" || block.type === "event"
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: CalendarBlock {
+      editor: block.editor
+      uid: block.uid
+      kind: block.type
+      source: block.calref
+      ink: block.inkColor
+      available: block.width - block.bx - block.boxRight
+    }
+  }
+
+  // ---- a button, a file, a video, a bookmark, a board, a synced block ---------------------------
+
+  Loader {
+    id: dataLoader
+    active: Blocks.hasData(block.type)
+    x: block.bx
+    y: block.st.above + block.boxTop
+    sourceComponent: block.type === "button" ? buttonComp : block.type === "file" ? fileComp : block.type === "video" ? videoComp
+      : block.type === "bookmark" ? bookmarkComp : block.type === "board" ? boardComp : block.type === "contact" ? contactComp : block.type === "email" ? emailComp
+      : block.type === "gallery" ? galleryComp : null
+    // (A synced block has an editor of its own, of these blocks: by name, so
+    // the types aren't each other's when they're compiled.)
+    source: block.type === "synced" ? "SyncedBlock.qml" : ""
+    onLoaded: if (block.type === "synced") {
+      item.editor = Qt.binding(function() { return block.editor })
+      item.uid = Qt.binding(function() { return block.uid })
+      item.source = Qt.binding(function() { return block.extra })
+      item.ink = Qt.binding(function() { return block.inkColor })
+      item.available = Qt.binding(function() { return block.width - block.bx - block.boxRight })
+    }
+  }
+  Component { id: buttonComp; ButtonBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: fileComp; FileBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: videoComp; VideoBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: galleryComp; GalleryBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: emailComp; EmailBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: contactComp; ContactBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: bookmarkComp; BookmarkBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
+  Component { id: boardComp; BoardBlock { editor: block.editor; uid: block.uid; source: block.extra; ink: block.inkColor; available: block.width - block.bx - block.boxRight } }
 
   // ---- a habit's week --------------------------------------------------------------------------
 
@@ -923,6 +983,39 @@ Item {
       }
     }
   }
+  // A link to a page, under the pointer: to another one (or, its page gone, to one that's here).
+  Rectangle {
+    objectName: "linkChange"
+    visible: block.type === "link" && !block.editor.readOnly && (zoneHover.hovered || !pageRow.page)
+    x: pageRow.x + pageRow.width + 4
+    y: pageRow.y + (pageRow.height - height) / 2
+    width: changeRow.implicitWidth + 14
+    height: 24
+    radius: 6
+    color: changeTap.pressed ? Qt.alpha(block.editor.ink, 0.12) : Qt.alpha(block.editor.ink, 0.05)
+    Row {
+      id: changeRow
+      anchors.centerIn: parent
+      spacing: 5
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: block.editor.theme ? block.editor.theme.icons.edit : ""
+        font.family: block.editor.theme ? block.editor.theme.iconFont : ""
+        font.pixelSize: 11
+        color: Qt.alpha(block.editor.ink, 0.6)
+      }
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: pageRow.page ? "Change" : "Link to a page"
+        font.family: block.editor.uiFamily
+        font.pixelSize: 12
+        color: Qt.alpha(block.editor.ink, 0.6)
+      }
+    }
+    TapHandler { id: changeTap; onTapped: block.editor.pageRelinkRequested(block.uid) }
+  }
 
   // A table of contents: the page's headings, further in the smaller they
   // are; click one to go to it.
@@ -968,6 +1061,7 @@ Item {
   // A picture, with rounded corners.
   Item {
     id: pictureFrame
+    objectName: "pictureFrame"
     visible: block.type === "image"
     width: block.picW
     height: block.picH
@@ -996,34 +1090,136 @@ Item {
       border.width: 2
       border.color: block.editor.accent
     }
-    // Drag the corner to size it.
-    Rectangle {
-      visible: block.selected && !block.editor.readOnly
-      width: 14
-      height: 14
-      radius: 7
-      x: parent.width - 7
-      y: parent.height - 7
-      color: block.editor.accent
-      border.width: 2
-      border.color: "white"
-      DragHandler {
-        target: null
-        cursorShape: Qt.SizeFDiagCursor
-        property real startWidth: 0
-        onActiveChanged: {
-          if (active) {
-            startWidth = block.imgWidth
+    // Under the pointer: a handle on each side, dragged to size it (how wide
+    // it is shown as it's dragged); a double-click, as wide as the page.
+    HoverHandler { id: picHover; onHoveredChanged: block.pictureHovered = hovered }
+    property bool sizing: leftSize.active || rightSize.active || cornerSize.active
+    Repeater {
+      model: block.type === "image" && !block.editor.readOnly ? ["left", "right"] : []
+      delegate: Item {
+        id: side
+        required property string modelData
+        readonly property bool isLeft: modelData === "left"
+        objectName: "pictureSize" + (isLeft ? "Left" : "Right")
+        visible: picHover.hovered || pictureFrame.sizing
+        x: isLeft ? 0 : pictureFrame.width - width
+        width: 22
+        height: pictureFrame.height
+        Rectangle {
+          anchors.centerIn: parent
+          width: 6
+          height: Math.min(56, Math.max(24, pictureFrame.height * 0.3))
+          radius: 3
+          color: Qt.rgba(0.08, 0.08, 0.1, sizeDrag.active || sizeHover.hovered ? 0.85 : 0.6)
+          border.width: 1
+          border.color: Qt.rgba(1, 1, 1, 0.85)
+        }
+        HoverHandler { id: sizeHover; cursorShape: Qt.SizeHorCursor }
+        DragHandler {
+          id: sizeDrag
+          target: null
+          cursorShape: Qt.SizeHorCursor
+          grabPermissions: PointerHandler.CanTakeOverFromAnything
+          property real startWidth: 0
+          onActiveChanged: {
+            if (side.isLeft) leftSize.active = active
+            else rightSize.active = active
+            if (active) {
+              startWidth = block.imgWidth || 0.6
+              block.editor.beginResize(block.uid)
+            } else {
+              block.editor.endResize(block.uid)
+            }
+          }
+          onTranslationChanged: {
+            if (!active) return
+            var factor = block.align === "center" ? 2 : 1
+            var dx = side.isLeft ? -translation.x : translation.x
+            var next = startWidth + dx * factor / Math.max(1, block.width - block.bx)
+            block.editor.resizeImage(block.uid, Math.max(0.15, Math.min(1, next)))
+          }
+        }
+        TapHandler {
+          onDoubleTapped: {
             block.editor.beginResize(block.uid)
-          } else {
+            block.editor.resizeImage(block.uid, 1)
             block.editor.endResize(block.uid)
           }
         }
-        onTranslationChanged: {
-          if (!active) return
-          var factor = block.align === "center" ? 2 : 1
-          var next = startWidth + translation.x * factor / Math.max(1, block.width - block.bx)
-          block.editor.resizeImage(block.uid, Math.max(0.15, Math.min(1, next)))
+      }
+    }
+    QtObject { id: leftSize; property bool active: false }
+    QtObject { id: rightSize; property bool active: false }
+    QtObject { id: cornerSize; property bool active: false }
+    // How wide it is, while it's sized.
+    Rectangle {
+      objectName: "pictureSizeBadge"
+      visible: pictureFrame.sizing
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 10
+      width: sizeText.implicitWidth + 16
+      height: 24
+      radius: 12
+      color: Qt.rgba(0.08, 0.08, 0.1, 0.85)
+      Text {
+        id: sizeText
+        anchors.centerIn: parent
+        textFormat: Text.PlainText
+        text: Math.round((block.imgWidth || 0.6) * 100) + "%"
+        font.family: block.editor.uiFamily
+        font.pixelSize: 12
+        color: "#f2f2f2"
+      }
+    }
+    // Under the pointer (or picked): a handle at each corner, dragged any
+    // way, it the size it's dragged to (as tall as its shape says).
+    Repeater {
+      model: block.type === "image" && !block.editor.readOnly ? ["tl", "tr", "bl", "br"] : []
+      delegate: Item {
+        id: corner
+        required property string modelData
+        readonly property int sx: modelData === "tr" || modelData === "br" ? 1 : -1
+        readonly property int sy: modelData === "bl" || modelData === "br" ? 1 : -1
+        objectName: "pictureCorner_" + modelData
+        visible: picHover.hovered || cornerHover.hovered || pictureFrame.sizing || block.selected
+        width: 22
+        height: 22
+        x: (sx > 0 ? pictureFrame.width : 0) - width / 2
+        y: (sy > 0 ? pictureFrame.height : 0) - height / 2
+        Rectangle {
+          anchors.centerIn: parent
+          width: cornerDrag.active || cornerHover.hovered ? 14 : 12
+          height: width
+          radius: width / 2
+          color: block.editor.accent
+          border.width: 2
+          border.color: "white"
+        }
+        HoverHandler { id: cornerHover; cursorShape: corner.sx === corner.sy ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor }
+        DragHandler {
+          id: cornerDrag
+          target: null
+          cursorShape: corner.sx === corner.sy ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+          grabPermissions: PointerHandler.CanTakeOverFromAnything
+          property real startWidth: 0
+          onActiveChanged: {
+            cornerSize.active = active
+            if (active) {
+              startWidth = block.imgWidth || 0.6
+              block.editor.beginResize(block.uid)
+            } else {
+              block.editor.endResize(block.uid)
+            }
+          }
+          onTranslationChanged: {
+            if (!active) return
+            // Across and down, each as width: the drag's way, half and half.
+            var across = corner.sx * translation.x
+            var down = corner.sy * translation.y * block.picRatio
+            var factor = block.align === "center" ? 2 : 1
+            var next = startWidth + (across + down) / 2 * factor / Math.max(1, block.width - block.bx)
+            block.editor.resizeImage(block.uid, Math.max(0.15, Math.min(1, next)))
+          }
         }
       }
     }
@@ -1076,7 +1272,7 @@ Item {
   // Blocks that aren't text are picked with a click (a calendar picks
   // itself, away from its dates).
   TapHandler {
-    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch" && block.type !== "audio" && block.type !== "meeting"
+    enabled: !block.isText && block.type !== "page" && block.type !== "link" && block.type !== "toc" && block.type !== "calendar" && block.type !== "mindmap" && block.type !== "table" && block.type !== "sketch" && block.type !== "audio" && block.type !== "meeting" && block.type !== "agenda" && block.type !== "event" && !Blocks.hasData(block.type)
     onTapped: block.editor.selectBlocks(block.uid, block.uid)
     onDoubleTapped: if (block.type === "image") block.editor.openPicture(block.src)
   }

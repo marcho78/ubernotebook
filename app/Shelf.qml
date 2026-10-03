@@ -11,6 +11,8 @@ Item {
 
   property var theme: null
   property var store: null
+  // The service: the profiles, for the switch at the top.
+  property var service: null
   property string shortcutHint: ""
 
   signal openRequested(var notebook, rect from)
@@ -75,12 +77,26 @@ Item {
         font.pixelSize: 30
         color: shelf.theme.text
       }
-      Text {
-        textFormat: Text.PlainText
-        text: shelf.notebooks.length === 1 ? "1 notebook" : shelf.notebooks.length + " notebooks"
-        font.family: shelf.theme.uiFont
-        font.pixelSize: 12
-        color: shelf.theme.muted
+      // The profile open (a click: the others), and how many notebooks it has.
+      Row {
+        spacing: 8
+        topPadding: 4
+        ProfileSwitch {
+          id: profileSwitch
+          theme: shelf.theme
+          service: shelf.service
+          visible: shelf.service !== null && shelf.service.profiles !== undefined && shelf.service.profiles !== null
+          anchors.verticalCenter: parent.verticalCenter
+          onManageRequested: shelf.settingsRequested()
+        }
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: shelf.notebooks.length === 1 ? "1 notebook" : shelf.notebooks.length + " notebooks"
+          font.family: shelf.theme.uiFont
+          font.pixelSize: 12
+          color: shelf.theme.muted
+        }
       }
     }
 

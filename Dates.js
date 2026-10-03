@@ -118,7 +118,7 @@ function parse(text, now) {
       if (only < 0) return null
       var at = new Date(n.getFullYear(), n.getMonth(), n.getDate(), Math.floor(only / 60), only % 60)
       if (at < n) at = addDays(at, 1)
-      return { at: at, time: true }
+      return { at: at, time: true, onlyTime: true }
     }
     if (/^\d{4}$/.test(words[i] || "")) { yy = Number(words[i]); i++ }
     var year = yy > 0 ? yy : n.getFullYear()

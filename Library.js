@@ -378,6 +378,10 @@ function assetName(sourcePath, date) {
   return pageId(date) + "." + ext
 }
 
+// A folder's folders ("d\t0\tname") and files ("f\t<modified>\tname"),
+// hidden ones left out: bash -c LIST_SCRIPT <name> <folder>.
+var LIST_SCRIPT = "cd -- \"$1\" 2>/dev/null || exit 1; /usr/bin/find . -mindepth 1 -maxdepth 1 ! -name '.*' \\( -type d -printf 'd\\t0\\t%f\\n' -o -type f -printf 'f\\t%T@\\t%f\\n' \\) 2>/dev/null | /usr/bin/head -n 5000"
+
 function isImagePath(path) {
   return /^\/[^\u0000-\u001f\u007f]{1,4000}\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(path || ""))
 }

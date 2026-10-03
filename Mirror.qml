@@ -182,6 +182,9 @@ Item {
         return { title: e.title || "Untitled", icon: e.icon, file: paths[pid] ? Mirror.relative(file, paths[pid]) : "" }
       }, {
         assetPrefix: Mirror.toTop(file),
+        calendar: workspace.calendar,
+        syncedPage: function(id) { return pages[id] || null },
+        contactOf: function(id) { return mirror.workspace ? mirror.workspace.contactById(id) : null },
         sketchFile: function(bid) { return Mirror.relative(file, "sketches/" + bid + ".svg") }
       })
       Workspace.sketchesOf(page).forEach(function(k) {

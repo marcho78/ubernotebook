@@ -600,6 +600,7 @@ Item {
             uiFamily: view.theme.uiFont
             accent: view.theme.accent
             strikeDone: view.settings.strikeDone !== false
+            scrollSpeed: view.settings.scrollSpeed || "normal"
             leftGutter: view.leftGutter
             // The page changes in place (a template on a blank page): `revision` says so.
             dateText: { var r = view.revision; return view.dateLabel(view.page) }

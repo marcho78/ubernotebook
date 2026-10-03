@@ -18,6 +18,8 @@ Item {
   property string uiFamily: "Adwaita Sans"
   property color accent: "#2456b3"
   property bool strikeDone: true
+  // Settings' scrolling speed ("slower", "normal", "faster").
+  property string scrollSpeed: "normal"
   property bool readOnly: false
   // Room the binding takes at the left edge.
   property real leftGutter: 48
@@ -81,7 +83,7 @@ Item {
     interactive: false
     contentWidth: width
     contentHeight: Math.max(height, sheet.bodyTop + editor.height + sheet.pitch * 4)
-    Behavior on contentY { enabled: !wheel.active; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+    Behavior on contentY { enabled: scroller.animate; NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
     // The title, on the top rule.
     TextInput {
@@ -189,12 +191,10 @@ Item {
     id: wheel
     target: null
     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-    onWheel: function(event) {
-      var dy = event.pixelDelta.y !== 0 ? event.pixelDelta.y : event.angleDelta.y / 120 * sheet.pitch * 2.5
-      var max = Math.max(0, flick.contentHeight - flick.height)
-      flick.contentY = Math.round(Math.max(0, Math.min(max, flick.contentY - dy)))
-    }
+    onWheel: function(event) { scroller.wheel(event) }
   }
+  // A trackpad as the fingers move (and on, gliding, when they lift); a wheel a step a notch.
+  SmoothScroll { id: scroller; flick: flick; step: sheet.pitch * 2.5; notchMs: 140; speed: sheet.scrollSpeed }
 
   // A thin scroll mark at the right edge while there's more page than fits.
   Rectangle {

@@ -31,6 +31,10 @@ Item {
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
   // Settings.folder: "" is the default place.
   property string folder: ""
+  // Off (no profile yet): no folder is looked for, and nothing's made.
+  property bool active: true
+  // A first notebook with things to try, in a folder with none.
+  property bool welcome: true
   property string rootPath: ""
   property bool ready: false
   property var notebooks: []
@@ -49,7 +53,8 @@ Item {
 
   // The folder can change just after the shell starts (when the settings
   // arrive): look a moment later, once, and ignore what an older look finds.
-  onFolderChanged: locateTimer.restart()
+  onFolderChanged: { welcomed = false; locateTimer.restart() }
+  onActiveChanged: locateTimer.restart()
   Component.onCompleted: locateTimer.restart()
 
   Timer {
@@ -266,7 +271,7 @@ Item {
   // ---- the library -------------------------------------------------------------------------
 
   function locate() {
-    if (!home) return
+    if (!home || !active) return
     ready = false
     var gen = ++generation
     exec(["/usr/bin/test", "-d", home + "/Documents"], function(ok) {
@@ -297,7 +302,7 @@ Item {
         store.publish()
         store.ready = true
         // A first notebook, once, in a folder with none.
-        if (store.order.length === 0 && !store.welcomed) {
+        if (store.order.length === 0 && !store.welcomed && store.welcome) {
           store.welcomed = true
           store.createWelcome()
         }
@@ -726,17 +731,35 @@ Item {
     Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", String(url)])
   }
 
+  // A file in its app, as the desktop says: done(true), or done(false, why)
+  // when there's no app for it ("none") or only a web browser ("browser":
+  // it would download it, and take you away from here).
+  readonly property string appScript: "t=$(/usr/bin/xdg-mime query filetype \"$1\" 2>/dev/null); d=$(/usr/bin/xdg-mime query default \"$t\" 2>/dev/null); printf '%s\\n%s\\n' \"$t\" \"$d\""
+  readonly property var browsers: /(^|[-.])(google-chrome|chrome|chromium|firefox|brave|vivaldi|opera|microsoft-edge|zen|librewolf|epiphany|qutebrowser|falkon|midori)/i
+  function openFile(path, done) {
+    exec(["/usr/bin/bash", "-c", appScript, "omanote-app", path], function(ok, out) {
+      var app = String(out || "").split("\n")[1] || ""
+      app = app.trim()
+      if (!app) { if (done) done(false, "none"); return }
+      if (store.browsers.test(app)) { if (done) done(false, "browser"); return }
+      Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", path])
+      if (done) done(true, app)
+    }, { timeoutMs: 5000, maxBytes: 4096 })
+  }
+
   function openFolder() {
     if (rootPath) Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", rootPath])
   }
 
-  // An Omarchy notification (a reminder); clicking it opens the page.
-  function notify(title, text, pageId) {
+  // An Omarchy notification (a reminder, an event's alert); clicking it
+  // opens the page (or the calendar, on `day`).
+  function notify(title, text, pageId, day) {
     // Texts starting with "-" would be read as options.
     var head = String(title || "Reminder").replace(/^-+/, "\u2010").slice(0, 120)
     var body = String(text || "").replace(/^-+/, "\u2010").slice(0, 300)
     var argv = ["/usr/bin/omarchy-notification-send", "-g", "\u{f009e}", "-u", "normal", "--app-name", "Omanote", head, body]
     if (/^[0-9a-f-]{36}$/.test(String(pageId || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "omanote", "open", pageId])
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "omanote", "calendar", day])
     Quickshell.execDetached(argv)
   }
 

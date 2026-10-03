@@ -3,6 +3,9 @@ import QtQuick.Controls
 import QtQuick.Shapes
 import "../Workspace.js" as Workspace
 import "../Docs.js" as Docs
+import "../Calendar.js" as Calendar
+import "../Dates.js" as Dates
+import "../Colors.js" as Colors
 
 // The sidebar of Pages: the switch back to notebooks, search, a new page,
 // the projects (+ makes one; each with the pages in it) and the other pages,
@@ -132,20 +135,51 @@ Rectangle {
     return view.workspace ? Workspace.trashed(view.workspace.index).length : 0
   }
 
-  color: theme.dark ? Qt.darker(theme.background, 1.12) : Qt.darker(theme.background, 1.035)
+  color: theme.sidebar
 
   Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: bar.theme.line }
+
+  // Its sections as cards (Settings → Appearance, Sections and cards: a
+  // color of their own), each behind its section.
+  component SectionCard: Rectangle {
+    property Item target: null
+    property real above: 6
+    property real below: 6
+    visible: bar.theme.cardsShown && target !== null && target.visible && target.height > 0
+    x: 4
+    y: target ? target.y - above : 0
+    width: bar.width - 9
+    height: target ? target.height + above + below : 0
+    radius: 10
+    color: bar.theme.surface
+    border.width: 1
+    border.color: bar.theme.line
+  }
+  SectionCard { objectName: "sectionCard"; target: head; above: 4; below: 4 }
+  SectionCard { objectName: "sectionCard"; target: todayBox }
+  SectionCard { objectName: "sectionCard"; target: favs }
+  SectionCard { objectName: "sectionCard"; target: projectsBox }
+  SectionCard {
+    objectName: "sectionCard"
+    target: tree
+    y: pagesLabel.y - 6
+    height: tree.y + tree.height - pagesLabel.y + 8
+  }
+  SectionCard { objectName: "sectionCard"; target: tagsBox; above: -2; below: 4 }
+  SectionCard { objectName: "sectionCard"; target: foot; above: -2; below: 4 }
 
   component Row2: Rectangle {
     id: r2
     property string icon: ""
     property string text: ""
     property string hint: ""
+    // What it opens is shown.
+    property bool checked: false
     signal clicked()
     width: parent ? parent.width : 200
     height: 30
     radius: 6
-    color: rowHover.hovered ? bar.theme.hover : "transparent"
+    color: checked ? bar.theme.pressed : rowHover.hovered ? bar.theme.hover : "transparent"
     Icon {
       theme: bar.theme
       x: 12
@@ -206,9 +240,128 @@ Rectangle {
         onClicked: bar.view.sidebarShown = false
       }
     }
+    // The profile open, and the others.
+    ProfileSwitch {
+      visible: bar.view.service !== null && bar.view.service.profiles !== undefined && bar.view.service.profiles !== null
+      theme: bar.theme
+      service: bar.view.service
+      wide: true
+      width: parent.width
+      onManageRequested: bar.view.settingsRequested()
+    }
     Item { width: 1; height: 4 }
     Row2 { icon: bar.theme.icons.search; text: "Search"; hint: "Ctrl+P"; onClicked: bar.view.openFind() }
     Row2 { icon: bar.theme.icons.newPage; text: "New page"; hint: "Ctrl+N"; onClicked: bar.view.newPage("") }
+    Row2 {
+      objectName: "calendarRow"
+      icon: bar.theme.icons.calendarMonth
+      text: "Calendar"
+      hint: Dates.SHORT_DAYS[new Date(bar.nowMs).getDay()] + " " + new Date(bar.nowMs).getDate()
+      color: bar.view.calendarShown ? bar.theme.pressed : rowHover2.hovered ? bar.theme.hover : "transparent"
+      HoverHandler { id: rowHover2 }
+      onClicked: bar.view.openCalendar("")
+    }
+    Row2 {
+      objectName: "libraryRow"
+      icon: bar.theme.icons.library
+      text: "Library"
+      hint: { var r = bar.view.workspace ? bar.view.workspace.revision : 0; var n = bar.view.workspace ? Workspace.collected(bar.view.workspace.index).length : 0; return n > 0 ? String(n) : "" }
+      color: bar.view.libraryShown ? bar.theme.pressed : rowHover3.hovered ? bar.theme.hover : "transparent"
+      HoverHandler { id: rowHover3 }
+      onClicked: bar.view.openLibrary("")
+    }
+    Row2 {
+      objectName: "peopleRow"
+      icon: bar.theme.icons.contacts
+      text: "People"
+      hint: { var r = bar.view.workspace ? bar.view.workspace.contactsRevision : 0; var n = bar.view.workspace ? bar.view.workspace.contacts.contacts.length : 0; return n > 0 ? String(n) : "" }
+      color: bar.view.peopleShown ? bar.theme.pressed : rowHover4.hovered ? bar.theme.hover : "transparent"
+      HoverHandler { id: rowHover4 }
+      onClicked: bar.view.openPeople("")
+    }
+  }
+
+  // Today: what's left of it on the calendar, soonest first.
+  property real nowMs: Date.now()
+  Timer { interval: 60000; repeat: true; running: true; onTriggered: bar.nowMs = Date.now() }
+  readonly property var todayLeft: {
+    var r = view.workspace ? view.workspace.calendarRevision : 0
+    var n = new Date(nowMs)
+    var lo = new Date(n.getFullYear(), n.getMonth(), n.getDate())
+    var hi = new Date(lo.getFullYear(), lo.getMonth(), lo.getDate() + 1)
+    return view.workspace ? Calendar.occurrences(view.workspace.calendar, lo, hi).filter(function(o) { return o.end > n }) : []
+  }
+  function eventTint(c) {
+    var e = c ? Docs.colorEntry(c) : null
+    return e ? e.text[theme.dark ? 1 : 0] : c && Colors.isHex(c) ? Colors.normalize(c) : theme.accent
+  }
+  Column {
+    id: todayBox
+    objectName: "sidebarToday"
+    x: 8
+    width: parent.width - 16
+    anchors.top: head.bottom
+    anchors.topMargin: visible ? 16 : 0
+    visible: bar.todayLeft.length > 0
+    spacing: 0
+    Text {
+      textFormat: Text.PlainText
+      leftPadding: 12
+      bottomPadding: 6
+      text: "Today"
+      font.family: bar.theme.uiFont
+      font.pixelSize: 11
+      font.weight: Font.DemiBold
+      font.letterSpacing: 0.4
+      color: bar.theme.muted
+    }
+    Repeater {
+      model: bar.todayLeft.slice(0, 4)
+      delegate: Rectangle {
+        id: trow
+        required property var modelData
+        readonly property bool now: !modelData.allDay && modelData.start <= new Date(bar.nowMs)
+        readonly property real soon: (modelData.start - bar.nowMs) / 60000
+        objectName: "todayRow"
+        width: todayBox.width
+        height: 30
+        radius: 6
+        color: trowHover.hovered ? bar.theme.hover : "transparent"
+        Rectangle { x: 12; anchors.verticalCenter: parent.verticalCenter; width: 3; height: 16; radius: 1.5; color: bar.eventTint(trow.modelData.color) }
+        Text {
+          id: tWhen
+          x: 22
+          anchors.verticalCenter: parent.verticalCenter
+          width: 44
+          textFormat: Text.PlainText
+          text: trow.modelData.allDay ? "All day" : trow.now ? "Now" : Calendar.timeLabel(trow.modelData.start)
+          font.family: bar.theme.uiFont
+          font.pixelSize: 11
+          font.weight: trow.now || trow.soon <= 15 && !trow.modelData.allDay ? Font.DemiBold : Font.Normal
+          font.features: { "tnum": 1 }
+          color: trow.now ? (bar.theme.dark ? "#ff6b6b" : "#e5484d") : bar.theme.muted
+        }
+        Text {
+          x: tWhen.x + tWhen.width + 4
+          anchors.verticalCenter: parent.verticalCenter
+          width: parent.width - x - 8
+          elide: Text.ElideRight
+          textFormat: Text.PlainText
+          text: (trow.modelData.title || "Untitled") + (!trow.modelData.allDay && !trow.now && trow.soon > 0 && trow.soon <= 60 ? "  \u00b7  in " + Math.max(1, Math.round(trow.soon)) + " min" : "")
+          font.family: bar.theme.uiFont
+          font.pixelSize: 13
+          color: bar.theme.text
+        }
+        HoverHandler { id: trowHover; cursorShape: Qt.PointingHandCursor }
+        TapHandler { onTapped: bar.view.openEvent(trow.modelData.id, trow.modelData.day, trow) }
+      }
+    }
+    Row2 {
+      visible: bar.todayLeft.length > 4
+      icon: ""
+      text: (bar.todayLeft.length - 4) + " more today"
+      onClicked: bar.view.openCalendar("")
+    }
   }
 
   // Favorites: the pages starred, at the top.
@@ -216,7 +369,7 @@ Rectangle {
     id: favs
     x: 8
     width: parent.width - 16
-    anchors.top: head.bottom
+    anchors.top: todayBox.visible ? todayBox.bottom : head.bottom
     anchors.topMargin: bar.favorites.length ? 16 : 0
     visible: bar.favorites.length > 0
     spacing: 0
@@ -421,7 +574,7 @@ Rectangle {
     objectName: "sidebarProjects"
     x: 8
     width: parent.width - 16
-    anchors.top: favs.visible ? favs.bottom : head.bottom
+    anchors.top: favs.visible ? favs.bottom : todayBox.visible ? todayBox.bottom : head.bottom
     anchors.topMargin: 16
     spacing: 0
     Rectangle {
@@ -510,7 +663,8 @@ Rectangle {
     ListView {
       id: projRows
       width: parent.width
-      height: bar.projectsOpen ? Math.min(bar.projectRows.length * 30, Math.max(120, bar.height * 0.36)) : 0
+      height: bar.projectsOpen ? Math.max(Math.min(bar.projectRows.length, 2) * 30, Math.min(bar.projectRows.length * 30, Math.max(120, bar.height * 0.36),
+        foot.y - projectsBox.y - 82 - bar.treeKeep - (tagsBox.visible ? 96 : 0))) : 0
       visible: height > 0
       clip: true
       boundsBehavior: Flickable.StopAtBounds
@@ -532,6 +686,10 @@ Rectangle {
     font.letterSpacing: 0.4
     color: bar.theme.muted
   }
+
+  // The Pages tree keeps room for a few of its pages, however many projects
+  // and tags there are: those scroll in what's left.
+  readonly property real treeKeep: Math.min(Math.max(bar.rows.length, 1), 4) * 30 + 12
 
   ListView {
     id: tree
@@ -613,7 +771,8 @@ Rectangle {
     anchors.bottomMargin: 6
     visible: bar.tagList.length > 0
     spacing: 0
-    Rectangle { width: parent.width; height: 1; color: bar.theme.line }
+    // (Cards instead of the line, when sections are cards.)
+    Rectangle { width: parent.width; height: 1; color: bar.theme.line; opacity: bar.theme.cardsShown ? 0 : 1 }
     Item { width: 1; height: 6 }
     Rectangle {
       width: parent.width
@@ -684,7 +843,8 @@ Rectangle {
     ListView {
       id: tagRows
       width: parent.width
-      height: bar.tagsOpen ? Math.min(bar.tagList.length * 28, Math.max(90, bar.height * 0.26)) : 0
+      height: bar.tagsOpen ? Math.max(Math.min(bar.tagList.length, 2) * 28, Math.min(bar.tagList.length * 28, Math.max(90, bar.height * 0.26),
+        foot.y - 52 - (pagesLabel.y + pagesLabel.height + 6) - bar.treeKeep)) : 0
       clip: true
       boundsBehavior: Flickable.StopAtBounds
       model: bar.tagList
@@ -766,7 +926,7 @@ Rectangle {
     anchors.bottom: parent.bottom
     anchors.bottomMargin: 10
     spacing: 2
-    Rectangle { width: parent.width; height: 1; color: bar.theme.line }
+    Rectangle { width: parent.width; height: 1; color: bar.theme.line; opacity: bar.theme.cardsShown ? 0 : 1 }
     Item { width: 1; height: 4 }
     Row2 {
       id: importRow
@@ -774,7 +934,7 @@ Rectangle {
       text: bar.view.workspace && bar.view.workspace.importing ? "Importing\u2026 " + bar.view.workspace.importCount : "Import\u2026"
       onClicked: bar.view.openImport(importRow)
     }
-    Row2 { objectName: "templatesRow"; icon: bar.theme.icons.templates; text: "Templates"; hint: bar.templateCount > 0 ? String(bar.templateCount) : ""; onClicked: bar.view.openTemplates() }
+    Row2 { objectName: "templatesRow"; icon: bar.theme.icons.templates; text: "Templates"; hint: bar.templateCount > 0 ? String(bar.templateCount) : ""; checked: bar.view.templatesShown; onClicked: bar.view.openTemplates() }
     Row2 { objectName: "archiveRow"; icon: bar.theme.icons.archive; text: "Archive"; hint: bar.archiveCount > 0 ? String(bar.archiveCount) : ""; onClicked: bar.view.openArchive() }
     Row2 { icon: bar.theme.icons.trash; text: "Trash"; hint: bar.trashCount > 0 ? String(bar.trashCount) : ""; onClicked: bar.view.openTrash() }
     Row2 { icon: bar.theme.icons.cog; text: "Settings"; hint: "Ctrl+,"; onClicked: bar.view.settingsRequested() }

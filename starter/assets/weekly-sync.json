@@ -1,0 +1,22 @@
+{
+ "title": "Weekly sync",
+ "day": "-1",
+ "time": "10:00",
+ "duration": 1520,
+ "names": {},
+ "segments": [
+  { "start": 2000, "end": 9000, "speaker": "You", "text": "Morning, both. Three things today: the shop, the photos, and whether the launch date still holds." },
+  { "start": 10000, "end": 24000, "speaker": "Priya", "text": "The shop's mostly there. Products, the cart and the account pages work. Checkout needs another few days because of the shipping rules." },
+  { "start": 25000, "end": 31000, "speaker": "You", "text": "What's hard about shipping?" },
+  { "start": 32000, "end": 47000, "speaker": "Priya", "text": "Jonas wants the islands too, and the carriers price them differently. If we start with the mainland, I can have checkout on staging by the weekend." },
+  { "start": 48000, "end": 56000, "speaker": "You", "text": "Let's do the mainland first. I'll confirm the zones with Jonas tomorrow." },
+  { "start": 58000, "end": 76000, "speaker": "Sam", "text": "Photos: we shot the beans and the cups on Thursday. I'm editing them now, and they'll be in the shared folder in two days. The bags still look a bit flat, so I might reshoot those." },
+  { "start": 77000, "end": 84000, "speaker": "You", "text": "Fine by me, as long as it doesn't move the launch." },
+  { "start": 85000, "end": 93000, "speaker": "Sam", "text": "It won't. Worst case we launch with the current bag photos and swap them later." },
+  { "start": 95000, "end": 108000, "speaker": "Priya", "text": "One more thing: gift cards. They're on the list, but they need their own checkout flow. I'd leave them until after the launch." },
+  { "start": 109000, "end": 118000, "speaker": "You", "text": "Agreed, gift cards after the launch. So the date stays as it is?" },
+  { "start": 119000, "end": 124000, "speaker": "Sam", "text": "Yes, from my side." },
+  { "start": 125000, "end": 131000, "speaker": "Priya", "text": "Yes, if the shipping zones are settled this week." },
+  { "start": 132000, "end": 140000, "speaker": "You", "text": "Great. Same time next week, and I'll write up the actions." }
+ ]
+}

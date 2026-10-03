@@ -86,6 +86,31 @@ function cleanFolder(value) {
   return path
 }
 
+// Profiles as they may be used: at most 30, each with an id, a name (a
+// line), a folder, whether it's the demo, and its own settings kept while
+// another is open (`saved`: the keys of PROFILE_KEYS, each as it may be).
+var PROFILE_KEYS = ["inbox", "lastPage", "lastNotebook", "mirror", "mirrorFolder"]
+function cleanProfiles(value, schema) {
+  if (!Array.isArray(value)) return null
+  var out = []
+  var seen = {}
+  value.slice(0, 30).forEach(function(p) {
+    if (!isPlainObject(p) || typeof p.id !== "string" || !/^[a-z0-9-]{1,40}$/.test(p.id) || seen[p.id]) return
+    var name = typeof p.name === "string" ? p.name.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60) : ""
+    var folder = cleanFolder(p.folder)
+    if (!name || folder === null) return
+    var saved = {}
+    if (isPlainObject(p.saved)) PROFILE_KEYS.forEach(function(k) {
+      if (p.saved[k] === undefined) return
+      var checked = validValue(k, p.saved[k], undefined, schema)
+      if (checked.ok) saved[k] = checked.value
+    })
+    seen[p.id] = true
+    out.push({ id: p.id, name: name, folder: folder, demo: p.demo === true, saved: saved })
+  })
+  return out
+}
+
 // The folder as a real path: "~/x" under home, "" as the default place.
 function resolveFolder(folder, home, hasDocuments) {
   var clean = cleanFolder(folder)
@@ -114,6 +139,10 @@ function validValue(key, value, fallback, schema) {
   if (type === "folder") {
     var folder = cleanFolder(value)
     return folder === null ? { ok: false } : { ok: true, value: folder }
+  }
+  if (type === "profiles") {
+    var list = cleanProfiles(value, schema)
+    return list === null ? { ok: false } : { ok: true, value: list }
   }
   if (type === "id") {
     return typeof value === "string" && /^[a-z0-9-]{0,80}$/.test(value) ? { ok: true, value: value } : { ok: false }

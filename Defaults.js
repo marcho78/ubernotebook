@@ -11,8 +11,13 @@ var DEFAULTS = {
   shortcut: "SUPER + N",
   quickShortcut: "SUPER + ALT + N",
   // Where the notebooks live: "" is ~/Documents/Omanote (or ~/Omanote when
-  // there is no Documents folder).
+  // there is no Documents folder). The open profile's folder.
   folder: "",
+  // Profiles: notes kept apart (personal, business, the demo...), each a
+  // folder of its own: [{ id, name, folder, demo, saved }], `saved` its own
+  // settings while another is open (Profiles.js). `profile`: the one open.
+  profiles: [],
+  profile: "",
   // The notebook floats in the middle of the screen, like a notebook on a
   // desk, at this size; off, it tiles like any other window.
   floating: true,
@@ -31,6 +36,9 @@ var DEFAULTS = {
   sounds: true,
   // Fade instead of the cover swinging open and the pages turning.
   reduceMotion: false,
+  // How fast a page scrolls with a trackpad or a wheel: slower, normal, faster
+  // (a trackpad's quicker strokes go further, as on a MacBook, whichever).
+  scrollSpeed: "normal",
   // Draw a line through checked items, like crossing them off.
   strikeDone: true,
   // Where the last session left off, so the notebook opens there again.
@@ -57,6 +65,18 @@ var DEFAULTS = {
   mirrorFolder: "",
   // How the sidebar lists tags: by name ("name") or by color ("color").
   tagSort: "name",
+  // The calendar's view, as it was last: month, week, agenda or compact (a
+  // small month and the days from the one picked).
+  calendarView: "month",
+  // How People shows everyone: a list beside the one picked ("list"), or cards.
+  peopleLayout: "list",
+  // Appearance: colors of your own ("#1e1e2e"), or "" to follow the Omarchy
+  // theme: the sidebar, the page (and desk) behind everything, the sections
+  // and cards (the sidebar's sections, cards, menus), and the text.
+  colorSidebar: "",
+  colorPage: "",
+  colorCards: "",
+  colorText: "",
   // An audio note written out (by voxtype) as soon as it's recorded.
   audioTranscribe: true,
   // The microphone audio notes and dictation record from: a PipeWire
@@ -72,6 +92,8 @@ var SCHEMA = {
     shortcut: "shortcut",
     quickShortcut: "shortcut",
     folder: "folder",
+    profiles: "profiles",
+    profile: "id",
     floating: "bool",
     width: "int",
     height: "int",
@@ -84,6 +106,7 @@ var SCHEMA = {
     binding: "string",
     sounds: "bool",
     reduceMotion: "bool",
+    scrollSpeed: "string",
     strikeDone: "bool",
     lastNotebook: "id",
     zoom: "int",
@@ -96,6 +119,12 @@ var SCHEMA = {
     mirror: "bool",
     mirrorFolder: "folder",
     tagSort: "string",
+    calendarView: "string",
+    peopleLayout: "string",
+    colorSidebar: "string",
+    colorPage: "string",
+    colorCards: "string",
+    colorText: "string",
     audioTranscribe: "bool",
     audioInput: "string",
     audioBoost: "bool"
@@ -111,7 +140,10 @@ var SCHEMA = {
     space: ["notebooks", "pages"],
     exportTo: ["ask", "folder"],
     quickTo: ["notebook", "pages"],
-    tagSort: ["name", "color"]
+    tagSort: ["name", "color"],
+    calendarView: ["month", "week", "agenda", "compact"],
+    peopleLayout: ["list", "cards"],
+    scrollSpeed: ["slower", "normal", "faster"]
   },
   ranges: {
     width: [640, 5000],

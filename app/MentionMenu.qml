@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import "../Tags.js" as Tags
+import "../Docs.js" as Docs
 
 // The "@" menu (dates, and reminders then), the "[[" menu (pages, and a
 // new page with the name typed), the ":" menu (emoji by name) and the "#"
@@ -36,7 +37,7 @@ Pop {
       leftPadding: 10
       topPadding: 4
       bottomPadding: 6
-      text: menu.kind === "page" ? "Link to a page" : menu.kind === "emoji" ? "Emoji" : menu.kind === "tag" ? "Tags" : "A date, or a reminder"
+      text: menu.kind === "page" ? "Link to a page" : menu.kind === "emoji" ? "Emoji" : menu.kind === "tag" ? "Tags" : "A person, a date, or a reminder"
       font.family: menu.theme.uiFont
       font.pixelSize: 11
       font.weight: Font.DemiBold
@@ -71,9 +72,28 @@ Pop {
           color: parent.look.color
         }
       }
+      // A person: their initials.
+      Rectangle {
+        visible: entry.modelData.kind === "person"
+        x: 9
+        anchors.verticalCenter: parent.verticalCenter
+        width: 24
+        height: 24
+        radius: 12
+        color: Qt.alpha(menu.theme.text, menu.theme.dark ? 0.13 : 0.09)
+        Text {
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: entry.modelData.initials || "?"
+          font.family: menu.theme.uiFont
+          font.pixelSize: 10
+          font.weight: Font.DemiBold
+          color: Qt.alpha(menu.theme.text, 0.72)
+        }
+      }
       Text {
         id: glyph
-        visible: entry.modelData.kind !== "tag"
+        visible: entry.modelData.kind !== "tag" && entry.modelData.kind !== "person"
         textFormat: Text.PlainText
         x: 10
         anchors.verticalCenter: parent.verticalCenter
@@ -82,7 +102,7 @@ Pop {
         readonly property bool tag: entry.modelData.kind === "tag" || entry.modelData.kind === "tagnew"
         text: entry.modelData.kind === "page" ? (entry.modelData.icon || "\u{1f4c4}")
           : entry.modelData.kind === "emoji" ? entry.modelData.emoji
-          : entry.modelData.kind === "create" || entry.modelData.kind === "tagnew" ? (tag ? "+" : "\u2795")
+          : entry.modelData.kind === "create" || entry.modelData.kind === "tagnew" || entry.modelData.kind === "personnew" ? (tag ? "+" : "\u2795")
           : tag ? "#"
           : entry.modelData.remind ? "\u23f0" : "\u{1f4c5}"
         font.family: tag ? menu.theme.uiFont : "Noto Color Emoji"

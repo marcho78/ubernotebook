@@ -20,6 +20,8 @@
 .import "Blocks.js" as Blocks
 .import "Mindmap.js" as Mindmap
 .import "Tags.js" as Tags
+.import "Board.js" as Board
+.import "Bookmark.js" as Bookmark
 
 var MONO = "'iA Writer Mono S'"
 var HIGHLIGHT = "#fbf3db"
@@ -29,7 +31,11 @@ function context(ctx) {
   return {
     link: typeof c.link === "function" ? c.link : function(h) { return h },
     image: typeof c.image === "function" ? c.image : function(s) { return "" },
-    wiki: typeof c.wiki === "function" ? c.wiki : function(n) { return "" }
+    wiki: typeof c.wiki === "function" ? c.wiki : function(n) { return "" },
+    // A person in People by id, name, email or number (their id, or "").
+    contact: typeof c.contact === "function" ? c.contact : function(q) { return "" },
+    // An event on the calendar by id (true if it's there).
+    event: typeof c.event === "function" ? c.event : function(id) { return false }
   }
 }
 
@@ -420,6 +426,9 @@ function readBlocks(lines, ctx, refs) {
         i++
       }
       i++
+      // A board, a person's card, a day's agenda, an event, a bookmark.
+      var made = fenced(f.lang, code.join("\n"), ctx)
+      if (made) { emit(made); continue }
       var map = mindMap(f.lang, code.join("\n"))
       if (map) emit({ type: "mindmap", outline: map, indent: 0 })
       else emit({ type: "code", html: Html.fromPlainText(code.join("\n")), lang: langName(f.lang), indent: 0 })
@@ -562,6 +571,58 @@ var LANGS = { js: "JavaScript", javascript: "JavaScript", ts: "TypeScript", type
   nix: "Nix", php: "PHP", qml: "QML", rb: "Ruby", ruby: "Ruby", rs: "Rust", rust: "Rust", sql: "SQL", swift: "Swift", toml: "TOML", yaml: "YAML", yml: "YAML",
   zig: "Zig", dockerfile: "Dockerfile", docker: "Dockerfile", xml: "XML", svg: "XML", diff: "Diff", patch: "Diff", ini: "INI",
   scss: "SCSS", jsx: "JavaScript", tsx: "TypeScript", text: "", plaintext: "", "plain text": "" }
+
+// A code block that's one of Pages' own blocks (what agents write, and get
+// back from `read`): ```board ("## Column", "- card"), ```contact (a name,
+// an email or a number in People), ```agenda (a day: 2026-10-05, or
+// nothing for the day it's read), ```event (an event's id), ```bookmark (a
+// link). A block, or null (then it's code).
+function fenced(lang, text, ctx) {
+  var l = String(lang || "").trim().toLowerCase()
+  var body = String(text || "").trim()
+  if (l === "board" || l === "kanban") {
+    var b = Board.fromFence(body)
+    return b ? { type: "board", indent: 0, data: b } : null
+  }
+  if (l === "contact" || l === "person") {
+    var q = body.split("\n")[0].trim()
+    if (!q) return null
+    return { type: "contact", indent: 0, data: { contact: ctx.contact(q) || "", name: q } }
+  }
+  if (l === "agenda") {
+    var d = /^\d{4}-\d{2}-\d{2}$/.test(body) ? body : ""
+    if (body && !d && body.toLowerCase() !== "today") return null
+    return { type: "agenda", indent: 0, calendar: { day: d } }
+  }
+  if (l === "event") return body && ctx.event(body) ? { type: "event", indent: 0, calendar: { id: body } } : null
+  // A link to a page: its id, or its title.
+  if (l === "link" || l === "page-link") {
+    var w = body.split("\n")[0].trim()
+    var target = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(w) ? w : ctx.wiki(w)
+    return target ? { type: "link", indent: 0, target: target } : null
+  }
+  // A gallery: "columns: 3", "height: 240", and its pictures as Markdown
+  // pictures of Pages/assets ("![A caption](assets/x.png)").
+  if (l === "gallery") {
+    var g = { images: [], columns: 3, height: 0 }
+    body.split("\n").forEach(function(line) {
+      var t = line.trim()
+      var m = /^columns\s*:\s*(\d)$/i.exec(t)
+      if (m) { g.columns = Number(m[1]); return }
+      m = /^height\s*:\s*(\d+)$/i.exec(t)
+      if (m) { g.height = Number(m[1]); return }
+      m = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(t)
+      if (m) g.images.push({ src: m[2], caption: m[1] })
+    })
+    var clean = Blocks.cleanData("gallery", g)
+    return clean.images.length ? { type: "gallery", indent: 0, data: clean } : null
+  }
+  if (l === "bookmark") {
+    var url = Bookmark.cleanUrl(body.split("\n")[0].trim())
+    return url ? { type: "bookmark", indent: 0, data: { url: url } } : null
+  }
+  return null
+}
 
 // A code block that's a mind map: ```mindmap (an outline), or a Mermaid
 // mind map (```mermaid starting "mindmap"). Its outline, or "".

@@ -76,6 +76,9 @@ Item {
     } else if (p.pages) {
       app.showSpace("pages")
       app.docView.activate()
+    } else if (typeof p.calendar === "string" && p.calendar) {
+      app.showSpace("pages")
+      app.docView.openCalendar(p.calendar === "today" ? "" : p.calendar)
     } else if (typeof p.search === "string" && p.search) {
       app.showSpace("notebooks")
       if (app.mode === "notebook") app.closeNotebook()
@@ -189,12 +192,47 @@ Item {
     }
 
     FolderDialog {
+      id: folderPicker
+      options: FolderDialog.DontUseNativeDialog
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
+      onAccepted: root.folderPicked(decodeURIComponent(String(selectedFolder).replace(/^file:\/\//, "")))
+      onRejected: root.folderPicked("")
+    }
+
+    FolderDialog {
       id: exportPicker
       title: "Export to"
       options: FolderDialog.DontUseNativeDialog
       currentFolder: "file://" + Quickshell.env("HOME") + "/Documents"
       onAccepted: root.exportPicked(decodeURIComponent(String(selectedFolder).replace(/^file:\/\//, "")))
       onRejected: root.exportPicked("")
+    }
+
+    FileDialog {
+      id: filePicker
+      options: FileDialog.DontUseNativeDialog
+      currentFolder: "file://" + Quickshell.env("HOME")
+      onAccepted: {
+        var done = root.fileDone
+        root.fileDone = null
+        if (done) done(decodeURIComponent(String(selectedFile).replace(/^file:\/\//, "")))
+      }
+      onRejected: {
+        var done = root.fileDone
+        root.fileDone = null
+        if (done) done("")
+      }
+    }
+
+    FileDialog {
+      id: picturesPicker
+      title: "Choose pictures"
+      options: FileDialog.DontUseNativeDialog
+      fileMode: FileDialog.OpenFiles
+      nameFilters: ["Pictures (*.png *.jpg *.jpeg *.gif *.webp *.bmp *.svg)"]
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Pictures"
+      onAccepted: root.picturesPicked(selectedFiles.map(function(f) { return decodeURIComponent(String(f).replace(/^file:\/\//, "")) }))
+      onRejected: root.picturesPicked([])
     }
 
     FileDialog {
@@ -236,8 +274,11 @@ Item {
 
   Theme {
     id: quickTheme
-    background: Color.background
-    foreground: Color.foreground
+    baseBackground: Color.background
+    baseForeground: Color.foreground
+    pageColor: root.service && root.service.settings ? (root.service.settings.colorPage || "") : ""
+    textColor: root.service && root.service.settings ? (root.service.settings.colorText || "") : ""
+    cardColor: root.service && root.service.settings ? (root.service.settings.colorCards || "") : ""
     accent: Color.accent
     urgent: Color.urgent
     fontsVersion: fonts.loaded
@@ -270,9 +311,42 @@ Item {
 
   property var pictureDone: null
 
+  // A file to put on a page (any, a PDF, a video).
+  property var fileDone: null
+  function pickFile(kind, done) {
+    fileDone = done
+    filePicker.nameFilters = kind === "calendar" ? ["Calendars (*.ics *.ical *.ifb *.vcs)", "Any file (*)"] : kind === "pdf" ? ["PDF (*.pdf)"] : kind === "video" ? ["Videos (*.mp4 *.m4v *.mov *.webm *.mkv *.avi *.ogv)"] : kind === "contacts" ? ["Contacts (*.vcf *.vcard *.csv)"] : kind === "email" ? ["Emails (*.eml)", "Any file (*)"] : ["Any file (*)"]
+    filePicker.title = kind === "calendar" ? "Choose a calendar file (.ics)" : kind === "pdf" ? "Choose a PDF" : kind === "video" ? "Choose a video" : kind === "contacts" ? "Choose contacts to import (.vcf or .csv)" : kind === "email" ? "Choose an email (.eml)" : "Choose a file"
+    filePicker.open()
+  }
+
   function pickPicture(done) {
     pictureDone = done
     picker.open()
+  }
+  // Pictures, several at once (a gallery's): done([paths]).
+  property var picturesDone: null
+  function pickPictures(done) {
+    picturesDone = done
+    picturesPicker.open()
+  }
+  function picturesPicked(paths) {
+    var done = root.picturesDone
+    root.picturesDone = null
+    if (done) done(paths)
+  }
+
+  // A folder for something (a profile's notes): done(path), or done("").
+  property var folderDone: null
+  function pickFolder(title, done) {
+    folderDone = done
+    folderPicker.title = title || "Choose a folder"
+    folderPicker.open()
+  }
+  function folderPicked(path) {
+    var done = root.folderDone
+    root.folderDone = null
+    if (done) done(path)
   }
 
   // Where an export goes, when Settings says to ask.

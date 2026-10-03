@@ -3,16 +3,36 @@ import QtQuick
 // The colors and fonts of everything around the notebook: the desk it lies
 // on, the bars, the popovers. They come from the Omarchy theme (its
 // background, foreground and accent), so the desk changes with your theme;
-// the paper keeps its own colors (Papers.js).
+// the paper keeps its own colors (Papers.js). Settings → Appearance can put
+// colors of your own over four of them: the sidebar, the page (and desk),
+// the sections and cards, and the text ("" follows the theme).
 QtObject {
   id: theme
 
-  property color background: "#1a1b26"
-  property color foreground: "#c0caf5"
+  // The Omarchy theme's.
+  property color baseBackground: "#1a1b26"
+  property color baseForeground: "#c0caf5"
   property color accent: "#7aa2f7"
   property color urgent: "#f7768e"
 
+  // Your own (hex, or "" for the theme's).
+  property string pageColor: ""
+  property string textColor: ""
+  property string sidebarColor: ""
+  property string cardColor: ""
+  function own(value) { return /^#[0-9a-fA-F]{6}$/.test(String(value || "")) }
+
+  readonly property color background: own(pageColor) ? pageColor : baseBackground
+  readonly property color foreground: own(textColor) ? textColor : baseForeground
+
   readonly property bool dark: luminance(background) < 0.5
+  // The sidebar: a shade of the page, or your own.
+  readonly property color sidebar: own(sidebarColor) ? sidebarColor : (dark ? Qt.darker(background, 1.12) : Qt.darker(background, 1.035))
+  // Sections and cards: shown as cards (the sidebar's sections) only once
+  // they have a color of their own.
+  readonly property bool cardsShown: own(cardColor)
+  // (As a color, to mix: a color written as text has no .r .g .b.)
+  readonly property color card: cardsShown ? cardColor : "#000000"
 
   // The desk, with a little light in the middle.
   readonly property color desk: background
@@ -22,8 +42,8 @@ QtObject {
   readonly property color faint: mix(foreground, background, 0.68)
   readonly property color line: Qt.alpha(foreground, dark ? 0.1 : 0.14)
   // Bars and popovers.
-  readonly property color surface: mix(background, foreground, dark ? 0.075 : 0.035)
-  readonly property color surfaceHigh: mix(background, foreground, dark ? 0.13 : 0.08)
+  readonly property color surface: cardsShown ? card : mix(background, foreground, dark ? 0.075 : 0.035)
+  readonly property color surfaceHigh: cardsShown ? mix(card, foreground, 0.06) : mix(background, foreground, dark ? 0.13 : 0.08)
   readonly property color hover: Qt.alpha(foreground, dark ? 0.08 : 0.07)
   readonly property color pressed: Qt.alpha(foreground, dark ? 0.15 : 0.13)
   readonly property color accentSoft: Qt.alpha(accent, 0.18)
@@ -101,6 +121,10 @@ QtObject {
     archive: "\u{f120e}", unarchive: "\u{f125c}", briefcase: "\u{f0814}",
     // Audio notes and dictation.
     mic: "\u{f036c}", dictate: "\u{f036c}", micOff: "\u{f036d}", play: "\u{f040a}", pause: "\u{f03e4}",
-    stop: "\u{f04db}", record: "\u{f044a}", waveform: "\u{f147d}", transcript: "\u{f09ed}"
+    stop: "\u{f04db}", record: "\u{f044a}", waveform: "\u{f147d}", transcript: "\u{f09ed}",
+    // Files, links, boards, buttons, synced blocks.
+    attach: "\u{f0066}", library: "\u{f0331}", person: "\u{f0004}", contacts: "\u{f06cb}", mail: "\u{f01ee}", phone: "\u{f03f2}", web: "\u{f059f}", place: "\u{f034e}", cake: "\u{f00eb}", pdf: "\u{f0226}", video: "\u{f0567}", board: "\u{f0564}", button: "\u{f0a1e}", synced: "\u{f04e6}",
+    fileDoc: "\u{f0219}", fileZip: "\u{f05c4}", fileSheet: "\u{f021b}", fileSlides: "\u{f0227}", fileCode: "\u{f022e}", fileMusic: "\u{f0223}", fileImage: "\u{f021f}",
+    openExternal: "\u{f03cc}", refresh: "\u{f0450}", unsync: "\u{f04e7}", edit: "\u{f03eb}"
   })
 }

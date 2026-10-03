@@ -21,9 +21,35 @@ QtObject {
 
   signal exported(string path)
   signal failed(string message)
+  signal pageAdded(string notebookId, var page)
+
+  // The shelf's notebooks, as the commands use Store.qml's: { id: { title,
+  // modified, pages } }, and the pages written this session.
+  property var index: ({})
+  property var written: ({})
+  function notebookList() { return Object.keys(index).map(function(id) { return { id: id, title: index[id].title, modified: index[id].modified } }) }
+  function writePage(id, page) {
+    if (!written[id]) written[id] = {}
+    written[id][page.id] = JSON.parse(JSON.stringify(page))
+    disk[Library.pageFile(rootPath, id, page.id)] = Library.stringify(page)
+  }
+  function createPage(id, at, options) {
+    var nb = index[id]
+    if (!nb) return null
+    var taken = {}
+    nb.pages.forEach(function(p) { taken[p] = true })
+    var page = Library.newPage(options, new Date(), taken)
+    var list = nb.pages.slice()
+    list.splice(Math.max(0, Math.min(list.length, at)), 0, page.id)
+    nb.pages = list
+    writePage(id, page)
+    return page
+  }
 
   function reset() {
     disk = ({})
+    index = ({})
+    written = ({})
     copied = ""
     trashed = []
     notified = []
@@ -32,6 +58,9 @@ QtObject {
     launched = []
     picked = 0
   }
+
+  property var fetchPages: ({})
+  property var fetchPictures: ({})
 
   function parseJson(text) {
     try { return JSON.parse(text) } catch (e) { return null }
@@ -77,6 +106,33 @@ QtObject {
       done(true, out)
       return
     }
+    // A folder's folders and files, for the picture picker ("d\t0\tname", "f\tmtime\tname").
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-pictures") {
+      var base = argv[4].replace(/\/+$/, "") + "/"
+      var seenDirs = {}
+      var rows = []
+      Object.keys(disk).forEach(function(p, n) {
+        if (p.indexOf(base) !== 0) return
+        var rest = p.slice(base.length)
+        var cut = rest.indexOf("/")
+        if (cut > 0) { var dn = rest.slice(0, cut); if (!seenDirs[dn]) { seenDirs[dn] = true; rows.push("d\t0\t" + dn) } }
+        else rows.push("f\t" + (1000 + n) + "\t" + rest)
+      })
+      done(rows.length > 0, rows.join("\n") + "\n")
+      return
+    }
+    // Notes from before profiles: for each folder, whether it has them, and
+    // the Inbox, the page and the notebook the settings name.
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-notes") {
+      var ids = argv.slice(4, 7)
+      done(true, argv.slice(7).map(function(d) {
+        var bit = function(on) { return on ? "1" : "0" }
+        return [bit(disk[d + "/library.json"] !== undefined || disk[d + "/Pages/index.json"] !== undefined),
+          bit(ids[0] && disk[d + "/Pages/" + ids[0] + ".json"] !== undefined), bit(ids[1] && disk[d + "/Pages/" + ids[1] + ".json"] !== undefined),
+          bit(ids[2] && disk[d + "/" + ids[2] + "/notebook.json"] !== undefined)].join(" ")
+      }).join("\n") + "\n")
+      return
+    }
     if (argv[0] === "/usr/bin/cp" && disk[argv[2]] !== undefined) {
       disk[argv[3]] = disk[argv[2]]
       done(true, "")
@@ -98,6 +154,40 @@ QtObject {
       done(true, mine.join("\n") + (mine.length ? "\n" : ""))
       return
     }
+    // A file copied into assets: its size.
+    // An email's attachment: its base64, decoded into a file.
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-unpack") {
+      if (disk[argv[4]] === undefined) { done(false, "No such file"); return }
+      disk[argv[5]] = Qt.atob(String(disk[argv[4]]))
+      delete disk[argv[4]]
+      done(true, "")
+      return
+    }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-import-file") {
+      if (disk[argv[4]] === undefined) { done(false, "No such file"); return }
+      disk[argv[5]] = disk[argv[4]]
+      done(true, String(disk[argv[4]].length) + "\n")
+      return
+    }
+    // A link's page, and its picture (`pages`: { url: html }; `pictures`: { url: content type }).
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-fetch") {
+      var html = fetchPages[argv[4]]
+      done(html !== undefined, html || "")
+      return
+    }
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-fetch-image") {
+      var type = fetchPictures[argv[4]]
+      if (type === undefined) { done(false, ""); return }
+      disk[argv[5]] = "PNG"
+      done(true, type)
+      return
+    }
+    if (argv[0] === "/usr/bin/mv" && disk[argv[3]] !== undefined) {
+      disk[argv[4]] = disk[argv[3]]
+      delete disk[argv[3]]
+      if (done) done(true, "")
+      return
+    }
     if (argv[0] === "/usr/bin/rm") {
       argv.slice(3).forEach(function(p) { delete disk[p] })
       if (done) done(true, "")
@@ -117,7 +207,16 @@ QtObject {
   function assetName(path) { return Library.assetName(path, new Date()) }
   function pasteInto(dest, done) { done("") }
   function copyText(text) { copied = String(text) }
-  function openUrl(url) { console.log("open:", url) }
+  property var opened: []
+  function openUrl(url) { opened = opened.concat([String(url)]) }
+  // A file in its app: opened, unless its name matches `noApp` (no app for
+  // it here but a web browser).
+  property var noApp: null
+  function openFile(path, done) {
+    if (noApp && noApp.test(String(path))) { if (done) done(false, "browser"); return }
+    opened = opened.concat(["file://" + path])
+    if (done) done(true, "app")
+  }
   function openPath(path) { console.log("open:", path) }
   // The agents installed (Store.qml: listAgents), and choosing one.
   property var agentList: [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
@@ -126,5 +225,5 @@ QtObject {
   function defaultAgent(done) { done(agent) }
   function launchAgent(prompt) { launched = launched.concat([String(prompt)]) }
   function pickAgent() { picked++ }
-  function notify(title, text, pageId) { notified = notified.concat([{ title: title, text: text, page: pageId }]) }
+  function notify(title, text, pageId, day) { notified = notified.concat([{ title: title, text: text, page: pageId, day: day || "" }]) }
 }
