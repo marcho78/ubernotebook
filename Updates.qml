@@ -1,12 +1,12 @@
 import QtQuick
 import "Updates.js" as Updates
 
-// Whether there's a newer Omanote (Updates.js): GitHub's list of the
+// Whether there's a newer Uber Notebook (Updates.js): GitHub's list of the
 // project's releases (the manifest's homepage), asked a minute after
-// Omanote starts and once a day after that while Settings has it on, and
+// Uber Notebook starts and once a day after that while Settings has it on, and
 // whenever you ask. It's one plain request for that list: nothing of yours
 // goes with it. A newer one shows in the sidebar, on the shelf and in
-// Settings, with its notes; Omanote installed from git (`omarchy plugin
+// Settings, with its notes; Uber Notebook installed from git (`omarchy plugin
 // add`) updates itself with `omarchy plugin update`, on your click.
 Item {
   id: up
@@ -36,14 +36,14 @@ Item {
   property string installing: ""
   readonly property string updateCommand: "omarchy plugin update " + pluginId
 
-  readonly property string curlScript: "/usr/bin/curl -sS -L --proto =https --proto-redir =https --max-time 15 --max-filesize 2000000 -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -A 'Omanote' -w '\\n%{http_code}' -- \"$1\""
+  readonly property string curlScript: "/usr/bin/curl -sS -L --proto =https --proto-redir =https --max-time 15 --max-filesize 2000000 -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -A 'Uber Notebook' -w '\\n%{http_code}' -- \"$1\""
 
   function check(done) {
     if (status === "checking") { if (done) done(); return }
     if (!repo || !files) { status = "failed"; problem = "There's no GitHub page to ask (the manifest's homepage)."; if (done) done(); return }
     status = "checking"
     problem = ""
-    files.exec(["/usr/bin/bash", "-c", curlScript, "omanote-update", Updates.releasesUrl(repo)], function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", curlScript, "uber-notebook-update", Updates.releasesUrl(repo)], function(ok, out) {
       up.checkedAt = new Date()
       if (!ok) {
         up.status = "failed"
@@ -72,13 +72,13 @@ Item {
   }
 
   // The update, from git: `omarchy plugin update <id> --yes` fetches it,
-  // checks it and has the shell load it again (Omanote starts again).
+  // checks it and has the shell load it again (Uber Notebook starts again).
   readonly property string installScript: "p=$(command -v omarchy-plugin-update || echo /usr/share/omarchy/bin/omarchy-plugin-update); \"$p\" \"$1\" --yes 2>&1"
   function install(done) {
-    if (!managed) { installing = "Omanote wasn't installed from git, so it can't update itself: reinstall it with omarchy plugin add."; if (done) done(false); return }
+    if (!managed) { installing = "Uber Notebook wasn't installed from git, so it can't update itself: reinstall it with omarchy plugin add."; if (done) done(false); return }
     if (installing === "running") return
     installing = "running"
-    files.exec(["/usr/bin/bash", "-c", installScript, "omanote-install", pluginId], function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", installScript, "uber-notebook-install", pluginId], function(ok, out) {
       up.installing = ok ? "" : (String(out || "").trim().split("\n").pop().replace(/^omarchy-plugin-update:\s*/, "") || "The update didn't go.")
       if (done) done(ok)
     }, { timeoutMs: 180000, maxBytes: 256 * 1024 })

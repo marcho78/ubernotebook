@@ -2,7 +2,7 @@
 // notebook's notebook.json and a page's JSON file may hold, and finding text
 // in pages.
 //
-// The library is a folder (~/Documents/Omanote by default) with a folder per
+// The library is a folder (~/Documents/Uber Notebook by default) with a folder per
 // notebook:
 //
 //   work-journal-k3f9/

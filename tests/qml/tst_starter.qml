@@ -1,10 +1,10 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Workspace.js" as Workspace
 
-// A new Omanote's Pages: the examples (Starter.js) made the first time it's
+// A new Uber Notebook's Pages: the examples (Starter.js) made the first time it's
 // opened in an empty folder: the pages in their places (the Welcome page
 // first, and open), Favorites, a project, templates, the people and events
 // they name, the email written into Pages/assets, the Library full; every
@@ -17,7 +17,7 @@ Item {
   FakeFiles { id: files }
   FakeService { id: service; user: ({ sounds: false }) }
   Theme { id: th }
-  Omanote.Workspace { id: ws; files: files; starter: "examples" }
+  UberNotebook.Workspace { id: ws; files: files; starter: "examples" }
 
   DocView {
     id: view
@@ -57,10 +57,10 @@ Item {
       fresh()
       var ix = ws.index
       var top = ix.top.filter(function(id) { return !ix.pages[id].template })
-      compare(ix.pages[top[0]].title, "Welcome to Omanote", "first in the tree")
+      compare(ix.pages[top[0]].title, "Welcome to Uber Notebook", "first in the tree")
       compare(view.page.id, top[0], "and open")
       verify(top.length >= 9, top.length)
-      var welcome = titled("Welcome to Omanote")
+      var welcome = titled("Welcome to Uber Notebook")
       compare(ix.pages[welcome].children.length, 3, "the basics inside it")
       compare(ix.pages[titled("Weekly sync")].parent, titled("Website relaunch"))
       compare(ix.favorites.length, 2)
@@ -122,10 +122,10 @@ Item {
       view.open(old)
       tryVerify(function() { return view.page && view.page.id === old }, 2000)
       view.markDirty()
-      files.rootPath = "/tmp/omanote-other"
-      tryVerify(function() { return ws.ready && view.page !== null && view.page.title === "Welcome to Omanote" && ws.index.pages[view.page.id] !== undefined }, 3000, "the new folder's examples, open")
-      verify(view.page.id !== titled("Reading list") || ws.folder === "/tmp/omanote-other/Pages")
-      compare(Object.keys(files.disk).filter(function(p) { return p.indexOf("/tmp/omanote-other/Pages/" + old) === 0 }).length, 0, "nothing of the old folder's written here")
+      files.rootPath = "/tmp/uber-notebook-other"
+      tryVerify(function() { return ws.ready && view.page !== null && view.page.title === "Welcome to Uber Notebook" && ws.index.pages[view.page.id] !== undefined }, 3000, "the new folder's examples, open")
+      verify(view.page.id !== titled("Reading list") || ws.folder === "/tmp/uber-notebook-other/Pages")
+      compare(Object.keys(files.disk).filter(function(p) { return p.indexOf("/tmp/uber-notebook-other/Pages/" + old) === 0 }).length, 0, "nothing of the old folder's written here")
       compare(ws.contacts.contacts.length, 4)
       // Back.
       files.rootPath = home

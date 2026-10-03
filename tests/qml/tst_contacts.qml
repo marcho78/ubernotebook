@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Html.js" as Html
 import "../../Contacts.js" as Contacts
@@ -19,7 +19,7 @@ Item {
   FakeFiles { id: files }
   FakeService { id: service; user: ({ sounds: false }) }
   Theme { id: th }
-  Omanote.Workspace { id: ws; files: files }
+  UberNotebook.Workspace { id: ws; files: files }
   property string lastToast: ""
   property var lastUndo: null
 
@@ -36,7 +36,7 @@ Item {
     id: ui
     function saveNow() { view.commit() }
   }
-  Omanote.Api { id: api; workspace: ws; files: files; ui: ui }
+  UberNotebook.Api { id: api; workspace: ws; files: files; ui: ui }
 
   readonly property string vcf: "BEGIN:VCARD\nVERSION:3.0\nFN:Sam Rivera\nORG:Acme\nTITLE:Designer\nTEL;TYPE=CELL:+1 555 123 4567\nEMAIL;TYPE=WORK:sam@acme.com\nEND:VCARD\n"
     + "BEGIN:VCARD\nVERSION:3.0\nFN:Ana Lopez\nEMAIL:ana@x.org\nEND:VCARD\n"
@@ -203,7 +203,7 @@ Item {
       compare(e.mentionItems[0].label, "Sam Rivera")
       keyClick(Qt.Key_Return)
       var html = function() { return e.serialize()[e.model.count - 1].html }
-      tryVerify(function() { return html().indexOf("omanote://contact/" + who.sam.id) >= 0 && Html.plainText(html()).indexOf("Call @Sam Rivera") === 0 }, 1000, html())
+      tryVerify(function() { return html().indexOf("uber-notebook://contact/" + who.sam.id) >= 0 && Html.plainText(html()).indexOf("Call @Sam Rivera") === 0 }, 1000, html())
       // Someone new from "@".
       type("and @Zed Q")
       tryVerify(function() { return e.mentionItems.some(function(x) { return x.kind === "personnew" }) }, 1000)
@@ -213,7 +213,7 @@ Item {
       view.commit()
       // A click on them: their card.
       var item = lastText()
-      var link = Html.links(item.edit.text).filter(function(l) { return l.href === "omanote://contact/" + who.sam.id })[0]
+      var link = Html.links(item.edit.text).filter(function(l) { return l.href === "uber-notebook://contact/" + who.sam.id })[0]
       verify(link !== undefined)
       var at = item.edit.getText(0, item.edit.length).indexOf("@Sam") + 2
       var r = item.edit.positionToRectangle(at)
@@ -239,13 +239,13 @@ Item {
       e.focusBlock(e.uidAt(e.model.count - 1), 0)
       type("Write to ana@x.org or bo@y.net then")
       var html = function() { return e.serialize()[e.model.count - 1].html }
-      tryVerify(function() { return html().indexOf("omanote://contact/" + who.ana.id) >= 0 }, 1000, "Ana's: a link to her: " + html())
+      tryVerify(function() { return html().indexOf("uber-notebook://contact/" + who.ana.id) >= 0 }, 1000, "Ana's: a link to her: " + html())
       verify(html().indexOf("mailto:bo@y.net") >= 0, "no one's: mailto")
       compare(Html.plainText(html()), "Write to ana@x.org or bo@y.net then")
       // An email last, then Enter: a link too.
       type(" mail sam@acme.com")
       keyClick(Qt.Key_Return)
-      tryVerify(function() { return e.serialize()[e.model.count - 2].html.indexOf("omanote://contact/" + who.sam.id) >= 0 }, 1000, e.serialize()[e.model.count - 2].html)
+      tryVerify(function() { return e.serialize()[e.model.count - 2].html.indexOf("uber-notebook://contact/" + who.sam.id) >= 0 }, 1000, e.serialize()[e.model.count - 2].html)
       keyClick(Qt.Key_Backspace)
       // A contact block: who, picked as it's typed.
       keyClick(Qt.Key_Return)

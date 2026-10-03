@@ -1,4 +1,4 @@
-// Checks asking your agent from Omanote: the prompt it's handed, and what
+// Checks asking your agent from Uber Notebook: the prompt it's handed, and what
 // the box says.
 // Usage (from the plugin directory): node tests/agent.test.cjs
 
@@ -10,15 +10,15 @@ const Docs = load("Docs.js");
 let passed = 0;
 function check(name, fn) { fn(); passed++; }
 
-const base = { request: "Turn this into to-dos", page: { id: "p1", title: "Lisbon" }, skill: "/plugins/omanote/skills/omanote/SKILL.md" };
+const base = { request: "Turn this into to-dos", page: { id: "p1", title: "Lisbon" }, skill: "/plugins/uber-notebook/skills/uber-notebook/SKILL.md" };
 
 check("the prompt says where you are and what you'd like", () => {
   const page = Agent.prompt(Object.assign({ scope: "page", blocks: [] }, base));
   assert.ok(page.includes("\u201cLisbon\u201d (page id p1)"));
   assert.ok(page.includes("What I'd like: Turn this into to-dos"));
-  assert.ok(page.includes("Use the omanote skill"), "it names the skill");
-  assert.ok(page.includes("  /plugins/omanote/skills/omanote/SKILL.md"), "and where it is, for harnesses without skills");
-  assert.ok(page.includes("never by editing Omanote's files"));
+  assert.ok(page.includes("Use the uber-notebook skill"), "it names the skill");
+  assert.ok(page.includes("  /plugins/uber-notebook/skills/uber-notebook/SKILL.md"), "and where it is, for harnesses without skills");
+  assert.ok(page.includes("never by editing Uber Notebook's files"));
   const blocks = Agent.prompt(Object.assign({ scope: "blocks", blocks: ["b1", "b2"] }, base));
   assert.ok(blocks.includes("The blocks I picked on it: b1, b2"));
   const words = Agent.prompt(Object.assign({ scope: "words", blocks: ["b1"], words: "book the tram\nand pastries" }, base));

@@ -5,11 +5,11 @@ order: 9
 ---
 Commands worth keeping close. Click *Copy* on a block to copy it.
 
-## Omanote
+## Uber Notebook
 
 | Keys | What |
 |---|---|
-| **Super+N** | Open or close Omanote, from anywhere |
+| **Super+N** | Open or close Uber Notebook, from anywhere |
 | **Super+Alt+N** | Jot a quick note |
 | **Ctrl+P** | Find a page |
 | **Ctrl+N** | A new page |
@@ -31,7 +31,7 @@ omarchy reminder 15 "Tea"       # a nudge in 15 minutes
 ## Back up your notes
 
 ```bash
-tar czf ~/omanote-$(date +%F).tar.gz -C ~/Documents Omanote
+tar czf ~/uber-notebook-$(date +%F).tar.gz -C ~/Documents Uber Notebook
 ```
 
 > [!NOTE] Your notes are plain files, so any backup tool works: copy the folder, sync it, or put it in git.
@@ -41,16 +41,16 @@ tar czf ~/omanote-$(date +%F).tar.gz -C ~/Documents Omanote
 ```bash
 f=$(mktemp --suffix=.md)
 printf -- '- [ ] Call the plumber\n- [ ] Buy milk\n' > "$f"
-omarchy-shell omanote add "Errands" "$f"
+omarchy-shell uber-notebook add "Errands" "$f"
 rm -f "$f"
 ```
 
 ```json
 {
-  "id": "marcho78.omanote",
+  "id": "marcho78.uber-notebook",
   "shortcut": "SUPER + N",
   "floating": true
 }
 ```
 
-Omanote's settings live in its entry in `~/.config/omarchy/shell.json`, like the one above. Settings (**Ctrl+,**) changes them for you.
+Uber Notebook's settings live in its entry in `~/.config/omarchy/shell.json`, like the one above. Settings (**Ctrl+,**) changes them for you.

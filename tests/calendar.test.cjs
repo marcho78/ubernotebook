@@ -184,7 +184,7 @@ check("an .ics file's events: a booking's, an invitation, another calendar's", (
   assert.equal(list[2].skip.length, 1);
   assert.deepEqual([list[3].start, list[3].repeat.freq, list[3].repeat.every], ["2026-10-12T20:00", "monthly", 2], "a time zone's time, as written");
   assert.ok(list.every((e) => /^[0-9a-f-]{36}$/.test(e.id) && e.alert === -1), "new ids; no alerts");
-  // Omanote's own export, read back.
+  // Uber Notebook's own export, read back.
   const cal = { events: list };
   const back = plain(C.fromIcs(C.toIcs(cal)));
   assert.deepEqual(back.map((e) => [e.title, e.start, e.end, e.allDay, e.repeat ? e.repeat.freq : ""]), list.map((e) => [e.title, e.start, e.end, e.allDay, e.repeat ? e.repeat.freq : ""]));

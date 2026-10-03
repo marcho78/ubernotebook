@@ -1,6 +1,6 @@
-# What a new Omanote starts with
+# What a new Uber Notebook starts with
 
-A new Omanote's Pages isn't empty: these example pages show what it can do,
+A new Uber Notebook's Pages isn't empty: these example pages show what it can do,
 with the people, events and files they mention, and a few templates of your
 own. Change them here, then run `dev/starter` (it puts them in
 `StarterContent.js`, which `Starter.js` reads; the tests check it's up to
@@ -16,7 +16,7 @@ date).
   meeting, a sketch). `keyboard-shortcuts.pdf` is made from
   `dev/starter-shortcuts.html` with `dev/starter --pdf`.
 
-A page is Markdown as agents write it (see `skills/omanote/SKILL.md`):
+A page is Markdown as agents write it (see `skills/uber-notebook/SKILL.md`):
 headings, lists, to-dos, tables, callouts, `<details>` toggles, code, and
 fenced `mindmap`, `board`, `contact`, `agenda` and `event` blocks. Front
 matter: `title`, `icon`, `parent`, `order`, `favorite`, `cover`, and
@@ -25,7 +25,7 @@ with `::` (see `Starter.js`): `::columns 60 40` … `::next` … `::end`,
 `::pages`, `::file`, `::image`, `::email`, `::meeting`, `::sketch`,
 `::bookmark`, `::button`, `::habit`, `::toc`, `::calendar`.
 
-Dates are for the day Omanote is first opened: `{{date:+2}}` is a date two
+Dates are for the day Uber Notebook is first opened: `{{date:+2}}` is a date two
 days on, `{{day:+2}}` the same as `2026-10-04`, `{{label:-1}}` as
 `Thu 1 Oct`, `{{date:tue}}` the next Tuesday. A template's `{{date}}`,
 `{{week}}` and the like are filled in when it's used.

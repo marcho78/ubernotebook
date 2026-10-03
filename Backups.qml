@@ -51,7 +51,7 @@ Item {
 
   function refresh(done) {
     if (!files || !folder) { if (done) done(); return }
-    files.exec(["/usr/bin/bash", "-c", Backups.LIST_SCRIPT, "omanote-backups", folder], function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", Backups.LIST_SCRIPT, "uber-notebook-backups", folder], function(ok, out) {
       bk.list = ok ? Backups.listed(out, bk.folder) : []
       if (done) done()
     }, { okCodes: [0], timeoutMs: 8000, maxBytes: 512 * 1024 })
@@ -77,7 +77,7 @@ Item {
     note = ""
     if (service && typeof service.saveOpen === "function") service.saveOpen()
     var paths = picked.map(function(p) { return bk.profiles.pathOf(p.folder) })
-    files.exec(["/usr/bin/bash", "-c", Backups.EXISTS_SCRIPT, "omanote-backup-has"].concat(paths), function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", Backups.EXISTS_SCRIPT, "uber-notebook-backup-has"].concat(paths), function(ok, out) {
       var there = String(out || "").split("\n")
       var take = []
       picked.forEach(function(p, i) { if (there[i] === "1") take.push({ profile: p, path: paths[i] }) })
@@ -88,7 +88,7 @@ Item {
       var m = Backups.manifest(take.map(function(t) { return t.profile }), bk.version, now)
       var args = [bk.folder, name.stem, name.suffix, JSON.stringify(m)]
       take.forEach(function(t, i) { args.push(t.path, "p" + (i + 1), Backups.inside(bk.folder, t.path)) })
-      bk.files.exec(["/usr/bin/bash", "-c", Backups.BACKUP_SCRIPT, "omanote-backup"].concat(args), function(made, said) {
+      bk.files.exec(["/usr/bin/bash", "-c", Backups.BACKUP_SCRIPT, "uber-notebook-backup"].concat(args), function(made, said) {
         var lines = String(said || "").trim().split("\n")
         var path = made ? lines[lines.length - 1] : ""
         if (!made || !path) { finish({ ok: false, error: "The backup didn't go: " + (String(said || "").trim().split("\n").pop() || "tar stopped") }); return }
@@ -104,7 +104,7 @@ Item {
     var p = String(path || "").trim()
     if (p.indexOf("~/") === 0) p = home + p.slice(1)
     if (!p || p.charAt(0) !== "/") { done({ ok: false, problem: "Give the backup's full path.", manifest: null }); return }
-    files.exec(["/usr/bin/bash", "-c", Backups.CHECK_SCRIPT, "omanote-backup-check", p], function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", Backups.CHECK_SCRIPT, "uber-notebook-backup-check", p], function(ok, out) {
       var r = ok ? Backups.checked(out) : { ok: false, problem: "That backup couldn't be read.", manifest: null }
       r.path = p
       done(r)
@@ -112,7 +112,7 @@ Item {
   }
 
   // A backup put back: each profile in it a new profile, in a new folder
-  // beside the others (~/Documents/Omanote <name> (restored)), opened if
+  // beside the others (~/Documents/Uber Notebook <name> (restored)), opened if
   // `open` (the first). done({ ok, restored: [{ id, name, folder }], error }).
   function restore(path, open, done) {
     if (working) { done({ ok: false, error: "A backup is being " + (working === "backup" ? "made" : "put back") + " already." }); return }
@@ -126,7 +126,7 @@ Item {
         if (!todo.length) { bk.added(made, open, done); return }
         var p = todo.shift()
         var base = Backups.restoreFolder(p.name)
-        bk.files.exec(["/usr/bin/bash", "-c", Backups.RESTORE_SCRIPT, "omanote-restore", c.path, p.dir, bk.home + base.slice(1)], function(ok, out) {
+        bk.files.exec(["/usr/bin/bash", "-c", Backups.RESTORE_SCRIPT, "uber-notebook-restore", c.path, p.dir, bk.home + base.slice(1)], function(ok, out) {
           var at = ok ? String(out || "").trim().split("\n").pop() : ""
           if (at) made.push({ name: p.name, folder: bk.home && at.indexOf(bk.home + "/") === 0 ? "~" + at.slice(bk.home.length) : at, saved: p.saved })
           next()

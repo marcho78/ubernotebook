@@ -1,12 +1,12 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Settings.js" as Settings
 import "../../Backups.js" as Backups
 
 // Settings in sections (each its own; the list at the left), the sidebar's
-// foot (who makes Omanote, on X; a newer version, a click from its notes),
+// foot (who makes Uber Notebook, on X; a newer version, a click from its notes),
 // the update check (up to date, a newer one, none yet, GitHub out of reach;
 // updating, or the command to copy), and backups: made (this profile, all
 // of them; the backup folder left out), listed, automatic ones (the oldest
@@ -21,23 +21,23 @@ Item {
   FakeStore { id: store }
   FakeService { id: service; store: files; user: ({ sounds: false }); profiles: profiles; updates: updates; backups: backups }
   FakeFiles { id: files; rootPath: profiles.current !== null ? Settings.resolveFolder(service.settings.folder, "/tmp", true) : "" }
-  Omanote.Profiles { id: profiles; service: service; files: files; dataFolder: "/tmp/omanote-data" }
-  Omanote.Workspace {
+  UberNotebook.Profiles { id: profiles; service: service; files: files; dataFolder: "/tmp/uber-notebook-data" }
+  UberNotebook.Workspace {
     id: ws
     files: files
     starter: "templates"
   }
-  Omanote.Updates {
+  UberNotebook.Updates {
     id: updates
     files: files
     current: "1.0.0"
     homepage: "https://github.com/marcho78/omanote"
-    pluginDir: "/tmp/omanote-plugin"
-    pluginId: "marcho78.omanote"
+    pluginDir: "/tmp/uber-notebook-plugin"
+    pluginId: "marcho78.uber-notebook"
     automatic: false
   }
-  Omanote.Backups { id: backups; service: service; files: files; profiles: profiles; version: "1.0.0" }
-  Omanote.Api { id: api; workspace: ws; files: files; profiles: profiles; noProfile: profiles.firstRun; updates: updates; backups: backups }
+  UberNotebook.Backups { id: backups; service: service; files: files; profiles: profiles; version: "1.0.0" }
+  UberNotebook.Api { id: api; workspace: ws; files: files; profiles: profiles; noProfile: profiles.firstRun; updates: updates; backups: backups }
 
   App {
     id: app
@@ -189,7 +189,7 @@ Item {
       // Not from git: the command, to copy.
       compare(named(notes.contentItem, "releaseNotesUpdate"), null)
       click(named(notes.contentItem, "releaseNotesCopy"))
-      compare(files.copied, "omarchy plugin update marcho78.omanote")
+      compare(files.copied, "omarchy plugin update marcho78.uber-notebook")
       click(named(notes.contentItem, "releaseNotesGitHub"))
       verify(files.opened.indexOf("https://github.com/marcho78/omanote/releases/tag/v1.1.0") >= 0)
       keyClick(Qt.Key_Escape)
@@ -199,7 +199,7 @@ Item {
       app.showReleaseNotes()
       tryVerify(function() { return notes.opened }, 1000)
       click(named(notes.contentItem, "releaseNotesUpdate"))
-      tryCompare(files, "installed", ["marcho78.omanote"], 1000)
+      tryCompare(files, "installed", ["marcho78.uber-notebook"], 1000)
       keyClick(Qt.Key_Escape)
       updates.managed = false
       // Settings: About has a dot, and says it.
@@ -220,7 +220,7 @@ Item {
       verify(!updates.available)
       compare(named(win(), "footerUpdate"), null)
       // Up to date: the notes of the version running, from CHANGELOG.md.
-      files.disk["/tmp/omanote-plugin/CHANGELOG.md"] = "# Changelog\n\n## 1.0.0 - Unreleased\n\nThe first version.\n"
+      files.disk["/tmp/uber-notebook-plugin/CHANGELOG.md"] = "# Changelog\n\n## 1.0.0 - Unreleased\n\nThe first version.\n"
       compare(updates.notes().markdown, "The first version.")
       compare(updates.notes().title, "What's in 1.0.0")
       files.http[root.releases] = { code: 404, body: "{\"message\":\"Not Found\"}" }
@@ -249,8 +249,8 @@ Item {
       click(reach(named(win(), "backupNow")))
       tryVerify(function() { return backups.list.length === 1 }, 2000, "made, and listed")
       var b = backups.list[0]
-      verify(/^Omanote Personal \d{4}-\d{2}-\d{2} \d{4}\.tar\.gz$/.test(b.name), b.name)
-      compare(b.path, "/tmp/Documents/Omanote Backups/" + b.name, "in the backup folder")
+      verify(/^Uber Notebook Personal \d{4}-\d{2}-\d{2} \d{4}\.tar\.gz$/.test(b.name), b.name)
+      compare(b.path, "/tmp/Documents/Uber Notebook Backups/" + b.name, "in the backup folder")
       var held = JSON.parse(String(files.disk[b.path]).slice(9))
       compare(held.manifest.profiles.map(function(p) { return p.name }), ["Personal"])
       compare(held.manifest.profiles[0].saved.inbox, "inbox-1", "with its Inbox")
@@ -285,13 +285,13 @@ Item {
     function test_6_automatic_ones() {
       fresh()
       // Five automatic ones, a day apart, and one of yours, oldest of all.
-      var dir = "/tmp/Documents/Omanote Backups/"
+      var dir = "/tmp/Documents/Uber Notebook Backups/"
       var day = 24 * 3600
       var t0 = Date.now() / 1000 - 10 * day
-      files.disk[dir + "Omanote Mine 2026-01-01 0900.tar.gz"] = "mine"
-      files.mtimes[dir + "Omanote Mine 2026-01-01 0900.tar.gz"] = t0 - day
+      files.disk[dir + "Uber Notebook Mine 2026-01-01 0900.tar.gz"] = "mine"
+      files.mtimes[dir + "Uber Notebook Mine 2026-01-01 0900.tar.gz"] = t0 - day
       for (var i = 0; i < 5; i++) {
-        var n = dir + "Omanote 2026-09-0" + (i + 1) + " 0900 (automatic).tar.gz"
+        var n = dir + "Uber Notebook 2026-09-0" + (i + 1) + " 0900 (automatic).tar.gz"
         files.disk[n] = "auto " + i
         files.mtimes[n] = t0 + i * day
       }
@@ -301,8 +301,8 @@ Item {
       service.setSettings({ backupEvery: "daily", backupKeep: 3 })
       backups.automaticNow()
       tryVerify(function() { return backups.list.filter(function(b) { return b.automatic }).length === 3 }, 2000, "made one, cleared the oldest out")
-      verify(files.disk[dir + "Omanote Mine 2026-01-01 0900.tar.gz"] !== undefined, "yours: never")
-      verify(files.trashed.indexOf(dir + "Omanote 2026-09-01 0900 (automatic).tar.gz") >= 0, "to the trash")
+      verify(files.disk[dir + "Uber Notebook Mine 2026-01-01 0900.tar.gz"] !== undefined, "yours: never")
+      verify(files.trashed.indexOf(dir + "Uber Notebook 2026-09-01 0900 (automatic).tar.gz") >= 0, "to the trash")
       var newest = backups.list.filter(function(b) { return b.automatic })[0]
       compare(JSON.parse(String(files.disk[newest.path]).slice(9)).manifest.profiles.length, 2, "every profile")
       // Not due again for a day.
@@ -329,9 +329,9 @@ Item {
       var names = profiles.list.map(function(p) { return p.name })
       compare(names.slice(2), ["Personal (restored)", "Work (restored)"], "their names taken: (restored)")
       var back = profiles.list[2]
-      compare(back.folder, "~/Documents/Omanote Personal (restored)")
+      compare(back.folder, "~/Documents/Uber Notebook Personal (restored)")
       compare(back.saved.inbox, "inbox-1", "with its Inbox")
-      compare(files.disk["/tmp/Documents/Omanote Personal (restored)/Pages/one.json"], "{\"page\":1}")
+      compare(files.disk["/tmp/Documents/Uber Notebook Personal (restored)/Pages/one.json"], "{\"page\":1}")
       compare(files.disk["/tmp/Notes/Personal/Pages/one.json"], "{\"page\":1}", "what was there, as it was")
       compare(profiles.current.name, "Personal", "still the one that was open")
       // Again: new folders beside those.
@@ -339,7 +339,7 @@ Item {
       backups.restore(made.path, false, function(x) { again = x })
       tryVerify(function() { return again !== null && again.ok }, 2000)
       compare(again.restored[0].name, "Personal (restored 2)")
-      compare(again.restored[0].folder, "~/Documents/Omanote Personal (restored) 2")
+      compare(again.restored[0].folder, "~/Documents/Uber Notebook Personal (restored) 2")
       // Open one.
       var open = null
       tryVerify(function() { open = named(win(), "restoredOpen"); return open !== null }, 1000)
@@ -352,7 +352,7 @@ Item {
       tryVerify(function() { return panel() !== null }, 1000)
       click(reach(named(win(), "restoreFromFile")))
       compare(service.pickedKind, "backup")
-      compare(service.pickedFrom, "/tmp/Documents/Omanote Backups", "it opens in the backup folder")
+      compare(service.pickedFrom, "/tmp/Documents/Uber Notebook Backups", "it opens in the backup folder")
       tryVerify(function() { ask = named(win(), "restoreAsk"); return ask !== null && ask.note.indexOf("isn't a backup") >= 0 }, 1000)
       compare(named(win(), "restoreYes"), null)
       compare(profiles.list.length, 6)
@@ -371,7 +371,7 @@ Item {
       click(named(win(), "firstRunRestore"))
       tryVerify(function() { return !profiles.firstRun }, 2000, "put back, and open")
       compare(profiles.current.name, "Personal")
-      compare(service.settings.folder, "~/Documents/Omanote Personal (restored)")
+      compare(service.settings.folder, "~/Documents/Uber Notebook Personal (restored)")
       compare(service.settings.inbox, "inbox-1")
       tryVerify(function() { return named(win(), "firstRun") === null }, 1000)
     }
@@ -384,8 +384,8 @@ Item {
       tryVerify(function() { return backups.list.length === 1 }, 2000)
       var listed = JSON.parse(api.backupList())
       compare(listed.backups.length, 1)
-      verify(/^Omanote Personal/.test(listed.backups[0].name))
-      compare(listed.folder, "~/Documents/Omanote Backups")
+      verify(/^Uber Notebook Personal/.test(listed.backups[0].name))
+      compare(listed.folder, "~/Documents/Uber Notebook Backups")
       compare(JSON.parse(api.backup("Nobody")).ok, false)
       compare(JSON.parse(api.restoreBackup("relative.tar.gz", "")).ok, false, "a full path")
       verify(JSON.parse(api.restoreBackup(listed.backups[0].file, "")).ok)
@@ -404,7 +404,7 @@ Item {
       compare(JSON.parse(api.installUpdate()).ok, false, "not from git: it says how")
       updates.managed = true
       verify(JSON.parse(api.installUpdate()).ok)
-      tryCompare(files, "installed", ["marcho78.omanote"], 1000)
+      tryCompare(files, "installed", ["marcho78.uber-notebook"], 1000)
       updates.managed = false
       verify(JSON.parse(api.help()).commands.some(function(c) { return c.use.indexOf("restoreBackup") === 0 }))
     }

@@ -5,9 +5,9 @@ import "../Audio.js" as Audio
 import "../Backups.js" as Backups
 import "../Colors.js" as Colors
 
-// Omanote's settings, in sections (the list at the left): General,
+// Uber Notebook's settings, in sections (the list at the left): General,
 // Appearance, Writing, Audio, Profiles, Backups and About. They apply as
-// you change them and are kept on Omanote's entry in
+// you change them and are kept on Uber Notebook's entry in
 // ~/.config/omarchy/shell.json.
 Popup {
   id: panel
@@ -26,7 +26,7 @@ Popup {
   // Profiles (Profiles.qml): notes kept apart, each in a folder of its own.
   readonly property var profiles: service && service.profiles ? service.profiles : null
   property bool addingProfile: false
-  // Whether there's a newer Omanote (Updates.qml), and backups (Backups.qml).
+  // Whether there's a newer Uber Notebook (Updates.qml), and backups (Backups.qml).
   readonly property var updates: service && service.updates ? service.updates : null
   readonly property var backups: service && service.backups ? service.backups : null
 
@@ -43,7 +43,7 @@ Popup {
     { id: "audio", label: "Audio", icon: icons.mic || "", note: "The microphone, dictation, and meetings." },
     { id: "profiles", label: "Profiles", icon: icons.people || "", note: "Notes kept apart, each profile in a folder of its own." },
     { id: "backups", label: "Backups", icon: icons.archive || "", note: "Your profiles in one file each, to keep safe or move, and put back." },
-    { id: "about", label: "About", icon: icons.info || "", note: "The version you have, updates, and who makes Omanote." }
+    { id: "about", label: "About", icon: icons.info || "", note: "The version you have, updates, and who makes Uber Notebook." }
   ]
   readonly property var current: sections.filter(function(x) { return x.id === panel.section })[0] || sections[0]
 
@@ -196,7 +196,7 @@ Popup {
     if (u.status === "current") return "You have the newest version" + when
     if (u.status === "none") return "No releases published yet" + when
     if (u.status === "failed") return u.problem + when
-    return u.automatic ? "Checked a minute after Omanote starts, then once a day." : "Not checked yet."
+    return u.automatic ? "Checked a minute after Uber Notebook starts, then once a day." : "Not checked yet."
   }
 
   background: Item {
@@ -365,7 +365,7 @@ Popup {
         elide: Text.ElideMiddle
         textFormat: Text.PlainText
         leftPadding: 2
-        text: prow.modelData.folder || "~/Documents/Omanote"
+        text: prow.modelData.folder || "~/Documents/Uber Notebook"
         font.family: panel.theme.uiFont
         font.pixelSize: 12
         color: panel.theme.muted
@@ -522,7 +522,7 @@ Popup {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 18
         textFormat: Text.PlainText
-        text: "Omanote " + (panel.service ? panel.service.version : "")
+        text: "Uber Notebook " + (panel.service ? panel.service.version : "")
         font.family: panel.theme.uiFont
         font.pixelSize: 11
         color: panel.theme.faint
@@ -587,7 +587,7 @@ Popup {
           visible: panel.section === "general"
           title: "Shortcuts"
           Line {
-            label: "Open and close Omanote"
+            label: "Open and close Uber Notebook"
             note: panel.service ? panel.service.shortcutNote("toggle") : ""
             Field {
               id: toggleField
@@ -647,8 +647,8 @@ Popup {
             }
           }
           Line {
-            label: "Show Omanote in the top bar"
-            note: "Off, the notebook icon takes no space; Omanote stays on."
+            label: "Show Uber Notebook in the top bar"
+            note: "Off, the notebook icon takes no space; Uber Notebook stays on."
             Toggle { theme: panel.theme; checked: panel.s.barIcon !== false; onToggled: function(on) { panel.set("barIcon", on) } }
           }
         }
@@ -1043,7 +1043,7 @@ Popup {
         Group {
           visible: panel.section === "backups" && panel.backups !== null
           title: "Automatic backups"
-          note: panel.s.backupEvery === "daily" || panel.s.backupEvery === "weekly" ? "Every profile, while Omanote runs. The oldest automatic ones go to the trash; the ones you make are never cleared out." : ""
+          note: panel.s.backupEvery === "daily" || panel.s.backupEvery === "weekly" ? "Every profile, while Uber Notebook runs. The oldest automatic ones go to the trash; the ones you make are never cleared out." : ""
           Line {
             label: "Back up automatically"
             Choice {
@@ -1172,7 +1172,7 @@ Popup {
           title: "Updates"
           Line {
             objectName: "updateStatus"
-            label: "Omanote " + (panel.service ? panel.service.version : "")
+            label: "Uber Notebook " + (panel.service ? panel.service.version : "")
             note: panel.updateNote
             noteColor: panel.updates && panel.updates.status === "failed" ? panel.theme.urgent : panel.theme.muted
             Row {
@@ -1195,7 +1195,7 @@ Popup {
           }
           Line {
             label: "Check for updates automatically"
-            note: "Once a day, Omanote asks GitHub for its newest version. Nothing of yours goes with it."
+            note: "Once a day, Uber Notebook asks GitHub for its newest version. Nothing of yours goes with it."
             Toggle { objectName: "updateAuto"; theme: panel.theme; checked: panel.s.checkUpdates !== false; onToggled: function(on) { panel.set("checkUpdates", on) } }
           }
           Line {

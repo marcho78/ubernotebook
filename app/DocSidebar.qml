@@ -941,7 +941,7 @@ Rectangle {
     Item { width: 1; height: 4 }
     Rectangle { width: parent.width; height: 1; color: bar.theme.line; opacity: 0.7 }
     Item { width: 1; height: 4 }
-    // A newer version, if there's one; who makes Omanote, on X.
+    // A newer version, if there's one; who makes Uber Notebook, on X.
     SideFooter {
       objectName: "sidebarFooter"
       width: parent.width

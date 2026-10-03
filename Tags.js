@@ -1,7 +1,7 @@
 // Tags.js - tags in Pages: "#idea" in any line. A tag is a link in the
-// block's text, omanote://tag/<name>, its words "#Idea" as they were written;
+// block's text, uber-notebook://tag/<name>, its words "#Idea" as they were written;
 // its name is those words in lowercase, so #Idea and #idea are one tag. A
-// name is letters, digits, "_", "-" and "/" (#project/omanote), not only
+// name is letters, digits, "_", "-" and "/" (#project/uber-notebook), not only
 // digits (#1 is a number), at most 60 long.
 //
 // It reads and writes tag links, finds the tags in a block and in a page,
@@ -11,7 +11,9 @@
 .pragma library
 .import "Html.js" as Html
 
-var PREFIX = "omanote://tag/"
+var PREFIX = "uber-notebook://tag/"
+// (What tags' links said before Uber Notebook was renamed: read the same.)
+var LEGACY_PREFIX = "omanote://tag/"
 var MAX = 60
 // What a tag's name is made of (no white space, no punctuation but _ - /).
 var CHARS = "[^\\s#,.;:!?()\\[\\]{}<>\"'`|\\\\@*~=+&^%$\\u2018\\u2019\\u201c\\u201d\\u00a0\\u2026]"
@@ -40,13 +42,14 @@ function href(name) {
 // The tag a link is, or "".
 function of(url) {
   var s = String(url || "")
-  if (s.indexOf(PREFIX) !== 0) return ""
+  var pre = s.indexOf(PREFIX) === 0 ? PREFIX : s.indexOf(LEGACY_PREFIX) === 0 ? LEGACY_PREFIX : ""
+  if (!pre) return ""
   var name = ""
-  try { name = decodeURIComponent(s.slice(PREFIX.length)) } catch (e) { return "" }
+  try { name = decodeURIComponent(s.slice(pre.length)) } catch (e) { return "" }
   return clean(name) === name ? name : ""
 }
 
-// Is it a tag's link, as Omanote writes them?
+// Is it a tag's link, as Uber Notebook writes them?
 function isLink(url) { return of(url) !== "" }
 
 // A tag's link in a block's text.

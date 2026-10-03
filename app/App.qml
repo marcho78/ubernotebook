@@ -5,7 +5,7 @@ import "../Papers.js" as Papers
 import "../Covers.js" as Covers
 import "../Blocks.js" as Blocks
 
-// Omanote: a desk with your notebooks on it. The shelf shows them cover up;
+// Uber Notebook: a desk with your notebooks on it. The shelf shows them cover up;
 // pick one and it slides onto the desk and its cover swings open. Or Pages:
 // a workspace of pages made of blocks, the way Notion does it (DocView.qml).
 //
@@ -49,7 +49,7 @@ FocusScope {
     else root.forceActiveFocus()
   }
 
-  // Esc on the shelf: put Omanote away.
+  // Esc on the shelf: put Uber Notebook away.
   signal hideRequested()
 
   Theme {
@@ -65,7 +65,7 @@ FocusScope {
     cardColor: root.settings.colorCards || ""
   }
 
-  // The fonts Omanote brings with it (the notebook window loads them once
+  // The fonts Uber Notebook brings with it (the notebook window loads them once
   // for itself and the quick note, and turns this off).
   property bool loadFonts: true
   property int fontsLoaded: 0

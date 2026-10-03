@@ -38,7 +38,7 @@ check("a block's things", () => {
 });
 
 check("links in text and tables (not to pages or tags, once each)", () => {
-  const t = plain(C.ofBlock({ uid: "t1", type: "p", html: 'See <a href="https://example.com/a">the docs</a>, <a href="omanote://page/' + U(1) + '">a page</a>, <a href="omanote://tag/x">#x</a> and <a href="https://example.com/a">again</a> and <a href="https://github.com/basecamp/omarchy">https://github.com/basecamp/omarchy</a>' }));
+  const t = plain(C.ofBlock({ uid: "t1", type: "p", html: 'See <a href="https://example.com/a">the docs</a>, <a href="uber-notebook://page/' + U(1) + '">a page</a>, <a href="uber-notebook://tag/x">#x</a> and <a href="https://example.com/a">again</a> and <a href="https://github.com/basecamp/omarchy">https://github.com/basecamp/omarchy</a>' }));
   assert.deepEqual(t.map((r) => [r.title, r.url, r.sub, r.type]), [["the docs", "https://example.com/a", "example.com", "text"], ["github.com", "https://github.com/basecamp/omarchy", "github.com", "text"]]);
   assert.equal(C.detail(t[0]), "example.com  \u00b7  in the text");
   assert.equal(C.ofBlock({ uid: "c", type: "code", html: '<a href="https://example.com">x</a>' }).length, 0, "not in code");

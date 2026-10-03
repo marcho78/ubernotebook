@@ -40,7 +40,7 @@ check("levels and waveforms", () => {
 });
 
 check("voxtype's output, as the words said", () => {
-  const out = 'Loading audio file: "/run/user/1000/omanote/d.wav"\nAudio format: 16000 Hz, 1 channel(s), Int\nProcessing 22848 samples (1.43s)...\n\nFront, Center.\n';
+  const out = 'Loading audio file: "/run/user/1000/uber-notebook/d.wav"\nAudio format: 16000 Hz, 1 channel(s), Int\nProcessing 22848 samples (1.43s)...\n\nFront, Center.\n';
   assert.equal(A.transcriptOf(out), "Front, Center.");
   assert.equal(A.transcriptOf("Loading audio file: x\nProcessing 1 samples (0s)...\n\n\n"), "", "nothing said");
   assert.equal(A.transcriptOf("\u001b[2m2026-10-02T17:50:49.442539Z\u001b[0m \u001b[32m INFO\u001b[0m Using local whisper\n [BLANK_AUDIO] \nHello  there.\n"), "Hello there.");
@@ -93,10 +93,10 @@ check("microphones, the voice made louder, and a test", () => {
 });
 
 check("the commands", () => {
-  const d = A.recordCommand("dictation", "/run/user/1000/omanote/d.wav");
+  const d = A.recordCommand("dictation", "/run/user/1000/uber-notebook/d.wav");
   assert.equal(d[0], "/usr/bin/ffmpeg");
   assert.equal(d[d.indexOf("-t") + 1], "600");
-  assert.equal(d[d.length - 1], "/run/user/1000/omanote/d.wav");
+  assert.equal(d[d.length - 1], "/run/user/1000/uber-notebook/d.wav");
   assert.ok(d.includes("pcm_s16le"));
   const a = A.recordCommand("audio", "/home/x/Pages/assets/a.ogg");
   assert.ok(a.includes("libopus"));

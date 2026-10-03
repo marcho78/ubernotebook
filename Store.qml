@@ -9,7 +9,7 @@ import "Settings.js" as Settings
 import "Agent.js" as Agent
 
 // The notebooks on disk. Each notebook is a folder in the notebooks folder
-// (~/Documents/Omanote by default):
+// (~/Documents/Uber Notebook by default):
 //
 //   <notebook>/notebook.json         title, cover, paper, pen, kind of page, pages in order
 //   <notebook>/pages/<page>.json     one page each
@@ -98,13 +98,13 @@ Item {
 
   function readFiles(paths, done, maxBytes) {
     if (paths.length === 0) { done({}); return }
-    exec(["/usr/bin/bash", "-c", readScript, "omanote-read"].concat(paths), function(ok, output) {
+    exec(["/usr/bin/bash", "-c", readScript, "uber-notebook-read"].concat(paths), function(ok, output) {
       done(ok ? parseFrames(output) : {})
     }, { maxBytes: maxBytes || 32 * 1024 * 1024, timeoutMs: 20000 })
   }
 
   function readGlob(dir, pattern, done, maxBytes) {
-    exec(["/usr/bin/bash", "-c", globScript, "omanote-read", dir, pattern], function(ok, output) {
+    exec(["/usr/bin/bash", "-c", globScript, "uber-notebook-read", dir, pattern], function(ok, output) {
       done(ok ? parseFrames(output) : {})
     }, { maxBytes: maxBytes || 64 * 1024 * 1024, timeoutMs: 30000 })
   }
@@ -159,7 +159,7 @@ Item {
   function listAgents(done) {
     var all = Agent.menuAgents(readNow(omarchyPath + "/default/omarchy/omarchy-menu.jsonc", 1024 * 1024) || "")
     if (all.length === 0) { done([]); return }
-    exec(["/usr/bin/bash", "-c", "for a in \"$@\"; do command -v -- \"$a\" >/dev/null && printf '%s\\n' \"$a\"; done; exit 0", "omanote-agents"]
+    exec(["/usr/bin/bash", "-c", "for a in \"$@\"; do command -v -- \"$a\" >/dev/null && printf '%s\\n' \"$a\"; done; exit 0", "uber-notebook-agents"]
       .concat(all.map(function(a) { return a.name })), function(ok, output) {
       var here = String(output || "").split("\n")
       done(all.filter(function(a) { return here.indexOf(a.name) >= 0 }))
@@ -182,21 +182,21 @@ Item {
     Quickshell.execDetached(["/usr/bin/omarchy-menu", "summon", "setup.default.agent"])
   }
 
-  // The omanote skill, linked into the folders agents read skills from (the
+  // The uber-notebook skill, linked into the folders agents read skills from (the
   // ones Omarchy links its own skills into), so whichever agent you use knows
-  // Omanote's commands. A link is only made where nothing has that name,
-  // and only Omanote's own links (to `target`) are taken out.
+  // Uber Notebook's commands. A link is only made where nothing has that name,
+  // and only Uber Notebook's own links (to `target`) are taken out.
   readonly property var skillFolders: [".agents/skills", ".claude/skills", ".codex/skills", ".hermes/skills", ".pi/agent/skills"]
-  readonly property string skillScript: "mode=$1; target=$2; shift 2; for dir in \"$@\"; do link=\"$dir/omanote\"; "
+  readonly property string skillScript: "mode=$1; target=$2; shift 2; for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
     + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -s -- \"$target\" \"$link\"; fi; "
     + "elif [ -L \"$link\" ] && [ \"$(/usr/bin/readlink -- \"$link\")\" = \"$target\" ]; then /usr/bin/rm -f -- \"$link\"; fi; done; exit 0"
 
   function skillDirs() { return skillFolders.map(function(f) { return store.home + "/" + f }) }
   function linkSkill(target) {
-    exec(["/usr/bin/bash", "-c", skillScript, "omanote-skills", "link", target].concat(skillDirs()), null, { timeoutMs: 5000 })
+    exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", "link", target].concat(skillDirs()), null, { timeoutMs: 5000 })
   }
   function unlinkSkill(target) {
-    Quickshell.execDetached(["/usr/bin/bash", "-c", skillScript, "omanote-skills", "unlink", target].concat(skillDirs()))
+    Quickshell.execDetached(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", "unlink", target].concat(skillDirs()))
   }
 
   // ---- writing files -------------------------------------------------------------------
@@ -588,7 +588,7 @@ Item {
       paper: { pattern: "ruled", color: "ivory", spacing: "regular" },
       pen: "sans"
     }, [{
-      title: "Welcome to Omanote",
+      title: "Welcome to Uber Notebook",
       blocks: [
         { type: "p", html: "This is your notebook. Everything you write is <span style=\"font-weight:700;\">saved as you go</span>, as plain files in " + Html.escapeText(rootPath.replace(home, "~")) + "." },
         { type: "h2", html: "Things to try" },
@@ -598,7 +598,7 @@ Item {
         tip("Turn the page with Ctrl+PgDown, or click the page's bottom corner"),
         tip("Paste or drop a picture onto the page"),
         tip("Give a page an index tab: \u22ef, then Add a tab"),
-        { type: "callout", tone: "yellow", html: "<span style=\"font-weight:700;\">Super+N</span> opens and closes Omanote from anywhere. <span style=\"font-weight:700;\">Super+Alt+N</span> jots a quick note." },
+        { type: "callout", tone: "yellow", html: "<span style=\"font-weight:700;\">Super+N</span> opens and closes Uber Notebook from anywhere. <span style=\"font-weight:700;\">Super+Alt+N</span> jots a quick note." },
         { type: "p", html: "Back to the shelf (top left) to start another notebook, with the cover, paper and pen you like." }
       ]
     }, {}])
@@ -711,14 +711,14 @@ Item {
       store.mkdirs([dest], function(made) {
         if (!made) { done(""); return }
         // wl-paste writes the picture to its stdout; bash only points that at the file.
-        store.exec(["/usr/bin/bash", "-c", "exec /usr/bin/wl-paste --no-newline --type \"$1\" > \"$2\"", "omanote-paste", pick, dest + "/" + name], function(pasted) {
+        store.exec(["/usr/bin/bash", "-c", "exec /usr/bin/wl-paste --no-newline --type \"$1\" > \"$2\"", "uber-notebook-paste", pick, dest + "/" + name], function(pasted) {
           done(pasted ? "assets/" + name : "")
         }, { timeoutMs: 10000 })
       })
     }, { okCodes: [0, 1], timeoutMs: 3000 })
   }
 
-  // ---- out of Omanote -----------------------------------------------------------------------
+  // ---- out of Uber Notebook -----------------------------------------------------------------------
 
   function copyText(text) {
     var value = String(text || "")
@@ -737,7 +737,7 @@ Item {
   readonly property string appScript: "t=$(/usr/bin/xdg-mime query filetype \"$1\" 2>/dev/null); d=$(/usr/bin/xdg-mime query default \"$t\" 2>/dev/null); printf '%s\\n%s\\n' \"$t\" \"$d\""
   readonly property var browsers: /(^|[-.])(google-chrome|chrome|chromium|firefox|brave|vivaldi|opera|microsoft-edge|zen|librewolf|epiphany|qutebrowser|falkon|midori)/i
   function openFile(path, done) {
-    exec(["/usr/bin/bash", "-c", appScript, "omanote-app", path], function(ok, out) {
+    exec(["/usr/bin/bash", "-c", appScript, "uber-notebook-app", path], function(ok, out) {
       var app = String(out || "").split("\n")[1] || ""
       app = app.trim()
       if (!app) { if (done) done(false, "none"); return }
@@ -757,13 +757,13 @@ Item {
     // Texts starting with "-" would be read as options.
     var head = String(title || "Reminder").replace(/^-+/, "\u2010").slice(0, 120)
     var body = String(text || "").replace(/^-+/, "\u2010").slice(0, 300)
-    var argv = ["/usr/bin/omarchy-notification-send", "-g", "\u{f009e}", "-u", "normal", "--app-name", "Omanote", head, body]
-    if (/^[0-9a-f-]{36}$/.test(String(pageId || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "omanote", "open", pageId])
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "omanote", "calendar", day])
+    var argv = ["/usr/bin/omarchy-notification-send", "-g", "\u{f009e}", "-u", "normal", "--app-name", "Uber Notebook", head, body]
+    if (/^[0-9a-f-]{36}$/.test(String(pageId || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "uber-notebook", "open", pageId])
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "uber-notebook", "calendar", day])
     Quickshell.execDetached(argv)
   }
 
-  // A folder Omanote made (an export), in the file manager.
+  // A folder Uber Notebook made (an export), in the file manager.
   function openPath(path) {
     if (path && path.indexOf(rootPath + "/") === 0) Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", path])
   }

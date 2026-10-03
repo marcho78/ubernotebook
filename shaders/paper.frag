@@ -1,5 +1,5 @@
 #version 440
-// Omanote's paper: the sheet's color and grain, and its printed pattern
+// Uber Notebook's paper: the sheet's color and grain, and its printed pattern
 // (ruled lines, grid, dots, graph), drawn per pixel so it stays crisp at any
 // zoom. Rows line up with the editor's: row k's rule sits `rule` px below the
 // top of the row, which is where the text's baselines are.

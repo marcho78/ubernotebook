@@ -25,7 +25,7 @@ Item {
 
   // Store.qml: running a command once (checks, transcribing).
   property var files: null
-  readonly property string tempDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/omanote-audio"
+  readonly property string tempDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/uber-notebook-audio"
 
   // What's there: ffmpeg to record, voxtype to write out.
   property bool canRecord: false
@@ -106,7 +106,7 @@ Item {
     _started = Date.now()
     phase = "recording"
     var dir = kind === "test" ? tempDir : path.replace(/\/[^\/]*$/, "")
-    proc.command = ["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec \"$@\"", "omanote-record", dir]
+    proc.command = ["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec \"$@\"", "uber-notebook-record", dir]
       .concat(Audio.recordCommand(kind, path, { input: input, boost: boost }))
     proc.running = true
     return ""
@@ -210,7 +210,7 @@ Item {
         transcriber.timeoutMs = Audio.transcribeTimeout(seconds)
         transcriber.file = file
         var even = rec._boosted ? file.replace(/\.wav$/, "") + "-even.wav" : ""
-        transcriber.start(["/usr/bin/bash", "-c", Audio.TRANSCRIBE_SCRIPT, "omanote-transcribe", file, even, rec._boosted ? Audio.BOOST : ""])
+        transcriber.start(["/usr/bin/bash", "-c", Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, even, rec._boosted ? Audio.BOOST : ""])
         return
       }
       var result = { file: rec._final || file, duration: Math.round(seconds * 10) / 10, peaks: Audio.peaks(rec._levels, 120) }
@@ -219,7 +219,7 @@ Item {
         rec.phase = "finishing"
         finisher.result = result
         finisher.timeoutMs = 60000 + Math.round(seconds * 1000)
-        finisher.start(["/usr/bin/bash", "-c", Audio.LOUDER_SCRIPT, "omanote-louder", file, rec._final, Audio.BOOST])
+        finisher.start(["/usr/bin/bash", "-c", Audio.LOUDER_SCRIPT, "uber-notebook-louder", file, rec._final, Audio.BOOST])
         return
       }
       rec._end(true, result)
@@ -256,7 +256,7 @@ Item {
   // A recording made louder into a new file (it stays, for Undo): done(ok, peaks).
   function louder(file, to, done) {
     if (!files || !canRecord) { done(false, []); return }
-    files.exec(["/usr/bin/bash", "-c", Audio.LOUDER_SCRIPT, "omanote-louder", file, to, Audio.BOOST, "keep"], function(ok, output) {
+    files.exec(["/usr/bin/bash", "-c", Audio.LOUDER_SCRIPT, "uber-notebook-louder", file, to, Audio.BOOST, "keep"], function(ok, output) {
       done(ok, ok ? Audio.peaks(Audio.levelsIn(output), 120) : [])
     }, { timeoutMs: 600000, maxBytes: 4 * 1024 * 1024 })
   }
@@ -265,7 +265,7 @@ Item {
   function transcribe(file, seconds, done) {
     if (!files || !canTranscribe) { done(false, "", "Writing it out needs voxtype (Omarchy's dictation)"); return }
     var wav = tempDir + "/transcribe-" + Date.now().toString(36) + ".wav"
-    files.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec /usr/bin/bash -c \"$@\"", "omanote-transcribe", tempDir, Audio.TRANSCRIBE_SCRIPT, "omanote-transcribe", file, wav, boost ? Audio.BOOST : ""], function(ok, output) {
+    files.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec /usr/bin/bash -c \"$@\"", "uber-notebook-transcribe", tempDir, Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, wav, boost ? Audio.BOOST : ""], function(ok, output) {
       var text = ok ? Audio.transcriptOf(output) : ""
       done(ok && text !== "", text, !ok ? "voxtype couldn't write it out" : text === "" ? "No words were heard" : "")
     }, { timeoutMs: Audio.transcribeTimeout(seconds), maxBytes: 2 * 1024 * 1024 })

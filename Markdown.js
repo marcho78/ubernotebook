@@ -85,7 +85,8 @@ function inline(inner) {
     if (f.strike) body = "~~" + body + "~~"
     if (f.italic) body = "*" + body + "*"
     if (f.bold) body = "**" + body + "**"
-    if (g.href) body = "[" + body + "](" + g.href.replace(/[()\s]/g, function(c) { return encodeURIComponent(c) }) + ")"
+    // (A link written before Uber Notebook was renamed comes out with its new name.)
+    if (g.href) body = "[" + body + "](" + g.href.replace(/^omanote:\/\//, "uber-notebook://").replace(/[()\s]/g, function(c) { return encodeURIComponent(c) }) + ")"
     out += lead + body + trail
   })
   return out
@@ -313,7 +314,7 @@ function fromDocPage(page, lookup, options) {
     else if (b.type === "table") line = Table.toMarkdown(b.table, inline)
     else if (b.type === "sketch") {
       var file = typeof opts.sketchFile === "function" ? opts.sketchFile(b.id) : ""
-      line = file ? "![Sketch](" + file + ")" : "*(A sketch, drawn in Omanote)*"
+      line = file ? "![Sketch](" + file + ")" : "*(A sketch, drawn in Uber Notebook)*"
     }
     else if (b.type === "audio") {
       // A link to the recording, and what was said in it, quoted.

@@ -149,7 +149,7 @@ Pop {
       y: 30
       text: menu.kind === "date"
         ? "Try \u201ctomorrow 9am\u201d, \u201cfri\u201d, \u201cin 2 hours\u201d, \u201coct 3\u201d"
-        : menu.kind === "tag" ? "Type a tag: #idea, #project/omanote"
+        : menu.kind === "tag" ? "Type a tag: #idea, #project/uber-notebook"
         : "No page is called that."
       font.family: menu.theme.uiFont
       font.pixelSize: 12

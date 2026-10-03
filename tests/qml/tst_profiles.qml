@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Settings.js" as Settings
 import "../../Workspace.js" as Workspace
@@ -20,14 +20,14 @@ Item {
   // (The files follow the open profile's folder, as Store.qml does: none
   // before there's a profile.)
   FakeFiles { id: files; rootPath: profiles.current !== null ? Settings.resolveFolder(service.settings.folder, "/tmp", true) : "" }
-  Omanote.Profiles { id: profiles; service: service; files: files; dataFolder: "/tmp/omanote-data" }
-  Omanote.Workspace {
+  UberNotebook.Profiles { id: profiles; service: service; files: files; dataFolder: "/tmp/uber-notebook-data" }
+  UberNotebook.Workspace {
     id: ws
     files: files
     starter: profiles.current !== null && profiles.current.demo ? "examples" : "templates"
   }
 
-  Omanote.Api { id: api; workspace: ws; files: files; profiles: profiles; noProfile: profiles.firstRun }
+  UberNotebook.Api { id: api; workspace: ws; files: files; profiles: profiles; noProfile: profiles.firstRun }
 
   App {
     id: app
@@ -93,7 +93,7 @@ Item {
       var first = named(win(), "firstRun")
       verify(first !== null, "it asks")
       compare(named(first, "profileName").text, "Personal")
-      compare(named(first, "profileFolder").text, "~/Documents/Omanote", "the usual place, for the first")
+      compare(named(first, "profileFolder").text, "~/Documents/Uber Notebook", "the usual place, for the first")
       compare(Object.keys(files.disk).length, 0, "nothing made anywhere yet")
       // Its own folder, picked.
       service.nextFolder = "/tmp/Notes/Mine"
@@ -113,14 +113,14 @@ Item {
       // A profile of your own starts with the templates, no examples.
       pagesOpen()
       verify(Workspace.templates(ws.index).length >= 5, "the templates")
-      compare(titles().indexOf("Welcome to Omanote"), -1, "no examples")
+      compare(titles().indexOf("Welcome to Uber Notebook"), -1, "no examples")
       compare(ws.contacts.contacts.length, 0, "nobody in People")
       compare(named(win(), "profileSwitchName").text, "Home", "the switch says which")
     }
 
     function test_2_another_one_and_switching() {
       fresh()
-      verify(profiles.add("Personal", "~/Documents/Omanote", true) === "")
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
       service.setSetting("inbox", "aaaa-inbox")
       service.setSetting("lastPage", "aaaa-page")
       // From the dropdown: New profile.
@@ -131,11 +131,11 @@ Item {
       var name = null
       tryVerify(function() { name = find(win(), function(it) { return it.objectName === "profileName" && it.visible }); return name !== null && name.input.activeFocus }, 1000)
       type("Business")
-      compare(named(win(), "profileFolder").text, "~/Documents/Omanote Business", "suggested from its name")
+      compare(named(win(), "profileFolder").text, "~/Documents/Uber Notebook Business", "suggested from its name")
       keyClick(Qt.Key_Return)
       tryVerify(function() { return profiles.current && profiles.current.name === "Business" }, 1000)
       verify(service.savedOpen > 0, "what was open, written first")
-      compare(service.settings.folder, "~/Documents/Omanote Business")
+      compare(service.settings.folder, "~/Documents/Uber Notebook Business")
       compare(service.settings.inbox, "", "its own Inbox, not Personal's")
       compare(service.settings.lastPage, "")
       service.setSetting("inbox", "bbbb-inbox")
@@ -147,12 +147,12 @@ Item {
       tryVerify(function() { return profiles.current.name === "Personal" }, 1000)
       compare(service.settings.inbox, "aaaa-inbox")
       compare(service.settings.lastPage, "aaaa-page")
-      compare(service.settings.folder, "~/Documents/Omanote")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
       var business = profiles.list.filter(function(p) { return p.name === "Business" })[0]
       compare(business.saved.inbox, "bbbb-inbox", "Business keeps its")
       // A name or a folder that's taken.
       compare(profiles.add("business", "~/Elsewhere", false), "There's a profile called that already")
-      compare(profiles.add("Other", "~/Documents/Omanote/Other", false), "“Personal” keeps its notes there")
+      compare(profiles.add("Other", "~/Documents/Uber Notebook/Other", false), "“Personal” keeps its notes there")
     }
 
     function test_3_the_demo() {
@@ -160,10 +160,10 @@ Item {
       // From the first run.
       click(named(named(win(), "firstRun"), "firstRunDemo"))
       tryVerify(function() { return profiles.current && profiles.current.demo }, 1000)
-      compare(service.settings.folder, "/tmp/omanote-data/demo")
+      compare(service.settings.folder, "/tmp/uber-notebook-data/demo")
       pagesOpen()
-      tryVerify(function() { return titles().indexOf("Welcome to Omanote") >= 0 }, 2000, "the examples")
-      compare(app.docView.page.title, "Welcome to Omanote")
+      tryVerify(function() { return titles().indexOf("Welcome to Uber Notebook") >= 0 }, 2000, "the examples")
+      compare(app.docView.page.title, "Welcome to Uber Notebook")
       // A profile of your own, then back to the demo from the dropdown (no new one).
       verify(profiles.add("Mine", "~/Mine", true) === "")
       compare(profiles.list.length, 2)
@@ -176,13 +176,13 @@ Item {
       compare(profiles.list.length, 2)
       // Started over: a new folder, the examples again.
       profiles.restartDemo()
-      verify(/^\/tmp\/omanote-data\/demo-[a-z0-9]+$/.test(service.settings.folder), service.settings.folder)
+      verify(/^\/tmp\/uber-notebook-data\/demo-[a-z0-9]+$/.test(service.settings.folder), service.settings.folder)
       compare(profiles.list.filter(function(p) { return p.demo }).length, 1)
     }
 
     function test_4_settings() {
       fresh()
-      verify(profiles.add("Personal", "~/Documents/Omanote", true) === "")
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
       verify(profiles.add("Side", "~/Side", false) === "")
       app.openSettings("profiles")
       var rows = []
@@ -228,22 +228,22 @@ Item {
       verify(j(api.add("Notes", "/tmp/in/x.md")).error.indexOf("no profile yet") >= 0, "nothing to work on yet")
       var w = j(api.addProfile("Work", "", "true"))
       verify(w.ok, JSON.stringify(w))
-      compare(w.folder, "~/Documents/Omanote", "the first: the usual place")
+      compare(w.folder, "~/Documents/Uber Notebook", "the first: the usual place")
       compare(profiles.current.name, "Work")
       var c = j(api.addProfile("Client", "", "false"))
-      compare(c.folder, "~/Documents/Omanote Client", "beside it, named for it")
+      compare(c.folder, "~/Documents/Uber Notebook Client", "beside it, named for it")
       compare(profiles.current.name, "Work", "not opened")
       compare(j(api.addProfile("work", "", "false")).error, "There's a profile called that already")
       var list = j(api.profileList())
       compare(list.map(function(p) { return p.name + (p.open ? "*" : "") }).join(","), "Work*,Client")
       compare(j(api.renameProfile("client", "Acme")).name, "Acme")
       compare(j(api.profileFolder("Acme", "~/Clients/Acme")).folder, "~/Clients/Acme")
-      compare(j(api.profileFolder("Acme", "~/Documents/Omanote/Acme")).error, "“Work” keeps its notes there")
+      compare(j(api.profileFolder("Acme", "~/Documents/Uber Notebook/Acme")).error, "“Work” keeps its notes there")
       compare(j(api.removeProfile("Work")).error, "Open another profile first")
       compare(j(api.openProfile("Acme")).profile, "Acme")
       compare(service.settings.folder, "~/Clients/Acme")
       var gone = j(api.removeProfile("Work"))
-      verify(gone.ok && gone.note.indexOf("~/Documents/Omanote") >= 0, JSON.stringify(gone))
+      verify(gone.ok && gone.note.indexOf("~/Documents/Uber Notebook") >= 0, JSON.stringify(gone))
       compare(j(api.openProfile("nope")).ok, false)
       // The demo.
       compare(j(api.demo(false)).profile, "Demo")
@@ -257,27 +257,27 @@ Item {
 
     function test_5_notes_from_before_profiles() {
       // Notes in the usual place: they're "Personal", open.
-      fresh({ sounds: false }, { "/tmp/Documents/Omanote/library.json": "{}" })
+      fresh({ sounds: false }, { "/tmp/Documents/Uber Notebook/library.json": "{}" })
       compare(profiles.list.length, 1)
       compare(profiles.current.name, "Personal")
-      compare(service.settings.folder, "~/Documents/Omanote")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
       verify(!profiles.firstRun)
       // A folder set in Settings, and notes in the usual place too: both, the set one open.
-      fresh({ sounds: false, folder: "~/Documents/Omanote-Demo", inbox: "keep-inbox" }, { "/tmp/Documents/Omanote/Pages/index.json": "{}" })
-      compare(profiles.list.map(function(p) { return p.name }).join(","), "Omanote-Demo,Personal")
-      compare(profiles.current.name, "Omanote-Demo")
+      fresh({ sounds: false, folder: "~/Documents/Uber Notebook Demo", inbox: "keep-inbox" }, { "/tmp/Documents/Uber Notebook/Pages/index.json": "{}" })
+      compare(profiles.list.map(function(p) { return p.name }).join(","), "Uber Notebook Demo,Personal")
+      compare(profiles.current.name, "Uber Notebook Demo")
       compare(service.settings.inbox, "keep-inbox", "its settings, as they were")
       // Its Inbox in the usual place's notes: Personal's, not the open one's.
-      fresh({ sounds: false, folder: "~/Documents/Omanote-Demo", inbox: "real-inbox", lastPage: "demo-page" }, {
-        "/tmp/Documents/Omanote/library.json": "{}", "/tmp/Documents/Omanote/Pages/real-inbox.json": "{}",
-        "/tmp/Documents/Omanote-Demo/Pages/demo-page.json": "{}" })
-      compare(profiles.current.name, "Omanote-Demo")
+      fresh({ sounds: false, folder: "~/Documents/Uber Notebook Demo", inbox: "real-inbox", lastPage: "demo-page" }, {
+        "/tmp/Documents/Uber Notebook/library.json": "{}", "/tmp/Documents/Uber Notebook/Pages/real-inbox.json": "{}",
+        "/tmp/Documents/Uber Notebook Demo/Pages/demo-page.json": "{}" })
+      compare(profiles.current.name, "Uber Notebook Demo")
       compare(service.settings.inbox, "", "not the demo's")
       compare(service.settings.lastPage, "demo-page", "the demo's page, its")
       compare(profiles.list.filter(function(p) { return p.name === "Personal" })[0].saved.inbox, "real-inbox")
       profiles.use("Personal")
       compare(service.settings.inbox, "real-inbox", "Personal's, back when it's open")
-      compare(service.settings.folder, "~/Documents/Omanote")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
       // Nothing anywhere: the first run.
       fresh()
       verify(profiles.firstRun)

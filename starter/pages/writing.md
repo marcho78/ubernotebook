@@ -1,5 +1,5 @@
 ---
-title: Writing in Omanote
+title: Writing in Uber Notebook
 icon: ✍️
 parent: welcome
 order: 1

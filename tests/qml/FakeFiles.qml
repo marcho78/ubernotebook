@@ -6,7 +6,7 @@ import "../../Library.js" as Library
 QtObject {
   id: files
 
-  property string rootPath: "/tmp/omanote-dev"
+  property string rootPath: "/tmp/uber-notebook-dev"
   property string home: "/tmp"
   property string runtimeDir: "/tmp"
   // path -> text
@@ -67,7 +67,7 @@ QtObject {
   property var fetchPages: ({})
   property var fetchPictures: ({})
   // GitHub, for the update check: { url: { code, body } } (a URL not in it:
-  // GitHub can't be reached). Omanote installed from git, and what
+  // GitHub can't be reached). Uber Notebook installed from git, and what
   // `omarchy plugin update` was asked to update.
   property var http: ({})
   property bool gitCheckout: false
@@ -109,7 +109,7 @@ QtObject {
   // The programs Workspace.qml runs: listing a folder, grep, cp, finding
   // what's in folders to import.
   function exec(argv, done, options) {
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-scan") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-scan") {
       var out = ""
       argv.slice(4).forEach(function(root) {
         if (disk[root] !== undefined) { out += "R\t" + root + "\n" + root + "\n"; return }
@@ -120,7 +120,7 @@ QtObject {
       return
     }
     // A folder's folders and files, for the picture picker ("d\t0\tname", "f\tmtime\tname").
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-pictures") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-pictures") {
       var base = argv[4].replace(/\/+$/, "") + "/"
       var seenDirs = {}
       var rows = []
@@ -136,7 +136,7 @@ QtObject {
     }
     // Notes from before profiles: for each folder, whether it has them, and
     // the Inbox, the page and the notebook the settings name.
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-notes") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-notes") {
       var ids = argv.slice(4, 7)
       done(true, argv.slice(7).map(function(d) {
         var bit = function(on) { return on ? "1" : "0" }
@@ -147,32 +147,32 @@ QtObject {
       return
     }
     // The update check (Updates.qml): GitHub's answer, then its status.
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-update") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-update") {
       var answer = http[argv[4]]
       if (!answer) { done(false, "curl: (6) Could not resolve host: api.github.com"); return }
       done(true, answer.body + "\n" + answer.code)
       return
     }
     if (argv[0] === "/usr/bin/test" && /\/\.git$/.test(argv[2])) { done(gitCheckout, ""); return }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-install") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-install") {
       installed = installed.concat([argv[4]])
       done(true, "Updated " + argv[4] + ".")
       return
     }
     // Backups (Backups.js). A backup here is "FAKE-TAR:" then JSON:
     // { manifest, files: { p1: { "Pages/x.json": text } } }.
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backup-has") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-backup-has") {
       done(true, argv.slice(4).map(function(d) { return Object.keys(disk).some(function(p) { return p.indexOf(d + "/") === 0 }) ? "1" : "0" }).join("\n") + "\n")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backups") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-backups") {
       var bdir = argv[4].replace(/\/+$/, "") + "/"
       var rows2 = Object.keys(disk).filter(function(p) { var n = p.slice(bdir.length); return p.indexOf(bdir) === 0 && n.indexOf("/") < 0 && n.charAt(0) !== "." && /\.tar\.gz$/.test(n) })
         .map(function(p) { return (mtimes[p] || 1759455000) + "\t" + String(disk[p]).length + "\t" + p.slice(bdir.length) })
       done(true, rows2.join("\n") + (rows2.length ? "\n" : ""))
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backup") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-backup") {
       var a = argv.slice(4)
       var out2 = a[0] + "/" + a[1] + a[2]
       for (var k2 = 2; disk[out2] !== undefined; k2++) out2 = a[0] + "/" + a[1] + " " + k2 + a[2]
@@ -192,13 +192,13 @@ QtObject {
       done(true, String(disk[out2].length) + "\n" + out2 + "\n")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-backup-check") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-backup-check") {
       var tarred = disk[argv[4]]
       if (tarred === undefined || String(tarred).indexOf("FAKE-TAR:") !== 0) { done(true, "readable:0\n"); return }
       done(true, "readable:1\ntypes:-d\noutside:0\ndots:0\n---\n" + JSON.stringify(JSON.parse(String(tarred).slice(9)).manifest))
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-restore") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-restore") {
       var held = JSON.parse(String(disk[argv[4]]).slice(9)).files[argv[5]]
       if (!held) { done(false, "not in it"); return }
       var dest = argv[6]
@@ -217,7 +217,7 @@ QtObject {
       done(true, "")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-list") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-list") {
       var dir = argv[4] + "/"
       var names = Object.keys(disk).filter(function(p) { return p.indexOf(dir) === 0 && p.slice(dir.length).indexOf("/") < 0 && /\.json$/.test(p) })
         .map(function(p) { return p.slice(dir.length) })
@@ -225,7 +225,7 @@ QtObject {
       return
     }
     // The Markdown copy's own files in a folder (Mirror.qml).
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-mirror-list") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-mirror-list") {
       var top = argv[4] + "/"
       var mine = Object.keys(disk).filter(function(p) { return p.indexOf(top) === 0 })
         .map(function(p) { return p.slice(top.length) })
@@ -235,26 +235,26 @@ QtObject {
     }
     // A file copied into assets: its size.
     // An email's attachment: its base64, decoded into a file.
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-unpack") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-unpack") {
       if (disk[argv[4]] === undefined) { done(false, "No such file"); return }
       disk[argv[5]] = Qt.atob(String(disk[argv[4]]))
       delete disk[argv[4]]
       done(true, "")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-import-file") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-import-file") {
       if (disk[argv[4]] === undefined) { done(false, "No such file"); return }
       disk[argv[5]] = disk[argv[4]]
       done(true, String(disk[argv[4]].length) + "\n")
       return
     }
     // A link's page, and its picture (`pages`: { url: html }; `pictures`: { url: content type }).
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-fetch") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-fetch") {
       var html = fetchPages[argv[4]]
       done(html !== undefined, html || "")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "omanote-fetch-image") {
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-fetch-image") {
       var type = fetchPictures[argv[4]]
       if (type === undefined) { done(false, ""); return }
       disk[argv[5]] = "PNG"

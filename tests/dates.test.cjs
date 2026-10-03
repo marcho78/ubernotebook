@@ -59,11 +59,11 @@ check("written on the page, and in links", () => {
   assert.equal(Dates.label(new Date(2026, 9, 1), false, now), "Thu 1 Oct");
   assert.equal(Dates.label(new Date(2026, 9, 1, 9, 5), true, now), "Thu 1 Oct 9:05");
   assert.equal(Dates.label(new Date(2027, 0, 4), false, now), "Mon 4 Jan 2027", "another year says so");
-  assert.equal(Dates.href(new Date(2026, 9, 1, 9, 30), true, true), "omanote://remind/2026-10-01T09:30");
-  const back = plain(Dates.fromHref("omanote://date/2026-10-01"));
+  assert.equal(Dates.href(new Date(2026, 9, 1, 9, 30), true, true), "uber-notebook://remind/2026-10-01T09:30");
+  const back = plain(Dates.fromHref("uber-notebook://date/2026-10-01"));
   assert.equal(back.remind, false);
   assert.equal(back.time, false);
-  assert.equal(Dates.fromHref("omanote://remind/2026-13-01T09:00"), null);
+  assert.equal(Dates.fromHref("uber-notebook://remind/2026-13-01T09:00"), null);
   assert.equal(Dates.fromHref("https://example.com"), null);
   const r = Dates.remindAt(new Date(2026, 9, 1), false);
   assert.equal(Dates.iso(r, true), "2026-10-01T09:00", "a reminder on a day comes at 9 in the morning");

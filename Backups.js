@@ -1,8 +1,8 @@
 // Backups.js - a profile's notes (or every profile's) kept in one file, and
 // put back as profiles of their own.
 //
-// A backup is a .tar.gz any archive tool opens: `omanote-backup.json` (what's
-// in it: which profiles, when, which Omanote made it), and each profile's
+// A backup is a .tar.gz any archive tool opens: `uber-notebook-backup.json` (what's
+// in it: which profiles, when, which Uber Notebook made it), and each profile's
 // folder as it was, under p1/, p2/... Putting one back never writes over
 // anything: each profile in it comes back as a new profile, in a new folder.
 // Automatic ones (daily or weekly, in Settings) are named so they're told
@@ -13,10 +13,10 @@
 // with the real tar), so keep it plain JavaScript with no QML or Node APIs.
 .pragma library
 
-var APP = "Omanote"
-var APP_ID = "omanote"
+var APP = "Uber Notebook"
+var APP_ID = "uber-notebook"
 var FORMAT = 1
-var MANIFEST = "omanote-backup.json"
+var MANIFEST = "uber-notebook-backup.json"
 var EVERY = ["off", "daily", "weekly"]
 var KEEP = [3, 5, 10, 20, 50]
 var DAY = 24 * 3600 * 1000
@@ -38,8 +38,8 @@ function safeLabel(text) {
 
 // A backup's file name, before ".tar.gz" (and the " 2" that tells two
 // made in the same minute apart): { stem, suffix }.
-//   "Omanote Personal 2026-10-03 0130" + ".tar.gz"
-//   "Omanote 2026-10-03 0130" + " (automatic).tar.gz"
+//   "Uber Notebook Personal 2026-10-03 0130" + ".tar.gz"
+//   "Uber Notebook 2026-10-03 0130" + " (automatic).tar.gz"
 function fileName(label, date, automatic) {
   if (automatic) return { stem: APP + " " + stamp(date), suffix: " (automatic).tar.gz" }
   return { stem: APP + " " + (safeLabel(label) || "backup") + " " + stamp(date), suffix: ".tar.gz" }
@@ -50,7 +50,7 @@ function isAutomatic(name) {
   return n.indexOf(pre) === 0 && /^\d{4}-\d{2}-\d{2} \d{4}( \d+)? \(automatic\)\.tar\.gz$/.test(n.slice(pre.length))
 }
 
-// What a backup holds, as its omanote-backup.json says: the profiles, each
+// What a backup holds, as its uber-notebook-backup.json says: the profiles, each
 // under its own folder in it (p1, p2...), with the page and notebook it was
 // on and its Inbox.
 function savedOf(saved) {
@@ -75,7 +75,7 @@ function line(value, max) {
   return typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max) : ""
 }
 
-// A backup's omanote-backup.json, checked: { version, created, profiles:
+// A backup's uber-notebook-backup.json, checked: { version, created, profiles:
 // [{ dir, name, demo, saved }] }, or null if it isn't one.
 function readManifest(text) {
   var m = null
@@ -95,7 +95,7 @@ function readManifest(text) {
 }
 
 // What the check script says about a file: { ok, problem, manifest }. A
-// backup holds only omanote-backup.json and its profiles' folders (p1/...),
+// backup holds only uber-notebook-backup.json and its profiles' folders (p1/...),
 // plain files and folders, nothing reaching outside them.
 function checked(output) {
   var text = String(output || "")
@@ -152,7 +152,7 @@ function restoredName(taken, name) {
 }
 
 // Where a profile put back goes (a new folder; the script adds " 2"... if
-// it's there already): "~/Documents/Omanote Personal (restored)".
+// it's there already): "~/Documents/Uber Notebook Personal (restored)".
 function restoreFolder(name) {
   return "~/Documents/" + APP + " " + (safeLabel(name) || "Restored") + " (restored)"
 }
@@ -184,7 +184,7 @@ var EXISTS_SCRIPT = "for d in \"$@\"; do if [ -d \"$d\" ]; then echo 1; else ech
 // The backups in a folder: "<modified>\t<size>\t<name>" a line.
 var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
 
-// A backup made: <folder> <stem> <suffix> <omanote-backup.json> then, for
+// A backup made: <folder> <stem> <suffix> <uber-notebook-backup.json> then, for
 // each profile, <its folder> <p1...> <a folder in it to leave out, or "">.
 // It's written beside where it goes and named when it's done, so a backup
 // that's there is a whole one. Prints its size, then its path.
@@ -212,7 +212,7 @@ var BACKUP_SCRIPT = [
 
 // What's in a file, before it's put back: whether tar reads it, what kinds
 // of things are in it (- files, d folders), how many names fall outside
-// what a backup holds or reach up (..), then its omanote-backup.json.
+// what a backup holds or reach up (..), then its uber-notebook-backup.json.
 var CHECK_SCRIPT = [
   "f=$1",
   "names=$(/usr/bin/tar -tzf \"$f\" 2>/dev/null) || { echo 'readable:0'; exit 0; }",

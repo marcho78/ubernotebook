@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import "../Docs.js" as Docs
 
-// A page's cover: one of Omanote's gradients, a picture of your own, or none.
+// A page's cover: one of Uber Notebook's gradients, a picture of your own, or none.
 Pop {
   id: pop
 

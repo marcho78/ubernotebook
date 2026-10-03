@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Effects
 import "../Workspace.js" as Workspace
 
-// A page's history (the page's ⋯ menu): the versions Omanote kept of it,
+// A page's history (the page's ⋯ menu): the versions Uber Notebook kept of it,
 // newest first, and the one picked shown as it was. "Restore this version"
 // puts it back (the page as it is now is kept first, and Undo takes it back
 // too). Versions are kept every ten minutes while you write, and before an
@@ -213,7 +213,7 @@ Popup {
         width: parent.width - 36
         wrapMode: Text.Wrap
         textFormat: Text.PlainText
-        text: "No earlier versions of this page yet. Omanote keeps one every ten minutes while you write, and one before an agent or a command changes it."
+        text: "No earlier versions of this page yet. Uber Notebook keeps one every ten minutes while you write, and one before an agent or a command changes it."
         font.family: panel.theme.uiFont
         font.pixelSize: 12
         lineHeight: 1.2

@@ -1,5 +1,5 @@
 // Checks settings validation, the shortcuts and their conflicts, the folder,
-// and the path to hypr/omanote.lua and back.
+// and the path to hypr/uber-notebook.lua and back.
 // Usage (from the plugin directory): node tests/settings.test.cjs
 
 const assert = require("node:assert/strict");
@@ -51,11 +51,11 @@ check("folders", () => {
   for (const bad of ["Notes", "../etc", "/home/u/../etc", "/a\nb", "~user/x", 42, null]) {
     assert.equal(Settings.cleanFolder(bad), null, JSON.stringify(bad));
   }
-  assert.equal(Settings.resolveFolder("", "/home/u", true), "/home/u/Documents/Omanote");
-  assert.equal(Settings.resolveFolder("", "/home/u", false), "/home/u/Omanote");
+  assert.equal(Settings.resolveFolder("", "/home/u", true), "/home/u/Documents/Uber Notebook");
+  assert.equal(Settings.resolveFolder("", "/home/u", false), "/home/u/Uber Notebook");
   assert.equal(Settings.resolveFolder("~/Notes", "/home/u", true), "/home/u/Notes");
   assert.equal(Settings.resolveFolder("/srv/notes", "/home/u", true), "/srv/notes");
-  assert.equal(Settings.resolveFolder("relative", "/home/u", true), "/home/u/Documents/Omanote", "bad folders fall back");
+  assert.equal(Settings.resolveFolder("relative", "/home/u", true), "/home/u/Documents/Uber Notebook", "bad folders fall back");
   assert.equal(plain(Settings.merge(defaults, { lastNotebook: "../x" }, schema)).lastNotebook, "", "ids are plain");
 });
 
@@ -83,7 +83,7 @@ check("wanted binds and conflicts", () => {
 
   const hypr = [
     { modmask: 72, key: "n", description: "Something of yours" },
-    { modmask: 64, key: "N", description: "Open or close the notebook (Omanote)" },
+    { modmask: 64, key: "N", description: "Open or close the notebook (Uber Notebook)" },
     { modmask: 64, key: "N", description: "Ours, in a submap", submap: "resize" },
   ];
   const checked = plain(Settings.checkBinds(wanted, hypr));
@@ -99,7 +99,7 @@ check("wanted binds and conflicts", () => {
 check("hyprland options", () => {
   const options = plain(Settings.hyprOptions(plain(Settings.wantedBinds(defaults)), defaults));
   assert.deepEqual(options.window, { floating: true, width: 1320, height: 900 });
-  assert.equal(options.binds[0].description, "Open or close the notebook (Omanote)");
+  assert.equal(options.binds[0].description, "Open or close the notebook (Uber Notebook)");
   const odd = plain(Settings.hyprOptions([{ keys: "SUPER + N; x", event: "toggle", description: "" }, { keys: "SUPER + N", event: "exec", description: "" }], { floating: false, width: 1e9, height: 12 }));
   assert.equal(odd.binds.length, 0, "only plain keys and known events");
   assert.deepEqual(odd.window, { floating: false, width: 5000, height: 480 });
@@ -114,7 +114,7 @@ check("lua literals", () => {
 check("the registration runs in lua", () => {
   // The same text the service hands `hyprctl eval`, against the fake hl.
   const options = Settings.hyprOptions(Settings.wantedBinds(defaults), defaults);
-  const code = Settings.hyprRegistration(path.join(root, "hypr/omanote.lua"), options);
+  const code = Settings.hyprRegistration(path.join(root, "hypr/uber-notebook.lua"), options);
   const script = 'package.path = "' + path.join(root, "tests") + '/?.lua;" .. package.path\n'
     + 'local fake = require("fake_hl")\n'
     + 'local result = (function() ' + code + ' end)()\n'
@@ -124,27 +124,27 @@ check("the registration runs in lua", () => {
 });
 
 check("events", () => {
-  assert.deepEqual(plain(Settings.parseEvent("marcho78.omanote|toggle")), { type: "command", command: "toggle" });
-  assert.deepEqual(plain(Settings.parseEvent("marcho78.omanote|quick")), { type: "command", command: "quick" });
-  assert.equal(Settings.parseEvent("marcho78.omanote|exec"), null);
+  assert.deepEqual(plain(Settings.parseEvent("marcho78.uber-notebook|toggle")), { type: "command", command: "toggle" });
+  assert.deepEqual(plain(Settings.parseEvent("marcho78.uber-notebook|quick")), { type: "command", command: "quick" });
+  assert.equal(Settings.parseEvent("marcho78.uber-notebook|exec"), null);
   assert.equal(Settings.parseEvent("someone-else|toggle"), null);
-  assert.equal(Settings.parseEvent("marcho78.omanote|toggle" + "x".repeat(80)), null);
+  assert.equal(Settings.parseEvent("marcho78.uber-notebook|toggle" + "x".repeat(80)), null);
 });
 
 check("the entry in the bar", () => {
-  const bar = { layout: { left: [], right: [{ id: "omarchy.clock" }, { id: "marcho78.omanote", paper: "grid" }] } };
-  assert.deepEqual(plain(Settings.entryInBar(bar, "marcho78.omanote")), { paper: "grid" });
-  assert.deepEqual(plain(Settings.entryInBar(null, "marcho78.omanote")), {});
+  const bar = { layout: { left: [], right: [{ id: "omarchy.clock" }, { id: "marcho78.uber-notebook", paper: "grid" }] } };
+  assert.deepEqual(plain(Settings.entryInBar(bar, "marcho78.uber-notebook")), { paper: "grid" });
+  assert.deepEqual(plain(Settings.entryInBar(null, "marcho78.uber-notebook")), {});
 });
 
 check("the app launcher entry, with its icon", () => {
   const fs = require("node:fs");
   const os = require("node:os");
-  const entry = Settings.desktopEntry("/home/u/.config/omarchy/plugins/marcho78.omanote");
+  const entry = Settings.desktopEntry("/home/u/.config/omarchy/plugins/marcho78.uber-notebook");
   assert.match(entry, /^\[Desktop Entry\]\n/);
-  assert.match(entry, /\nName=Omanote\n/);
-  assert.match(entry, /\nExec=\/usr\/bin\/omarchy-shell omanote show\n/);
-  assert.match(entry, /\nIcon=\/home\/u\/\.config\/omarchy\/plugins\/marcho78\.omanote\/icon\.svg\n/);
+  assert.match(entry, /\nName=Uber Notebook\n/);
+  assert.match(entry, /\nExec=\/usr\/bin\/omarchy-shell uber-notebook show\n/);
+  assert.match(entry, /\nIcon=\/home\/u\/\.config\/omarchy\/plugins\/marcho78\.uber-notebook\/icon\.svg\n/);
   assert.equal(Settings.desktopEntry("relative/dir"), "", "only an absolute folder");
   assert.equal(Settings.desktopEntry("/a\nExec=evil"), "", "no line breaks sneaking in keys");
   assert.match(Settings.desktopEntry("/odd\\dir"), /Icon=\/odd\\\\dir\/icon\.svg/, "backslashes escaped");
@@ -153,7 +153,7 @@ check("the app launcher entry, with its icon", () => {
   assert.match(svg, /^<svg [^>]*xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
   // And the desktop's own checker is happy with it, where it's installed.
   if (fs.existsSync("/usr/bin/desktop-file-validate")) {
-    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "omanote-")), "marcho78-omanote.desktop");
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "uber-notebook-")), "marcho78-uber-notebook.desktop");
     fs.writeFileSync(file, Settings.desktopEntry(root));
     const out = execFileSync("/usr/bin/desktop-file-validate", [file], { encoding: "utf8" });
     assert.equal(out.trim(), "", "desktop-file-validate: " + out);

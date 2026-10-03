@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Workspace.js" as Workspace
 import "../../Html.js" as Html
@@ -17,7 +17,7 @@ Item {
   TextEdit { id: clip; visible: false; textFormat: TextEdit.PlainText }
   FakeService { id: service; user: ({ sounds: false }) }
   Theme { id: th }
-  Omanote.Workspace { id: ws; files: files }
+  UberNotebook.Workspace { id: ws; files: files }
 
   DocView {
     id: view

@@ -1,6 +1,6 @@
 import QtQuick
 
-// The fonts Omanote brings with it: handwriting (Caveat, Patrick Hand), a
+// The fonts Uber Notebook brings with it: handwriting (Caveat, Patrick Hand), a
 // typewriter (Special Elite), a marker for labels (Permanent Marker) and a
 // book face (Lora). `loaded` counts up as each one is ready.
 Item {

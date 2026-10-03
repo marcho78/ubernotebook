@@ -277,7 +277,7 @@ Item {
     }
   }
 
-  // A newer version, if there's one; who makes Omanote, on X.
+  // A newer version, if there's one; who makes Uber Notebook, on X.
   SideFooter {
     objectName: "shelfFooter"
     x: 22

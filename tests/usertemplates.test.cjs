@@ -18,7 +18,7 @@ const now = new Date(2026, 9, 2, 9, 5);
 check("filled in as it's used", () => {
   assert.equal(T.fill("Standup {{date}}", false, now, fmt), "Standup Fri 2 Oct");
   assert.equal(T.fill("{{weekday}}, {{ time }}, {{month}}, {{year}}, {{week}}", false, now, fmt), "Friday, 09:05, October 2026, 2026, Week 40");
-  assert.equal(T.fill("<b>{{date}}</b>", true, now, fmt), '<b><a href="omanote://date/2026-10-02">@Fri 2 Oct</a></b>', "in a line, a date in Pages");
+  assert.equal(T.fill("<b>{{date}}</b>", true, now, fmt), '<b><a href="uber-notebook://date/2026-10-02">@Fri 2 Oct</a></b>', "in a line, a date in Pages");
   assert.equal(T.fill("{{nope}} and {{", false, now, fmt), "{{nope}} and {{", "only what it knows");
   assert.equal(T.fill("no braces", true, now, fmt), "no braces");
 });

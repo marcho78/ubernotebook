@@ -216,7 +216,7 @@ function clean(raw, options) {
   block.indent = nest ? Math.round(cleanNumber(raw.indent, 0, MAX_DEPTH, 0))
     : canIndent(type) ? Math.round(cleanNumber(raw.indent, 0, MAX_INDENT, 0)) : 0
   if (isText(type)) {
-    // Only the formatting Omanote itself writes: no pictures, stylesheets or
+    // Only the formatting Uber Notebook itself writes: no pictures, stylesheets or
     // odd links inside the text, whatever a page file says.
     block.html = typeof raw.html === "string" && raw.html.length <= 200000 ? Html.sanitize(raw.html, true) : ""
     if (ALIGNS.indexOf(raw.align) > 0) block.align = raw.align

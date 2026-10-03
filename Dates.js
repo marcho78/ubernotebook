@@ -3,9 +3,9 @@
 // date (and a time, if it has one), the suggestions the "@" menu offers, how
 // a date is written on the page, and the links that carry it:
 //
-//   omanote://date/2026-10-05          a date
-//   omanote://date/2026-10-05T09:30    a date and time
-//   omanote://remind/2026-10-05T09:30  a reminder then (a notification comes)
+//   uber-notebook://date/2026-10-05          a date
+//   uber-notebook://date/2026-10-05T09:30    a date and time
+//   uber-notebook://remind/2026-10-05T09:30  a reminder then (a notification comes)
 //
 // Shared by the editor (app/Editor.qml), the workspace and tests/dates.test.cjs,
 // so keep it plain JavaScript with no QML or Node APIs.
@@ -166,12 +166,13 @@ function label(at, time, now) {
 }
 
 function href(at, time, remind) {
-  return "omanote://" + (remind ? "remind" : "date") + "/" + iso(at, time)
+  return "uber-notebook://" + (remind ? "remind" : "date") + "/" + iso(at, time)
 }
 
-// "omanote://remind/2026-10-05T09:30" -> { remind, at, time }, or null.
+// "uber-notebook://remind/2026-10-05T09:30" -> { remind, at, time }, or null.
 function fromHref(url) {
-  var m = /^omanote:\/\/(date|remind)\/([0-9T:-]{10,16})$/.exec(String(url || ""))
+  // (omanote://: written before Uber Notebook was renamed.)
+  var m = /^(?:uber-notebook|omanote):\/\/(date|remind)\/([0-9T:-]{10,16})$/.exec(String(url || ""))
   if (!m) return null
   var d = fromIso(m[2])
   if (!d) return null

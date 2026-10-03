@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Makes Omanote's paper sounds (the .wav files here) from noise and sine waves, so
+# Makes Uber Notebook's paper sounds (the .wav files here) from noise and sine waves, so
 # no recordings are needed. Run it again only to change them.
 #
 #   page.wav   a page turning: a swish that sweeps up, and a soft flap

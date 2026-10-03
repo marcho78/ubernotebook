@@ -1,6 +1,6 @@
 import QtQuick
 
-// Notebooks or Pages: the two ways to write in Omanote, side by side in a
+// Notebooks or Pages: the two ways to write in Uber Notebook, side by side in a
 // pill, the one you're in filled.
 Rectangle {
   id: sw

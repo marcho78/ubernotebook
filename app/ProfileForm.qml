@@ -72,7 +72,7 @@ Column {
       objectName: "profileFolder"
       theme: form.theme
       width: form.width - choose.width - 6
-      placeholder: "~/Documents/Omanote"
+      placeholder: "~/Documents/Uber Notebook"
       maximumLength: 1000
       onEdited: { form.folderTouched = true; form.error = "" }
       onAccepted: form.create()
@@ -107,7 +107,7 @@ Column {
     width: form.width
     wrapMode: Text.Wrap
     textFormat: Text.PlainText
-    text: "An empty folder starts fresh; one with Omanote's notes in it opens them."
+    text: "An empty folder starts fresh; one with Uber Notebook's notes in it opens them."
     font.family: form.theme.uiFont
     font.pixelSize: 11
     color: form.theme.faint

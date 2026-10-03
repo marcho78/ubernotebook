@@ -19,7 +19,7 @@ import "../Files.js" as Files
 import "../Contacts.js" as Contacts
 import "../Email.js" as Email
 
-// Pages: the other way to write in Omanote, the way Notion does it. The
+// Pages: the other way to write in Uber Notebook, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
 // and title, then its blocks (Editor.qml in its "doc" layout), with the "/"
 // menu, a toolbar over selected words, and a menu on each block's handle.
@@ -68,7 +68,7 @@ FocusScope {
   property bool libraryShown: false
   // People (contacts), in place of a page.
   property bool peopleShown: false
-  // Templates (yours and Omanote's), in place of a page.
+  // Templates (yours and Uber Notebook's), in place of a page.
   property bool templatesShown: false
   // An event just made from "More" with nothing in it yet (it goes if it's left empty).
   property string justMade: ""
@@ -121,7 +121,7 @@ FocusScope {
 
   Connections {
     target: view.workspace
-    // Another notes folder (Settings, or `omarchy-shell omanote set folder`).
+    // Another notes folder (Settings, or `omarchy-shell uber-notebook set folder`).
     function onFolderChanged() { view.leaveFolder() }
     function onRevisionChanged() {
       if (view.pendingActivate && view.workspace.ready && view.visible) {
@@ -665,7 +665,7 @@ FocusScope {
 
   function exportCalendar() {
     if (!workspace) return
-    workspace.exportCalendar(function(path) { if (path) view.toast("The calendar is in " + path.replace(/^.*\/Omanote\//, "Omanote/")) })
+    workspace.exportCalendar(function(path) { if (path) view.toast("The calendar is in " + path.replace(/^.*\/Uber Notebook\//, "Uber Notebook/")) })
   }
 
   // ---- people -------------------------------------------------------------------------------
@@ -713,7 +713,7 @@ FocusScope {
     })
   }
   function exportContacts() {
-    workspace.exportContacts(function(path) { view.toast(path ? "Everyone's in " + path.replace(/^.*\/Omanote\//, "Omanote/") : "They couldn't be exported") })
+    workspace.exportContacts(function(path) { view.toast(path ? "Everyone's in " + path.replace(/^.*\/Uber Notebook\//, "Uber Notebook/") : "They couldn't be exported") })
   }
 
   // People for the "@" menu: [{ id, name, sub, initials, tint }].
@@ -1446,7 +1446,7 @@ FocusScope {
   }
 
   // A new page from a template (Templates): one of yours by its id, or one
-  // of Omanote's ("daily"...), put on it once it's open.
+  // of Uber Notebook's ("daily"...), put on it once it's open.
   property var startWith: null
   function newPageWith(template) {
     if (!workspace) return
@@ -1636,7 +1636,7 @@ FocusScope {
   // are on the page, recording at once; again, it stops.
   readonly property bool recordingNote: recorder !== null && recorder.busy && recorder.kind === "audio"
   function newAudioNote() {
-    if (!recorder) { toast("Recording isn't here: Omanote runs without the shell"); return }
+    if (!recorder) { toast("Recording isn't here: Uber Notebook runs without the shell"); return }
     if (recordingNote) { if (recorder.phase === "recording") recorder.stop(); return }
     if (recorder.busy) { toast("Already recording: stop that one first"); return }
     if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to record on it" : "Open a page to record on it"); return }
@@ -1649,7 +1649,7 @@ FocusScope {
   // the microphone at the top, or "/dictate"; again, or Done, to finish).
   readonly property bool dictating: recorder !== null && recorder.busy && recorder.kind === "dictation" && recorder.owner === "page"
   function dictate() {
-    if (!recorder) { toast("Dictation isn't here: Omanote runs without the shell"); return }
+    if (!recorder) { toast("Dictation isn't here: Uber Notebook runs without the shell"); return }
     if (dictating) { if (recorder.phase === "recording") recorder.stop(); return }
     if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to dictate into it" : "Open a page to dictate into it"); return }
     var problem = recorder.start("dictation", "page", "", function(ok, r) {
@@ -1696,7 +1696,7 @@ FocusScope {
   }
 
   function meetingProblem() {
-    if (!meetings) return "Meetings aren't here: Omanote runs without the shell"
+    if (!meetings) return "Meetings aren't here: Uber Notebook runs without the shell"
     if (!meetings.available) return "Meetings need voxtype, Omarchy's dictation (omarchy voxtype install)"
     if (!meetings.enabled) return "voxtype's meeting mode is off: turn it on in the meeting"
     return ""
@@ -2065,7 +2065,7 @@ FocusScope {
 
   function openFind() { quickFind.start() }
   function openTrash() { trashPop.x = 12; trashPop.y = view.height - trashPop.height - 60; trashPop.open() }
-  // Templates (yours, then Omanote's), in place of a page.
+  // Templates (yours, then Uber Notebook's), in place of a page.
   function openTemplates(fromHistory) {
     if (!workspace) return
     commit()
@@ -3596,7 +3596,7 @@ FocusScope {
           onClicked: buttonSetup.set({ template: "tpl:" + modelData.id })
         }
       }
-      Text { textFormat: Text.PlainText; leftPadding: 4; text: "Omanote's"; font.family: view.theme.uiFont; font.pixelSize: 11; color: view.theme.muted }
+      Text { textFormat: Text.PlainText; leftPadding: 4; text: "Uber Notebook's"; font.family: view.theme.uiFont; font.pixelSize: 11; color: view.theme.muted }
       Flow {
         objectName: "buttonBuiltins"
         width: parent.width

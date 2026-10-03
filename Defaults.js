@@ -1,7 +1,7 @@
-// Defaults.js - Omanote's settings: their defaults, and what each may be.
+// Defaults.js - Uber Notebook's settings: their defaults, and what each may be.
 //
-// Code rather than a JSON file, so Omanote reads no settings file of its own.
-// Settings are stored on Omanote's entry in shell.json (by the Omarchy shell),
+// Code rather than a JSON file, so Uber Notebook reads no settings file of its own.
+// Settings are stored on Uber Notebook's entry in shell.json (by the Omarchy shell),
 // holding only what differs from DEFAULTS; Settings.merge() validates them
 // against SCHEMA before anything uses them.
 
@@ -10,7 +10,7 @@ var DEFAULTS = {
   // Opens and closes the notebook, and jots a quick note from anywhere.
   shortcut: "SUPER + N",
   quickShortcut: "SUPER + ALT + N",
-  // Where the notebooks live: "" is ~/Documents/Omanote (or ~/Omanote when
+  // Where the notebooks live: "" is ~/Documents/Uber Notebook (or ~/Uber Notebook when
   // there is no Documents folder). The open profile's folder.
   folder: "",
   // Profiles: notes kept apart (personal, business, the demo...), each a
@@ -44,7 +44,7 @@ var DEFAULTS = {
   // Where the last session left off, so the notebook opens there again.
   lastNotebook: "",
   zoom: 100,
-  // Notebooks or Pages: which one Omanote opens in (the one you were in), and
+  // Notebooks or Pages: which one Uber Notebook opens in (the one you were in), and
   // the page you were on in Pages.
   space: "notebooks",
   lastPage: "",
@@ -84,13 +84,13 @@ var DEFAULTS = {
   audioInput: "",
   // A voice evened out and made loud enough (a quiet laptop microphone).
   audioBoost: true,
-  // Backups (Backups.js): the folder they go in ("" is ~/Documents/Omanote
+  // Backups (Backups.js): the folder they go in ("" is ~/Documents/Uber Notebook
   // Backups); automatic ones of every profile ("off", "daily", "weekly"),
   // and how many of those are kept (the oldest go to the trash).
   backupFolder: "",
   backupEvery: "off",
   backupKeep: 10,
-  // Whether Omanote asks GitHub, once a day, if there's a newer version
+  // Whether Uber Notebook asks GitHub, once a day, if there's a newer version
   // (Updates.qml); off, only when you ask.
   checkUpdates: true
 }

@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../Workspace.js" as Workspace
 import "../../Mirror.js" as Mirror
 
@@ -13,7 +13,7 @@ Item {
 
   FakeFiles { id: files }
   FakeStore { id: nbs }
-  Omanote.Workspace { id: ws; files: files }
+  UberNotebook.Workspace { id: ws; files: files }
 
   // Store.qml as the copy uses it: the files (FakeFiles), and the notebooks (FakeStore).
   QtObject {
@@ -29,7 +29,7 @@ Item {
     function writeFile(path, text, done) { writes = writes.concat([path]); files.writeFile(path, text, done) }
   }
 
-  Omanote.Mirror {
+  UberNotebook.Mirror {
     id: mirror
     workspace: ws
     store: shim
@@ -75,7 +75,7 @@ Item {
       var list = copied()
       verify(list.indexOf("Pages/Getting started.md") >= 0, list.join(", "))
       verify(list.indexOf("Pages/Getting started/A page inside a page.md") >= 0, "a page's pages in its folder")
-      verify(list.indexOf(".omanote-mirror.json") >= 0, "and what it wrote, listed")
+      verify(list.indexOf(".uber-notebook-mirror.json") >= 0, "and what it wrote, listed")
       var nb = list.filter(function(p) { return p.indexOf("Notebooks/Field Journal/001 ") === 0 })
       compare(nb.length, 1, "a notebook's pages, in order")
       verify(list.some(function(p) { return p.indexOf("Notebooks/Recipes/001 ") === 0 && /Shakshuka\.md$/.test(p) }))
@@ -83,7 +83,7 @@ Item {
       verify(top.indexOf("# ") === 0, "a page as Markdown")
       verify(top.indexOf("](Getting%20started/A%20page%20inside%20a%20page.md)") >= 0, "the page inside it, a link to its file")
       verify(text(list.filter(function(p) { return p.indexOf("Notebooks/Recipes/") === 0 })[0]).indexOf("**20 minutes**") >= 0, "a notebook page's formatting")
-      var man = JSON.parse(text(".omanote-mirror.json"))
+      var man = JSON.parse(text(".uber-notebook-mirror.json"))
       compare(Object.keys(man.files).length, mirror.files)
     }
 
@@ -118,17 +118,17 @@ Item {
       fresh()
       files.disk["/tmp/copy/Pages/Mine.md"] = "my own notes"
       files.disk["/tmp/copy/notes.txt"] = "keep me"
-      var made = ws.createPage({ parent: "", title: "Mine", blocks: [{ type: "p", html: "from Omanote", indent: 0 }] })
+      var made = ws.createPage({ parent: "", title: "Mine", blocks: [{ type: "p", html: "from Uber Notebook", indent: 0 }] })
       mirror.on = true
       tryVerify(function() { return mirror.status === "Up to date" }, 2000)
       compare(text("Pages/Mine.md"), "my own notes", "a file of yours keeps its name")
-      verify(text("Pages/Mine (2).md").indexOf("from Omanote") >= 0, "the page takes the next one")
+      verify(text("Pages/Mine (2).md").indexOf("from Uber Notebook") >= 0, "the page takes the next one")
       ws.trashPage(made.id, false)
       tryVerify(function() { return text("Pages/Mine (2).md") === undefined }, 2000, "the copy's own file goes")
       compare(text("Pages/Mine.md"), "my own notes", "yours stays")
       compare(text("notes.txt"), "keep me")
       // A manifest that names files that aren't the copy's: never touched.
-      files.disk["/tmp/copy/.omanote-mirror.json"] = JSON.stringify({ files: { "notes.txt": "x", "../escape.md": "y" } })
+      files.disk["/tmp/copy/.uber-notebook-mirror.json"] = JSON.stringify({ files: { "notes.txt": "x", "../escape.md": "y" } })
       mirror.manifest = null
       mirror.manifestFor = ""
       syncNow()
@@ -166,7 +166,7 @@ Item {
       compare(Object.keys(files.disk).filter(function(p) { return /\.md$/.test(p) }).length, 0, "nothing written")
       mirror.folder = files.rootPath + "/Pages"
       mirror.sync()
-      verify(mirror.problem !== "", "not in Omanote's own folders")
+      verify(mirror.problem !== "", "not in Uber Notebook's own folders")
       mirror.folder = "/tmp/copy"
       mirror.sync()
       tryVerify(function() { return mirror.status === "Up to date" }, 2000, "a good folder: it copies")

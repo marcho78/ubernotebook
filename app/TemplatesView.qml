@@ -4,7 +4,7 @@ import "../Workspace.js" as Workspace
 import "../Templates.js" as Templates
 
 // Templates (the sidebar's foot), in place of a page: yours, then
-// Omanote's, each a card with its icon, its name and what it's for, found
+// Uber Notebook's, each a card with its icon, its name and what it's for, found
 // by words in those. A click on one makes a new page from it; Edit opens one of yours, to change it
 // like any page (its description is at its top). New template makes an
 // empty one; a page's ⋯ menu saves one from a page.
@@ -151,7 +151,7 @@ Item {
       }
 
       Item { width: 1; height: 10; visible: builtInLabel.visible }
-      SectionLabel { id: builtInLabel; visible: tv.builtInShown.length > 0; text: "Omanote's" + (tv.words.length ? "  " + tv.builtInShown.length : "") }
+      SectionLabel { id: builtInLabel; visible: tv.builtInShown.length > 0; text: "Uber Notebook's" + (tv.words.length ? "  " + tv.builtInShown.length : "") }
       Grid {
         columns: tv.columns
         columnSpacing: 12

@@ -1,4 +1,4 @@
-// Updates.js - whether there's a newer Omanote, and what's in it: the
+// Updates.js - whether there's a newer Uber Notebook, and what's in it: the
 // project's releases on GitHub (the manifest's homepage), compared with the
 // version running, and each newer one's notes; the notes of the version
 // running come from CHANGELOG.md, which comes with it.
@@ -46,7 +46,7 @@ function repoOf(homepage) {
 // The address of a repository's releases, on GitHub's API.
 function releasesUrl(repo) { return "https://api.github.com/repos/" + repo + "/releases?per_page=30" }
 
-// Release notes as Omanote shows them: Markdown, with no pictures or HTML
+// Release notes as Uber Notebook shows them: Markdown, with no pictures or HTML
 // (nothing in them fetched from anywhere), not too long.
 function cleanNotes(md) {
   var t = String(md || "").replace(/\r\n?/g, "\n")

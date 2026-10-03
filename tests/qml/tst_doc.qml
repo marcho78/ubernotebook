@@ -315,7 +315,7 @@ Item {
       compare(editor.mentionItems[0].label, Dates.label(tomorrow, false, t))
       keyClick(Qt.Key_Return)
       var html = blocks()[0].html
-      verify(html.indexOf("omanote://date/" + Dates.iso(tomorrow, false)) >= 0, html)
+      verify(html.indexOf("uber-notebook://date/" + Dates.iso(tomorrow, false)) >= 0, html)
       compare(texts(), "due @" + Dates.label(tomorrow, false, t) + " ")
       type("x")
       verify(/<\/a> x$/.test(blocks()[0].html), "what's typed after it isn't part of it: " + blocks()[0].html)
@@ -335,7 +335,7 @@ Item {
       keyClick(Qt.Key_Down)
       keyClick(Qt.Key_Return)
       var html = blocks()[0].html
-      verify(html.indexOf("omanote://remind/") >= 0, html)
+      verify(html.indexOf("uber-notebook://remind/") >= 0, html)
       verify(texts().indexOf("\u23f0 ") >= 0, "a reminder shows a clock")
     }
 
@@ -353,10 +353,10 @@ Item {
       compare(editor.mentionItems[0].label, "Plans")
       compare(editor.mentionItems[editor.mentionItems.length - 1].kind, "create", "and a new page with that name")
       keyClick(Qt.Key_Return)
-      verify(blocks()[0].html.indexOf("omanote://page/" + plans) >= 0)
+      verify(blocks()[0].html.indexOf("uber-notebook://page/" + plans) >= 0)
       compare(texts(), "see \u{1f5fa}\u{fe0f} Plans ")
       opened.clear()
-      editor.openLink("omanote://page/" + plans)
+      editor.openLink("uber-notebook://page/" + plans)
       compare(opened.count, 1, "a link to a page opens it")
       compare(opened.signalArguments[0][0], plans)
       type("[[Brand new")
@@ -364,7 +364,7 @@ Item {
       keyClick(Qt.Key_Up)
       compare(editor.mentionItems[editor.mentionIndex].kind, "create")
       keyClick(Qt.Key_Return)
-      verify(blocks()[0].html.indexOf("omanote://page/" + fresh) >= 0, "a new page, linked")
+      verify(blocks()[0].html.indexOf("uber-notebook://page/" + fresh) >= 0, "a new page, linked")
       // A page's link says what it's called now.
       editor.pageInfo = function(id) { return id === plans ? { title: "Renamed", icon: "" } : null }
       editor.load(blocks())

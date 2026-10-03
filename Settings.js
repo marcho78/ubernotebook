@@ -1,6 +1,6 @@
-// Settings.js - Omanote's settings: the defaults from Defaults.js with the
+// Settings.js - Uber Notebook's settings: the defaults from Defaults.js with the
 // user's overrides on top, validated against its SCHEMA, plus the shortcut and
-// window-rule registration handed to hypr/omanote.lua.
+// window-rule registration handed to hypr/uber-notebook.lua.
 //
 // Shared by Service.qml, the settings panel and tests/settings.test.cjs, so
 // keep it plain JavaScript with no QML or Node APIs.
@@ -10,13 +10,13 @@ var MODIFIERS = ["SUPER", "CTRL", "ALT", "SHIFT"]
 var MODMASK = { SHIFT: 1, CTRL: 4, ALT: 8, SUPER: 64 }
 var MODIFIER_ALIASES = { CONTROL: "CTRL", META: "SUPER", WIN: "SUPER", LOGO: "SUPER", MOD4: "SUPER", MOD1: "ALT", OPTION: "ALT", CMD: "SUPER", COMMAND: "SUPER" }
 
-// Every message hypr/omanote.lua may send back. The Lua side checks the same list.
+// Every message hypr/uber-notebook.lua may send back. The Lua side checks the same list.
 var EVENTS = ["toggle", "quick"]
-var EVENT_PREFIX = "marcho78.omanote|"
+var EVENT_PREFIX = "marcho78.uber-notebook|"
 
 // The window titles Hyprland's rules match (Notebook.qml sets them).
-var WINDOW_TITLE = "Omanote"
-var QUICK_TITLE = "Omanote Quick Note"
+var WINDOW_TITLE = "Uber Notebook"
+var QUICK_TITLE = "Uber Notebook Quick Note"
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -114,7 +114,7 @@ function cleanProfiles(value, schema) {
 // The folder as a real path: "~/x" under home, "" as the default place.
 function resolveFolder(folder, home, hasDocuments) {
   var clean = cleanFolder(folder)
-  if (clean === null || clean === "") return (hasDocuments ? home + "/Documents" : home) + "/Omanote"
+  if (clean === null || clean === "") return (hasDocuments ? home + "/Documents" : home) + "/Uber Notebook"
   if (clean.indexOf("~/") === 0) return home + clean.slice(1)
   return clean
 }
@@ -175,7 +175,7 @@ function overrides(defaults, settings) {
   return out
 }
 
-// Omanote's own entry, without its id, from the copy of the bar configuration
+// Uber Notebook's own entry, without its id, from the copy of the bar configuration
 // the Omarchy shell hands plugins (its `barConfig`). With its bar icon, the
 // entry lives in bar.layout, where updateEntryInline() writes it.
 function entryInBar(barConfig, pluginId) {
@@ -197,7 +197,7 @@ function entryInBar(barConfig, pluginId) {
 
 // ---- Hyprland --------------------------------------------------------------------
 
-var BIND_SUFFIX = " (Omanote)"
+var BIND_SUFFIX = " (Uber Notebook)"
 
 function wantedBinds(settings) {
   var out = []
@@ -242,7 +242,7 @@ function checkBinds(wanted, hyprBinds) {
   return { free: free, taken: taken }
 }
 
-// Options for hypr/omanote.lua. Everything in here is a validated number,
+// Options for hypr/uber-notebook.lua. Everything in here is a validated number,
 // boolean, or string from a fixed set, so it can be written out as Lua.
 function hyprOptions(freeBinds, settings) {
   var s = settings || {}
@@ -296,13 +296,13 @@ function luaLiteral(value) {
   return "nil"
 }
 
-// The code `hyprctl eval` runs: load hypr/omanote.lua from the plugin and
+// The code `hyprctl eval` runs: load hypr/uber-notebook.lua from the plugin and
 // register with the given options. Returns the module's status string.
 function hyprRegistration(moduleFile, options) {
   return "return dofile(" + luaString(moduleFile) + ")(" + luaLiteral(options) + ")"
 }
 
-// "marcho78.omanote|toggle" → { type: "command", command: "toggle" };
+// "marcho78.uber-notebook|toggle" → { type: "command", command: "toggle" };
 // null for anything else.
 function parseEvent(data) {
   var text = String(data || "")
@@ -313,7 +313,7 @@ function parseEvent(data) {
 
 // ---- the app launcher ---------------------------------------------------------------
 
-// Omanote's entry in ~/.local/share/applications, so it's in the app
+// Uber Notebook's entry in ~/.local/share/applications, so it's in the app
 // launcher with its icon; "" when the plugin's folder isn't a plain absolute
 // path. Backslashes are escaped as the Desktop Entry spec asks.
 function desktopEntry(pluginDir) {
@@ -321,10 +321,10 @@ function desktopEntry(pluginDir) {
   if (!/^\/[^\u0000-\u001f\u007f]{1,4000}$/.test(dir)) return ""
   return "[Desktop Entry]\n"
     + "Type=Application\n"
-    + "Name=Omanote\n"
+    + "Name=Uber Notebook\n"
     + "GenericName=Notebook\n"
     + "Comment=Notebooks that look and feel like paper\n"
-    + "Exec=/usr/bin/omarchy-shell omanote show\n"
+    + "Exec=/usr/bin/omarchy-shell uber-notebook show\n"
     + "Icon=" + dir.replace(/\\/g, "\\\\") + "/icon.svg\n"
     + "Terminal=false\n"
     + "Categories=Office;\n"

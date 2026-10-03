@@ -15,7 +15,7 @@ function check(name, fn) { fn(); passed++; }
 
 check("names", () => {
   assert.equal(T.clean("#Idea"), "idea");
-  assert.equal(T.clean("project/omanote"), "project/omanote", "nested");
+  assert.equal(T.clean("project/uber-notebook"), "project/uber-notebook", "nested");
   assert.equal(T.clean("to-do_list"), "to-do_list");
   assert.equal(T.clean("caf\u00e9"), "caf\u00e9", "any letters");
   assert.equal(T.clean("2026"), "", "only digits is a number");
@@ -27,39 +27,39 @@ check("names", () => {
   assert.equal(T.clean("x".repeat(61)), "");
   assert.equal(T.label("Idea"), "#Idea");
   assert.equal(T.href("Caf\u00e9 Ideas"), "", "no spaces");
-  assert.equal(T.href("Caf\u00e9"), "omanote://tag/caf%C3%A9");
-  assert.equal(T.of("omanote://tag/caf%C3%A9"), "caf\u00e9");
-  assert.equal(T.of("omanote://tag/Idea"), "", "only names as Omanote writes them");
-  assert.equal(T.of("omanote://page/x"), "");
-  assert.ok(Html.isInternal(T.href("idea")), "a link Omanote keeps");
+  assert.equal(T.href("Caf\u00e9"), "uber-notebook://tag/caf%C3%A9");
+  assert.equal(T.of("uber-notebook://tag/caf%C3%A9"), "caf\u00e9");
+  assert.equal(T.of("uber-notebook://tag/Idea"), "", "only names as Uber Notebook writes them");
+  assert.equal(T.of("uber-notebook://page/x"), "");
+  assert.ok(Html.isInternal(T.href("idea")), "a link Uber Notebook keeps");
   assert.ok(Html.isInternal(T.href("caf\u00e9/x")));
 });
 
 check("in a block", () => {
   const inner = "Buy milk " + T.html("Errand") + " and " + T.html("home") + " " + T.html("errand");
-  assert.equal(T.html("Errand"), '<a href="omanote://tag/errand">#Errand</a>');
+  assert.equal(T.html("Errand"), '<a href="uber-notebook://tag/errand">#Errand</a>');
   assert.deepEqual(plain(T.inHtml(inner)), [{ name: "errand", label: "#Errand" }, { name: "home", label: "#home" }], "each once");
   assert.equal(Html.sanitize(inner, true), inner, "kept as it is");
 });
 
 check("#words as tags", () => {
   const l = (s) => T.linkify(s);
-  assert.equal(l("Call mum #family #home"), 'Call mum <a href="omanote://tag/family">#family</a> <a href="omanote://tag/home">#home</a>');
-  assert.equal(l("#idea at the start"), '<a href="omanote://tag/idea">#idea</a> at the start');
+  assert.equal(l("Call mum #family #home"), 'Call mum <a href="uber-notebook://tag/family">#family</a> <a href="uber-notebook://tag/home">#home</a>');
+  assert.equal(l("#idea at the start"), '<a href="uber-notebook://tag/idea">#idea</a> at the start');
   assert.equal(l("C# and issue#4 and #1 and # heading"), "C# and issue#4 and #1 and # heading", "not in words, not numbers, not alone");
-  assert.equal(l("(#later)"), '(<a href="omanote://tag/later">#later</a>)');
-  assert.equal(l("end #done."), 'end <a href="omanote://tag/done">#done</a>.', "a full stop isn't part of it");
+  assert.equal(l("(#later)"), '(<a href="uber-notebook://tag/later">#later</a>)');
+  assert.equal(l("end #done."), 'end <a href="uber-notebook://tag/done">#done</a>.', "a full stop isn't part of it");
   const code = '<span style="font-family:\'iA Writer Mono S\';">#include</span> x';
   assert.equal(l(code), code, "not in code");
   const link = '<a href="https://x.org/#top">#top</a>';
   assert.equal(l(link), link, "not in a link");
-  assert.equal(l('<span style="font-weight:700;">#bold</span>'), '<a href="omanote://tag/bold"><span style="font-weight:700;">#bold</span></a>', "keeping its look");
+  assert.equal(l('<span style="font-weight:700;">#bold</span>'), '<a href="uber-notebook://tag/bold"><span style="font-weight:700;">#bold</span></a>', "keeping its look");
 });
 
 check("renamed and taken away", () => {
   const inner = "a " + T.html("Old") + " b " + T.html("keep");
-  assert.equal(T.rename(inner, "old", "New/Thing"), 'a <a href="omanote://tag/new%2Fthing">#New/Thing</a> b <a href="omanote://tag/keep">#keep</a>');
-  assert.equal(T.remove(inner, "old"), 'a b <a href="omanote://tag/keep">#keep</a>');
+  assert.equal(T.rename(inner, "old", "New/Thing"), 'a <a href="uber-notebook://tag/new%2Fthing">#New/Thing</a> b <a href="uber-notebook://tag/keep">#keep</a>');
+  assert.equal(T.remove(inner, "old"), 'a b <a href="uber-notebook://tag/keep">#keep</a>');
   assert.equal(T.remove(T.html("x") + " first", "x"), "first", "a space goes with it");
   assert.equal(T.remove("last " + T.html("x"), "x"), "last");
   assert.deepEqual(plain(T.matching(["home", "homework", "work", "art"], "wo")), ["work", "homework"], "starting with it first");

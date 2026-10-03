@@ -9,7 +9,7 @@
 //       address: "1 Main St, Springfield", website: "https://sam.dev",
 //       notes: "Met at the launch", created, modified }] }
 //
-// A page names a person with a link to omanote://contact/<id> ("@Sam
+// A page names a person with a link to uber-notebook://contact/<id> ("@Sam
 // Rivera"), or a contact block shows their card. It cleans what's read,
 // finds people by what's typed, reads vCard and CSV (an import matches
 // people already there by email or phone, and fills them in), and writes
@@ -486,9 +486,10 @@ var EMAIL_LABELS = ["home", "work", "other"]
 // ---- on pages ------------------------------------------------------------------------------
 
 // A link to a person, and the person a link goes to ("" for none).
-function href(id) { return "omanote://contact/" + id }
+function href(id) { return "uber-notebook://contact/" + id }
 function idOf(url) {
-  var m = /^omanote:\/\/contact\/([A-Za-z0-9_-]{1,40})$/.exec(String(url || ""))
+  // (omanote://: written before Uber Notebook was renamed.)
+  var m = /^(?:uber-notebook|omanote):\/\/contact\/([A-Za-z0-9_-]{1,40})$/.exec(String(url || ""))
   return m ? m[1] : ""
 }
 

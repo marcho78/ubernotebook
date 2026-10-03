@@ -1,8 +1,8 @@
-// Agent.js - asking your agent from Omanote. The agent is Omarchy's default
+// Agent.js - asking your agent from Uber Notebook. The agent is Omarchy's default
 // coding agent: whichever harness `omarchy default agent` set (Claude Code,
 // Codex, OpenCode, Gemini...), launched by Omarchy with a prompt that says
 // where you are in your notes and what you'd like. It does the work through
-// the omanote skill's commands, so its changes show up in the page as it
+// the uber-notebook skill's commands, so its changes show up in the page as it
 // goes, each one a step you can undo.
 //
 // Shared by the Pages view (app/DocView.qml, app/AgentPop.qml) and
@@ -49,13 +49,13 @@ function clip(text, max) {
 
 // The prompt the agent starts with. `o`: { request, page: { id, title },
 // scope, blocks (ids picked), words (selected), line (the empty line's
-// block id), skill (the omanote skill's SKILL.md) }. It carries ids, not the
+// block id), skill (the uber-notebook skill's SKILL.md) }. It carries ids, not the
 // page's text: the agent reads what it needs (the words you selected are
 // the exception, since only you know which they are).
 function prompt(o) {
   var page = o.page || {}
   var out = []
-  out.push("I'm in Omanote, the notes app in my Omarchy shell, and I'd like your help with my notes.")
+  out.push("I'm in Uber Notebook, the notes app in my Omarchy shell, and I'd like your help with my notes.")
   out.push("")
   out.push("The page I'm on: \u201c" + clip(page.title || "Untitled", 200) + "\u201d (page id " + page.id + ").")
   if (o.scope === "blocks" && o.blocks && o.blocks.length) {
@@ -70,13 +70,13 @@ function prompt(o) {
   out.push("")
   out.push("What I'd like: " + clip(o.request, MAX_REQUEST))
   out.push("")
-  out.push("Use the omanote skill: it explains the omarchy-shell omanote commands that read and change my notes "
+  out.push("Use the uber-notebook skill: it explains the omarchy-shell uber-notebook commands that read and change my notes "
     + "(blocks, read, replace, insertAfter, append, add, find). If your harness has no skill mechanism, "
     + "read the skill file directly and follow it instead:")
   out.push("")
   out.push("  " + o.skill)
   out.push("")
-  out.push("Change my notes only through those commands, never by editing Omanote's files, and change only what "
+  out.push("Change my notes only through those commands, never by editing Uber Notebook's files, and change only what "
     + "my request is about. When you're done, tell me what you changed.")
   return out.join("\n")
 }

@@ -65,7 +65,7 @@ Item {
   readonly property var turns: Meeting.turns(meeting)
   readonly property var speakerList: Meeting.speakers(meeting)
 
-  // A meeting that ended while it wasn't shown (Omanote wasn't running, or
+  // A meeting that ended while it wasn't shown (Uber Notebook wasn't running, or
   // it was stopped elsewhere): its transcript, from voxtype.
   function askIfDone() {
     if (done && meeting.segments.length === 0 && !readOnly && meetings && meetings.known) Qt.callLater(function() { if (mb.editor) mb.editor.meetingAction(mb.uid, "autofetch", null) })

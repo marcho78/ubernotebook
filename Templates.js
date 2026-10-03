@@ -307,7 +307,7 @@ function stamp(text) {
 
 // A line with the date on it, as a date in Pages ("@Wed 30 Sep").
 function dateLine(day, f) {
-  return blk("p", "", "<a href=\"omanote://date/" + day + "\">@" + esc(f(day, "ddd d MMM")) + "</a> ")
+  return blk("p", "", "<a href=\"uber-notebook://date/" + day + "\">@" + esc(f(day, "ddd d MMM")) + "</a> ")
 }
 
 // The month's weeks (Monday to Sunday, cut at its ends), each a folded
@@ -465,7 +465,7 @@ function fill(text, html, now, fmt) {
   function out(t) { return html ? esc(t) : t }
   return s.replace(FILLS, function(all, name) {
     var n = name.toLowerCase()
-    if (n === "date") return html ? "<a href=\"omanote://date/" + day + "\">@" + esc(f(day, "ddd d MMM")) + "</a>" : f(day, "ddd d MMM")
+    if (n === "date") return html ? "<a href=\"uber-notebook://date/" + day + "\">@" + esc(f(day, "ddd d MMM")) + "</a>" : f(day, "ddd d MMM")
     if (n === "weekday") return out(f(day, "dddd"))
     if (n === "time") return pad(d.getHours()) + ":" + pad(d.getMinutes())
     if (n === "month") return out(f(day, "MMMM yyyy"))

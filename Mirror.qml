@@ -92,7 +92,7 @@ Item {
     function stale() { return gen !== mirror.generation || dir !== mirror.folder || !mirror.on }
     loadManifest(dir, function() {
       if (stale()) return finish(gen)
-      store.exec(["/usr/bin/bash", "-c", listScript, "omanote-mirror-list", dir], function(ok, output) {
+      store.exec(["/usr/bin/bash", "-c", listScript, "uber-notebook-mirror-list", dir], function(ok, output) {
         if (stale()) return finish(gen)
         var existing = {}
         String(output || "").split("\n").forEach(function(p) { if (p) existing[p] = true })
@@ -116,9 +116,11 @@ Item {
   function loadManifest(dir, done) {
     if (manifestFor === dir && manifest) { done(); return }
     var path = dir + "/" + Mirror.MANIFEST
-    store.readFiles([path], function(got) {
+    var legacy = dir + "/" + Mirror.LEGACY_MANIFEST
+    store.readFiles([path, legacy], function(got) {
       var raw = null
-      try { raw = got[path] ? JSON.parse(got[path]) : null } catch (e) { raw = null }
+      var text = got[path] !== undefined ? got[path] : got[legacy]
+      try { raw = text ? JSON.parse(text) : null } catch (e) { raw = null }
       mirror.manifest = Mirror.cleanManifest(raw)
       mirror.manifestFor = dir
       done()
@@ -235,7 +237,7 @@ Item {
           mirror.synced()
           finish(gen)
         }
-        if (changed) store.writeFile(dir + "/" + Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Omanote", files: next }, null, 1) + "\n", function() { done() })
+        if (changed) store.writeFile(dir + "/" + Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Uber Notebook", files: next }, null, 1) + "\n", function() { done() })
         else done()
       })
     }
@@ -253,7 +255,7 @@ Item {
         store.exec(["/usr/bin/rm", "-f", "--"].concat(todo.remove.map(function(path) { return dir + "/" + path })), function() {
           var gone = {}
           todo.remove.forEach(function(path) { gone[path.slice(0, path.lastIndexOf("/"))] = true })
-          store.exec(["/usr/bin/bash", "-c", rmdirScript, "omanote-mirror-rmdir", dir].concat(Object.keys(gone)), function() { one() })
+          store.exec(["/usr/bin/bash", "-c", rmdirScript, "uber-notebook-mirror-rmdir", dir].concat(Object.keys(gone)), function() { one() })
         })
       }
       one()
@@ -268,7 +270,7 @@ Item {
     function next() {
       if (i >= list.length) { done(); return }
       var c = list[i++]
-      store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] || exit 0; /usr/bin/mkdir -p -- \"$2\" && /usr/bin/cp -ru -- \"$1\"/. \"$2\"/", "omanote-mirror-copy", c[0], c[1]], function() { next() }, { timeoutMs: 60000, okCodes: [0, 1] })
+      store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] || exit 0; /usr/bin/mkdir -p -- \"$2\" && /usr/bin/cp -ru -- \"$1\"/. \"$2\"/", "uber-notebook-mirror-copy", c[0], c[1]], function() { next() }, { timeoutMs: 60000, okCodes: [0, 1] })
     }
     next()
   }

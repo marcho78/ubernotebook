@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Workspace.js" as Workspace
 import "../../Html.js" as Html
@@ -19,7 +19,7 @@ Item {
   FakeFiles { id: files }
   FakeService { id: service; user: ({ sounds: false }) }
   Theme { id: th }
-  Omanote.Workspace { id: ws; files: files }
+  UberNotebook.Workspace { id: ws; files: files }
   property string lastToast: ""
   property var lastUndo: null
 
@@ -39,7 +39,7 @@ Item {
     function addPageBlock(parentId, childId) { return view.pageAddedInto(parentId, childId) }
   }
 
-  Omanote.Api {
+  UberNotebook.Api {
     id: api
     workspace: ws
     files: files
@@ -128,7 +128,7 @@ Item {
       compare(card.title, "Standup " + today("ddd d MMM"), "named as a page from it will be")
       verify(card.about.indexOf(today("dddd")) >= 0, "no description yet: how it starts, filled in: " + card.about)
       compare(card.meta, "1 page in it")
-      verify(find(view.templatesView, function(it) { return it.objectName === "templateCard" && !it.yours && it.title === "Daily planner" }) !== null, "and Omanote's")
+      verify(find(view.templatesView, function(it) { return it.objectName === "templateCard" && !it.yours && it.title === "Daily planner" }) !== null, "and Uber Notebook's")
       // Edit (under the pointer) opens it, to change it like any page.
       mouseMove(card, card.width / 2, card.height / 2)
       var edit = null
@@ -229,8 +229,8 @@ Item {
       verify(onMeetings.indexOf(view.page.id) >= 0, "its block on the page it's in")
     }
 
-    // One of Omanote's, from its card: a new page, laid out.
-    function test_4b_omanotes_from_templates() {
+    // One of Uber Notebook's, from its card: a new page, laid out.
+    function test_4b_uber_notebooks_from_templates() {
       fresh()
       view.openTemplates()
       var card = null
@@ -246,7 +246,7 @@ Item {
     }
 
     // Found by words in their names or what they're for, yours and
-    // Omanote's; none found, it says so; Esc shows them all; Enter, a new
+    // Uber Notebook's; none found, it says so; Esc shows them all; Enter, a new
     // page from the first.
     function test_4c_finding_a_template() {
       fresh()
@@ -265,7 +265,7 @@ Item {
         return out
       }
       var all = cards().length
-      compare(all, 13, "yours and Omanote's 12")
+      compare(all, 13, "yours and Uber Notebook's 12")
       type("planner")
       tryVerify(function() { return cards().length === 3 }, 1000)
       compare(cards().join(", "), "Daily planner, Weekly planner, Monthly planner")

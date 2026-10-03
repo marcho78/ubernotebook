@@ -35,9 +35,9 @@ check("links: inline, references, bare addresses, wiki links", () => {
   assert.equal(one("visit https://example.com/a_b."), 'visit <a href="https://example.com/a_b">https://example.com/a_b</a>.');
   assert.equal(one("[docs][d] and [d]\n\n[d]: https://d.org"), '<a href="https://d.org">docs</a> and <a href="https://d.org">d</a>');
   const id = "6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b";
-  const ctx = { wiki: (n) => (n === "Plans" ? id : ""), link: (h) => (h === "Plans.md" ? "omanote://page/" + id : h) };
-  assert.equal(md("[[Plans]] and [[Plans|the plan]] and [[Nope]]", ctx).blocks[0].html, `<a href="omanote://page/${id}">Plans</a> and <a href="omanote://page/${id}">the plan</a> and Nope`);
-  assert.equal(md("[plan](Plans.md)", ctx).blocks[0].html, `<a href="omanote://page/${id}">plan</a>`, "a link to another page imported");
+  const ctx = { wiki: (n) => (n === "Plans" ? id : ""), link: (h) => (h === "Plans.md" ? "uber-notebook://page/" + id : h) };
+  assert.equal(md("[[Plans]] and [[Plans|the plan]] and [[Nope]]", ctx).blocks[0].html, `<a href="uber-notebook://page/${id}">Plans</a> and <a href="uber-notebook://page/${id}">the plan</a> and Nope`);
+  assert.equal(md("[plan](Plans.md)", ctx).blocks[0].html, `<a href="uber-notebook://page/${id}">plan</a>`, "a link to another page imported");
   assert.equal(one("[js](javascript:alert(1))"), "js", "no odd links");
 });
 
@@ -93,7 +93,7 @@ check("code, tables, pictures", () => {
   const ctx = { image: (src) => (src === "img/a.png" ? "assets/a.png" : "") };
   const pics = md("![A](img/a.png)\n\n![Web](https://x.org/b.png)", ctx).blocks;
   assert.deepEqual([pics[0].type, pics[0].src], ["image", "assets/a.png"]);
-  assert.equal(pics[1].type, "p", "a picture on the web stays a link (Omanote never goes online)");
+  assert.equal(pics[1].type, "p", "a picture on the web stays a link (Uber Notebook never goes online)");
   assert.ok(pics[1].html.includes('href="https://x.org/b.png"'));
 });
 
@@ -116,7 +116,7 @@ check("a quick note as a page", () => {
   // As blocks: the to-dos ticked or not, links to pages.
   const blocks = plain(Import.fromMarkdown(q("Groceries\n[] milk\n[x] eggs\nsee [[Shopping]]").markdown, { wiki: (n) => (n === "Shopping" ? "6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b" : "") })).blocks;
   assert.deepEqual(blocks.map((b) => b.type + (b.checked ? "x" : "")), ["check", "checkx", "p"]);
-  assert.ok(blocks[2].html.includes("omanote://page/6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b"));
+  assert.ok(blocks[2].html.includes("uber-notebook://page/6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b"));
 });
 
 check("code keeps every tab and space", () => {
@@ -165,7 +165,7 @@ check("HTML, and what Notion's export has in it", () => {
       <p><img src="Plans/pic.png" alt="pic"/></p>
     </div></article></body></html>`;
   const ctx = {
-    link: (h) => (/Other/.test(h) ? "omanote://page/" + page : h),
+    link: (h) => (/Other/.test(h) ? "uber-notebook://page/" + page : h),
     image: (s) => (s === "Plans/pic.png" ? "assets/pic.png" : ""),
   };
   const r = plain(Import.fromHtml(html, ctx));

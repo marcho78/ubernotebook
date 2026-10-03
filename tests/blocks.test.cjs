@@ -45,7 +45,7 @@ check("reading a page from disk keeps only what makes sense", () => {
   assert.equal(plain(Blocks.cleanList("nope")).length, 1);
 });
 
-check("text from a page file is only Omanote's own formatting", () => {
+check("text from a page file is only Uber Notebook's own formatting", () => {
   const b = plain(Blocks.clean({ type: "p", html: 'hi <img src="https://track.example/x.png" /><span style="background-image:url(https://e.x/a.png); color:#aa0000; font-weight:700;">there</span> <a href="javascript:alert(1)">bad</a> <a href="https://ok.org">ok</a>' }));
   assert.equal(b.html, 'hi <span style="color:#aa0000; font-weight:700;">there</span> bad <a href="https://ok.org">ok</a>');
 });

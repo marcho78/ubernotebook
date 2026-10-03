@@ -6,19 +6,19 @@ import qs.Commons
 import "Defaults.js" as Defaults
 import "Settings.js" as Settings
 
-// Omanote: notebooks that look and feel like paper, and pages made of
+// Uber Notebook: notebooks that look and feel like paper, and pages made of
 // blocks (Pages), on Omarchy.
 //
 // This service is the part that's always running. It keeps the shortcuts and
-// window rules registered with Hyprland (hypr/omanote.lua, run with `hyprctl
+// window rules registered with Hyprland (hypr/uber-notebook.lua, run with `hyprctl
 // eval`), holds the settings, the notebooks on disk (Store.qml) and Pages
 // (Workspace.qml), and answers IPC. Notebook.qml is the window and the
 // quick-note card; BarWidget.qml is the icon in the top bar.
 //
-//   omarchy-shell omanote toggle
-//   omarchy-shell omanote quick "Call the dentist"
-//   omarchy-shell omanote search "tram 28"
-//   omarchy-shell omanote pages
+//   omarchy-shell uber-notebook toggle
+//   omarchy-shell uber-notebook quick "Call the dentist"
+//   omarchy-shell uber-notebook search "tram 28"
+//   omarchy-shell uber-notebook pages
 Item {
   id: root
 
@@ -31,13 +31,13 @@ Item {
   // entry off.
   property bool hyprIntegration: true
   property bool launcherEntry: true
-  // The omanote skill (skills/omanote), linked into agents' skill folders
-  // while Omanote runs, so whichever agent you use knows its commands.
+  // The uber-notebook skill (skills/uber-notebook), linked into agents' skill folders
+  // while Uber Notebook runs, so whichever agent you use knows its commands.
   property bool agentSkill: true
-  readonly property string skillDir: pluginDir + "/skills/omanote"
+  readonly property string skillDir: pluginDir + "/skills/uber-notebook"
   readonly property string skillPath: skillDir + "/SKILL.md"
 
-  readonly property string pluginId: "marcho78.omanote"
+  readonly property string pluginId: "marcho78.uber-notebook"
   readonly property string pluginDir: decodeURIComponent(Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, ""))
   readonly property string home: Quickshell.env("HOME")
   // The manifest, as the shell hands it over (or, if it doesn't, as
@@ -48,7 +48,7 @@ Item {
 
   // ---- settings ----------------------------------------------------------------------
   //
-  // Kept inline on Omanote's own shell.json entry (only what differs from
+  // Kept inline on Uber Notebook's own shell.json entry (only what differs from
   // Defaults.js): the shell writes the entry (updateEntryInline) and hands
   // plugins a copy of the bar configuration it lives in (barConfig).
 
@@ -59,7 +59,7 @@ Item {
 
   // While the shell saves an entry it hands plugins a copy of its
   // configuration from just before the save; a copy that still shows the
-  // entry as it was must not undo Omanote's own save.
+  // entry as it was must not undo Uber Notebook's own save.
   property bool saving: false
   property string entryBeforeSave: ""
 
@@ -87,7 +87,7 @@ Item {
     id: profilesItem
     service: root
     files: storeItem
-    dataFolder: { var d = Quickshell.env("XDG_DATA_HOME"); return d && d.indexOf("/") === 0 ? d.replace(/\/+$/, "") + "/omanote" : "~/.local/share/omanote" }
+    dataFolder: { var d = Quickshell.env("XDG_DATA_HOME"); return d && d.indexOf("/") === 0 ? d.replace(/\/+$/, "") + "/uber-notebook" : "~/.local/share/uber-notebook" }
   }
   property alias profiles: profilesItem
 
@@ -216,7 +216,7 @@ Item {
     })
   }
 
-  // Whether there's a newer Omanote, and what's in it (Updates.qml).
+  // Whether there's a newer Uber Notebook, and what's in it (Updates.qml).
   Updates {
     id: updatesItem
     files: storeItem
@@ -315,7 +315,7 @@ Item {
       var checked = Settings.checkBinds(Settings.wantedBinds(root.settings), existing)
       root.takenBinds = checked.taken
       registerRun.start(["/usr/bin/hyprctl", "eval",
-        Settings.hyprRegistration(root.pluginDir + "/hypr/omanote.lua", Settings.hyprOptions(checked.free, root.settings))])
+        Settings.hyprRegistration(root.pluginDir + "/hypr/uber-notebook.lua", Settings.hyprOptions(checked.free, root.settings))])
     }
   }
 
@@ -324,10 +324,10 @@ Item {
     maxBytes: 16 * 1024
     timeoutMs: 4000
     onFinished: function(ok, output) {
-      // hypr/omanote.lua raises what didn't register; hyprctl prints it as "error: …".
+      // hypr/uber-notebook.lua raises what didn't register; hyprctl prints it as "error: …".
       var text = String(output || "").trim().replace(/^error:\s*/i, "")
       root.hyprStatus = ok && (text === "" || text === "ok") ? "ok" : (text.slice(0, 600) || "Hyprland didn't answer")
-      if (root.hyprStatus !== "ok") console.warn("Omanote: registering with Hyprland:", root.hyprStatus)
+      if (root.hyprStatus !== "ok") console.warn("Uber Notebook: registering with Hyprland:", root.hyprStatus)
       root.registering = false
       if (root.registerAgain) {
         root.registerAgain = false
@@ -350,7 +350,7 @@ Item {
     return Settings.shortcutLabel(key)
   }
 
-  // Take the shortcuts and rules back out of Hyprland when Omanote is
+  // Take the shortcuts and rules back out of Hyprland when Uber Notebook is
   // disabled or reloaded; write everything waiting to be written.
   Component.onDestruction: {
     if (launcherEntry) Quickshell.execDetached(["/usr/bin/rm", "-f", "--", desktopFile])
@@ -362,7 +362,7 @@ Item {
     storeItem.flush()
     if (hyprIntegration)
       Quickshell.execDetached(["/usr/bin/hyprctl", "eval",
-        Settings.hyprRegistration(pluginDir + "/hypr/omanote.lua", { remove: true })])
+        Settings.hyprRegistration(pluginDir + "/hypr/uber-notebook.lua", { remove: true })])
   }
 
   Connections {
@@ -384,7 +384,7 @@ Item {
   // ---- the window ------------------------------------------------------------------------
   //
   // Opening and closing go through the Omarchy shell (summon/hide/toggle), so
-  // `omarchy-shell shell toggle marcho78.omanote` and the shortcut agree.
+  // `omarchy-shell shell toggle marcho78.uber-notebook` and the shortcut agree.
 
   property var ui: null
   readonly property bool windowOpen: !!ui && ui.opened === true
@@ -502,12 +502,12 @@ Item {
 
   // ---- in the app launcher ----------------------------------------------------------------------
   //
-  // An entry in ~/.local/share/applications, so Omanote is in the Omarchy
+  // An entry in ~/.local/share/applications, so Uber Notebook is in the Omarchy
   // launcher (and any other) with its icon, like an app. It's written when
-  // Omanote starts and taken out when it stops, so turning Omanote off (or
+  // Uber Notebook starts and taken out when it stops, so turning Uber Notebook off (or
   // removing it) leaves nothing behind.
 
-  readonly property string desktopFile: home + "/.local/share/applications/marcho78-omanote.desktop"
+  readonly property string desktopFile: home + "/.local/share/applications/marcho78-uber-notebook.desktop"
 
   FileView {
     id: desktopWriter
@@ -534,21 +534,21 @@ Item {
   // ---- IPC --------------------------------------------------------------------------------------
 
   IpcHandler {
-    target: "omanote"
+    target: "uber-notebook"
 
     function toggle(): void { root.toggle({}) }
     function show(): void { if (!root.windowOpen) root.show({}) }
     function hide(): void { root.hide() }
-    // omanote quick            opens the quick-note card
-    // omanote quick "Buy milk"  saves it straight away
+    // uber-notebook quick            opens the quick-note card
+    // uber-notebook quick "Buy milk"  saves it straight away
     function quick(text: string): void { root.quick(String(text || "").slice(0, 20000)) }
     function search(text: string): void { root.show({ search: String(text || "").slice(0, 200) }) }
     function shelf(): void { root.show({ shelf: true }) }
-    // omanote pages: straight to Pages.
+    // uber-notebook pages: straight to Pages.
     function pages(): void { root.show({ pages: true }) }
     // The calendar, on a day ("" is today).
     function calendar(day: string): void { root.show({ calendar: /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) ? String(day) : "today" }) }
-    // omanote importNotes ~/notes: files or a folder (a Notion or Obsidian export) into Pages.
+    // uber-notebook importNotes ~/notes: files or a folder (a Notion or Obsidian export) into Pages.
     function importNotes(path: string): void {
       var p = String(path || "")
       if (p.indexOf("~/") === 0) p = root.home + p.slice(1)
@@ -556,10 +556,10 @@ Item {
         root.osd("\u{f0e27}", r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into Pages" : "Nothing to import there")
       })
     }
-    // omanote open <page id>: a page in Pages (a reminder's notification does this).
+    // uber-notebook open <page id>: a page in Pages (a reminder's notification does this).
     function open(id: string): void { if (/^[0-9a-f-]{36}$/.test(String(id || ""))) root.show({ page: String(id) }) }
     function settings(): void { root.show({ settings: true }) }
-    // omarchy-shell omanote set paper grid   (values are checked like the settings panel's)
+    // omarchy-shell uber-notebook set paper grid   (values are checked like the settings panel's)
     function set(key: string, value: string): string {
       if (!root.defaults || root.defaults[key] === undefined) return "unknown setting"
       var parsed = value
@@ -569,15 +569,15 @@ Item {
       return JSON.stringify(root.settings[key])
     }
     function reset(): void { root.resetSettings() }
-    // omarchy-shell omanote mirror: the Markdown copy made up to date now, and how it is.
+    // omarchy-shell uber-notebook mirror: the Markdown copy made up to date now, and how it is.
     function mirror(): string {
-      if (!mirrorItem.on) return JSON.stringify({ ok: false, error: "the Markdown copy is off: omarchy-shell omanote set mirror true" })
+      if (!mirrorItem.on) return JSON.stringify({ ok: false, error: "the Markdown copy is off: omarchy-shell uber-notebook set mirror true" })
       mirrorItem.sync()
       return JSON.stringify({ ok: !mirrorItem.problem, folder: root.mirrorPath, status: mirrorItem.status, files: mirrorItem.files })
     }
 
     // For AI agents and scripts: pages in and out, answered in JSON
-    // (omarchy-shell omanote help lists them; Api.qml does them).
+    // (omarchy-shell uber-notebook help lists them; Api.qml does them).
     function help(): string { return apiItem.help() }
     function list(): string { return apiItem.list() }
     function find(words: string): string { return apiItem.find(words) }
@@ -642,9 +642,9 @@ Item {
     function notebook(id: string): string { return apiItem.notebook(id) }
     function readNotebook(id: string, page: string): string { return apiItem.readNotebook(id, page) }
     function addToNotebook(id: string, file: string): string { return apiItem.addToNotebook(id, file) }
-    // omarchy-shell omanote profiles: [{ id, name, folder, open, demo }].
+    // omarchy-shell uber-notebook profiles: [{ id, name, folder, open, demo }].
     function profiles(): string { return apiItem.profileList() }
-    // omarchy-shell omanote profile Business: another profile open (its name or id).
+    // omarchy-shell uber-notebook profile Business: another profile open (its name or id).
     function profile(which: string): string { return apiItem.openProfile(which) }
     function addProfile(name: string, folder: string, open: string): string { return apiItem.addProfile(name, folder, open) }
     function renameProfile(which: string, name: string): string { return apiItem.renameProfile(which, name) }

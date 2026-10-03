@@ -1,4 +1,4 @@
-// Workspace.js - Pages: the other way to write in Omanote, as a workspace of
+// Workspace.js - Pages: the other way to write in Uber Notebook, as a workspace of
 // pages made of blocks, the way Notion does it.
 //
 // Everything is a block: an atomic record with an id (a UUID v4), a type, its
@@ -55,7 +55,7 @@ function uuid4(random) {
   return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" + hex.slice(16, 20) + "-" + hex.slice(20)
 }
 
-// Any UUID, as Omanote writes them (lowercase). Pages and blocks made
+// Any UUID, as Uber Notebook writes them (lowercase). Pages and blocks made
 // elsewhere keep theirs.
 var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
@@ -205,7 +205,7 @@ function cleanIcon(value) {
   return value
 }
 
-// A cover: "gradient:<n>" (one of Omanote's), or a picture in assets.
+// A cover: "gradient:<n>" (one of Uber Notebook's), or a picture in assets.
 function cleanCover(value) {
   var v = typeof value === "string" ? value : ""
   var m = /^gradient:(\d{1,2})$/.exec(v)
@@ -456,7 +456,7 @@ function linkedPages(page) {
 function pageReminders(page) {
   var out = []
   flatten(page).forEach(function(b) {
-    if (!Blocks.isText(b.type) || !b.html || b.html.indexOf("omanote://remind/") < 0) return
+    if (!Blocks.isText(b.type) || !b.html || !/(?:uber-notebook|omanote):\/\/remind\//.test(b.html)) return
     var text = Html.plainText(b.html).replace(/\s+/g, " ").trim().slice(0, 200)
     Html.links(b.html).forEach(function(l) {
       var d = Dates.fromHref(l.href)
@@ -842,7 +842,7 @@ function backlinks(index, id) {
 
 function reminderKey(page, r) { return page + "|" + r.block + "|" + r.at }
 
-// Reminders still to come (or come while Omanote wasn't running), soonest
+// Reminders still to come (or come while Uber Notebook wasn't running), soonest
 // first: [{ key, page, block, at (a Date), text }].
 function pendingReminders(index) {
   var out = []

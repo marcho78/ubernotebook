@@ -431,11 +431,11 @@ function fold(line) {
 // The calendar as an .ics file (times as the computer's own).
 function toIcs(cal, now) {
   var stamp = (now || new Date()).toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z")
-  var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Omanote//Calendar//EN", "CALSCALE:GREGORIAN"]
+  var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Uber Notebook//Calendar//EN", "CALSCALE:GREGORIAN"]
   var events = cal.events || []
   events.forEach(function(e) {
     lines.push("BEGIN:VEVENT")
-    lines.push("UID:" + e.id + "@omanote")
+    lines.push("UID:" + e.id + "@uber-notebook")
     lines.push("DTSTAMP:" + stamp)
     lines.push("SUMMARY:" + icsText(e.title || "Event"))
     if (e.allDay) {

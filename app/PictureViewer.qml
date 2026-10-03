@@ -1,6 +1,6 @@
 import QtQuick
 
-// Pictures shown large, here in Omanote (a picture on a page, a gallery's):
+// Pictures shown large, here in Uber Notebook (a picture on a page, a gallery's):
 // its caption under it, how many there are, ← and → (or the arrows at its
 // sides) for the others, Esc or a click around it to close, and Open in
 // its app at the corner.

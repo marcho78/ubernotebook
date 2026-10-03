@@ -87,7 +87,7 @@ Item {
   }
 
   function run(argv, done, options) {
-    if (!files) { done(false, "Omanote runs without the shell"); return }
+    if (!files) { done(false, "Uber Notebook runs without the shell"); return }
     files.exec(argv, function(ok, out) {
       var problem = ok ? "" : String(out || "").replace(/^Error:\s*/m, "").split("\n").filter(function(l) { return l.trim() !== "" })[0] || "voxtype couldn't do it"
       done(ok, ok ? out : problem)

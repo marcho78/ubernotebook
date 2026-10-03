@@ -44,6 +44,7 @@ node tests/starter.test.cjs
 node tests/profiles.test.cjs
 node tests/backups.test.cjs
 node tests/updates.test.cjs
+node tests/legacy.test.cjs
 lua tests/hypr.test.lua
 
 runner=/usr/lib/qt6/bin/qmltestrunner

@@ -6,7 +6,7 @@ import "../Agent.js" as Agent
 // words, the page's ⋯ menu): what you'd like done with this page, the blocks
 // you picked, the words you selected, or the line you're on. Omarchy's
 // default coding agent does it (whichever `omarchy default agent` chose), in
-// its own terminal, through Omanote's commands, so what it changes shows up
+// its own terminal, through Uber Notebook's commands, so what it changes shows up
 // here as it goes.
 Pop {
   id: pop
@@ -258,7 +258,7 @@ Pop {
       width: parent.width
       wrapMode: Text.Wrap
       textFormat: Text.PlainText
-      text: "It opens in a terminal and works through Omanote's commands: what it changes shows up here, each change a step you can undo."
+      text: "It opens in a terminal and works through Uber Notebook's commands: what it changes shows up here, each change a step you can undo."
       font.family: pop.theme.uiFont
       font.pixelSize: 11
       color: pop.theme.faint

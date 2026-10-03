@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "id": "marcho78.omanote",
-  "name": "Omanote",
+  "id": "marcho78.uber-notebook",
+  "name": "Uber Notebook",
   "version": "1.0.0",
   "author": "marcho78",
   "license": "MIT",
   "homepage": "https://github.com/marcho78/omanote",
-  "description": "Notebooks that look and feel like paper. Press Super+N (or click the notebook in the top bar) and a notebook opens on your desk: its cover swings open, pages turn over the binding, and you write on ruled, grid, dotted, graph or blank paper in the paper color and pen you like. Rich text with headings, lists, checklists, ink colors, highlighters, links, sticky notes, code and pictures; index tabs, search across every page, and quick notes from anywhere with Super+Alt+N. Everything is plain files in ~/Documents/Omanote.",
+  "description": "Notebooks that look and feel like paper. Press Super+N (or click the notebook in the top bar) and a notebook opens on your desk: its cover swings open, pages turn over the binding, and you write on ruled, grid, dotted, graph or blank paper in the paper color and pen you like. Rich text with headings, lists, checklists, ink colors, highlighters, links, sticky notes, code and pictures; index tabs, search across every page, and quick notes from anywhere with Super+Alt+N. Everything is plain files in ~/Documents/Uber Notebook.",
   "kinds": [
     "panel",
     "service",
@@ -19,7 +19,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Omanote",
+    "displayName": "Uber Notebook",
     "description": "Your notebooks. Click to open, right-click for a quick note.",
     "category": "Productivity",
     "allowMultiple": false,

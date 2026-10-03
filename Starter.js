@@ -1,4 +1,4 @@
-// Starter.js - what a new Omanote's Pages starts with: example pages that
+// Starter.js - what a new Uber Notebook's Pages starts with: example pages that
 // show what it can do (a project with its board, meeting notes with the
 // meeting in them, a trip with its flight's email, a mind map, a reading
 // list, a recipe...), the people and events they name, and templates of
@@ -66,7 +66,7 @@ function fill(text, now, b) {
     var key = arg.trim()
     if (kind === "person") {
       var p = b.people[key]
-      return p ? "[@" + p.name + "](omanote://contact/" + p.id + ")" : key
+      return p ? "[@" + p.name + "](uber-notebook://contact/" + p.id + ")" : key
     }
     if (kind === "event") return b.events[key] ? b.events[key].id : ""
     var d = dayAt(now, key)
@@ -74,7 +74,7 @@ function fill(text, now, b) {
     if (kind === "label") return Dates.label(d, false, now)
     if (kind === "compact") return Calendar.dayIso(d).replace(/-/g, "")
     if (kind === "mail") return mailDate(new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 12))
-    return "[@" + Dates.label(d, false, now) + "](omanote://date/" + Calendar.dayIso(d) + ")"
+    return "[@" + Dates.label(d, false, now) + "](uber-notebook://date/" + Calendar.dayIso(d) + ")"
   })
 }
 
@@ -242,7 +242,7 @@ function hexer(random) {
 // templatesOnly (just the templates: a profile of your own) }.
 function build(now, options) {
   var o = options || {}
-  var b = { folder: o.folder || "~/Documents/Omanote", people: {}, events: {}, ids: {}, placed: {}, assets: {}, hex: hexer(o.random) }
+  var b = { folder: o.folder || "~/Documents/Uber Notebook", people: {}, events: {}, ids: {}, placed: {}, assets: {}, hex: hexer(o.random) }
 
   // The people, then the events (which may have notes pages).
   var contacts = []

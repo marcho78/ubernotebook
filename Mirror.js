@@ -5,19 +5,22 @@
 // beside them and sketches are SVG files; each notebook is a folder of its
 // pages, in order (Notebooks/Recipes/001 Shakshuka.md).
 //
-// The copy only goes one way: Omanote writes it, and reads nothing from it.
+// The copy only goes one way: Uber Notebook writes it, and reads nothing from it.
 // It writes a file only when what's in it changed (so git sees real changes),
 // and takes away only files it wrote itself, as its manifest
-// (.omanote-mirror.json) lists them: anything else in the folder is never
-// touched, and a file of yours with a name it wants keeps it (Omanote's
+// (.uber-notebook-mirror.json) lists them: anything else in the folder is never
+// touched, and a file of yours with a name it wants keeps it (Uber Notebook's
 // takes "Name (2).md").
 //
 // Shared with tests/mirror.test.cjs, so keep it plain JavaScript with no QML
 // or Node APIs.
 .pragma library
 
-var MANIFEST = ".omanote-mirror.json"
-// Folders in the notes folder that are Omanote's own.
+var MANIFEST = ".uber-notebook-mirror.json"
+// A copy made before Uber Notebook was renamed: its manifest, read when
+// there's no new one (and written as the new one from then on).
+var LEGACY_MANIFEST = ".omanote-mirror.json"
+// Folders in the notes folder that are Uber Notebook's own.
 var RESERVED = ["Pages", ".trash", "Exports", "assets"]
 
 // A title as a file or folder name: no slashes or other characters a file
@@ -70,7 +73,7 @@ function notebookFile(dir, index, name) {
   return dir + "/" + ("00" + (index + 1)).slice(-3) + " " + name
 }
 
-// A file of yours already at a path Omanote wants (and isn't its own): its
+// A file of yours already at a path Uber Notebook wants (and isn't its own): its
 // takes the next free "Name (2).md". `paths` is { key: path }, changed in place.
 function claim(paths, manifest, existing) {
   var taken = {}
@@ -158,7 +161,7 @@ function isMirrorPath(p) {
 
 // Can the copy go in that folder? "" if it can, else why not. Not your home
 // folder or the top of the disk, not the notes folder or a folder it's in,
-// and not Omanote's own folders in it (its Pages, a notebook's folder, the
+// and not Uber Notebook's own folders in it (its Pages, a notebook's folder, the
 // trash, Exports).
 function folderProblem(folder, root, home, notebookIds) {
   function norm(p) { return String(p || "").replace(/\/+$/, "") || "/" }
@@ -169,7 +172,7 @@ function folderProblem(folder, root, home, notebookIds) {
   if (f === r || r.indexOf(f + "/") === 0) return "that's where your notes are: a folder inside it, like " + r + "/Markdown"
   if (f.indexOf(r + "/") === 0) {
     var first = f.slice(r.length + 1).split("/")[0]
-    if (RESERVED.indexOf(first) >= 0 || (notebookIds || []).indexOf(first) >= 0) return "that's one of Omanote's own folders: pick another, like " + r + "/Markdown"
+    if (RESERVED.indexOf(first) >= 0 || (notebookIds || []).indexOf(first) >= 0) return "that's one of Uber Notebook's own folders: pick another, like " + r + "/Markdown"
   }
   return ""
 }

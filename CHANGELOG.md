@@ -1,12 +1,22 @@
 # Changelog
 
-Every notable change to Omanote is listed here, newest first. The format
+Every notable change to Uber Notebook is listed here, newest first. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version
 numbers follow [Semantic Versioning](https://semver.org/).
 
 ## 1.0.0 - Unreleased
 
 The first version.
+
+### Changed
+
+- **Omanote is now Uber Notebook.** The command is `omarchy-shell
+  uber-notebook`, the plugin `marcho78.uber-notebook`, the agents' skill
+  `uber-notebook`, and new notes go in `~/Documents/Uber Notebook` (a
+  profile keeps the folder it has). Notes written as Omanote work as they
+  did: their `omanote://` links (to pages, dates, reminders, people and
+  tags) are read like the new `uber-notebook://` ones, and a Markdown copy
+  made then is still recognized.
 
 ### Added
 
@@ -190,7 +200,7 @@ The first version.
   ticks, code languages (and code exactly as written, tabs and all),
   pictures, links between the pages, and Notion's ids. Markdown pasted into
   a page becomes blocks. A page is a JSON file named by its UUID in the Pages folder.
-- **A picture picker of Omanote's own**: your pictures shown as pictures
+- **A picture picker of Uber Notebook's own**: your pictures shown as pictures
   (newest first, folders first, Pictures, Downloads, Desktop and Home a
   click away), several chosen at once for a gallery (click, Shift+click a
   run, Ctrl+A), one for `/image`; Qt's own file dialog takes one file at a
@@ -206,13 +216,13 @@ The first version.
   page (and fixes one whose page is gone).
 - **Pictures**: a handle on each side of a picture (under the pointer)
   sizes it, its width shown as it's dragged, a double-click the page's
-  width; a picture is shown large in Omanote (←/→ for the others, Esc),
+  width; a picture is shown large in Uber Notebook (←/→ for the others, Esc),
   not in another app. **Galleries** (`/gallery`): pictures in a grid, 2 to
   4 to a row, picked several at once or dropped, moved, captioned, taken
   out, taller or shorter by the bottom edge, shown large, in the Library,
   with colors. A click in the calendar's event editor no longer clicks the
   day under it too.
-- **Calendar files and contact cards open in Omanote**: an `.ics` (an
+- **Calendar files and contact cards open in Uber Notebook**: an `.ics` (an
   email's attachment, a file on a page, one dropped, or *Import .ics…* in
   the calendar's ⋯) shows its events, with *Add to calendar* (none added
   twice); a `.vcf` attachment puts its people in People; a file whose only
@@ -223,8 +233,8 @@ The first version.
   group with a line about it; Esc closes Settings opened from Pages (the
   page kept the keys before).
 - **Backups**: the open profile, or all of them, in one `.tar.gz` (any
-  archive tool opens it: an `omanote-backup.json` and each profile's
-  folder), in `~/Documents/Omanote Backups` or a folder you choose, whole
+  archive tool opens it: an `uber-notebook-backup.json` and each profile's
+  folder), in `~/Documents/Uber Notebook Backups` or a folder you choose, whole
   or not at all; automatic ones daily or weekly (off to start with), the
   oldest past 3 to 50 to the trash, never the ones you make. **Restore**
   says what's in a backup, then puts each profile back as a new profile in
@@ -232,11 +242,11 @@ The first version.
   the first run can restore one, for a new computer. A file that isn't a
   backup, or holds links or reaches outside its folders, is refused;
   `backup`, `backups` and `restoreBackup` for agents.
-- **Updates**: Omanote asks GitHub for its newest release a minute after
+- **Updates**: Uber Notebook asks GitHub for its newest release a minute after
   it starts and once a day (Settings → About; off, only when you ask);
   a newer one shows at the foot of Pages' sidebar, in the shelf's corner
-  and by About, a click from its release notes (read in Omanote, without
-  pictures or HTML); *Update now* for an Omanote installed with
+  and by About, a click from its release notes (read in Uber Notebook, without
+  pictures or HTML); *Update now* for an Uber Notebook installed with
   `omarchy plugin add` (`omarchy plugin update`), else the command to
   copy; *Release notes* for the version you have, from `CHANGELOG.md`;
   `appVersion`, `checkUpdate`, `releaseNotes` and `installUpdate` for
@@ -250,7 +260,7 @@ The first version.
   them, makes a new one (a name, and the folder its notes go in) or opens
   Settings' Profiles (rename, another folder, open the folder, take one off
   the list, start the demo over); the first run asks for your first profile
-  (or the demo) and makes nothing anywhere until then; an Omanote from
+  (or the demo) and makes nothing anywhere until then; an Uber Notebook from
   before profiles opens as it was, its folder a profile ("Personal"); a new
   profile starts empty, with the templates; `profiles`, `profile`,
   `addProfile`, `renameProfile`, `profileFolder`, `removeProfile`, `demo`
@@ -262,7 +272,7 @@ The first version.
   sketch, a reading list, a recipe in columns, a journal with a button, a
   page of people, a cheatsheet), the people and events they name, dated from
   that day, and six templates; **Templates** in the sidebar is a page of
-  cards (yours, then Omanote's), each with what it's for (a line written at
+  cards (yours, then Uber Notebook's), each with what it's for (a line written at
   the top of a template of yours), found by its name or what it's for, a
   click a new page from it; written as Markdown in `starter/`
   (`dev/starter` builds them in). The Library has someone, or a link, once
@@ -270,7 +280,7 @@ The first version.
   the sidebar's page tree keeps room for its pages however many projects and
   tags there are.
 - **Commands for AI agents and scripts**, over the Omarchy shell's IPC (no
-  MCP server): `omarchy-shell omanote help`, `list`, `find`, `read`, `add`,
+  MCP server): `omarchy-shell uber-notebook help`, `list`, `find`, `read`, `add`,
   `addTo`, `append` and `trash`, answered in JSON, with pages in and out as
   Markdown (links to pages, dates and reminders too), new pages in an Inbox, and
   the app doing every write; `blocks`, `replace` and `insertAfter` change a
@@ -292,8 +302,8 @@ The first version.
   for the Notebooks; boards, bookmarks, links to pages, galleries, people,
   agendas and events read and written as fenced code (```` ```board ```` and
   the like). A
-  version of a page is kept in its history before a command changes it. A skill (`skills/omanote/SKILL.md`), linked into the
-  skill folders of the agents Omarchy supports while Omanote runs, teaches them
+  version of a page is kept in its history before a command changes it. A skill (`skills/uber-notebook/SKILL.md`), linked into the
+  skill folders of the agents Omarchy supports while Uber Notebook runs, teaches them
   how to use the commands.
 - **Ask your agent** from Pages: Ctrl+J, `/agent`, a block's menu, the toolbar
   over selected words or the page's menu hand what you'd like (with the page,
@@ -301,13 +311,13 @@ The first version.
   you chose with `omarchy default agent`; its changes show up on the page as
   it works, each one a step you can undo. The agent runs in its own terminal
   (Omarchy's agent window), so what it says, its questions and its summary of
-  what it changed, comes back there rather than in Omanote.
+  what it changed, comes back there rather than in Uber Notebook.
 - **Drawing**: a pen, a highlighter and an eraser over the writing, with its
   own undo.
 - **Find** on a page (Ctrl+F), and **search** across every notebook from the
   shelf.
 - **Quick notes**: Super+Alt+N (or right-click the bar icon, or
-  `omarchy-shell omanote quick "text"`) puts a sticky note up anywhere; kept,
+  `omarchy-shell uber-notebook quick "text"`) puts a sticky note up anywhere; kept,
   it becomes a page in the Quick notes notebook, or (Settings, or a click on
   the note's foot) a page in the Pages Inbox, its text read as Markdown.
 - **Files**: a folder per notebook, a JSON file per page, pictures beside

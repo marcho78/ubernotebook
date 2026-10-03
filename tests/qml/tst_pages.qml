@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 import "../../Workspace.js" as Workspace
 import "../../Html.js" as Html
@@ -18,7 +18,7 @@ Item {
   FakeService { id: service; user: ({ sounds: false }) }
   Theme { id: th }
 
-  Omanote.Workspace {
+  UberNotebook.Workspace {
     id: ws
     files: files
   }
@@ -174,7 +174,7 @@ Item {
       var target = ws.createPage({ parent: "", title: "Target" })
       ws.editPage(home, function(p) {
         var id = Workspace.uuid4()
-        p.blocks[id] = { id: id, type: "p", parent: p.id, html: 'about <a href="omanote://page/' + target.id + '">Target</a>' }
+        p.blocks[id] = { id: id, type: "p", parent: p.id, html: 'about <a href="uber-notebook://page/' + target.id + '">Target</a>' }
         p.content.push(id)
         return true
       })
@@ -192,9 +192,9 @@ Item {
       var old = iso(new Date(now - 3 * 86400000))
       var later = iso(new Date(now + 86400000))
       ws.createPage({ parent: "", title: "Errands", blocks: [
-        { type: "check", html: 'Call the bank <a href="omanote://remind/' + recent + '">x</a>', indent: 0 },
-        { type: "check", html: 'Old one <a href="omanote://remind/' + old + '">x</a>', indent: 0 },
-        { type: "check", html: 'Later <a href="omanote://remind/' + later + '">x</a>', indent: 0 }
+        { type: "check", html: 'Call the bank <a href="uber-notebook://remind/' + recent + '">x</a>', indent: 0 },
+        { type: "check", html: 'Old one <a href="uber-notebook://remind/' + old + '">x</a>', indent: 0 },
+        { type: "check", html: 'Later <a href="uber-notebook://remind/' + later + '">x</a>', indent: 0 }
       ] })
       ws.checkReminders()
       compare(files.notified.length, 1, "the one due now comes; one long gone doesn't; one to come waits")
@@ -236,7 +236,7 @@ Item {
       verify(/^assets\//.test(src), "the picture is in Pages' assets")
       compare(files.disk[files.rootPath + "/Pages/" + src], "PNG", "copied")
       var tripList = Workspace.flatten(fileOf(tripId))
-      verify(tripList[0].html.indexOf("omanote://page/" + plansId) >= 0, "[[Plans]] links to the page imported")
+      verify(tripList[0].html.indexOf("uber-notebook://page/" + plansId) >= 0, "[[Plans]] links to the page imported")
       compare(tripList[1].type, "callout")
       compare(tripList[2].lang, "Bash")
       tryVerify(function() { return view.page && view.page.id === ws.index.pages[plansId].parent || true }, 100)
@@ -352,7 +352,7 @@ Item {
       compare(view.titleHint, "What's the meeting?", "you name the meeting")
       var list = view.editor.serialize()
       compare(list.slice(0, 3).map(function(b) { return b.type }).join(","), "p,columns,column", "today's date, then who's there and the agenda side by side")
-      verify(list[0].html.indexOf("omanote://date/") >= 0)
+      verify(list[0].html.indexOf("uber-notebook://date/") >= 0)
       verify(list.some(function(b) { return b.type === "check" && b.hint === "Who does what, by when" }), "every line says what goes on it")
       compare(view.page.icon, "\u{1f465}")
       view.commit()

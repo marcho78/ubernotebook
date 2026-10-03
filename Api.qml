@@ -16,7 +16,7 @@ import "Library.js" as Library
 import "Profiles.js" as Profiles
 import "Defaults.js" as Defaults
 
-// Omanote's commands for AI agents and scripts: `omarchy-shell omanote
+// Uber Notebook's commands for AI agents and scripts: `omarchy-shell uber-notebook
 // <command>` (Service.qml hands them on). They work on the same pages as the
 // window, through the same store, so what they add shows up as you watch,
 // links and reminders work, and nothing but the app writes its files.
@@ -47,7 +47,7 @@ QtObject {
   property var profiles: null
   // Settings as they are now (Service.qml's), for `preferences`.
   property var settings: null
-  // Whether there's a newer Omanote (Updates.qml), and backups (Backups.qml).
+  // Whether there's a newer Uber Notebook (Updates.qml), and backups (Backups.qml).
   property var updates: null
   property var backups: null
 
@@ -57,8 +57,8 @@ QtObject {
   function fail(message) { return JSON.stringify({ ok: false, error: message }) }
 
   function unready() {
-    if (noProfile) return "Omanote has no profile yet: make one with addProfile (or the user can, opening Omanote)"
-    if (!workspace || !workspace.ready) return "Omanote's pages aren't loaded yet: try again in a moment"
+    if (noProfile) return "Uber Notebook has no profile yet: make one with addProfile (or the user can, opening Uber Notebook)"
+    if (!workspace || !workspace.ready) return "Uber Notebook's pages aren't loaded yet: try again in a moment"
     return ""
   }
 
@@ -115,12 +115,12 @@ QtObject {
   function help() {
     return answer({
       ok: true,
-      app: "Omanote (Omarchy's notes app): its Pages, a tree of pages made of blocks",
-      run: "omarchy-shell omanote <command> [arguments]",
+      app: "Uber Notebook (Omarchy's notes app): its Pages, a tree of pages made of blocks",
+      run: "omarchy-shell uber-notebook <command> [arguments]",
       commands: [
         { use: "list", does: "every page: id, title, icon, path (the pages it's inside)" },
         { use: "find <words>", does: "pages with all the words in their title or text, best first, with a snippet" },
-        { use: "read <id>", does: "the page as Markdown (pages it links to as omanote://page/<id>)" },
+        { use: "read <id>", does: "the page as Markdown (pages it links to as uber-notebook://page/<id>)" },
         { use: "add <title> <file.md>", does: "a new page in the Inbox from a Markdown file; an empty title takes the file's first # heading" },
         { use: "addTo <page id> <title> <file.md>", does: "a new page inside that page (\"\" for the top of Pages)" },
         { use: "append <id> <file.md>", does: "the Markdown added at the end of a page" },
@@ -180,10 +180,10 @@ QtObject {
         { use: "notebook <id>", does: "a notebook's pages in order: id, n, title, day, text (its first words)" },
         { use: "readNotebook <id> <page id>", does: "a notebook's page as Markdown" },
         { use: "addToNotebook <id> <file.md>", does: "a new page at the end of a notebook from a Markdown file" },
-        { use: "open <id>", does: "shows the page in Omanote's window" },
+        { use: "open <id>", does: "shows the page in Uber Notebook's window" },
         { use: "profiles", does: "the user's profiles (notes kept apart: personal, work, the demo...): id, name, folder, open, demo; every other command works on the open one" },
         { use: "profile <name or id>", does: "opens another profile (only when the user asks)" },
-        { use: "addProfile <name> <folder> <open>", does: "a new profile, its notes in folder (\"\" for ~/Documents/Omanote <name>; an empty folder starts fresh, one with Omanote's notes opens them), opened if open is true; it starts empty, with the templates" },
+        { use: "addProfile <name> <folder> <open>", does: "a new profile, its notes in folder (\"\" for ~/Documents/Uber Notebook <name>; an empty folder starts fresh, one with Uber Notebook's notes opens them), opened if open is true; it starts empty, with the templates" },
         { use: "renameProfile <name or id> <new name>", does: "a profile's name" },
         { use: "profileFolder <name or id> <folder>", does: "a profile's notes looked for in another folder (nothing is moved)" },
         { use: "removeProfile <name or id>", does: "takes a profile off the list (not the open one); its notes stay in their folder" },
@@ -194,15 +194,15 @@ QtObject {
         { use: "appVersion", does: "the version running, and whether there's a newer one: latest, updateAvailable, status (current, available, none: no releases yet, failed), checked, releases" },
         { use: "checkUpdate", does: "asks GitHub for the newest version now; appVersion says what it found a few seconds later" },
         { use: "releaseNotes", does: "what's new, as Markdown: the newer releases' notes, or (up to date) this version's" },
-        { use: "installUpdate", does: "installs the newer version with omarchy plugin update (only when the user asks; only an Omanote installed from git): Omanote starts again" }
+        { use: "installUpdate", does: "installs the newer version with omarchy plugin update (only when the user asks; only an Uber Notebook installed from git): Uber Notebook starts again" }
       ],
       fences: "read gives (and add, append, replace and insertAfter take) these as fenced code: "
         + "```board (## a column, - a card under it), ```bookmark (a link), ```contact (someone in People: their name, email or id), "
         + "```agenda (a day's events: 2026-10-05 or today), ```event (an event's id), ```link (a link to a page: its id or title), "
         + "```gallery (columns: 3, height: 240, then ![caption](assets/...) a picture a line, pictures already in Pages/assets)",
       markdown: "Headings, lists, - [ ] to-dos, code blocks with their language, > [!NOTE] callouts, "
-        + "[[Page title]] (a link to that page), #tag (a tag), [@Fri 2 Oct](omanote://date/2026-10-02) (a date) and "
-        + "[\u23f0 Fri 2 Oct 9:30](omanote://remind/2026-10-02T09:30) (a reminder: a notification then)"
+        + "[[Page title]] (a link to that page), #tag (a tag), [@Fri 2 Oct](uber-notebook://date/2026-10-02) (a date) and "
+        + "[\u23f0 Fri 2 Oct 9:30](uber-notebook://remind/2026-10-02T09:30) (a reminder: a notification then)"
     })
   }
 
@@ -257,11 +257,11 @@ QtObject {
     keep(id)
     var page = workspace.readPageNow(id)
     if (!page) return fail("couldn't read that page")
-    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Omanote first")
+    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Uber Notebook first")
     var had = page.project || { status: "active", due: "" }
     var next = st === "none" ? null : Workspace.cleanProject({ status: st || had.status, due: d === "-" ? had.due : d })
     var took = viewDoes("setProjectOfOpenPage", id, next)
-    if (took === "locked") return fail("that page is locked: unlock it in Omanote first")
+    if (took === "locked") return fail("that page is locked: unlock it in Uber Notebook first")
     if (took !== true) {
       if (next) page.project = next
       else delete page.project
@@ -426,7 +426,7 @@ QtObject {
     if (!page) return fail("couldn't read that page")
     return Markdown.fromDocPage(page, function(pid) {
       var e = api.workspace.index.pages[pid]
-      return e && !Workspace.inTrash(api.workspace.index, pid) ? { title: e.title || "Untitled", icon: e.icon, file: "omanote://page/" + pid } : null
+      return e && !Workspace.inTrash(api.workspace.index, pid) ? { title: e.title || "Untitled", icon: e.icon, file: "uber-notebook://page/" + pid } : null
     }, { fences: true, contactOf: function(cid) { return api.workspace.contactById(cid) },
       syncedPage: function(sid) { return live(sid) ? api.workspace.readPageNow(sid) : null } })
   }
@@ -565,12 +565,12 @@ QtObject {
     keep(id)
     // Open in the window: it adds them itself.
     var took = viewDoes("appendToOpenPage", id, blocks)
-    if (took === "locked") return fail("that page is locked: unlock it in Omanote first")
+    if (took === "locked") return fail("that page is locked: unlock it in Uber Notebook first")
     if (took === true) return answer({ ok: true, id: id, added: blocks.length })
     writeOpen()
     var page = workspace.readPageNow(id)
     if (!page) return fail("couldn't read that page")
-    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Omanote first")
+    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Uber Notebook first")
     var n = Workspace.appendBlocks(page, blocks)
     page.modified = new Date().toISOString()
     workspace.savePage(page)
@@ -609,7 +609,7 @@ QtObject {
     writeOpen()
     var page = workspace.readPageNow(id)
     if (!page) return fail("couldn't read that page")
-    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Omanote first")
+    if (page.format && page.format.locked) return fail("that page is locked: unlock it in Uber Notebook first")
     var spot = Workspace.locate(page, String(block || ""))
     if (!spot) return fail("there's no block with that id on the page (blocks <page id> gives them)")
     if (Workspace.isStructure(spot.block.type)) return fail("that block holds columns: change the blocks inside them instead")
@@ -621,7 +621,7 @@ QtObject {
     keep(id)
     // Open in the window: it changes the page itself, as a step you can undo.
     var took = viewDoes(how === "replace" ? "replaceInOpenPage" : "insertInOpenPage", id, { block: spot.block.uid, blocks: list })
-    if (took === "locked") return fail("that page is locked: unlock it in Omanote first")
+    if (took === "locked") return fail("that page is locked: unlock it in Uber Notebook first")
     if (took !== true) {
       if (how === "replace") Workspace.putBlocks(page, spot.at, spot.end - spot.at + 1, list, spot.depth)
       else Workspace.putBlocks(page, spot.end + 1, 0, list, spot.depth)
@@ -703,7 +703,7 @@ QtObject {
     return err ? fail(err) : answer({ ok: true, id: id, icon: clean })
   }
 
-  // One of Omanote's covers ("gradient:0" to "gradient:11"), or "" for none.
+  // One of Uber Notebook's covers ("gradient:0" to "gradient:11"), or "" for none.
   function cover(id, which) {
     var not = unready()
     if (not) return fail(not)
@@ -1087,7 +1087,7 @@ QtObject {
     var list = pathList(text)
     if (list.length === 1 && !files.isImagePath(list[0])) {
       var dir = list[0].replace(/\/+$/, "")
-      files.exec(["/usr/bin/bash", "-c", Library.LIST_SCRIPT, "omanote-pictures", dir], function(ok, out) {
+      files.exec(["/usr/bin/bash", "-c", Library.LIST_SCRIPT, "uber-notebook-pictures", dir], function(ok, out) {
         var names = String(out || "").split("\n").map(function(l) { var m = /^f\t[0-9.]+\t(.+)$/.exec(l); return m ? dir + "/" + m[1] : "" })
           .filter(function(p) { return p && files.isImagePath(p) }).sort()
         done(names.slice(0, 200))
@@ -1396,7 +1396,7 @@ QtObject {
     var c = workspace.contactById(q)
     if (!c) return fail("give their id (contacts lists everyone)")
     workspace.setContacts(Contacts.without(workspace.contacts, c.id))
-    return answer({ ok: true, id: c.id, name: Contacts.nameOf(c), note: "taken out of People (Undo in People puts them back while Omanote runs)" })
+    return answer({ ok: true, id: c.id, name: Contacts.nameOf(c), note: "taken out of People (Undo in People puts them back while Uber Notebook runs)" })
   }
 
   // ---- tags: renamed, or taken off every page ----
@@ -1481,7 +1481,7 @@ QtObject {
 
   function profileOut(p) {
     var open = profiles.current !== null && profiles.current.id === p.id
-    return { id: p.id, name: p.name, folder: p.folder || "~/Documents/Omanote", open: open, demo: p.demo }
+    return { id: p.id, name: p.name, folder: p.folder || "~/Documents/Uber Notebook", open: open, demo: p.demo }
   }
   function profileOf(which) {
     var w = String(which || "").trim()
@@ -1567,13 +1567,13 @@ QtObject {
     var n = updates.notes()
     return "# " + n.title + "\n\n" + n.markdown + "\n" + (n.url ? "\n" + n.url + "\n" : "")
   }
-  // The newer version installed (only when the user asks): Omanote starts again.
+  // The newer version installed (only when the user asks): Uber Notebook starts again.
   function installUpdate() {
     if (!updates) return fail("the update check isn't here")
     if (!updates.available) return fail(updates.status === "idle" || updates.status === "checking" ? "it hasn't been asked yet: checkUpdate, then appVersion" : "there's no newer version (appVersion)")
-    if (!updates.managed) return fail("Omanote wasn't installed from git, so it can't update itself; the user can reinstall it with omarchy plugin add")
+    if (!updates.managed) return fail("Uber Notebook wasn't installed from git, so it can't update itself; the user can reinstall it with omarchy plugin add")
     updates.install()
-    return answer({ ok: true, version: updates.latest.version, note: "updating to " + updates.latest.version + " with omarchy plugin update: Omanote starts again when it's done" })
+    return answer({ ok: true, version: updates.latest.version, note: "updating to " + updates.latest.version + " with omarchy plugin update: Uber Notebook starts again when it's done" })
   }
 
   // ---- backups ----------------------------------------------------------------------------------

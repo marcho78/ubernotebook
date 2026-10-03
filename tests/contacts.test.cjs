@@ -93,7 +93,7 @@ check("an import matches who's there; found by what's typed", () => {
   assert.deepEqual(plain(K.find(book2, "")).map((c) => c.name), ["Ana Lopez", "Sam Rivera"], "A to Z");
   assert.equal(K.byEmail(book2, "Sam@Acme.com").id, "p1");
   assert.equal(K.idOf(K.href("p1")), "p1");
-  assert.equal(K.idOf("omanote://page/x"), "");
+  assert.equal(K.idOf("uber-notebook://page/x"), "");
   assert.equal(K.without(book2, "p1").contacts.length, 1);
   assert.equal(K.toMarkdown(sam), "**Sam Rivera** · Acme\n- ☎ +1 (555) 123-4567 (mobile)\n- ✉ [sam@acme.com](mailto:sam@acme.com)");
 });

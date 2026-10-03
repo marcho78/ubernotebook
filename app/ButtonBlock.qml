@@ -3,7 +3,7 @@ import QtQuick.Controls
 import "../Templates.js" as Templates
 
 // A button on a page in Pages: a click puts in a template (yours, or one of
-// Omanote's) after it, or makes a new page from it inside this page. Not set
+// Uber Notebook's) after it, or makes a new page from it inside this page. Not set
 // up yet, it asks for its words and its template. Its gear sets it up again;
 // its colors are Pages' or your own.
 DataCard {

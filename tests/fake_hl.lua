@@ -1,5 +1,5 @@
 -- A small stand-in for Hyprland's Lua API: just enough of hl.* for
--- hypr/omanote.lua, recording what it registers. Like Hyprland's, window
+-- hypr/uber-notebook.lua, recording what it registers. Like Hyprland's, window
 -- rules can only be switched off, never removed; binds can be removed.
 local fake = { binds = {}, rules = {}, events = {} }
 

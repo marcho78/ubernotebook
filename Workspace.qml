@@ -14,7 +14,7 @@ import "Bookmark.js" as Bookmark
 import "Starter.js" as Starter
 
 // Pages on disk: the workspace in the Pages folder of your notebooks folder
-// (~/Documents/Omanote/Pages), a JSON file per page, named by its UUID, and
+// (~/Documents/Uber Notebook/Pages), a JSON file per page, named by its UUID, and
 // index.json with the tree of pages (Workspace.js says what they may hold).
 //
 // It reads and writes through the notebooks' store (`files`): every file is
@@ -92,7 +92,7 @@ Item {
     files.readFiles([ws.indexPath()], function(got) {
       if (gen !== ws.generation) return
       var ix = Workspace.cleanIndex(files.parseJson(got[ws.indexPath()] || ""))
-      files.exec(["/usr/bin/bash", "-c", ws.listScript, "omanote-list", ws.folder], function(listed, output) {
+      files.exec(["/usr/bin/bash", "-c", ws.listScript, "uber-notebook-list", ws.folder], function(listed, output) {
         if (gen !== ws.generation) return
         var onDisk = String(output || "").split("\n").map(function(n) { return n.replace(/\.json$/, "") }).filter(Workspace.isUuid)
         var present = {}
@@ -376,7 +376,7 @@ Item {
   property var versionNames: ({})
   function listVersions(id, done) {
     if (!Workspace.isUuid(id)) { done([]); return }
-    files.exec(["/usr/bin/bash", "-c", listScript, "omanote-list", Workspace.historyDir(files.rootPath, id)], function(ok, output) {
+    files.exec(["/usr/bin/bash", "-c", listScript, "uber-notebook-list", Workspace.historyDir(files.rootPath, id)], function(ok, output) {
       var list = ok ? Workspace.versionList(String(output || "").split("\n")) : []
       ws.versionNames[id] = list.map(function(v) { return v.name })
       done(list)
@@ -428,7 +428,7 @@ Item {
   // ---- reminders ---------------------------------------------------------------------------
 
   // A reminder comes as an Omarchy notification with what the block says;
-  // clicking it opens the page. One that came while Omanote wasn't running
+  // clicking it opens the page. One that came while Uber Notebook wasn't running
   // comes when it starts, if it was in the last 12 hours.
   readonly property int lateness: 12 * 3600000
 
@@ -545,7 +545,7 @@ Item {
   // The calendar as an .ics file, where exports go: done(its path, or "").
   function exportCalendar(done) {
     function to(base) {
-      var path = base + "/Omanote calendar " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".ics"
+      var path = base + "/Uber Notebook calendar " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".ics"
       files.mkdirs([base], function() {
         files.writeFile(path, Calendar.toIcs(calendar, new Date()), function(ok) {
           if (ok && typeof files.exported === "function") files.exported(path)
@@ -621,7 +621,7 @@ Item {
   // Everyone as a .vcf file, where exports go: done(its path, or "").
   function exportContacts(done) {
     function to(base) {
-      var path = base + "/Omanote contacts " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".vcf"
+      var path = base + "/Uber Notebook contacts " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".vcf"
       files.mkdirs([base], function() {
         files.writeFile(path, Contacts.toVcard(ws.contacts), function(ok) {
           if (ok && typeof files.exported === "function") files.exported(path)
@@ -683,7 +683,7 @@ Item {
   }
 
   // Out of the trash for good: its file (and those of the pages in it) go to
-  // the notebooks folder's .trash, as nothing in Omanote is ever deleted.
+  // the notebooks folder's .trash, as nothing in Uber Notebook is ever deleted.
   function deleteForever(id) {
     if (!index.pages[id]) return
     var all = Workspace.withDescendants(index, id)
@@ -780,13 +780,13 @@ Item {
     var asset = Files.assetName(name, new Date())
     var dest = Workspace.assetsDir(files.rootPath) + "/" + asset
     files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
-      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "omanote-import-file", p, dest], function(ok, out) {
+      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dest], function(ok, out) {
         if (!ok) { done(null); return }
         var f = { src: "assets/" + asset, name: name, size: Number(String(out).trim()) || 0, kind: Files.kindOf(name), poster: "" }
         if (f.kind !== "video") { done(f); return }
         // A video's still: a frame from a second in (or its first).
         var still = asset.replace(/\.[A-Za-z0-9]+$/, "") + "-still.jpg"
-        files.exec(["/usr/bin/bash", "-c", ws.stillScript, "omanote-still", dest, Workspace.assetsDir(files.rootPath) + "/" + still], function(ok2) {
+        files.exec(["/usr/bin/bash", "-c", ws.stillScript, "uber-notebook-still", dest, Workspace.assetsDir(files.rootPath) + "/" + still], function(ok2) {
           if (ok2) f.poster = "assets/" + still
           done(f)
         }, { timeoutMs: 30000, maxBytes: 4096 })
@@ -802,7 +802,7 @@ Item {
     var asset = Email.assetName(name, new Date())
     var dir = Workspace.assetsDir(files.rootPath)
     files.mkdirs([dir], function() {
-      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "omanote-import-file", p, dir + "/" + asset], function(ok, out) {
+      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dir + "/" + asset], function(ok, out) {
         if (!ok) { done(null, "It couldn't be copied in"); return }
         files.readFiles([dir + "/" + asset], function(got) {
           var m = Email.parse(got[dir + "/" + asset] || "")
@@ -860,7 +860,7 @@ Item {
       var tmp = dir + "/.unpack-" + Math.random().toString(36).slice(2, 10) + ".b64"
       files.writeFile(tmp, data, function(ok) {
         if (!ok) { done(""); return }
-        files.exec(["/usr/bin/bash", "-c", ws.unpackScript, "omanote-unpack", tmp, dir + "/" + out], function(ok2) {
+        files.exec(["/usr/bin/bash", "-c", ws.unpackScript, "uber-notebook-unpack", tmp, dir + "/" + out], function(ok2) {
           done(ok2 ? "assets/" + out : "")
         }, { timeoutMs: 60000, maxBytes: 4096 })
       })
@@ -872,19 +872,19 @@ Item {
   // A link's page read (its title, a line about it, its picture, kept in
   // assets): done(bookmark data, or null and why). Only http and https;
   // a page of at most 2 MB, a picture of at most 5 MB, 15 seconds each.
-  readonly property string fetchScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 2000000 -A 'Mozilla/5.0 (X11; Linux) Omanote' -H 'Accept: text/html' -- \"$1\" | /usr/bin/head -c 2000000"
-  readonly property string imageScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 5000000 -A 'Mozilla/5.0 (X11; Linux) Omanote' -o \"$2\" -w '%{content_type}' -- \"$1\""
+  readonly property string fetchScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 2000000 -A 'Mozilla/5.0 (X11; Linux) Uber Notebook' -H 'Accept: text/html' -- \"$1\" | /usr/bin/head -c 2000000"
+  readonly property string imageScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 5000000 -A 'Mozilla/5.0 (X11; Linux) Uber Notebook' -o \"$2\" -w '%{content_type}' -- \"$1\""
   function fetchBookmark(url, done) {
     var u = Bookmark.cleanUrl(url)
     if (!u) { done(null, "That isn't a web link (https://...)"); return }
-    files.exec(["/usr/bin/bash", "-c", fetchScript, "omanote-fetch", u], function(ok, html) {
+    files.exec(["/usr/bin/bash", "-c", fetchScript, "uber-notebook-fetch", u], function(ok, html) {
       if (!ok || !String(html || "").trim()) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, "The page couldn't be read: the link's kept"); return }
       var meta = Bookmark.parse(html, u)
       var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
       if (!meta.image || !Bookmark.cleanUrl(meta.image)) { done(data, ""); return }
       var tmp = Workspace.assetsDir(files.rootPath) + "/.bm-" + Date.now().toString(36)
       files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
-        files.exec(["/usr/bin/bash", "-c", ws.imageScript, "omanote-fetch-image", meta.image, tmp], function(ok2, type) {
+        files.exec(["/usr/bin/bash", "-c", ws.imageScript, "uber-notebook-fetch-image", meta.image, tmp], function(ok2, type) {
           var name = ok2 ? Bookmark.imageName(String(type || ""), meta.image, new Date()) : ""
           if (!name) { files.exec(["/usr/bin/rm", "-f", "--", tmp], null); done(data, ""); return }
           files.exec(["/usr/bin/mv", "-f", "--", tmp, Workspace.assetsDir(files.rootPath) + "/" + name], function(ok3) {
@@ -1091,7 +1091,7 @@ Item {
     files.pasteInto(Workspace.assetsDir(files.rootPath), done)
   }
 
-  // ---- out of Omanote --------------------------------------------------------------------------
+  // ---- out of Uber Notebook --------------------------------------------------------------------------
 
   // A page and the pages in it as Markdown files, with their pictures, in
   // "<notebooks>/Exports/<title> <date>/"; the folder opens.
@@ -1156,7 +1156,7 @@ Item {
     if (!ready || importing || list.length === 0) { if (done) done({ pages: 0, first: "", skipped: [] }); return }
     importing = true
     importCount = 0
-    var tmp = files.runtimeDir + "/omanote-import-" + Workspace.uuid4().slice(0, 8)
+    var tmp = files.runtimeDir + "/uber-notebook-import-" + Workspace.uuid4().slice(0, 8)
     files.mkdirs([tmp], function(ok) {
       if (!ok) { ws.importing = false; if (done) done({ pages: 0, first: "", skipped: list }); return }
       ws.unzipAll(list, tmp, function(roots) {
@@ -1184,7 +1184,7 @@ Item {
         files.exec(["/usr/bin/unzip", "-qq", "-o", p, "-d", dir], function(ok) {
           if (!ok) { ws.failed("Couldn't unzip " + p); next(); return }
           // Notion zips its export in parts: those too.
-          files.exec(["/usr/bin/bash", "-c", "shopt -s nullglob; for z in \"$1\"/*.zip; do /usr/bin/unzip -qq -o \"$z\" -d \"$1\" && /usr/bin/rm -f -- \"$z\"; done", "omanote-unzip", dir], function() {
+          files.exec(["/usr/bin/bash", "-c", "shopt -s nullglob; for z in \"$1\"/*.zip; do /usr/bin/unzip -qq -o \"$z\" -d \"$1\" && /usr/bin/rm -f -- \"$z\"; done", "uber-notebook-unzip", dir], function() {
             out.push(dir)
             next()
           }, { okCodes: [0, 1], timeoutMs: 120000 })
@@ -1195,7 +1195,7 @@ Item {
   }
 
   function scanImport(roots, tmp, parent, done) {
-    files.exec(["/usr/bin/bash", "-c", scanScript, "omanote-scan"].concat(roots), function(ok, output) {
+    files.exec(["/usr/bin/bash", "-c", scanScript, "uber-notebook-scan"].concat(roots), function(ok, output) {
       var groups = []
       String(output || "").split("\n").forEach(function(line) {
         if (!line) return
@@ -1286,7 +1286,7 @@ Item {
   // through LibreOffice, whichever there is (pandoc first).
   function convertOffice(list, tmp, skipped, done) {
     if (list.length === 0) { done(); return }
-    files.exec(["/usr/bin/bash", "-c", "for t in /usr/bin/pandoc /usr/bin/soffice; do [ -x \"$t\" ] && echo \"$t\"; done; true", "omanote-which"], function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", "for t in /usr/bin/pandoc /usr/bin/soffice; do [ -x \"$t\" ] && echo \"$t\"; done; true", "uber-notebook-which"], function(ok, out) {
       var have = String(out || "")
       var pandoc = have.indexOf("/usr/bin/pandoc") >= 0
       var office = have.indexOf("/usr/bin/soffice") >= 0
@@ -1345,7 +1345,7 @@ Item {
           if (/^(https?:|mailto:)/i.test(href)) return href
           var abs = Import.resolvePath(from, href, root)
           var target = byFile[abs] || byFile[abs + ".md"] || byFile[abs.replace(/\.html?$/i, ".md")]
-          return target ? "omanote://page/" + target.id : ""
+          return target ? "uber-notebook://page/" + target.id : ""
         },
         image: function(src) {
           var abs = Import.resolvePath(from, src, root)
@@ -1383,7 +1383,7 @@ Item {
       var placed = {}
       e.blocks = (e.blocks || []).map(function(b) {
         if (b.type !== "p" || !b.html) return b
-        var only = /^<a href="omanote:\/\/page\/([0-9a-f-]{36})">[^<]*(?:<[^a][^>]*>[^<]*<\/[^a][^>]*>[^<]*)*<\/a>$/.exec(b.html.trim())
+        var only = /^<a href="(?:uber-notebook|omanote):\/\/page\/([0-9a-f-]{36})">[^<]*(?:<[^a][^>]*>[^<]*<\/[^a][^>]*>[^<]*)*<\/a>$/.exec(b.html.trim())
         if (only && kids.indexOf(only[1]) >= 0 && !placed[only[1]]) { placed[only[1]] = true; return { type: "page", uid: only[1], indent: b.indent } }
         return b
       })

@@ -59,7 +59,7 @@ check("what's written, and what goes", () => {
 });
 
 check("folders it may use", () => {
-  const root = "/home/u/Documents/Omanote";
+  const root = "/home/u/Documents/Uber Notebook";
   assert.equal(M.folderProblem(root + "/Markdown", root, "/home/u", ["recipes-ab12"]), "");
   assert.equal(M.folderProblem("/home/u/Obsidian/Notes", root, "/home/u", []), "");
   assert.ok(M.folderProblem("/home/u", root, "/home/u", []), "not home");

@@ -18,7 +18,7 @@
 var MAX = 30
 // A profile's own settings, besides its folder.
 var KEYS = Settings.PROFILE_KEYS
-// The demo's folder, under Omanote's data folder (a new one each time it starts over).
+// The demo's folder, under Uber Notebook's data folder (a new one each time it starts over).
 var DEMO_NAME = "Demo"
 
 function line(value, max) {
@@ -71,10 +71,10 @@ function folderProblem(list, folder, exceptId, home) {
 }
 
 // Where a new profile's notes go, unless said: the usual place for the
-// first, else beside it, named for it ("~/Documents/Omanote Work").
+// first, else beside it, named for it ("~/Documents/Uber Notebook Work").
 function suggestFolder(list, name) {
   var n = String(name || "").trim().replace(/[\/\\:*?"<>|]+/g, " ").replace(/\s+/g, " ").slice(0, 40)
-  return !list || !list.length ? "~/Documents/Omanote" : "~/Documents/Omanote" + (n ? " " + n : "")
+  return !list || !list.length ? "~/Documents/Uber Notebook" : "~/Documents/Uber Notebook" + (n ? " " + n : "")
 }
 
 // A new profile: { id, name, folder, demo: false, saved: {} }.

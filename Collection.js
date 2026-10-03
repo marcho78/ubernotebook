@@ -61,7 +61,7 @@ function dateOfAsset(src) {
 }
 
 var MAILTO = /^mailto:[^\s@<>]+@[^\s@<>]+\.[A-Za-z]{2,}$/i
-var PERSON = /^omanote:\/\/contact\/([A-Za-z0-9_-]{1,40})$/
+var PERSON = /^(?:uber-notebook|omanote):\/\/contact\/([A-Za-z0-9_-]{1,40})$/
 
 function item(kind, block, fields) {
   var out = { block: block, kind: kind, title: "", sub: "", url: "", src: "", size: 0, thumb: "", at: "", type: "", file: "", person: "", who: "" }

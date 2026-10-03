@@ -186,7 +186,7 @@ FocusScope {
   function display(inner) {
     var out = dark ? Html.mapColors(inner, toDark) : inner
     // Links to pages say what the pages are called now.
-    if (doc && out.indexOf("omanote://page/") >= 0) out = Html.refreshPageLinks(out, function(id) {
+    if (doc && /(?:uber-notebook|omanote):\/\/page\//.test(out)) out = Html.refreshPageLinks(out, function(id) {
       var info = root.pageInfo(id)
       return info ? root.pageLinkText(info) : ""
     })
@@ -2004,12 +2004,12 @@ FocusScope {
       // A person: "@Sam Rivera", a link to them (a new one's made first).
       var pid = entry.kind === "personnew" ? (typeof makePerson === "function" ? makePerson(entry.name) : "") : entry.id
       if (!pid) return
-      href = "omanote://contact/" + pid
+      href = "uber-notebook://contact/" + pid
       text = "@" + (entry.kind === "personnew" ? entry.name : entry.label)
     } else {
       var id = entry.kind === "create" ? makePage(entry.title) : entry.id
       if (!id) return
-      href = "omanote://page/" + id
+      href = "uber-notebook://page/" + id
       text = pageLinkText(pageInfo(id) || { title: entry.title || entry.label, icon: entry.icon || "" })
     }
     closeBurst()
@@ -3414,7 +3414,7 @@ FocusScope {
 
   // ---- the clipboard -------------------------------------------------------------------------
 
-  // What Omanote itself last copied, so pasting it back keeps everything.
+  // What Uber Notebook itself last copied, so pasting it back keeps everything.
   property string lastCopied: ""
   property var copiedBlocks: null
 

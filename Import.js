@@ -9,7 +9,7 @@
 // Every reader gives { title, icon, blocks }: blocks as the editor has them
 // (in order, each with its depth), their text sanitized as any page's is.
 // `ctx` says what can't be known here: ctx.link(href) -> the href to use
-// (a link to another imported page becomes omanote://page/<id>);
+// (a link to another imported page becomes uber-notebook://page/<id>);
 // ctx.image(src) -> "assets/<name>" for a picture that was copied in, or "";
 // ctx.wiki(name) -> the id of the imported page called that, or "".
 //
@@ -114,7 +114,7 @@ function inlineRuns(text, ctx, refs) {
         var target = (bar >= 0 ? inner.slice(0, bar) : inner).replace(/#.*$/, "").trim()
         var shown = (bar >= 0 ? inner.slice(bar + 1) : inner).trim()
         var id = ctx.wiki(target)
-        if (id) push({ t: "link", href: "omanote://page/" + id, runs: [{ text: shown, style: {}, href: "" }] })
+        if (id) push({ t: "link", href: "uber-notebook://page/" + id, runs: [{ text: shown, style: {}, href: "" }] })
         else textAtom(shown)
         i = wend + 2
         continue
@@ -1028,7 +1028,7 @@ function readHtmlBlock(n, depth, out, ctx, opts) {
   // Notion's link to a page, and table of contents.
   if (tag === "figure" && hasClass(n, "link-to-page")) {
     var a = find(n, function(k) { return k.tag === "a" })
-    var id = a ? /^omanote:\/\/page\/(.+)$/.exec(ctx.link(a.attrs.href || "")) : null
+    var id = a ? /^(?:uber-notebook|omanote):\/\/page\/(.+)$/.exec(ctx.link(a.attrs.href || "")) : null
     if (id) add({ type: "link", target: id[1], indent: depth })
     else readHtml(n.kids, depth, out, ctx, opts)
     return

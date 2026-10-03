@@ -16,8 +16,8 @@ QtObject {
   property var service: null
   // Store.qml: home, and programs to run (exec).
   property var files: null
-  // Omanote's own data folder ("~/.local/share/omanote"): the demo's is in it.
-  property string dataFolder: "~/.local/share/omanote"
+  // Uber Notebook's own data folder ("~/.local/share/uber-notebook"): the demo's is in it.
+  property string dataFolder: "~/.local/share/uber-notebook"
 
   readonly property var list: service ? service.settings.profiles : []
   readonly property var current: service ? Profiles.find(list, service.settings.profile) : null
@@ -47,15 +47,15 @@ QtObject {
     }
     // The folder set in Settings, or the default places.
     var set = service.settings.folder || ""
-    var places = set ? [set, "~/Documents/Omanote"] : ["~/Documents/Omanote", "~/Omanote"]
+    var places = set ? [set, "~/Documents/Uber Notebook"] : ["~/Documents/Uber Notebook", "~/Uber Notebook"]
     var paths = places.map(function(p) { return Settings.resolveFolder(p, pm.home(), true) })
     var s = service.settings
-    files.exec(["/usr/bin/bash", "-c", notesScript, "omanote-notes", s.inbox || "", s.lastPage || "", s.lastNotebook || ""].concat(paths), function(ok, out) {
+    files.exec(["/usr/bin/bash", "-c", notesScript, "uber-notebook-notes", s.inbox || "", s.lastPage || "", s.lastNotebook || ""].concat(paths), function(ok, out) {
       var rows = String(out || "").split("\n").filter(function(l) { return l.trim() }).map(function(l) { return l.trim().split(/\s+/).map(function(x) { return x === "1" }) })
       var had = rows.map(function(r) { return r[0] === true })
       var made = null
       if (set) {
-        // The folder Omanote's been using is open; the default place, if it
+        // The folder Uber Notebook's been using is open; the default place, if it
         // has notes and isn't that one, is a profile too: "Personal", with
         // the Inbox, the page and the notebook the settings name if they're its.
         made = Profiles.fromBefore(set)
@@ -145,7 +145,7 @@ QtObject {
     return ""
   }
 
-  // The demo: its profile open (made the first time, in Omanote's data folder).
+  // The demo: its profile open (made the first time, in Uber Notebook's data folder).
   readonly property var demo: list.filter(function(p) { return p.demo })[0] || null
   function openDemo() {
     if (demo) return use(demo.id)
@@ -167,7 +167,7 @@ QtObject {
     var demoOpen = current !== null && current.id === demo.id
     var changes = Profiles.switchTo(list2, demoOpen ? { profile: "" } : service.settings, demo.id)
     apply(changes)
-    // (Only ever a demo folder of Omanote's own.)
+    // (Only ever a demo folder of Uber Notebook's own.)
     if (old.indexOf(base + "/demo") === 0) files.exec(["/usr/bin/gio", "trash", "--", old], function() {})
     return ""
   }

@@ -9,7 +9,7 @@ QtObject {
   id: store
 
   property bool ready: true
-  property string rootPath: "/tmp/omanote-dev"
+  property string rootPath: "/tmp/uber-notebook-dev"
   property var notebooks: []
   property var data: ({})
   property var order: []

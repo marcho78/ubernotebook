@@ -1,4 +1,4 @@
-// Checks what a new Omanote starts with (Starter.js, from starter/): that
+// Checks what a new Uber Notebook starts with (Starter.js, from starter/): that
 // StarterContent.js is up to date, every page is made (each after the page
 // it's in), its links, people, events and files are there, dates are for
 // the day it's made, and nothing's left unfilled but the templates' own.
@@ -16,7 +16,7 @@ let passed = 0;
 function check(name, fn) { fn(); passed++; }
 
 const now = new Date(2026, 9, 2, 9, 0);
-const made = plain(S.build(now, { folder: "~/Documents/Omanote" }));
+const made = plain(S.build(now, { folder: "~/Documents/Uber Notebook" }));
 const byTitle = (t) => made.pages.find((m) => m.page.title === t);
 
 check("StarterContent.js is made from starter/", () => {
@@ -30,7 +30,7 @@ check("the pages, the templates, the people and the events", () => {
   assert.ok(templates.length >= 5, "templates: " + templates.length);
   assert.equal(made.contacts.length, 4);
   assert.equal(made.events.length, 6);
-  assert.equal(made.pages[0].page.title, "Welcome to Omanote", "the first page");
+  assert.equal(made.pages[0].page.title, "Welcome to Uber Notebook", "the first page");
   assert.equal(made.favorites.length, 2);
   // A page comes after the page it's in.
   const seen = new Set();
@@ -51,8 +51,8 @@ check("links, people, events and pages inside pages are all there", () => {
   for (const m of made.pages) {
     for (const b of W.flatten(m.page)) {
       const h = b.html || "";
-      for (const x of h.matchAll(/omanote:\/\/page\/([0-9a-f-]{36})/g)) assert.ok(ids.has(x[1]), "a link in " + m.page.title);
-      for (const x of h.matchAll(/omanote:\/\/contact\/([A-Za-z0-9_-]+)/g)) assert.ok(people.has(x[1]), "a person in " + m.page.title);
+      for (const x of h.matchAll(/uber-notebook:\/\/page\/([0-9a-f-]{36})/g)) assert.ok(ids.has(x[1]), "a link in " + m.page.title);
+      for (const x of h.matchAll(/uber-notebook:\/\/contact\/([A-Za-z0-9_-]+)/g)) assert.ok(people.has(x[1]), "a person in " + m.page.title);
       if (b.type === "page") assert.ok(ids.has(b.uid));
       if (b.type === "contact") assert.ok(people.has(b.data.contact), "a card in " + m.page.title);
       if (b.type === "event") assert.ok(events.has(b.calendar.id));
@@ -101,7 +101,7 @@ check("the files: the PDF and picture copied, the email written", () => {
   const names = made.assets.map((a) => a.name).sort();
   assert.deepEqual(names, ["example-flight-confirmation.eml", "example-keyboard-shortcuts.pdf", "example-notebooks-shelf.jpg"]);
   for (const a of made.assets) if (a.text === undefined) assert.ok(require("node:fs").existsSync("starter/assets/" + a.file), a.file);
-  const file = W.flatten(byTitle("Welcome to Omanote").page).find((b) => b.type === "file");
+  const file = W.flatten(byTitle("Welcome to Uber Notebook").page).find((b) => b.type === "file");
   assert.equal(file.data.src, "assets/example-keyboard-shortcuts.pdf");
   assert.equal(file.data.kind, "pdf");
   assert.ok(file.data.size > 1000);

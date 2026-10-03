@@ -1,6 +1,6 @@
 import QtQuick
 import QtTest
-import "../.." as Omanote
+import "../.." as UberNotebook
 import "../../app"
 
 // Appearance (Settings): the sidebar, the page, the sections and cards and
@@ -15,7 +15,7 @@ Item {
   FakeStore { id: store }
   FakeService { id: service; store: store; user: ({ sounds: false }) }
   FakeFiles { id: files }
-  Omanote.Workspace { id: ws; files: files }
+  UberNotebook.Workspace { id: ws; files: files }
 
   App {
     id: app

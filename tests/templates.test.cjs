@@ -174,7 +174,7 @@ check("templates in Pages", () => {
   assert.equal(plain(Templates.forPages("habits", "2026-09-30", fmt)).blocks.filter((b) => b.type === "habit").length, 8);
   const meeting = plain(Templates.forPages("meeting", "2026-09-30", fmt));
   assert.deepEqual([meeting.title, meeting.hint], ["", "What's the meeting?"], "you name the meeting");
-  assert.equal(meeting.blocks[0].html, '<a href="omanote://date/2026-09-30">@Wed 30 Sep</a> ', "on today's date");
+  assert.equal(meeting.blocks[0].html, '<a href="uber-notebook://date/2026-09-30">@Wed 30 Sep</a> ', "on today's date");
   assert.equal(plain(Templates.forPages("todo", "", fmt)).title, "To do");
   assert.equal(plain(Templates.forPages("reading", "", fmt)).title, "Reading log");
   const packing = plain(Templates.forPages("packing", "", fmt));

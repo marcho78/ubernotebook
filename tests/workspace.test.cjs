@@ -228,9 +228,9 @@ check("links between pages, backlinks and reminders", () => {
   const page = W.cleanPage({
     content: [a, b, c],
     blocks: {
-      [a]: { type: "p", html: 'See <a href="omanote://page/' + q + '">Q</a> and <a href="omanote://page/' + q + '">Q again</a>' },
+      [a]: { type: "p", html: 'See <a href="uber-notebook://page/' + q + '">Q</a> and <a href="uber-notebook://page/' + q + '">Q again</a>' },
       [b]: { type: "link", target: r },
-      [c]: { type: "check", html: 'Call the bank <a href="omanote://remind/2026-10-01T09:30">Thu 1 Oct 9:30</a> or <a href="omanote://remind/2026-10-02">Fri 2 Oct</a> <a href="omanote://date/2026-10-03">Sat</a>' },
+      [c]: { type: "check", html: 'Call the bank <a href="uber-notebook://remind/2026-10-01T09:30">Thu 1 Oct 9:30</a> or <a href="uber-notebook://remind/2026-10-02">Fri 2 Oct</a> <a href="uber-notebook://date/2026-10-03">Sat</a>' },
     },
   }, p);
   assert.deepEqual(plain(W.linkedPages(page)).sort(), [q, r].sort(), "each page once");
