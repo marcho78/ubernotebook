@@ -100,4 +100,19 @@ check("as HTML", () => {
   for (const p of [H.PALETTES.light, H.PALETTES.dark]) assert.deepEqual(Object.keys(p).sort(), Object.keys(H.PALETTES.light).sort());
 });
 
+check("YAML keys found in one pass along the line, in time however long it is", () => {
+  // What the pattern it replaces finds, on lines of every kind.
+  const RE = /^([ \t]*(?:-[ \t]+)*)("[^"\n]*"|'[^'\n]*'|[^\s#'"{\[\-][^#\n]*?|-[^\s#][^#\n]*?)([ \t]*:)(?=[ \t]|$)/;
+  for (const line of ["key: value", "  - name: x", "- - a: 1", "\"quoted key\" : v", "'k':", "url: http://e.org", "a:b: c", "k :", "-x: 1",
+    "# k: v", "k # c: v", "{a: 1}", "[a]: 1", "- ", "", ":: x", ": x", "a  \t: b", "\u00a0k: v", "k:\r", "- -k:", "\"open: x", "key:   "]) {
+    const m = RE.exec(line);
+    assert.equal(JSON.stringify(H.yamlKey(line)), JSON.stringify(m ? [m[0], m[1], m[2], m[3]] : null), JSON.stringify(line));
+  }
+  for (const src of ["/*" + " ".repeat(200000), "a" + " ".repeat(200000) + "b", "k: a" + "\t".repeat(200000) + "b", "- a" + " ".repeat(200000)]) {
+    const t = Date.now();
+    H.html(src, "yaml", false);
+    assert.ok(Date.now() - t < 2000, (Date.now() - t) + " ms");
+  }
+});
+
 console.log(`highlight: ${passed} checks passed`);

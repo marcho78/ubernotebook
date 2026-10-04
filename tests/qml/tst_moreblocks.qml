@@ -221,9 +221,31 @@ Item {
       view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://nowhere.example/x" })
       tryVerify(function() { return dataAt(i).url === "https://nowhere.example/x" && dataAt(i).title === "" }, 2000)
       verify(root.lastToast.indexOf("couldn't be read") >= 0, root.lastToast)
+      // Not read (as an agent's bookmark is): read only when you ask, with
+      // the card's own button (not opened in the browser by that click).
+      tryVerify(function() { var b = named(bv, "bookmarkRead"); return b !== null && b.y > 0 }, 1000, "it says it can be read")
+      files.fetchPages["https://nowhere.example/x"] = '<html><head><title>Found it</title></head></html>'
+      var opened = files.opened.length
+      mouseClick(named(bv, "bookmarkRead"))
+      tryVerify(function() { return dataAt(i).title === "Found it" }, 2000, "read when you click")
+      compare(files.opened.length, opened, "and not opened")
+      tryVerify(function() { return named(bv, "bookmarkRead") === null }, 1000, "read: the button goes")
       // Not a web link.
       view.dataAction(view.editor.uidAt(i), "fetch", { url: "file:///etc/passwd" })
       tryVerify(function() { return root.lastToast.indexOf("isn't a web link") >= 0 }, 1000)
+      // A picture the page names on your own network (or this computer, or
+      // by its address, or plain http): never fetched.
+      var pictures = ["https://router.example.com/admin.png", "https://192.168.1.1/admin.png", "http://cdn.example.com/a.png", "https://box.local/a.png"]
+      files.privateHosts = { "router.example.com": "192.168.1.1" }
+      for (var k = 0; k < pictures.length; k++) {
+        files.fetchPictures[pictures[k]] = "image/png"
+        files.fetchPages["https://example.com/inside" + k] = '<html><head><title>Inside ' + k + '</title><meta property="og:image" content="' + pictures[k] + '"></head></html>'
+        var before = files.ran.length
+        view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://example.com/inside" + k })
+        tryVerify(function() { return dataAt(i).title === "Inside " + k }, 2000)
+        compare(dataAt(i).image, "", "no picture: " + pictures[k])
+        verify(!files.ran.slice(before).some(function(a) { return a[0] === "/usr/bin/curl" }), "never fetched: " + pictures[k])
+      }
     }
 
     // A link to a page: Change (under the pointer) picks another; its page

@@ -112,6 +112,15 @@ Item {
       var saved = ws.readPageNow(view.page.id).blocks[uid]
       compare(saved.type, "code")
       compare(saved.lang, "Math")
+      // One that would be millions of pixels: said, never drawn.
+      e.focusBlock(uid, item.edit.length)
+      type(" \\rule{1000000em}{1000000em}")
+      tryVerify(function() { return item.mathError.indexOf("Too big to draw") === 0 }, 8000, "too big: " + item.mathError)
+      compare(item.mathSized, null)
+      newLine()
+      tryVerify(function() { return item.drawnView }, 1000)
+      verify(find(item, function(it) { return it.text === item.mathError }) !== null, "what's wrong, where it would be")
+      compare(named(item, "mathImage"), null, "no picture")
     }
 
     function test_2_typed_in_a_line() {

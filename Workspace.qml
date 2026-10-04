@@ -11,6 +11,7 @@ import "Contacts.js" as Contacts
 import "Email.js" as Email
 import "Files.js" as Files
 import "Bookmark.js" as Bookmark
+import "Permissions.js" as Permissions
 import "Starter.js" as Starter
 import "Agent.js" as Agent
 
@@ -73,10 +74,11 @@ Item {
   // there's none until you use Pages.
   property bool folderMade: false
 
-  function withFolder(fn) {
+  // fn() once the folder's there (failed(false) if it can't be made).
+  function withFolder(fn, failed) {
     if (folderMade) { fn(); return }
     files.mkdirs([folder, Workspace.assetsDir(files.rootPath)], function(ok) {
-      if (!ok) return
+      if (!ok) { if (failed) failed(false); return }
       ws.folderMade = true
       fn()
     })
@@ -89,7 +91,12 @@ Item {
     contactsLoaded = false
     var gen = ++generation
     folderMade = false
+    // (Nothing of another folder's: its pages may have the same ids.)
     texts = ({})
+    written = ({})
+    keptAt = ({})
+    keptJson = ({})
+    versionNames = ({})
     files.readFiles([ws.indexPath()], function(got) {
       if (gen !== ws.generation) return
       var ix = Workspace.cleanIndex(files.parseJson(got[ws.indexPath()] || ""))
@@ -148,11 +155,12 @@ Item {
     onTriggered: ws.flushIndex()
   }
 
-  function flushIndex() {
+  // (done(ok) once it's written.)
+  function flushIndex(done) {
     indexTimer.stop()
-    if (!ready && Object.keys(index.pages).length === 0) return
+    if (!ready && Object.keys(index.pages).length === 0) { if (done) done(false); return }
     var text = Workspace.indexJson(index)
-    withFolder(function() { files.writeFile(ws.indexPath(), text) })
+    withFolder(function() { files.writeFile(ws.indexPath(), text, done) }, done)
   }
 
   function touched() {
@@ -227,9 +235,9 @@ Item {
   }
 
   // Writes a page, and what the tree knows of it: its title, icon, and the
-  // pages on it (in the order their blocks are).
-  function savePage(page) {
-    if (!page || !Workspace.isUuid(page.id)) return
+  // pages on it (in the order their blocks are). done(ok) once it's written.
+  function savePage(page, done) {
+    if (!page || !Workspace.isUuid(page.id)) { if (done) done(false); return }
     // The page as it was, kept in its history first (every ten minutes of writing).
     keepVersion(page.id, "edit", false)
     page.text = Workspace.pageText(page)
@@ -237,7 +245,7 @@ Item {
     texts[page.id] = page.text
     var path = pagePath(page.id)
     var text = Workspace.pageJson(page)
-    withFolder(function() { files.writeFile(path, text) })
+    withFolder(function() { files.writeFile(path, text, done) }, done)
     var e = index.pages[page.id]
     if (!e) {
       index.pages[page.id] = { title: page.title, icon: page.icon, parent: "", children: [], trashed: false, created: page.created, modified: page.modified }
@@ -819,7 +827,16 @@ Item {
   // ---- files and bookmarks ----------------------------------------------------------------
 
   // A file copied into Pages/assets: done({ src, name, size, kind }) or done(null).
-  readonly property string importFileScript: "/usr/bin/cp -- \"$1\" \"$2\" && /usr/bin/stat -c %s -- \"$2\""
+  // Only a plain file (not a device or a pipe), read once, at most $3 bytes,
+  // into a new file (never over one that's there); its size printed.
+  // (The new file is made first; only what was made here is ever taken away.)
+  readonly property string importFileScript: "set -C -o pipefail; t=$(/usr/bin/stat -L -c %F -- \"$1\") || exit 1; "
+    + "case \"$t\" in 'regular file'|'regular empty file') ;; *) echo 'not a plain file' >&2; exit 1 ;; esac; "
+    + "exec 3> \"$2\" || exit 1; "
+    + "if ! /usr/bin/head -c \"$(($3 + 1))\" -- \"$1\" >&3; then exec 3>&-; /usr/bin/rm -f -- \"$2\"; exit 1; fi; exec 3>&-; "
+    + "n=$(/usr/bin/stat -c %s -- \"$2\") || exit 1; if [ \"$n\" -gt \"$3\" ]; then /usr/bin/rm -f -- \"$2\"; echo 'too big' >&2; exit 1; fi; echo \"$n\""
+  readonly property real fileMax: 8 * 1024 * 1024 * 1024
+  readonly property real emailMax: 64 * 1024 * 1024
   function importFile(path, done) {
     var p = String(path || "")
     var name = p.slice(p.lastIndexOf("/") + 1)
@@ -827,7 +844,7 @@ Item {
     var asset = Files.assetName(name, new Date())
     var dest = Workspace.assetsDir(files.rootPath) + "/" + asset
     files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
-      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dest], function(ok, out) {
+      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dest, String(ws.fileMax)], function(ok, out) {
         if (!ok) { done(null); return }
         var f = { src: "assets/" + asset, name: name, size: Number(String(out).trim()) || 0, kind: Files.kindOf(name), poster: "" }
         if (f.kind !== "video") { done(f); return }
@@ -849,7 +866,7 @@ Item {
     var asset = Email.assetName(name, new Date())
     var dir = Workspace.assetsDir(files.rootPath)
     files.mkdirs([dir], function() {
-      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dir + "/" + asset], function(ok, out) {
+      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dir + "/" + asset, String(ws.emailMax)], function(ok, out) {
         if (!ok) { done(null, "It couldn't be copied in"); return }
         files.readFiles([dir + "/" + asset], function(got) {
           var m = Email.parse(got[dir + "/" + asset] || "")
@@ -914,13 +931,14 @@ Item {
     })
   }
 
-  readonly property string stillScript: "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -ss 1 -i \"$1\" -frames:v 1 -vf 'scale=min(1280\\,iw):-2' \"$2\" || /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -i \"$1\" -frames:v 1 \"$2\""
+  // (ffmpeg reads the video as a file on this computer, in a video format:
+  // not a playlist or a list of other files.)
+  readonly property string stillScript: "w='-protocol_whitelist file -format_whitelist mov,matroska,avi,ogg,mpegts,flv,asf'; /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y $w -ss 1 -i \"$1\" -frames:v 1 -vf 'scale=min(1280\\,iw):-2' \"$2\" || /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y $w -i \"$1\" -frames:v 1 \"$2\""
 
   // A link's page read (its title, a line about it, its picture, kept in
   // assets): done(bookmark data, or null and why). Only http and https;
   // a page of at most 2 MB, a picture of at most 5 MB, 15 seconds each.
-  readonly property string fetchScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 2000000 -A 'Mozilla/5.0 (X11; Linux) Uber Notebook' -H 'Accept: text/html' -- \"$1\" | /usr/bin/head -c 2000000"
-  readonly property string imageScript: "/usr/bin/curl -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 5000000 -A 'Mozilla/5.0 (X11; Linux) Uber Notebook' -o \"$2\" -w '%{content_type}' -- \"$1\""
+  readonly property string fetchScript: "/usr/bin/curl -q -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 2000000 -A 'Mozilla/5.0 (X11; Linux) Uber Notebook' -H 'Accept: text/html' -- \"$1\" | /usr/bin/head -c 2000000"
   function fetchBookmark(url, done) {
     var u = Bookmark.cleanUrl(url)
     if (!u) { done(null, "That isn't a web link (https://...)"); return }
@@ -928,19 +946,78 @@ Item {
       if (!ok || !String(html || "").trim()) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, "The page couldn't be read: the link's kept"); return }
       var meta = Bookmark.parse(html, u)
       var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
-      if (!meta.image || !Bookmark.cleanUrl(meta.image)) { done(data, ""); return }
-      var tmp = Workspace.assetsDir(files.rootPath) + "/.bm-" + Date.now().toString(36)
-      files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
-        files.exec(["/usr/bin/bash", "-c", ws.imageScript, "uber-notebook-fetch-image", meta.image, tmp], function(ok2, type) {
-          var name = ok2 ? Bookmark.imageName(String(type || ""), meta.image, new Date()) : ""
-          if (!name) { files.exec(["/usr/bin/rm", "-f", "--", tmp], null); done(data, ""); return }
-          files.exec(["/usr/bin/mv", "-f", "--", tmp, Workspace.assetsDir(files.rootPath) + "/" + name], function(ok3) {
-            if (ok3) data.image = "assets/" + name
-            done(data, "")
-          })
-        }, { timeoutMs: 20000, maxBytes: 4096 })
+      ws.fetchBookmarkPicture(meta.image, function(src) {
+        if (src) data.image = src
+        done(data, "")
       })
     }, { timeoutMs: 20000, maxBytes: 2200000 })
+  }
+
+  // A link's page read for an agent, contacting only `hosts` (the sites
+  // you've let it have contacted, Permissions.js): https only; each step one
+  // request that curl itself never redirects; a redirect followed only to
+  // one of them, at most five; the picture only from one of them. Then as
+  // fetchBookmark: done(bookmark data, or null and why).
+  readonly property string fetchAgent: "Mozilla/5.0 (X11; Linux) Uber Notebook"
+  function fetchBookmarkWithin(url, hosts, done) {
+    var u = Bookmark.cleanUrl(url)
+    var allowed = (hosts || []).map(function(h) { return Permissions.cleanHost(h) }).filter(function(h) { return h !== "" })
+    function within(link) { var h = Permissions.hostOf(link); return h !== "" && allowed.indexOf(h) >= 0 }
+    if (!u || !within(u)) { done(null, "Uber Notebook may not contact that site for it"); return }
+    function kept(why) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, why) }
+    // (Each step prints the page, then on a line of its own after it, how
+    // it answered: its code, and where it sends you on to.)
+    function step(link, hops) {
+      files.exec(["/usr/bin/curl", "-q", "-s", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "2000000",
+        "-A", ws.fetchAgent, "-H", "Accept: text/html", "-w", "\n%{http_code}\t%{redirect_url}", "--", link], function(ok, out) {
+        var text = String(out || "")
+        var cut = text.lastIndexOf("\n")
+        var parts = (cut >= 0 ? text.slice(cut + 1) : "").split("\t")
+        var code = Number(parts[0])
+        var next = String(parts[1] || "").trim()
+        if (ok && code >= 300 && code < 400 && next) {
+          if (hops >= 5 || !within(next)) { kept("It goes on to a site you haven't let it contact: the link's kept"); return }
+          step(next, hops + 1)
+          return
+        }
+        var html = cut >= 0 ? text.slice(0, cut) : ""
+        if (!ok || code !== 200 || !html.trim()) { kept("The page couldn't be read: the link's kept"); return }
+        var meta = Bookmark.parse(html, link)
+        var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
+        if (!meta.image || !within(meta.image)) { done(data, ""); return }
+        ws.fetchBookmarkPicture(meta.image, function(src) { if (src) data.image = src; done(data, "") })
+      }, { timeoutMs: 20000, maxBytes: 2100000 })
+    }
+    step(u, 0)
+  }
+
+  // The page's picture (its og:image, named by the page, not by you): only
+  // from the internet (Bookmark.imageTarget, isPublicIp): its host looked up
+  // first, every address it has a public one, then fetched from that
+  // address, never redirected, into a file of its own, and copied into
+  // assets under a new name. done("assets/<name>") or done("").
+  function fetchBookmarkPicture(url, done) {
+    var target = Bookmark.imageTarget(url)
+    if (!target) { done(""); return }
+    files.exec(["/usr/bin/getent", "ahosts", target.host], function(okR, out) {
+      var ips = okR ? Bookmark.addresses(out) : []
+      if (!ips.length || !ips.every(Bookmark.isPublicIp)) { done(""); return }
+      var ip = ips.filter(function(a) { return a.indexOf(":") < 0 })[0] || ips[0]
+      var at = target.host + ":" + target.port + ":" + (ip.indexOf(":") >= 0 ? "[" + ip + "]" : ip)
+      var tmp = files.runtimeDir + "/uber-notebook-picture-" + Workspace.uuid4()
+      files.exec(["/usr/bin/curl", "-q", "-sS", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
+        "--resolve", at, "-A", "Mozilla/5.0 (X11; Linux) Uber Notebook", "-o", tmp, "-w", "%{content_type}", "--", target.url], function(ok2, type) {
+        var name = ok2 ? Bookmark.imageName(String(type || ""), target.url, new Date()) : ""
+        if (!name) { files.exec(["/usr/bin/rm", "-f", "--", tmp], null); done(""); return }
+        var dir = Workspace.assetsDir(files.rootPath)
+        files.mkdirs([dir], function() {
+          files.exec(["/usr/bin/cp", "--update=none-fail", "--", tmp, dir + "/" + name], function(ok3) {
+            files.exec(["/usr/bin/rm", "-f", "--", tmp], null)
+            done(ok3 ? "assets/" + name : "")
+          }, { timeoutMs: 20000 })
+        })
+      }, { timeoutMs: 20000, maxBytes: 4096 })
+    }, { timeoutMs: 5000, maxBytes: 65536 })
   }
 
   // The template new pages inside a page start from ("" for none).
@@ -1125,6 +1202,17 @@ Item {
     return folder + "/" + src
   }
 
+  // A file in assets as it is on disk (not as a page says): done({ size,
+  // regular }) or done(null).
+  function assetInfo(src, done) {
+    var path = assetPath(src)
+    if (!path) { done(null); return }
+    files.exec(["/usr/bin/stat", "-c", "%s\t%F", "--", path], function(ok, out) {
+      var m = /^(\d+)\t(.+)$/.exec(String(out || "").trim())
+      done(ok && m ? { size: Number(m[1]), regular: m[2] === "regular file" || m[2] === "regular empty file" } : null)
+    }, { timeoutMs: 5000, maxBytes: 4096 })
+  }
+
   // Copies a picture into Pages/assets: done("assets/<name>") or done("").
   function importPicture(path, done) {
     if (!files.isImagePath(path)) { done(""); return }
@@ -1200,8 +1288,9 @@ Item {
   property bool importing: false
   property int importCount: 0
 
-  // Every file under the paths given ("R\t<root>" before each one's files).
-  readonly property string scanScript: "for p in \"$@\"; do if [ -d \"$p\" ]; then printf 'R\\t%s\\n' \"$p\"; /usr/bin/find \"$p\" -maxdepth 12 -type f ! -path '*/.*' -print; elif [ -f \"$p\" ]; then printf 'R\\t%s\\n' \"$p\"; printf '%s\\n' \"$p\"; fi; done"
+  // Every file under the paths given ("R\t<root>" before each one's files),
+  // each ended by a NUL (a name can't have one; it can have a newline).
+  readonly property string scanScript: "for p in \"$@\"; do if [ -d \"$p\" ]; then printf 'R\\t%s\\0' \"$p\"; /usr/bin/find \"$p\" -maxdepth 12 -type f ! -path '*/.*' -print0; elif [ -f \"$p\" ]; then printf 'R\\t%s\\0%s\\0' \"$p\" \"$p\"; fi; done"
 
   function importPaths(paths, parent, done) {
     var list = (paths || []).filter(function(p) { return /^\/[^\u0000-\u001f]{1,4000}$/.test(String(p)) }).slice(0, 200)
@@ -1222,8 +1311,13 @@ Item {
     })
   }
 
-  // Zips (a Notion export) unpacked into tmp, and zips in them; their
-  // folders take their place in the list.
+  // Zips (a Notion export) unpacked into tmp, and the zips in them (Notion
+  // zips its export in parts), by the archive helper (bin/uber-notebook-files):
+  // nothing in one can land outside its folder, be a link, or take more than
+  // UNZIP_MAX_BYTES (UNZIP_MAX_FILES files). Their folders take their place
+  // in the list.
+  readonly property real unzipMaxBytes: 4 * 1024 * 1024 * 1024
+  readonly property int unzipMaxFiles: 200000
   function unzipAll(list, tmp, done) {
     var out = []
     var k = 0
@@ -1231,16 +1325,15 @@ Item {
       if (k >= list.length) { done(out); return }
       var p = list[k++]
       if (Import.kindOf(p) !== "zip") { out.push(p); next(); return }
-      var dir = tmp + "/zip-" + k + "/" + Import.titleFromName(p).replace(/[\/\u0000-\u001f]/g, " ").slice(0, 80)
+      var dir = tmp + "/zip-" + k + "/" + Import.titleFromName(p).replace(/[\/\u0000-\u001f]/g, " ").replace(/^\.+/, "").slice(0, 80)
       files.mkdirs([dir], function() {
-        files.exec(["/usr/bin/unzip", "-qq", "-o", p, "-d", dir], function(ok) {
-          if (!ok) { ws.failed("Couldn't unzip " + p); next(); return }
-          // Notion zips its export in parts: those too.
-          files.exec(["/usr/bin/bash", "-c", "shopt -s nullglob; for z in \"$1\"/*.zip; do /usr/bin/unzip -qq -o \"$z\" -d \"$1\" && /usr/bin/rm -f -- \"$z\"; done", "uber-notebook-unzip", dir], function() {
-            out.push(dir)
-            next()
-          }, { okCodes: [0, 1], timeoutMs: 120000 })
-        }, { okCodes: [0, 1], timeoutMs: 120000, maxBytes: 1024 * 1024 })
+        files.helper(["unzip", p, dir, String(ws.unzipMaxBytes), String(ws.unzipMaxFiles)], function(ok, output) {
+          var r = null
+          try { r = JSON.parse(String(output || "").trim().split("\n").pop()) } catch (e) { r = null }
+          if (!ok || !r || !r.ok) { ws.failed("Couldn't unzip " + p + (r && r.error ? ": " + r.error : "")); next(); return }
+          out.push(dir)
+          next()
+        }, { timeoutMs: 10 * 60 * 1000, maxBytes: 64 * 1024 })
       })
     }
     next()
@@ -1249,12 +1342,14 @@ Item {
   function scanImport(roots, tmp, parent, done) {
     files.exec(["/usr/bin/bash", "-c", scanScript, "uber-notebook-scan"].concat(roots), function(ok, output) {
       var groups = []
-      String(output || "").split("\n").forEach(function(line) {
-        if (!line) return
-        if (line.indexOf("R\t") === 0) groups.push({ root: line.slice(2), files: [] })
-        else if (groups.length) groups[groups.length - 1].files.push(line)
+      String(output || "").split("\u0000").forEach(function(item) {
+        if (!item) return
+        if (item.indexOf("R\t") === 0) { groups.push({ root: item.slice(2), files: [] }); return }
+        var g = groups[groups.length - 1]
+        // (Only a file in what was asked for, with a name that's only a name.)
+        if (g && (item === g.root || item.indexOf(g.root + "/") === 0) && !/[\u0001-\u001f\u007f]/.test(item)) g.files.push(item)
       })
-      ws.planImport(groups, tmp, parent, done)
+      try { ws.planImport(groups, tmp, parent, done) } catch (e) { ws.importFailed(e, [], done) }
     }, { okCodes: [0, 1], maxBytes: 8 * 1024 * 1024, timeoutMs: 30000 })
   }
 
@@ -1351,7 +1446,9 @@ Item {
         var pandocReads = { docx: "docx", odt: "odt", rtf: "rtf", epub: "epub", org: "org", rst: "rst", tex: "latex", latex: "latex", textile: "textile", wiki: "mediawiki", mediawiki: "mediawiki", ipynb: "ipynb" }
         files.mkdirs([dir], function() {
           if (pandoc && pandocReads[ext]) {
-            files.exec(["/usr/bin/pandoc", "--from=" + pandocReads[ext], "--to=gfm", "--wrap=none", "--extract-media=" + dir, "--output=" + dir + "/out.md", "--", e.path], function(ok2) {
+            // (--sandbox: pandoc reads only the file it's given: nothing it
+            // names, on this computer or the web.)
+            files.exec(["/usr/bin/pandoc", "--sandbox", "--from=" + pandocReads[ext], "--to=gfm", "--wrap=none", "--extract-media=" + dir, "--output=" + dir + "/out.md", "--", e.path], function(ok2) {
               if (!ok2) { skipped.push(e.path); e.kind = "skip"; next(); return }
               files.readFiles([dir + "/out.md"], function(g) { e.kind = "markdown"; e.source = g[dir + "/out.md"] || ""; e.base = dir + "/out.md"; e.root = tmp; next() })
             }, { timeoutMs: 120000, maxBytes: 1024 * 1024 })
@@ -1375,9 +1472,19 @@ Item {
     }, { okCodes: [0, 1], timeoutMs: 5000 })
   }
 
+  // Something in what's imported that couldn't be read: said, and the import
+  // over (what was made stays), never stuck.
+  function importFailed(e, skipped, done) {
+    ws.failed("Couldn't import all of it: " + String(e && e.message ? e.message : e).slice(0, 200))
+    done({ pages: ws.importCount, first: "", skipped: skipped || [] })
+  }
+
   // Each file read into blocks, its links and pictures pointed where they
   // go now; then the pages are made, parents first, and the pictures copied.
   function buildImport(plan, images, parent, skipped, done) {
+    try { buildImportNow(plan, images, parent, skipped, done) } catch (e) { importFailed(e, skipped, done) }
+  }
+  function buildImportNow(plan, images, parent, skipped, done) {
     var byTitle = {}
     var byFile = {}
     plan.forEach(function(e) {
@@ -1481,6 +1588,91 @@ Item {
       files.exec(["/usr/bin/cp", "--", c.from, c.to], function() { copyNext() }, { okCodes: [0, 1], timeoutMs: 20000 })
     }
     files.mkdirs([Workspace.assetsDir(files.rootPath)], function() { copyNext() })
+  }
+
+  // ---- a notebook into Pages -------------------------------------------------------------------------
+
+  // One of your notebooks as pages: a page called what it is, at the end of
+  // the sidebar, with a page inside it for each of its pages, in order (their
+  // text, pictures and drawings, and when they were written: Import.js).
+  // `nb` as Store.openNotebook gives it (every page), `dir` its folder. Its
+  // pictures are copied in first (never over a picture that's there); one
+  // that can't be is left out, and counted. Then the pages are written, and
+  // the tree. done({ id, pages, missing, failed }) once every write has
+  // answered (`failed`: how many didn't go); done({ tooLong: "<title>" })
+  // when a page has more blocks than a page can hold, before anything's
+  // made; done(null) when nothing was made.
+  function importNotebook(nb, dir, done) {
+    if (!ready || importing || !nb || !Array.isArray(nb.pages) || nb.pages.length === 0 || !dir) { done(null); return }
+    // (Every page fits, its pictures and drawing too, or none is made.)
+    for (var p = 0; p < nb.pages.length; p++) {
+      var all = Import.fromNotebookPage(nb.pages[p], { image: function(src) { return src } })
+      if (all.blocks.length > Workspace.MAX_BLOCKS) { done({ tooLong: all.title || "Untitled" }); return }
+    }
+    importing = true
+    var dest = Workspace.assetsDir(files.rootPath)
+    // Every picture on its pages, once, each with a new name of its own.
+    var names = {}
+    var taken = {}
+    var copies = []
+    nb.pages.forEach(function(p) {
+      (p.blocks || []).forEach(function(b) {
+        if (b.type !== "image" || !Blocks.cleanAsset(b.src) || names[b.src] !== undefined) return
+        var name = files.assetName(b.src)
+        while (taken[name]) name = name.replace(/(\.[a-z0-9]+)$/, "-" + Math.floor(Math.random() * 1000) + "$1")
+        taken[name] = true
+        names[b.src] = ""
+        copies.push({ src: b.src, from: dir + "/" + b.src, name: name })
+      })
+    })
+    var missing = 0
+    var i = 0
+    function copyNext() {
+      if (i >= copies.length) { make(); return }
+      var c = copies[i++]
+      files.exec(["/usr/bin/cp", "--update=none-fail", "--", c.from, dest + "/" + c.name], function(ok) {
+        if (ok) names[c.src] = "assets/" + c.name
+        else missing++
+        copyNext()
+      }, { timeoutMs: 20000 })
+    }
+    function make() {
+      var ctx = { image: function(src) { return names[src] || "" } }
+      var kids = nb.pages.map(function(p) {
+        var r = Import.fromNotebookPage(p, ctx)
+        return { id: Workspace.uuid4(), title: r.title, blocks: r.blocks, created: p.created, modified: p.modified }
+      })
+      var top = Workspace.newPage({ title: nb.title, icon: "\u{1f4d3}", blocks: kids.map(function(k) { return { type: "page", uid: k.id, indent: 0 } }) })
+      if (!top) { ws.importing = false; done(null); return }
+      // Every write answers; then the tree's written, and it's done.
+      var waiting = kids.length + 1
+      var failed = 0
+      function written(ok) {
+        if (!ok) failed++
+        if (--waiting > 0) return
+        ws.flushIndex(function(indexOk) {
+          ws.importing = false
+          done({ id: top.id, pages: kids.length, missing: missing, failed: failed + (indexOk ? 0 : 1) })
+        })
+      }
+      index.pages[top.id] = { title: top.title, icon: top.icon, parent: "", children: [], trashed: false, created: top.created, modified: top.modified }
+      Workspace.attach(index, top.id, "", -1)
+      savePage(top, written)
+      kids.forEach(function(k) {
+        var when = Date.parse(k.created)
+        var page = Workspace.newPage({ id: k.id, parent: top.id, title: k.title, blocks: k.blocks }, isFinite(when) ? new Date(when) : new Date())
+        if (!page) { written(false); return }
+        if (isFinite(Date.parse(k.modified))) page.modified = new Date(Date.parse(k.modified)).toISOString()
+        index.pages[page.id] = { title: page.title, icon: page.icon, parent: "", children: [], trashed: false, created: page.created, modified: page.modified }
+        Workspace.attach(index, page.id, top.id, -1)
+        ws.savePage(page, written)
+      })
+      touched()
+    }
+    files.mkdirs([dest], function(ok) {
+      if (!ok) { ws.importing = false; done(null); return }
+      copyNext()
+    })
   }
 
   // ---- the first pages -----------------------------------------------------------------------------

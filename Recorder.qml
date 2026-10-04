@@ -109,6 +109,10 @@ Item {
     proc.command = ["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec \"$@\"", "uber-notebook-record", dir]
       .concat(Audio.recordCommand(kind, path, { input: input, boost: boost }))
     proc.running = true
+    // (ffmpeg's own limit is the recording's length; a microphone that stops
+    // sending could keep it waiting, so the clock has one too.)
+    wallClock.interval = (Number(Audio.LIMITS[kind] || Audio.LIMITS.audio) + 30) * 1000
+    wallClock.restart()
     return ""
   }
 
@@ -141,6 +145,7 @@ Item {
     interval: 4000
     onTriggered: if (proc.running) proc.signal(9)
   }
+  Timer { id: wallClock; onTriggered: rec.stop() }
 
   Timer {
     interval: 100
@@ -185,6 +190,7 @@ Item {
     }
     onExited: function(exitCode) {
       killer.stop()
+      wallClock.stop()
       var file = rec._file
       var seconds = rec._levels.length / Audio.RATE
       if (rec.kind === "test") {

@@ -2,17 +2,19 @@
 
 ![Uber Notebook](screenshots/notebook.png)
 
-Notebooks that look and feel like paper. Press **Super+N**, or click the
-notebook in the top bar, and your notebooks are on the desk, cover up. Pick
-one: it slides onto the desk, its cover swings open, and you write on the page
-in the pen you like, on ruled, grid, dotted, graph or blank paper. The pages
-turn over the binding, the text sits on the lines, and everything is saved as
+Your notes, in your Omarchy shell. Press **Super+N**, or click the notebook in
+the top bar, and **Pages** opens: a workspace of pages made of blocks, the
+way Notion does it. Type `/` for any kind of block, drag blocks around by
+their handle, put blocks inside blocks and pages inside pages, fold toggles,
+color anything, and ask your AI agent about any page. Everything is saved as
 you go, as plain files you own.
 
-Or switch to **Pages**, the other way to write in Uber Notebook: a workspace of
-pages made of blocks, the way Notion does it. Type `/` for any kind of block,
-drag blocks around by their handle, put blocks inside blocks and pages inside
-pages, fold toggles, color anything.
+Or switch to **Notebooks**: notebooks that look and feel like paper, on a
+desk, cover up. Pick one: it slides onto the desk, its cover swings open, and
+you write on the page in the pen you like, on ruled, grid, dotted, graph or
+blank paper. Notebooks stay as they are (Pages is where new things come), and
+any notebook moves to Pages in a click: *Move to Pages…* in its menu on the
+shelf.
 
 * **A notebook on your desk.** Pebbled leather with a gold-foil title and an
   elastic band, linen or smooth card with a paper label, kraft with a typed
@@ -63,8 +65,8 @@ pages, fold toggles, color anything.
 * **Find anything.** Search every page of every notebook from the shelf, or
   Ctrl+F on a page.
 * **Quick notes.** Super+Alt+N pops up a sticky note wherever you are; what
-  you write becomes a page in your Quick notes notebook, or, if you'd
-  rather, a page in your Pages Inbox, written in Markdown.
+  you write becomes a page in your Pages Inbox, written in Markdown (or, if
+  you'd rather, a page in your Quick notes notebook).
 * **Plain files.** Every notebook is a folder of JSON files in
   `~/Documents/Uber Notebook`, pictures beside them; export any notebook as Markdown.
 
@@ -186,7 +188,8 @@ profile, *Personal*.
 | A new notebook | **Ctrl+Shift+N**, or *New notebook* on the shelf |
 | Bigger or smaller | **Ctrl+=** / **Ctrl+-**, **Ctrl+0** to reset |
 | Settings | **Ctrl+,**, or the cog on the shelf |
-| Pages | *Pages* in the switch at the top right of the shelf (and *Notebooks* at the top of the Pages sidebar to go back) |
+| Pages and Notebooks | Uber Notebook opens in Pages (the first time; then where you were). *Notebooks* at the top of the Pages sidebar goes to the shelf, *Pages* at its top right comes back |
+| Move a notebook to Pages | Right-click it on the shelf, *Move to Pages…* |
 | Put Uber Notebook away | **Esc** on the shelf, **Super+N**, or close the window |
 
 Closing the window, or Uber Notebook, keeps your place: it opens where you were.
@@ -287,9 +290,22 @@ page, as *Habit to track* and *Time slot* do those.
 
 ## Pages
 
-Pages is the other way to write in Uber Notebook: not a notebook on a desk, but a
-workspace of pages, the way Notion does it. Switch to it with *Pages* at the
-top right of the shelf; Uber Notebook opens where you were last, notebooks or pages.
+Pages is where Uber Notebook opens: not a notebook on a desk, but a workspace of
+pages, the way Notion does it. The first time it's Pages; after that, Uber
+Notebook opens where you were last, Pages or the notebooks.
+
+**A notebook moved to Pages.** Right-click a notebook on the shelf, *Move to
+Pages…*: it becomes a page called what it is (📓), with a page inside it for
+each of its pages, in order, written when they were. Their text comes as it
+was (headings, lists, to-dos, sticky notes in their colors, code, dividers,
+habits, month calendars; a time slot is a line starting with its time), their
+pictures are copied into Pages, and what's drawn on a page becomes a sketch at
+its end (Pages draws in sketches, not over the writing). Once every page is
+in Pages and saved, the notebook goes to the trash (`.trash` in your notes
+folder, where you can get it back). If a picture can't be copied, or something
+couldn't be saved, the notebook stays on the shelf too; if a page is longer
+than a page in Pages can be (5,000 blocks), nothing is moved, and it says
+which.
 
 **The demo's examples.** The demo profile's Pages has pages that show what it can do, each a different kind of page:
 *Welcome to Uber Notebook* (and pages inside it on writing, staying organized and
@@ -553,10 +569,10 @@ request for the list of releases: nothing of yours goes with it. When there's
 a newer version, the foot of Pages' sidebar and the shelf's corner say so
 (*Version 1.1.0 is available*), with a dot by About in Settings; a click
 shows its release notes, here in Uber Notebook (no pictures or HTML from them,
-nothing fetched). An Uber Notebook installed with `omarchy plugin add` updates
-itself with *Update now* (`omarchy plugin update marcho78.uber-notebook`, which
-checks it before the shell loads it); one installed another way shows that
-command, to copy. *Release notes* in About shows what's in the version you
+nothing fetched), with the command that installs it, to copy:
+`omarchy plugin update marcho78.uber-notebook`. Run it in a terminal: it shows
+what changes and asks before it applies them. Uber Notebook never installs
+anything itself. *Release notes* in About shows what's in the version you
 have, from `CHANGELOG.md`.
 
 At the foot of the sidebar (and the shelf's corner) is *Follow me on X
@@ -731,7 +747,7 @@ omarchy-shell uber-notebook backup ""                   # a backup of the open p
 omarchy-shell uber-notebook backups                     # the backups in the backup folder, newest first, and how the last one went
 omarchy-shell uber-notebook restoreBackup ~/Documents/"Uber Notebook Backups"/<file>.tar.gz false   # put back as new profiles (true opens the first)
 omarchy-shell uber-notebook appVersion                  # the version running, and whether there's a newer one (checkUpdate asks GitHub now)
-omarchy-shell uber-notebook releaseNotes                # what's new, as Markdown (installUpdate installs it, for an Uber Notebook installed from git)
+omarchy-shell uber-notebook releaseNotes                # what's new, as Markdown
 omarchy-shell uber-notebook editEvent <event id> when "fri 3pm"   # an event changed: title, when, start, end, allDay, place, notes, repeat, alert, color
 omarchy-shell uber-notebook editContact "Sam" phone "mobile: +1 555 0100"   # someone changed (removeContact <id>: taken out)
 omarchy-shell uber-notebook renameTag "#idea" "#ideas"  # on every page (removeTag "#idea": off every page)
@@ -794,12 +810,16 @@ page the AI button has a mark under it; **Ctrl+J** (or the AI button, `/agent`,
 picked going with your next message. That's so after Uber Notebook starts
 again too (`Pages/chats.json`; the agent goes on in its own conversation, or,
 if that's gone, in a new one it's told what was said). **New chat**, at the
-panel's top, opens the box to ask anew (the one before is kept till you do). If
-it can't run there (not installed, not logged in), the panel says why and
-*Open in a terminal instead* starts it the usual way. The
+panel's top, opens the box to ask anew (the one before is kept till you do).
+A terminal instead, whenever you like (there your agent runs as you set it
+up, with all its own controls): **In a terminal** beside *Ask* in the box, or
+*Open in a terminal instead* in the panel, there all along (while the agent
+works in the panel, it stops there first; if it can't run there, the panel
+says why). The
 other agents open in their own terminal (Omarchy's agent window). A meeting's
-*Summarize* goes the same way. Each starts with the permission mode Omarchy
-starts it with in a terminal, and it uses your own login (subscription or key).
+*Summarize* goes the same way. In the panel each reads and changes your notes
+through Uber Notebook's commands (see Security: *Your agent*); in a terminal, an agent runs as Omarchy runs it. Each uses your own
+login (subscription or key).
 **Model and effort**: the box's *model · effort* buttons (or Settings → **AI**)
 choose what Claude Code, Grok and Codex work with, from each agent's own list
 (Grok's and Codex's models as they keep them, with the efforts each model
@@ -811,10 +831,12 @@ installed here (Omarchy's list of them). That makes it Omarchy's default agent
 too, and opens nothing. The agent gets the page's id, the
 ids of the blocks you picked (or the empty line you're on, where its writing
 goes), the words you selected, and where the uber-notebook skill is; it reads the
-rest itself. Omarchy starts it the way it starts every agent from a menu, with
-its approval prompts off, so it can also do whatever else your agent can on
-your computer; Uber Notebook's commands keep your notes safe from it (nothing
-deleted for good, no locked page changed, every change undoable).
+rest itself. In the panel it reads and changes your notes through Uber
+Notebook's commands, not Uber Notebook's settings, profiles or backups; in a terminal, Omarchy
+starts it the way it starts every agent from a menu, with its approval
+prompts off, so it can also do whatever else your agent can on your
+computer. Either way, Uber Notebook's commands keep your notes safe from it
+(nothing deleted for good, no locked page changed, every change undoable).
 
 **The skill.** While Uber Notebook runs, it links its skill (`skills/uber-notebook`) into
 the folders agents read skills from, the ones Omarchy links its own into:
@@ -947,95 +969,153 @@ quick-note card (`Notebook.qml`, `app/`), and the icon in the bar.
 ## Security
 
 Uber Notebook runs as unsandboxed code in the Omarchy shell, like every shell
-plugin, so here is exactly what it does.
+plugin, so here is exactly what it does, and how what it reads (a page synced
+in, an import, an email, an agent's answer, the clipboard) is kept from doing
+anything.
 
-**No root, nothing compiled on your machine, and the network only for two
-things.** Links you Ctrl+click open in your browser. Uber Notebook itself connects
-only to read a web bookmark's page and picture, once, when you add one; and
-to ask GitHub's API for the project's list of releases (a minute after it
-starts and once a day, while Settings → About has it on; a plain request,
-with nothing of yours in it).
+**No root, nothing installed or built, nothing that updates itself.** It never
+asks for root, and runs no package manager and no updater. When there's a newer version it
+says so, with the command that installs it (`omarchy plugin update
+marcho78.uber-notebook`), for you to run in a terminal, where it shows what
+changes and asks first.
 
-**Programs.** Every command runs by absolute path with an argument list:
+**The network, for three things.** A web bookmark you add: its page (http or
+https, at most 2 MB, 15 seconds) and its picture, which the page names: https
+only, from a host whose addresses are all public (not this computer or your
+network), fetched from that address, never redirected, at most 5 MB. GitHub's
+list of the project's releases (https only, at most 2 MB, a minute after it
+starts and once a day while Settings → About has it on; nothing of yours is
+in it). And the agents you ask (they use their own connection). A link you
+click opens in your browser only if it's http, https or mailto: a link in a
+page never opens a file on your computer.
+
+**Programs.** Every command runs by absolute path, with an argument list, in
+its own process group (`/usr/bin/setsid`) with a deadline and a budget for
+what it prints; when it's done (or overruns, or Uber Notebook stops), anything
+it left running ends too (`/usr/bin/kill` on its group), but `wl-copy`, which
+holds what you copied. A command gets only the environment a tool needs (your
+home, your language, the Wayland, D-Bus and PipeWire sockets, Hyprland's
+instance, a proxy you set) and `PATH=/usr/bin`: nothing that changes how a
+shell or a tool starts (`BASH_ENV`, `LD_PRELOAD`, `TAR_OPTIONS`...). Note text is
+never part of a script, only its arguments.
 
 | Program | Why |
 |---|---|
-| `/usr/bin/bash` | three fixed scripts: one prints the files it's handed (or that a fixed pattern matches in a notebook's folder), each after its name, so a notebook is read in one go; one lists the page files in the Pages folder; the other points `wl-paste`'s output at a new picture file. Your text is never part of a script |
-| `/usr/bin/cat` | read files, from that script |
-| `/usr/bin/grep` | find the pages that contain what you searched for (`-F`: plain text, never a pattern) |
-| `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/test` | make notebook folders, copy pictures in and out, move things to the trash, see if there's a Documents folder |
-| `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy a page as Markdown; paste a picture |
-| `/usr/bin/uwsm-app` with `xdg-open` | open a link, a picture or a folder the way Omarchy's launcher does |
+| `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
+| `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -e`: plain text, never a pattern) |
+| `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders; copy pictures in and out (never over a file that's there); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the archive helper: unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name) |
+| `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
+| `/usr/bin/uwsm-app` with `xdg-open` | open a link (http, https, mailto), or one of Uber Notebook's own folders and files |
 | `/usr/bin/hyprctl` | read Hyprland's bindings; register and remove the shortcuts and rules |
-| `/usr/bin/omarchy-shell` | say "Saved to Quick notes" on the OSD |
-| `/usr/bin/omarchy-notification-send` | a reminder from Pages, as an Omarchy notification; clicking it runs `omarchy-shell uber-notebook open <page id>` |
-| `/usr/bin/find`, `/usr/bin/unzip` | list the files in a folder you import; unpack a zipped export (into a folder of your own under `$XDG_RUNTIME_DIR`, removed afterwards with `/usr/bin/rm`) |
-| `/usr/bin/soffice` or `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown, in that same folder |
-| `/usr/bin/ffmpeg` | record from your microphone (PipeWire's, through its Pulse server) while an audio note, dictation or a test of the microphone records, printing its level ten times a second; even out a voice once it's recorded; make a recording a 16 kHz WAV for voxtype |
-| `/usr/bin/pactl` | list the microphones, for Settings |
-| `/usr/bin/curl` | read a web bookmark's page (http and https only, at most 2 MB, 15 seconds) and its picture (at most 5 MB), once, when you add it |
-| `/usr/bin/cp`, `/usr/bin/stat` | copy a file you put on a page into `Pages/assets`, and say how big it is |
-| `/usr/bin/voxtype` | `transcribe`: write out what was said in a recording, the way voxtype's settings say (its model, on your computer as Omarchy sets it up); `meeting start`, `stop`, `pause`, `resume`, `list` and `export`: record a meeting and get what voxtype wrote out; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on |
-| `/usr/bin/systemctl` | `--user restart voxtype.service`, once, when you turn voxtype's meeting mode on |
-| `/usr/bin/rm` | take Uber Notebook's launcher entry out when it stops; take away dictation's recordings (in a folder of Uber Notebook's own under `$XDG_RUNTIME_DIR`) once they're written out |
-| `/usr/bin/curl` | ask `api.github.com` for the project's releases (https only, at most 2 MB, 15 seconds) |
-| `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp`, `/usr/bin/stat`, `/usr/bin/find` | make a backup (a fixed script: its uber-notebook-backup.json in a folder of its own from `mktemp`, then each profile's folder added under `p1/`..., compressed beside where it goes and named when it's whole); list the backups; look inside one before it's put back (only plain files and folders, nothing outside its own) and put a profile back into a new folder (`--no-same-owner`) |
-| `/usr/bin/gio` | `trash`: automatic backups past how many are kept (only ever those) |
-| `omarchy-plugin-update` | when you click *Update now* (an Uber Notebook installed from git): `omarchy plugin update marcho78.uber-notebook --yes` |
-| `/usr/bin/setsid`, `/usr/bin/kill` | run each command in its own process group, with a deadline and an output budget, and end it if it overruns them |
+| `/usr/bin/omarchy-shell`, `/usr/bin/omarchy-notification-send`, `/usr/bin/omarchy-menu`, `/usr/bin/omarchy-default-agent`, `/usr/bin/omarchy-agent-prompt` | the OSD; a reminder as a notification (a title or text starting with "-" made safe); the menu for choosing your agent; which agent is Omarchy's default; an agent in a terminal |
+| `/usr/bin/soffice`, `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown (LibreOffice with a profile of its own; pandoc with `--sandbox`: it reads only that file) |
+| `/usr/bin/ffmpeg`, `/usr/bin/pactl` | record from your microphone (with a deadline on the clock too); even out a voice; make a recording a WAV for voxtype; a video's still; a picture copied as PNG. A file it reads is read as a file, in one of a few formats (`-protocol_whitelist file -format_whitelist ...`): never a playlist or a list of other files. `pactl` lists the microphones |
+| `/usr/bin/curl` | a bookmark's page and picture; GitHub's list of releases (`-q`: no `~/.curlrc`) |
+| `/usr/bin/getent` | `ahosts`: where a bookmark's picture is, before it's fetched |
+| `/usr/bin/voxtype` | `transcribe`; `meeting start`, `stop`, `pause`, `resume`, `list`, `export`; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on |
+| `/usr/bin/systemctl` | `--user restart voxtype.service`, once, when you turn voxtype's meeting mode on (your own voxtype service; it reads that setting only as it starts) |
+| `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp` | make a backup (written beside where it goes, named when it's whole) |
+| `/usr/bin/gio` | `trash`: automatic backups past how many are kept |
 
-What you type reaches `grep` as a separate argument after `-e`, so it can
-never be read as an option. Paths are checked before they're used: notebook
-and page ids are plain lowercase names, pictures must be in their notebook's
-`assets` folder, and dropped or picked pictures must be absolute image paths.
+**Archives.** A zip you import and a backup you put back are opened by the
+archive helper, from one open file (only a plain file, not a link): what's in
+them is written below a folder made for it, through folders opened without
+following links, as new files only; nothing in them can name a place outside
+that folder, be a link or a device, or take more than its room (an import 4
+GB and 200,000 files, the zips in it too; a profile put back 64 GB and
+2,000,000 files). A backup is put back only if it's still the file that was
+looked into (its SHA-256), into a new folder, and if anything goes wrong,
+only that folder is taken away.
 
-**Commands.** The IPC commands for agents and scripts (`add`, `addTo`,
-`append`, `replace`, `insertAfter`) read the Markdown file they're given, by its
-full path, up to 2 MB, as text; they don't run it or follow anything in it.
-They reach Uber Notebook over the Omarchy shell's IPC, which only programs running
-as you can use, and they can add, append, change blocks and put pages in the
-trash, never delete a page for good or change a locked one.
+**Your agent.** In the panel, Claude Code, Grok and Codex work through Uber
+Notebook's commands: they read and change your notes, as you ask.
 
-**Your agent.** Uber Notebook starts an agent only when you ask (Ask agent), and
-only Omarchy's default one. Claude Code, Grok and Codex it runs itself,
-without a terminal, through `/usr/bin/bash` with nothing on their input, in a
-folder of Uber Notebook's own under `$XDG_RUNTIME_DIR`, each with the
-permission mode Omarchy starts it with: `claude -p --output-format stream-json
---permission-mode auto` (and `omarchy-shell uber-notebook` commands allowed),
-`grok --single=<prompt> --output-format streaming-messages-json
---permission-mode bypassPermissions`, and `codex exec --json --approve-for-me
---skip-git-repo-check`; a reply goes on with the same conversation
-(`--session-id` then `--resume` for Claude Code and Grok, `codex exec resume`
-with the id Codex gives), all with the model and effort you chose (`--model` and
-`--effort`, `-m` and `--reasoning-effort`, `-m` and `-c
-model_reasoning_effort`; only a model's name ever goes there). The models to
-choose from are read from `~/.grok/models_cache.json` and
-`$CODEX_HOME/models_cache.json` (or `~/.codex`). What they print (a line of JSON a step) is read and
-shown in the panel, and Stop ends them and anything they started. Any other agent it starts by running `/usr/bin/omarchy-agent-prompt` with
-the prompt as one argument; it reads which agent that is with
-`/usr/bin/omarchy-default-agent`, and *Change* runs `/usr/bin/omarchy-menu
-summon setup.default.agent`. The agent runs as Omarchy runs it, with its
-approval prompts off, so it can do on your computer whatever that agent can;
-the prompt holds the page's and blocks' ids and the words you selected, never
-the rest of your notes.
+- Claude Code: in its restricted mode (your own settings files can't widen
+  what it may do; its file tools stay in its folder), with Uber Notebook's
+  commands and writing files in its own folder allowed. Anything else (a web
+  page, a web search, a command, one of your connectors' tools, a file
+  elsewhere) it asks for, and you're asked in the panel: *Allow once*,
+  *Always* (for that agent and that site, searching, that program, or that
+  tool; a command only when it's a plain one, one program with nothing a
+  shell would join, expand or redirect, and never a shell or an interpreter
+  itself) or *No*. Its request, and your answers, go on its input, not its
+  command line.
+- Grok: over its agent protocol (ACP), in its sandbox (a profile in its
+  folder's `.grok/sandbox.toml`: it reads only its folder and the system's,
+  writes only there and in temp, and reaches the shell's socket for Uber
+  Notebook's commands), with Always-approve off for these runs whatever your
+  Grok settings say: anything beyond what it allows by itself (its read-only
+  commands, in the sandbox) it asks for, and you're asked in the panel, as
+  for Claude Code. Allow rules saved in your own Grok settings still apply.
+- Codex: `--approve-for-me` (its sandbox: it writes only in its own folder, with
+  no network; anything else is reviewed by Codex's own reviewer).
+- The panel's agent calls Uber Notebook's commands under a name of their
+  own, `omarchy-shell uber-notebook-agent`, and those read and change your
+  notes (pages, People, the calendar, templates), not Uber Notebook's
+  settings (the permissions you give agents among them), profiles or
+  backups; a file one takes comes only from the agent's folder, and is read
+  by the archive helper first (only a plain file, at most 2 MB); with no
+  agent working in the panel, they do nothing. Yours, a script's and a
+  terminal's agent's (`omarchy-shell uber-notebook`) go on as always
+  meanwhile. Claude Code is held to the panel's name by its permission rules;
+  Grok and Codex, with a shell of their own, could call the other.
+- A link an agent puts on a page is kept as its link. Uber Notebook contacts
+  its site, for its title and picture, only with your yes, asked in the
+  panel: *Allow once*, *Always for* that site (that agent, that exact site,
+  https only), or *No*. A redirect is followed, and a picture fetched, only
+  from a site it may contact. **Settings → AI** lists the sites you've
+  allowed, to take back; an agent can't change them. A card that wasn't read
+  says *Get its title and picture*: a click reads it then.
+- Each is found where it's installed (the folders on your PATH as the shell
+  started, links resolved: a plain executable file owned by you or root that no
+  one else can change, in a folder no one else can change) and run by that
+  full path, in a folder of Uber Notebook's own under `$XDG_RUNTIME_DIR`, with
+  your environment but what changes how a program starts.
+- What it prints is read in pieces, a line at most 4 MB, 64 MB in all; its
+  answer is shown as text Qt draws without fetching anything (no pictures, any
+  HTML as text, links only to the web or email).
 
-**Files.** Uber Notebook writes inside its notebooks folder, and, outside it: its
-launcher entry, `~/.local/share/applications/marcho78-uber-notebook.desktop`, and a
-link named `uber-notebook` to its skill in each of `~/.agents/skills`,
-`~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills` and
-`~/.pi/agent/skills` that exists (never over anything already called that),
-all made when it starts and removed when it stops (only links to its own
-skill are removed). A fixed `/usr/bin/bash` script does the links with
-`/usr/bin/ln`, `/usr/bin/readlink` and `/usr/bin/rm`. Its settings are written by
-the Omarchy shell to Uber Notebook's entry in `shell.json`. Every file it
-reads is checked by `Library.js` or `Workspace.js` (types, sizes, counts,
-known values, UUIDs, a tree with no block or page inside itself), and the
-text of every block is cut down to the formatting Uber Notebook writes itself
-(no pictures, stylesheets or scripts inside text, and only `http`, `https`,
-`mailto` and `file` links), so a damaged, hand-edited or synced-in page can't
-make it load anything. Pasted text keeps what it says (bold, italic, links)
-and drops how the page it came from looked. Every title, label and name is
-drawn as plain text.
+The other agents open in a terminal (`/usr/bin/omarchy-agent-prompt`, as Omarchy
+runs them, with their approval prompts off).
+
+**Files.** Uber Notebook writes inside its notes folder, and, outside it, only:
+its launcher entry, `~/.local/share/applications/marcho78-uber-notebook.desktop`
+(made only where there's nothing of that name; taken out as it stops, only if
+it's exactly what was made); a link named `uber-notebook` to its skill in each
+of `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills`
+and `~/.pi/agent/skills` that exists (never over anything already called that;
+taken out only if it still links to its skill); `~/.config/omarchy/defaults/agent`
+when you choose your agent; voxtype's `meeting.enabled` when you turn meeting
+mode on; the Markdown copy, in the folder you choose (never over, or taking
+away, a file you edited there: that one is yours, and its page's copy goes
+beside it); and exports and backups where you say. Its settings are written by
+the Omarchy shell to Uber Notebook's entry in `shell.json`.
+
+**What it reads.** Every file is checked as it's read (`Library.js`,
+`Workspace.js`: types, sizes, counts, known values, UUIDs, a tree with no block
+or page inside itself). The text of every block is cut down to the formatting
+Uber Notebook writes itself (no pictures, stylesheets or scripts in text,
+every look a value it would write, links only to the web, email or Uber
+Notebook itself), so a damaged, hand-edited or synced-in page can't make it
+load anything. What you paste (Ctrl+V, or a middle click for what's selected)
+is read with `wl-paste` and cut down before Qt reads it: its writing and how
+it's laid out, nothing Qt would load (a page copied from the web can't make
+Uber Notebook fetch its pictures). An email's HTML is rebuilt from a short list of tags. Equations
+and diagrams have budgets (a drawing too big is said, not drawn), and so does
+everything that reads text someone else wrote (imports, emails, contacts,
+code). Every title, label and name is drawn as plain text.
+
+**Not done yet.** Notes are written with Qt's atomic writes (a new file,
+renamed into place) by their path, and a page's file is read by its path in
+one go as it opens: a program running as you that swaps a notes file or folder
+for a link, a pipe or a device could redirect a write or hold the shell up
+(a file you give a command, Markdown, contacts or a calendar, goes through the
+archive helper instead). Codex in the
+panel can read any file you can (its sandbox reads everywhere). Codex's
+prompt is an argument on its command line, as it takes it there (Claude
+Code's and Grok's go on their input).
 
 ## Development
 
@@ -1069,20 +1149,22 @@ at all).
 * Pages has no databases (on purpose: a table is rows and columns of text,
   a board columns of cards, and a project a page with a status, a due date
   and its to-dos), no live embeds of other websites (a link is a bookmark
-  card), no equations,
-  no merged cells, no @-mentions of
-  people (Uber Notebook has one writer), and no syncing between computers; pages move into other pages with *Move to…*, not by
+  card), no merged cells, and no syncing between computers; pages move into other pages with *Move to…*, not by
   dragging them in the sidebar. Columns are at the top of a page (not inside
   a toggle or a list), as Notion has them.
 * Weeks start on Monday (ISO weeks) in planners, habits and calendars,
   whatever your locale says.
 * Circling dates is all a calendar's days take; write about a day in a
   monthly planner's line for it.
-* *Ask agent* hands your request to Omarchy, which opens your agent in its
-  own terminal (Omarchy's agent window, `org.omarchy.agent`), outside
-  Uber Notebook. What it changes shows up on the page as it goes, but what it says,
-  its questions and its summary of what it changed, is in that window, and
-  you answer it there.
+* Notebooks get no new features: Pages is where new things come (move a
+  notebook there with *Move to Pages…*).
+* Only Claude Code, Grok and Codex work in the panel on the page; Omarchy's
+  other agents open in their own terminal (Omarchy's agent window), where what
+  they say is, and you answer them there. In the panel an agent works only
+  through Uber Notebook's commands: it can't run other programs, read other
+  files (Codex can read them) or search the web for you.
+* Notes are written and page files read by their path (see Security: *Not done
+  yet*).
 
 ## Uninstall
 

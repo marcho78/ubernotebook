@@ -17,8 +17,8 @@ Item {
   id: note
 
   property var theme: null
-  // Where it goes: "notebook" (Quick notes) or "pages" (the Pages Inbox).
-  property string destination: "notebook"
+  // Where it goes: "pages" (the Pages Inbox) or "notebook" (Quick notes).
+  property string destination: "pages"
   readonly property bool toPages: destination === "pages"
   // The microphone (Recorder.qml), for dictation.
   property var recorder: null

@@ -1,5 +1,7 @@
 import QtQuick
 import QtQuick.Effects
+import "../MarkdownView.js" as MarkdownView
+import "../Permissions.js" as Permissions
 
 // Your agent at work, in a panel on the page (Claude Code, Grok or Codex,
 // without a terminal): what you asked, each step as it takes it (reading the page,
@@ -25,9 +27,24 @@ Item {
   property string answer: ""
   // Its answer as it's being written.
   property string live: ""
+  // (Its answer is shown as rich text Qt draws without fetching anything,
+  // MarkdownView.js; as it's written, made again at most four times a second.
+  // What's kept of a turn is bounded: its last MAX_STEPS steps, each and the
+  // answer at most MAX_TEXT characters.)
+  readonly property int maxSteps: 200
+  readonly property int maxText: 200000
+  property string liveRich: ""
+  Timer { id: liveTimer; interval: 250; onTriggered: panel.liveRich = MarkdownView.rich(panel.live, 13) }
+  onLiveChanged: { if (live === "") { liveTimer.stop(); liveRich = "" } else if (!liveTimer.running) liveTimer.start() }
   property string failure: ""
   // What it wasn't allowed to do (tools' names).
   property var denied: []
+  // What its work needs your yes for (DocView.askAgentPermission): Uber
+  // Notebook contacting a site for it, or one of its tools beyond its rules.
+  // Allow once; Always (kept in Settings → AI, for that agent and what it
+  // says), when there's an always to it; No.
+  property var asks: []
+  signal asked(string key, string how)
   property real seconds: 0
   property real startedAt: 0
   property real now: 0
@@ -57,7 +74,7 @@ Item {
   objectName: "agentPanel"
   visible: false
   width: 400
-  height: Math.min(head.height + body.implicitHeight + 1 + replyBar.height, maxHeight)
+  height: Math.min(head.height + body.implicitHeight + 1 + askStrip.height + replyBar.height, maxHeight)
 
   function begin(label, req, choice) {
     agentLabel = label
@@ -147,14 +164,21 @@ Item {
 
   // What the agent said (Agent.fromClaude): a step, more of its answer, its
   // answer whole, how it ended.
+  // (Writing after a step starts afresh: what it says next, not more of before.)
+  property bool _afresh: false
   function take(ev) {
     if (!ev || status !== "working") return
     if (ev.kind === "start" && ev.model && (choiceText === "" || choiceText === "Default model")) choiceText = ev.model
-    else if (ev.kind === "step") steps = steps.concat([ev.text])
-    else if (ev.kind === "typing") live = ev.fresh ? ev.text : live + ev.text
-    else if (ev.kind === "answer") { answer = ev.text; live = "" }
+    else if (ev.kind === "step") { steps = steps.concat([String(ev.text || "").slice(0, 500)]).slice(-maxSteps); _afresh = true }
+    else if (ev.kind === "typing") {
+      live = (ev.fresh || _afresh ? String(ev.text || "") : live.length >= maxText ? live : live + ev.text).slice(0, maxText)
+      _afresh = false
+    }
+    else if (ev.kind === "answer") { answer = String(ev.text || "").slice(0, maxText); live = "" }
     else if (ev.kind === "done") {
-      if (ev.text) answer = ev.text
+      // (Its answer as it said it, or as it was written: Grok's.)
+      if (ev.text) answer = String(ev.text).slice(0, maxText)
+      else if (live) answer = live
       live = ""
       denied = ev.denied || []
       seconds = ev.seconds || Math.round((Date.now() - startedAt) / 100) / 10
@@ -294,7 +318,7 @@ Item {
     id: flick
     y: head.height
     width: parent.width
-    height: parent.height - y - replyBar.height
+    height: parent.height - y - askStrip.height - replyBar.height
     contentHeight: body.implicitHeight
     clip: true
     boundsBehavior: Flickable.StopAtBounds
@@ -342,8 +366,8 @@ Item {
             visible: text !== ""
             width: parent.width
             wrapMode: Text.Wrap
-            textFormat: Text.MarkdownText
-            text: turn.modelData.answer
+            textFormat: Text.RichText
+            text: MarkdownView.rich(turn.modelData.answer, 13)
             font.family: panel.theme.uiFont
             font.pixelSize: 13
             lineHeight: 1.2
@@ -428,8 +452,8 @@ Item {
         width: parent.width
         topPadding: panel.steps.length ? 6 : 0
         wrapMode: Text.Wrap
-        textFormat: Text.MarkdownText
-        text: panel.live !== "" ? panel.live : panel.answer
+        textFormat: Text.RichText
+        text: panel.live !== "" ? panel.liveRich : MarkdownView.rich(panel.answer, 13)
         font.family: panel.theme.uiFont
         font.pixelSize: 13
         lineHeight: 1.2
@@ -459,11 +483,14 @@ Item {
         font.pixelSize: 12
         color: panel.theme.urgent
       }
+      // In a terminal instead, whenever you like (there your agent runs as
+      // you set it up, with all its own controls): what it's doing here
+      // stops first.
       TextButton {
         objectName: "agentPanelTerminal"
-        visible: panel.status === "failed"
+        visible: panel.status !== ""
         theme: panel.theme
-        text: "Open in a terminal instead"
+        text: panel.working ? "Stop, and open in a terminal" : "Open in a terminal instead"
         onClicked: { panel.visible = false; panel.terminalRequested() }
       }
 
@@ -476,6 +503,50 @@ Item {
         font.family: panel.theme.uiFont
         font.pixelSize: 12
         color: panel.theme.muted
+      }
+    }
+  }
+
+  // Its questions for you, above the reply, where they stay in sight.
+  Column {
+    id: askStrip
+    objectName: "agentPanelAsks"
+    visible: panel.asks.length > 0
+    y: panel.height - replyBar.height - height
+    width: parent.width
+    height: panel.asks.length > 0 ? implicitHeight : 0
+    Repeater {
+      model: panel.asks
+      delegate: Item {
+        id: askItem
+        required property var modelData
+        width: askStrip.width
+        height: askCol.implicitHeight + 18
+        Rectangle { width: parent.width; height: 1; color: panel.theme.line; opacity: 0.7 }
+        Column {
+          id: askCol
+          x: 16
+          y: 10
+          width: parent.width - 32
+          spacing: 6
+          Text {
+            objectName: "agentAskText"
+            width: parent.width
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: Permissions.agentName(askItem.modelData.agent) + " wants to " + askItem.modelData.text + "."
+            font.family: panel.theme.uiFont
+            font.pixelSize: 12
+            color: panel.theme.text
+          }
+          Flow {
+            width: parent.width
+            spacing: 6
+            TextButton { objectName: "agentAskOnce"; theme: panel.theme; text: "Allow once"; onClicked: panel.asked(askItem.modelData.key, "once") }
+            TextButton { objectName: "agentAskAlways"; visible: askItem.modelData.always !== ""; theme: panel.theme; text: askItem.modelData.always; onClicked: panel.asked(askItem.modelData.key, "always") }
+            TextButton { objectName: "agentAskNo"; theme: panel.theme; text: "No"; onClicked: panel.asked(askItem.modelData.key, "no") }
+          }
+        }
       }
     }
   }

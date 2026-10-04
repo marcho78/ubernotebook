@@ -618,10 +618,11 @@ Item {
             onPicturesDropped: function(urls) { view.dropPictures(urls) }
             editor.onChanged: view.markDirty()
             editor.onLinkOpened: function(url) { view.store.openUrl(url) }
-            editor.onPictureOpened: function(src) { view.store.openUrl(view.store.assetUrl(view.nb.id, src)) }
+            editor.onPictureOpened: function(src) { view.store.openLocal(view.store.assetPath(view.nb.id, src)) }
             editor.onPictureCopyRequested: function(src) { view.copyPicture(src) }
             editor.onPictureSaveRequested: function(src) { view.pictureSaveRequested(view.store.assetPath(view.nb.id, src), Library.saveName(view.nb.title, src)) }
             editor.onPastePicture: function(afterUid) { view.pastePicture(afterUid) }
+            editor.readClipboard: view.store && typeof view.store.readClipboard === "function" ? function(done, primary) { view.store.readClipboard(done, primary) } : null
             editor.onLinkRequested: linkPop.openAt(formatBar)
           }
 

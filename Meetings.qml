@@ -149,13 +149,19 @@ Item {
   function enable(done) {
     if (!available) { done(false, "Meetings need voxtype (omarchy voxtype install)"); return }
     working = "enable"
-    run(["/usr/bin/bash", "-c", "/usr/bin/voxtype config set meeting.enabled true && /usr/bin/systemctl --user restart voxtype.service"], function(ok, problem) {
+    function checkSoon(ok, problem) {
       // (voxtype takes a moment to come back.)
       enableCheck.done = done
       enableCheck.ok = ok
       enableCheck.problem = problem
       enableCheck.restart()
-    }, { timeoutMs: 30000, maxBytes: 64 * 1024 })
+    }
+    // Its setting, then your voxtype service (the user's own, never the
+    // system's) started again, so it reads it.
+    run(["/usr/bin/voxtype", "config", "set", "meeting.enabled", "true"], function(ok, problem) {
+      if (!ok) { checkSoon(false, problem); return }
+      run(["/usr/bin/systemctl", "--user", "restart", "voxtype.service"], checkSoon, { timeoutMs: 30000, maxBytes: 64 * 1024 })
+    }, { timeoutMs: 15000, maxBytes: 64 * 1024 })
   }
   Timer {
     id: enableCheck

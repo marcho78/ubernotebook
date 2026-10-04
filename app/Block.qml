@@ -320,6 +320,15 @@ Item {
     onActiveFocusChanged: block.editor.focusChangedIn(block, activeFocus)
     onWidthChanged: strikes.refresh()
 
+    // A middle click pastes what's selected, the way Ctrl+V pastes (not Qt's
+    // own paste, which loads the pictures the selection's HTML names).
+    MouseArea {
+      anchors.fill: parent
+      enabled: !textEdit.readOnly
+      acceptedButtons: Qt.MiddleButton
+      onClicked: function(mouse) { block.editor.pastePrimary(block, mouse.x, mouse.y) }
+    }
+
     // Ctrl+click opens a link; Ctrl+hover shows it can.
     HoverHandler {
       id: hover

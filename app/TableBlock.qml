@@ -304,7 +304,16 @@ Item {
 
   // Pasting in a cell: cells (from a spreadsheet, or a table) fill the table
   // from this cell on; anything else goes in where the cursor is.
-  function paste(cell, plainOnly) {
+  function paste(cell, plainOnly) { editor.withClipboard(function() { pasteNow(cell, plainOnly) }) }
+  // A middle click: what's selected anywhere, where it's clicked.
+  function pastePrimary(cell, x, y) {
+    if (readOnly || !cell || !cell.edit) return
+    cell.edit.forceActiveFocus()
+    cell.edit.cursorPosition = cell.edit.positionAt(x, y)
+    editor.withClipboard(function() { pasteNow(cell, false) }, true)
+  }
+  function pasteNow(cell, plainOnly) {
+    if (!cell || !cell.edit) return
     var edit = cell.edit
     var text = editor.clipboardText()
     var many = Table.cellsOf(text)
@@ -567,6 +576,15 @@ Item {
               onCursorRectangleChanged: if (activeFocus) {
                 var p = text.mapToItem(grid.host, 0, cursorRectangle.y)
                 grid.editor.cursorAt(grid.host.y + p.y, cursorRectangle.height)
+              }
+
+              // A middle click pastes what's selected, the way Ctrl+V pastes (not Qt's
+              // own paste, which loads the pictures the selection's HTML names).
+              MouseArea {
+                anchors.fill: parent
+                enabled: !text.readOnly
+                acceptedButtons: Qt.MiddleButton
+                onClicked: function(mouse) { grid.pastePrimary(cell, mouse.x, mouse.y) }
               }
 
               // Ctrl+click opens a link (a link to a page, a plain click).

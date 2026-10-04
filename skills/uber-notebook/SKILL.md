@@ -102,16 +102,25 @@ except `read`, which prints the page as Markdown.
 | `omarchy-shell uber-notebook backup "<profile>"` | a backup (one `.tar.gz` in the backup folder) of the open profile (`""`), every profile (`all`; not the demo), or one by its name or id. It's written in a moment |
 | `omarchy-shell uber-notebook backups` | the backups in the backup folder, newest first: `{folder, working, last, lastFailed, backups: [{name, file, made, size, automatic}]}` |
 | `omarchy-shell uber-notebook restoreBackup <file> true\|false` | puts a backup back: each profile in it a new profile, in a new folder (nothing there is changed); `true` opens the first. Only when the user asks |
-| `omarchy-shell uber-notebook appVersion` | the version running and whether there's a newer one: `{version, latest, updateAvailable, status, checked, canUpdateItself, update, releases}` (`status`: `current`, `available`, `none` (no releases yet), `failed`, `idle` (not asked yet)) |
+| `omarchy-shell uber-notebook appVersion` | the version running and whether there's a newer one: `{version, latest, updateAvailable, status, checked, update, releases}` (`status`: `current`, `available`, `none` (no releases yet), `failed`, `idle` (not asked yet)) |
 | `omarchy-shell uber-notebook checkUpdate` | asks GitHub for the newest version now; `appVersion` says what it found a few seconds later |
 | `omarchy-shell uber-notebook releaseNotes` | what's new, as Markdown: the newer releases' notes, or (up to date) the notes of the version running |
-| `omarchy-shell uber-notebook installUpdate` | installs the newer version (`omarchy plugin update`, only for an Uber Notebook installed from git); Uber Notebook starts again. Only when the user asks |
 | `omarchy-shell uber-notebook help` | all of this, as JSON |
 
 ## Writing a page
 
 Content goes in as a Markdown file, by its full path (an argument can't carry a
-page). An empty title (`""`) takes the file's first `# heading`.
+page). An empty title (`""`) takes the file's first `# heading`. The first time
+a command names a file (Markdown, contacts, a calendar), it answers "run the
+same command again in a moment": the file is read for it first (only a plain
+file, not a link): run the same command again.
+
+Working in Uber Notebook's panel (the prompt says so, and names your working
+folder): write the file with your file-writing tool, in that folder, and give
+its full path. There the commands go under their panel name: run each as
+`omarchy-shell uber-notebook-agent <command> ...` (the same commands and
+arguments as below); they read and change the user's notes, as asked; not
+Uber Notebook's settings, profiles or backups.
 
 ```bash
 f=$(mktemp "$XDG_RUNTIME_DIR/uber-notebook-XXXXXX.md")
@@ -448,9 +457,9 @@ folder; use it only when the user asks, and tell them the new profiles'
 names (`profiles`).
 
 "Is there a new version?" is `checkUpdate`, then `appVersion` a few seconds
-later; `releaseNotes` says what's in it. Install it (`installUpdate`) only
-when the user says to: Uber Notebook restarts. If `canUpdateItself` is false, tell
-them the command in `update` instead.
+later; `releaseNotes` says what's in it. Uber Notebook doesn't install
+updates: tell the user the command in `update`, to run in a terminal (it shows
+what changes and asks before it applies them).
 
 ## Meetings
 

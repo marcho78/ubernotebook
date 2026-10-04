@@ -8,6 +8,7 @@
 // Shared by the Pages view (app/DocView.qml, app/AgentPop.qml) and
 // tests/agent.test.cjs, so keep it plain JavaScript with no QML or Node APIs.
 .pragma library
+.import "Permissions.js" as Permissions
 
 // The agents Omarchy can have as its default, by the name it keeps for each
 // (omarchy-default-agent).
@@ -101,6 +102,10 @@ function prompt(o) {
   if (o.here) {
     out.push("You're working inside Uber Notebook, with no terminal: what you write shows in a small panel on the page, "
       + "so keep it short, and end by saying what you changed in a sentence or two.")
+    out.push("Here Uber Notebook's commands go under their panel name: run each as omarchy-shell uber-notebook-agent <command> ... "
+      + "(the skill's omarchy-shell uber-notebook <command> ..., the same commands and arguments).")
+    if (o.dir) out.push("Here only Uber Notebook's commands run (no mktemp, cat or rm): write the Markdown a command takes with your "
+      + "file-writing tool, as a file in " + o.dir + " (your working folder), and give the command that file's full path.")
     out.push("")
   }
   out.push("Use the uber-notebook skill: it explains the omarchy-shell uber-notebook commands that read and change my notes "
@@ -174,38 +179,243 @@ function cleanChoice(v) {
   return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(t) ? t : ""
 }
 
-// The command, with nothing to read on its input:
-//   Claude Code: print mode (stream-json), --permission-mode auto, Uber
-//     Notebook's commands allowed outright;
+// The command, with nothing to read on its input, the agent run by its full
+// path (`where`: { exe, dir }: the program, found where it's installed and
+// checked, and its working folder). What it may do is only what the panel
+// needs (it works on a page that may have come from anywhere):
+//   Claude Code: print mode (stream-json), --permission-mode dontAsk: Uber
+//     Notebook's commands and writing files in its own folder allowed,
+//     everything else refused (no other commands, files or web);
 //   Grok: single-turn mode (streaming-messages-json, the same lines as
-//     Claude Code's), --permission-mode bypassPermissions;
-//   Codex: exec --json, --approve-for-me (its own folder writable, the rest
-//     reviewed for it), outside a git repository.
+//     Claude Code's) in its sandbox (GROK_PROFILE, in its folder's
+//     .grok/sandbox.toml): it reads only its folder and the system's,
+//     writes only there and in temp, and reaches nothing of yours but Uber
+//     Notebook's commands; no web search;
+//   Codex: exec --json, --approve-for-me (its own folder writable, no
+//     network, the rest reviewed for it), outside a git repository.
 // With `choice` ({ model, effort }), the model and effort you chose. With
 // `session` ({ id, resume }), the conversation it's in: Claude Code and Grok
 // start theirs with the id given (--session-id) and go on with it
 // (--resume); Codex names its own (its first line says, see fromCodex) and
 // goes on with it (exec resume). The prompt is always last, never read as an
-// option.
-function command(agent, prompt, choice, session) {
+// option. null without a program or a folder.
+// The tools Claude Code has in the panel (restricted: your own settings
+// files can't add to them): beyond its rules, it asks for each, and you're
+// asked in the panel (Uber Notebook answers on its input: input, answer).
+var CLAUDE_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
+
+function command(agent, prompt, choice, session, where) {
+  var w = where || {}
+  var exe = String(w.exe || "")
+  var dir = String(w.dir || "")
+  if (!/^\/[^\u0000-\u001f]{1,4000}$/.test(exe) || !/^\/[^\u0000-\u001f*?\[\]]{1,4000}$/.test(dir)) return null
   var head = ["/usr/bin/bash", "-c", "exec \"$@\" < /dev/null", "uber-notebook-agent"]
   var p = String(prompt)
   var c = choice || {}
   var model = cleanChoice(c.model)
   var effort = cleanChoice(c.effort)
   var s = session && isSessionId(session.id) ? session : null
-  if (agent === "claude") return head.concat(["claude", "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
-    "--permission-mode", "auto", "--allowedTools", "Bash(omarchy-shell uber-notebook *)"],
-    s ? [s.resume ? "--resume" : "--session-id", s.id] : [], model ? ["--model", model] : [], effort ? ["--effort", effort] : [], ["--", p])
-  if (agent === "grok") return head.concat(["grok", "--output-format", "streaming-messages-json", "--include-partial-messages",
-    "--permission-mode", "bypassPermissions"], s ? [(s.resume ? "--resume=" : "--session-id=") + s.id] : [],
-    model ? ["-m", model] : [], effort ? ["--reasoning-effort", effort] : [], ["--single=" + p])
+  // (Claude Code reads its request, and your answers to what it asks, on its
+  // input: input(), answer(). Nothing of yours is in its command line.)
+  if (agent === "claude") return ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent", exe, "-p", "--input-format", "stream-json",
+    "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--restricted", "--tools", CLAUDE_TOOLS,
+    "--permission-prompt-tool", "stdio", "--allowedTools", "Bash(omarchy-shell uber-notebook-agent *)", "Edit(/" + dir + "/**)", "Write(/" + dir + "/**)"]
+    .concat(s ? [s.resume ? "--resume" : "--session-id", s.id] : [], model ? ["--model", model] : [], effort ? ["--effort", effort] : [])
+  // (Grok works over ACP, its agent protocol, on its input and output:
+  // acpInit, acpSession, acpPrompt, fromAcp, reply. Its sandbox: env().)
+  if (agent === "grok") return ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent", exe, "agent"]
+    .concat(model ? ["-m", model] : [], effort ? ["--reasoning-effort", effort] : [], ["stdio"])
   if (agent === "codex") {
-    var opts = ["--json", "--approve-for-me", "--skip-git-repo-check"].concat(model ? ["-m", model] : [], effort ? ["-c", "model_reasoning_effort=\"" + effort + "\""] : [])
-    if (s && s.resume) return head.concat(["codex", "exec"], opts, ["resume", "--", s.id, p])
-    return head.concat(["codex", "exec"], opts, ["--", p])
+    var opts = ["--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false"]
+      .concat(model ? ["-m", model] : [], effort ? ["-c", "model_reasoning_effort=\"" + effort + "\""] : [])
+    if (s && s.resume) return head.concat([exe, "exec"], opts, ["resume", "--", s.id, p])
+    return head.concat([exe, "exec"], opts, ["--", p])
   }
   return null
+}
+
+// What an agent is told first on its input, when it works there (Claude
+// Code, stream-json: its request; Grok, ACP: hello, and the rest follows,
+// DocView.runHere): so what it asks can be answered as it works. A line, or
+// "" (Codex takes its request in its command line).
+function input(agent, prompt) {
+  if (agent === "grok") return acpInit()
+  if (agent !== "claude") return ""
+  return JSON.stringify({ type: "user", message: { role: "user", content: String(prompt) } }) + "\n"
+}
+// What's in its environment besides yours (Grok: its sandbox, which its agent
+// mode takes only from there).
+function env(agent) {
+  return agent === "grok" ? { GROK_SANDBOX: GROK_PROFILE } : {}
+}
+
+// ---- Grok, over ACP (JSON-RPC, a message a line) ----
+// Hello (1), then its session, new or gone on with (2: with Always-approve,
+// yours or not, off: it asks), then the request (3).
+function acpLine(id, method, params) { return JSON.stringify({ jsonrpc: "2.0", id: id, method: method, params: params }) + "\n" }
+function acpInit() {
+  return acpLine(1, "initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } })
+}
+function acpSession(dir, session) {
+  var meta = { yoloMode: false }
+  return session && session.resume && isSessionId(session.id)
+    ? acpLine(2, "session/load", { sessionId: session.id, cwd: String(dir), mcpServers: [], _meta: meta })
+    : acpLine(2, "session/new", { cwd: String(dir), mcpServers: [], _meta: meta })
+}
+function acpPrompt(sessionId, text) {
+  return acpLine(3, "session/prompt", { sessionId: String(sessionId), prompt: [{ type: "text", text: String(text) }] })
+}
+// What it says over ACP, as the panel's events (fromLine's), and these of its
+// own: { kind: "acp", stage: "ready" } (said hello: its session next),
+// { kind: "start", session } (its session: the request next).
+function fromAcp(line) {
+  var e = parse(line)
+  if (!e || e.jsonrpc !== "2.0") return []
+  if (e.id !== undefined && e.method === undefined) {
+    if (e.error) return [{ kind: "failed", text: String((e.error && e.error.message) || "It stopped before it finished.").slice(0, 400) }]
+    var r = e.result && typeof e.result === "object" ? e.result : {}
+    if (e.id === 1) return [{ kind: "acp", stage: "ready" }]
+    if (e.id === 2) return [{ kind: "start", model: "", session: isSessionId(r.sessionId) ? String(r.sessionId) : "" }]
+    // (Its turn over: done, what it said its answer; after a No, it waits
+    // to be told what to do instead: answer it in the panel.)
+    if (e.id === 3) {
+      if (r.stopReason === "refusal") return [{ kind: "failed", text: "It wouldn't do that." }]
+      return [{ kind: "done", text: "", seconds: 0, denied: [] }]
+    }
+    return []
+  }
+  if (e.method === "session/request_permission" && e.id !== undefined) {
+    var prm = e.params && typeof e.params === "object" ? e.params : {}
+    var tc = prm.toolCall && typeof prm.toolCall === "object" ? prm.toolCall : {}
+    var raw = tc.rawInput && typeof tc.rawInput === "object" ? tc.rawInput : {}
+    return [{ kind: "ask", id: e.id, tool: String(raw.variant || tc.kind || ""), input: raw, title: String(tc.title || ""), options: Array.isArray(prm.options) ? prm.options : [] }]
+  }
+  if (e.method !== undefined && e.id !== undefined) return [{ kind: "control", id: e.id }]
+  if (e.method === "session/update" && e.params && e.params.update) {
+    var u = e.params.update
+    if (u.sessionUpdate === "agent_message_chunk" && u.content && u.content.type === "text") return [{ kind: "typing", text: String(u.content.text || ""), fresh: false }]
+    if (u.sessionUpdate === "tool_call") {
+      var input = u.rawInput && typeof u.rawInput === "object" ? u.rawInput : {}
+      var name = input.command !== undefined ? "Bash" : input.url !== undefined ? "WebFetch" : String(u.title || "")
+      return stepText(name, input).split("\n").map(function(t) { return { kind: "step", text: t } })
+    }
+  }
+  return []
+}
+
+// Your answer to what it asked: a line for its input (Claude Code's
+// control_response; Grok's ACP result, the option that says it).
+function answerFor(agent, ev, allow) {
+  if (agent === "grok") {
+    var want = allow ? "allow_once" : "reject_once"
+    var opt = (ev.options || []).filter(function(o) { return o && o.kind === want })[0]
+    return JSON.stringify({ jsonrpc: "2.0", id: ev.id, result: { outcome: opt ? { outcome: "selected", optionId: String(opt.optionId) } : { outcome: "cancelled" } } }) + "\n"
+  }
+  return answer(ev.id, allow, ev.input)
+}
+// To anything else it asks Uber Notebook, which it doesn't do.
+function unsupportedFor(agent, id) {
+  if (agent === "grok") return JSON.stringify({ jsonrpc: "2.0", id: id, error: { code: -32601, message: "Uber Notebook doesn't do that" } }) + "\n"
+  return unsupported(id)
+}
+// Your answer to what it asked (Claude Code's can_use_tool): a line for its
+// input. And to anything else it asks Uber Notebook, which it doesn't do.
+function answer(id, allow, toolInput, message) {
+  var response = allow ? { behavior: "allow", updatedInput: toolInput && typeof toolInput === "object" ? toolInput : {} }
+    : { behavior: "deny", message: String(message || "The user said no.") }
+  return JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: String(id), response: response } }) + "\n"
+}
+function unsupported(id) {
+  return JSON.stringify({ type: "control_response", response: { subtype: "error", request_id: String(id), error: "Uber Notebook doesn't do that" } }) + "\n"
+}
+
+// Programs that run whatever they're given (a shell, an interpreter, one
+// that runs others): never allowed for good, only asked about each time.
+var RUNS_ANYTHING = ["bash", "sh", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "env", "exec", "eval", "xargs", "sudo", "su", "doas", "pkexec",
+  "python", "python2", "python3", "node", "nodejs", "deno", "bun", "perl", "ruby", "php", "lua", "awk", "gawk", "mawk", "find", "parallel",
+  "watch", "timeout", "nohup", "setsid", "nice", "ionice", "strace", "ssh", "systemd-run", "uwsm-app", "hyprctl", "omarchy", "busybox"]
+// The program a plain command runs ("git status": git; "LANG=C make": make),
+// or "" when it's more than one command, or anything a shell would expand,
+// redirect or join (; & | ` $ < > \, a line break): those are asked about
+// each time, never allowed for good.
+function programOf(command) {
+  var c = String(command || "").trim()
+  if (!c || /[;&|`$<>\\\n\r(){}]/.test(c)) return ""
+  var words = c.split(/\s+/)
+  var k = 0
+  while (k < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[k])) k++
+  var w = String(words[k] || "")
+  if (w.indexOf("/") >= 0) return ""
+  return /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/.test(w) && RUNS_ANYTHING.indexOf(w.toLowerCase()) < 0 ? w : ""
+}
+
+// What it asks to do (Claude Code's can_use_tool), in words for the panel,
+// and what Always would let it do from then on without asking
+// (Permissions.js): { action, target, text, always }; action "": only once.
+function askOf(tool, toolInput, title) {
+  var i = toolInput && typeof toolInput === "object" ? toolInput : {}
+  var t = String(tool || "")
+  if (t === "WebFetch") {
+    var url = String(i.url || "")
+    var host = Permissions.hostOf(url)
+    return host ? { action: "contact", target: host, text: "contact " + host + ", to read " + clip(url, 200), always: "Always for " + host }
+      : { action: "", target: "", text: "read " + clip(url, 200), always: "" }
+  }
+  if (t === "WebSearch") return { action: "search", target: "web", text: "search the web for \u201c" + clip(String(i.query || ""), 200) + "\u201d", always: "Always let it search" }
+  if (t === "Bash") {
+    var cmd = String(i.command || "")
+    var program = programOf(cmd)
+    return { action: program ? "command" : "", target: program, text: "run: " + clip(cmd, 300), always: program ? "Always for " + program + " commands" : "" }
+  }
+  if (/^mcp__[A-Za-z0-9_-]+$/.test(t)) {
+    var parts = t.split("__")
+    return { action: "tool", target: t, text: "use " + (parts[1] || "a connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), always: "Always for this tool" }
+  }
+  var file = String(i.file_path || i.path || i.pattern || "")
+  if (!file && title) return { action: "", target: "", text: "do this: " + clip(String(title), 300), always: "" }
+  var verb = t === "Read" || t === "Glob" || t === "Grep" ? "read " : t === "Write" || t === "Edit" ? "change " : "use " + t + " on "
+  return { action: "", target: "", text: verb + clip(file || t, 300), always: "" }
+}
+
+// Grok's sandbox for the panel, kept in its working folder's
+// .grok/sandbox.toml: strict (it reads its folder and the system's, writes
+// there and in temp), and it may read where the shell's socket is
+// (`runtime`: $XDG_RUNTIME_DIR), so Uber Notebook's commands reach it.
+var GROK_PROFILE = "uber-notebook"
+function grokSandbox(runtime) {
+  var r = String(runtime || "")
+  if (!/^\/[A-Za-z0-9._\/-]{1,400}$/.test(r)) return ""
+  return "# Uber Notebook's panel: Grok reads only its own folder and the system's,\n"
+    + "# writes only there and in temp, and reaches Uber Notebook's commands.\n"
+    + "[profiles." + GROK_PROFILE + "]\n"
+    + "extends = \"strict\"\n"
+    + "restrict_network = false\n"
+    + "read_only = [\"" + r + "/quickshell\"]\n"
+}
+
+// Where it may be installed: an agent's program found on the shell's PATH
+// (`path`), by a script that takes it only if, links resolved, it's a
+// regular, executable file owned by you or root that no one else can change,
+// in a folder no one else can change, and the folder on the PATH it's in is
+// one no one else can change either: lines of "<name>\t<full path>", the
+// path as found on the PATH, not where its links lead (a version manager's
+// shim, mise's or asdf's, is a link to the manager itself, which tells
+// which program to run by the name it's run by). Run with
+// bash -c AGENTS_SCRIPT uber-notebook-agents <path> <names...>.
+var AGENTS_SCRIPT = "uid=$(/usr/bin/id -u); IFS=: read -r -a dirs <<< \"$1\"; shift; "
+  + "mine() { local o m; read -r o m < <(/usr/bin/stat -c '%u %a' -- \"$1\") || return 1; { [ \"$o\" = \"$uid\" ] || [ \"$o\" = 0 ]; } && (( (8#$m & 022) == 0 )); }; "
+  + "for a in \"$@\"; do for d in \"${dirs[@]}\"; do case \"$d\" in /*) ;; *) continue ;; esac; "
+  + "f=$(/usr/bin/readlink -e -- \"$d/$a\" 2>/dev/null) || continue; [ -f \"$f\" ] && [ -x \"$f\" ] || continue; "
+  + "mine \"$f\" && mine \"$(/usr/bin/dirname -- \"$f\")\" && mine \"$d\" || continue; printf '%s\\t%s\\n' \"$a\" \"$d/$a\"; break; done; done; exit 0"
+
+// What AGENTS_SCRIPT printed: { name: full path }.
+function agentPaths(output) {
+  var out = {}
+  String(output || "").split("\n").forEach(function(line) {
+    var m = /^([a-z][a-z0-9-]{0,30})\t(\/[^\t\u0000-\u001f]{1,4000})$/.exec(line)
+    if (m && !out[m[1]]) out[m[1]] = m[2]
+  })
+  return out
 }
 
 // ---- a conversation: going on with it ------------------------------------------------------
@@ -214,7 +424,7 @@ function command(agent, prompt, choice, session) {
 // there any more (cleared out, another computer): Claude Code's, Codex's,
 // Grok's. Then it's started anew with what was said (prompt's `earlier`).
 function lostSession(text) {
-  return /No conversation found with session ID|no rollout found for thread id|not found locally|Failed to restore session/i.test(String(text || ""))
+  return /No conversation found with session ID|no rollout found for thread id|not found locally|Failed to restore session|session[^\n]{0,80}not found/i.test(String(text || ""))
 }
 
 // The conversations kept with their pages (Pages/chats.json), so one can be
@@ -263,7 +473,8 @@ function isSessionId(id) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 // A new one, for Claude Code or Grok to start with (Codex names its own: "").
 // `random`: 0 <= n < 1 (Math.random's).
 function newSessionId(agent, random) {
-  if (agent === "codex") return ""
+  // (Codex and Grok name their own: their first answer says.)
+  if (agent === "codex" || agent === "grok") return ""
   var r = typeof random === "function" ? random : Math.random
   var hex = "0123456789abcdef"
   var out = ""
@@ -362,7 +573,7 @@ function baseName(path) { var p = String(path || "").split("/"); return p[p.leng
 function commandSteps(cmd) {
   var c = String(cmd || "")
   var out = []
-  var re = /omarchy-shell\s+uber-notebook\s+([A-Za-z]+)/g
+  var re = /omarchy-shell\s+uber-notebook(?:-agent)?\s+([A-Za-z]+)/g
   var m
   while ((m = re.exec(c)) !== null) {
     var t = STEP_WORDS[m[1]] || "Running " + m[1]
@@ -385,6 +596,8 @@ function stepText(name, input) {
   if (name === "Write" || name === "Edit" || name === "search_replace" || name === "write_file") return "Writing " + baseName(file)
   if (name === "Glob" || name === "Grep" || name === "grep" || name === "list_dir") return "Searching files"
   if (name === "TodoWrite" || name === "todo_write") return "Planning"
+  if (name === "WebFetch") { var h = Permissions.hostOf(i.url); return h ? "Reading " + h : "Reading a web page" }
+  if (name === "WebSearch") return "Searching the web"
   return String(name || "A step")
 }
 
@@ -395,8 +608,10 @@ function stepText(name, input) {
 //   { kind: "answer", text }           what it said, whole
 //   { kind: "done", text, seconds, denied: [tools it wasn't allowed] }
 //   { kind: "failed", text }
+//   { kind: "ask", id, tool, input }   it asks to use a tool (answer)
+//   { kind: "control", id }            it asks something else (unsupported)
 function fromLine(agent, line) {
-  return agent === "codex" ? fromCodex(line) : fromMessages(line)
+  return agent === "codex" ? fromCodex(line) : agent === "grok" ? fromAcp(line) : fromMessages(line)
 }
 
 function parse(line) {
@@ -410,6 +625,12 @@ function parse(line) {
 function fromMessages(line) {
   var e = parse(line)
   if (!e) return []
+  // (Claude Code asking for a tool beyond its rules: you're asked.)
+  if (e.type === "control_request" && typeof e.request_id === "string" && e.request && typeof e.request === "object") {
+    if (e.request.subtype === "can_use_tool") return [{ kind: "ask", id: e.request_id, tool: String(e.request.tool_name || ""),
+      input: e.request.input && typeof e.request.input === "object" ? e.request.input : {} }]
+    return [{ kind: "control", id: e.request_id }]
+  }
   if (e.type === "system" && e.subtype === "init") return [{ kind: "start", model: String(e.model || ""), session: isSessionId(e.session_id) ? String(e.session_id) : "" }]
   if (e.type === "stream_event" && e.event) {
     var ev = e.event

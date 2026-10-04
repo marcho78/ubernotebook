@@ -212,12 +212,45 @@ Item {
     return { desired: desired, notebookDirs: dirs }
   }
 
+  // A file of the copy's that isn't as it wrote it (edited in Obsidian, say)
+  // is yours now: never written over or taken away, and no longer the copy's
+  // (its page goes to "Name (2).md" next time). Each one it would change is
+  // read first. done(write, remove) with those left out.
+  function keepEdited(dir, todo, existing, done) {
+    var man = manifest || {}
+    var check = todo.write.filter(function(p) { return man[p] !== undefined && existing[p] }).concat(todo.remove.filter(function(p) { return existing[p] }))
+    if (check.length === 0) { done(todo.write, todo.remove, {}); return }
+    store.readFiles(check.map(function(p) { return dir + "/" + p }), function(got) {
+      var edited = {}
+      check.forEach(function(p) {
+        var text = got[dir + "/" + p]
+        // (One it couldn't read: left as it is.)
+        if (text === undefined || Mirror.hash(text) !== man[p]) edited[p] = true
+      })
+      done(todo.write.filter(function(p) { return !edited[p] }), todo.remove.filter(function(p) { return !edited[p] }), edited)
+    }, 64 * 1024 * 1024)
+  }
+
   function write(dir, gen, existing, pages, notebooks) {
     var built = build(existing, pages, notebooks)
+    var planned = Mirror.plan(manifest || {}, built.desired, existing)
+    keepEdited(dir, planned, existing, function(toWrite, toRemove, edited) {
+      if (gen !== mirror.generation) return finish(gen)
+      if (Object.keys(edited).length === 0) { writeNow(dir, gen, built, { write: toWrite, remove: toRemove }, edited, existing); return }
+      // (They're yours now: the copy is planned again without them, so their
+      // pages' copies go beside them.)
+      var man = {}
+      for (var k in (mirror.manifest || {})) if (!edited[k]) man[k] = mirror.manifest[k]
+      mirror.manifest = man
+      var again = build(existing, pages, notebooks)
+      writeNow(dir, gen, again, Mirror.plan(man, again.desired, existing), edited, existing)
+    })
+  }
+
+  function writeNow(dir, gen, built, todo, edited, existing) {
     var desired = built.desired
-    var todo = Mirror.plan(manifest || {}, desired, existing)
     var next = {}
-    for (var p in desired) if ((manifest || {})[p] === Mirror.hash(desired[p]) && existing[p]) next[p] = (manifest || {})[p]
+    for (var p in desired) if (!edited[p] && (manifest || {})[p] === Mirror.hash(desired[p]) && existing[p]) next[p] = (manifest || {})[p]
     var dirs = {}
     todo.write.forEach(function(path) { dirs[dir + "/" + path.slice(0, path.lastIndexOf("/"))] = true })
     var pending = 1
@@ -264,13 +297,14 @@ Item {
 
   function canon(o) { return JSON.stringify(Object.keys(o).sort().map(function(k) { return [k, o[k]] })) }
 
-  // Pictures copied over (only what's new or newer).
+  // Pictures copied over (only what's new).
   function copyAll(list, done) {
     var i = 0
     function next() {
       if (i >= list.length) { done(); return }
       var c = list[i++]
-      store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] || exit 0; /usr/bin/mkdir -p -- \"$2\" && /usr/bin/cp -ru -- \"$1\"/. \"$2\"/", "uber-notebook-mirror-copy", c[0], c[1]], function() { next() }, { timeoutMs: 60000, okCodes: [0, 1] })
+      // (Never over a file that's there: a picture's name is new each time.)
+      store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] || exit 0; /usr/bin/mkdir -p -- \"$2\" && /usr/bin/cp -r --update=none -- \"$1\"/. \"$2\"/", "uber-notebook-mirror-copy", c[0], c[1]], function() { next() }, { timeoutMs: 60000, okCodes: [0, 1] })
     }
     next()
   }

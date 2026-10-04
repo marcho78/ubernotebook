@@ -27,7 +27,8 @@ Popup {
   property bool fitted: false
   property bool touched: false
   readonly property real minZoom: 0.2
-  readonly property real maxZoom: 6
+  // (An equation no bigger than Equations.js draws one: maxEm.)
+  readonly property real maxZoom: kind === "math" && mathDrawing && mathDrawing.svg ? Math.max(minZoom, Math.min(6, Equations.maxEm(mathDrawing.svg) / mathEm)) : 6
   readonly property real margin: 40
 
   // An equation at 100%: as big as the page's text, a little bigger.
@@ -182,7 +183,8 @@ Popup {
       // never larger than a graphics card takes).
       Image {
         objectName: "viewerMath"
-        readonly property real density: Math.min(2, 8192 / Math.max(1, width, height))
+        // (In the screen's own pixels: Qt draws it that much bigger again.)
+        readonly property real density: Math.min(2, 8192 / Math.max(1, width, height)) / Math.max(1, Screen.devicePixelRatio)
         visible: viewer.kind === "math" && viewer.mathShown !== null
         x: viewer.offsetX(viewer.zoom)
         y: viewer.offsetY(viewer.zoom)

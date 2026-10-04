@@ -114,6 +114,31 @@ Item {
       tryVerify(function() { return copied().indexOf("Pages/Start here/A page inside a page.md") < 0 }, 2000, "trashed, gone from the copy")
     }
 
+    // A file of the copy's, edited where it is (in Obsidian, say): never
+    // written over or taken away; the page's copy goes beside it.
+    function test_3b_edited_files_are_yours() {
+      fresh()
+      mirror.on = true
+      tryVerify(function() { return mirror.status === "Up to date" }, 2000)
+      var id = page("Getting started")
+      var path = "Pages/Getting started.md"
+      verify(text(path) !== undefined)
+      files.disk["/tmp/copy/" + path] = "# My own edits\n\nkept, please"
+      // The page changes in Uber Notebook: yours is kept, its copy beside it.
+      var p = ws.readPageNow(id)
+      p.blocks[p.content[0]].html = "Changed in Uber Notebook"
+      p.modified = new Date(Date.now() + 1000).toISOString()
+      ws.savePage(p)
+      tryVerify(function() { return text("Pages/Getting started (2).md") !== undefined }, 3000, "the page's copy, beside it")
+      tryVerify(function() { return !mirror.busy }, 2000)
+      compare(text(path), "# My own edits\n\nkept, please", "yours, as you left it")
+      verify(text("Pages/Getting started (2).md").indexOf("Changed in Uber Notebook") >= 0)
+      // The page in the trash: its copy goes; yours stays.
+      ws.trashPage(id, false)
+      tryVerify(function() { return text("Pages/Getting started (2).md") === undefined }, 3000)
+      compare(text(path), "# My own edits\n\nkept, please")
+    }
+
     function test_3_never_your_files() {
       fresh()
       files.disk["/tmp/copy/Pages/Mine.md"] = "my own notes"

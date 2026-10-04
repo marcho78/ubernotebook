@@ -34,9 +34,9 @@ FocusScope {
   readonly property alias settingsPopup: settingsPanel
   readonly property alias releaseNotesPopup: releaseNotes
   property string mode: "shelf"
-  // "notebooks" (the shelf and the desk) or "pages".
-  property string space: "notebooks"
-  Component.onCompleted: space = settings.space === "pages" ? "pages" : "notebooks"
+  // "pages" or "notebooks" (the shelf and the desk).
+  property string space: "pages"
+  Component.onCompleted: space = settings.space === "notebooks" ? "notebooks" : "pages"
 
   // Pages, or back to the notebooks.
   function showSpace(next) {
@@ -120,6 +120,7 @@ FocusScope {
     onNewRequested: root.newNotebook()
     onEditRequested: function(notebook) { notebookDialog.defaults = root.settings; notebookDialog.start(notebook) }
     onDeleteRequested: function(notebook) { root.askDelete(notebook) }
+    onMoveRequested: function(notebook) { root.askMove(notebook) }
     onSettingsRequested: settingsPanel.open()
     onReleaseNotesRequested: releaseNotes.show()
     onResultOpened: function(notebookId, pageId, query) {
@@ -350,6 +351,36 @@ FocusScope {
         root.store.deleteNotebook(notebook.id)
         root.toast("\u201c" + notebook.title + "\u201d is in the trash")
       })
+  }
+
+  // A notebook into Pages (Workspace.importNotebook): a page called what it
+  // is, with a page inside it for each of its pages. Once they're made, the
+  // notebook goes in the trash (where it can be got back), unless a picture
+  // of it couldn't be copied: then it stays on the shelf too.
+  function askMove(notebook) {
+    confirm.ask("Move \u201c" + notebook.title + "\u201d to Pages?",
+      "It becomes a page in Pages with a page inside it for each of its pages: their text, pictures and drawings (a drawing becomes a sketch at the end of its page). The notebook then moves to the .trash folder inside your notebooks folder, where you can get it back.",
+      "Move to Pages",
+      function() { root.moveToPages(notebook) })
+  }
+
+  function moveToPages(notebook) {
+    if (!root.store || !root.workspace) return
+    var name = "\u201c" + notebook.title + "\u201d"
+    root.store.openNotebook(notebook.id, function(nb) {
+      if (!nb) { root.toast(name + " couldn't be read"); return }
+      root.workspace.importNotebook(nb, root.store.rootPath + "/" + notebook.id, function(r) {
+        if (!r) { root.toast(name + " couldn't be moved to Pages"); return }
+        if (r.tooLong) { root.toast("\u201c" + r.tooLong + "\u201d in " + name + " is longer than a page in Pages can be: nothing was moved"); return }
+        // (Into the trash only once all of it is in Pages, and saved.)
+        if (r.missing === 0 && r.failed === 0) root.store.deleteNotebook(notebook.id)
+        root.showSpace("pages")
+        docs.open(r.id)
+        if (r.failed > 0) root.toast(name + " is in Pages, but not all of it could be saved: the notebook stays on the shelf")
+        else if (r.missing > 0) root.toast(name + " is in Pages now, but " + (r.missing === 1 ? "a picture" : r.missing + " pictures") + " couldn't be copied: the notebook stays on the shelf")
+        else root.toast(name + " is in Pages now")
+      })
+    })
   }
 
   // The first time: your first profile, or the demo (nothing made until then).

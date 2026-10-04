@@ -19,6 +19,8 @@ Item {
   signal newRequested()
   signal editRequested(var notebook)
   signal deleteRequested(var notebook)
+  // Into Pages: a page, with a page in it for each of its pages (App.qml).
+  signal moveRequested(var notebook)
   signal settingsRequested()
   // What's new in a newer version (the corner says there's one).
   signal releaseNotesRequested()
@@ -272,6 +274,7 @@ Item {
       MenuRow { theme: shelf.theme; icon: shelf.theme.icons.open; text: "Open"; onClicked: { menu.close(); shelf.openRequested(menu.target, shelf.coverRect(menu.target.id, shelf)) } }
       MenuRow { theme: shelf.theme; icon: shelf.theme.icons.cog; text: "Cover, paper and pen\u2026"; onClicked: { menu.close(); shelf.editRequested(menu.target) } }
       MenuRow { theme: shelf.theme; icon: shelf.theme.icons.export; text: "Export as Markdown"; onClicked: { menu.close(); shelf.store.exportNotebook(menu.target.id) } }
+      MenuRow { objectName: "shelfMoveToPages"; theme: shelf.theme; icon: shelf.theme.icons.pages; text: "Move to Pages\u2026"; onClicked: { menu.close(); shelf.moveRequested(menu.target) } }
       Rectangle { width: parent.width; height: 1; color: shelf.theme.line }
       MenuRow { theme: shelf.theme; icon: shelf.theme.icons.trash; text: "Put in the trash\u2026"; danger: true; onClicked: { menu.close(); shelf.deleteRequested(menu.target) } }
     }

@@ -105,7 +105,6 @@ Item {
       backups.working = ""
       updates.status = "idle"
       updates.newer = []
-      updates.installing = ""
       ws.welcomed = false
       ws.written = ({})
       ws.load()
@@ -184,23 +183,24 @@ Item {
       tryVerify(function() { return notes.opened }, 1000)
       compare(named(notes.contentItem, "releaseNotesTitle").text, "What's new in 1.1.0")
       var md = named(notes.contentItem, "releaseNotesText").text
-      verify(md.indexOf("Better **search**.") >= 0, md)
-      verify(md.indexOf("x.example") < 0, "no pictures fetched")
-      // Not from git: the command, to copy.
-      compare(named(notes.contentItem, "releaseNotesUpdate"), null)
-      click(named(notes.contentItem, "releaseNotesCopy"))
-      compare(files.copied, "omarchy plugin update marcho78.uber-notebook")
-      click(named(notes.contentItem, "releaseNotesGitHub"))
-      verify(files.opened.indexOf("https://github.com/marcho78/omanote/releases/tag/v1.1.0") >= 0)
-      keyClick(Qt.Key_Escape)
-      tryVerify(function() { return !notes.opened }, 1000, "Esc closes it")
-      // From git: Update now.
-      updates.managed = true
-      app.showReleaseNotes()
-      tryVerify(function() { return notes.opened }, 1000)
-      click(named(notes.contentItem, "releaseNotesUpdate"))
-      tryCompare(files, "installed", ["marcho78.uber-notebook"], 1000)
-      keyClick(Qt.Key_Escape)
+      verify(md.indexOf('Better <span style="font-weight:700;">search</span>.') >= 0, md)
+      verify(!/<img|src=/.test(md), "no pictures to fetch")
+      // The command, to copy and run in a terminal: nothing installed here,
+      // from git or not.
+      for (var managed = 0; managed < 2; managed++) {
+        updates.managed = managed === 1
+        files.copied = ""
+        app.showReleaseNotes()
+        tryVerify(function() { return notes.opened }, 1000)
+        compare(named(notes.contentItem, "releaseNotesUpdate"), null, "no Update now")
+        click(named(notes.contentItem, "releaseNotesCopy"))
+        compare(files.copied, "omarchy plugin update marcho78.uber-notebook")
+        click(named(notes.contentItem, "releaseNotesGitHub"))
+        verify(files.opened.indexOf("https://github.com/marcho78/omanote/releases/tag/v1.1.0") >= 0)
+        keyClick(Qt.Key_Escape)
+        tryVerify(function() { return !notes.opened }, 1000, "Esc closes it")
+      }
+      compare(files.installed, [], "nothing installed")
       updates.managed = false
       // Settings: About has a dot, and says it.
       app.openSettings("about")
@@ -409,6 +409,22 @@ Item {
       service.setSettings({ codexModel: "", codexEffort: "" })
     }
 
+    // The sites agents may have Uber Notebook contact without asking: listed
+    // under AI, each taken back with Remove.
+    function test_10b_sites_agents_may_contact() {
+      fresh()
+      service.setSetting("agentPermissions", [{ agent: "grok", action: "contact", target: "docs.example.org" }, { agent: "claude", action: "contact", target: "e.org" }])
+      app.openSettings("ai")
+      tryVerify(function() { return panel() !== null && findAll(win(), function(it) { return it.objectName === "aiPermission" && it.visible }, []).length === 2 }, 1000, "both listed")
+      var rows = findAll(win(), function(it) { return it.objectName === "aiPermission" && it.visible }, [])
+      compare(rows[0].label, "docs.example.org")
+      compare(rows[0].note, "Grok may contact it without asking (or have Uber Notebook do so, for a link)")
+      click(named(rows[0], "aiPermissionRemove"))
+      compare(JSON.stringify(service.settings.agentPermissions), JSON.stringify([{ agent: "claude", action: "contact", target: "e.org" }]), "taken back, only that one")
+      closeAll()
+      service.setSetting("agentPermissions", [])
+    }
+
     function test_11_what_the_sidebar_shows() {
       fresh()
       // From the sidebar: a right-click, Choose what's in the sidebar.
@@ -463,12 +479,12 @@ Item {
       compare(v.version, "1.0.0")
       compare(v.latest, "1.2.0")
       compare(v.updateAvailable, true)
-      compare(v.canUpdateItself, false)
       verify(api.releaseNotes().indexOf("Faster.") >= 0)
-      compare(JSON.parse(api.installUpdate()).ok, false, "not from git: it says how")
+      // Agents can't install it: they tell the user the command.
+      compare(api.installUpdate, undefined)
       updates.managed = true
-      verify(JSON.parse(api.installUpdate()).ok)
-      tryCompare(files, "installed", ["marcho78.uber-notebook"], 1000)
+      verify(JSON.parse(api.appVersion()).update.indexOf("omarchy plugin update marcho78.uber-notebook") >= 0)
+      verify(!JSON.parse(api.help()).commands.some(function(c) { return /install/i.test(c.use) }))
       updates.managed = false
       verify(JSON.parse(api.help()).commands.some(function(c) { return c.use.indexOf("restoreBackup") === 0 }))
     }

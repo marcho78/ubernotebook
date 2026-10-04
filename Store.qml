@@ -82,7 +82,8 @@ Item {
   // (options: cwd, timeoutMs).
   function stream(argv, onLine, done, options) {
     var o = options || {}
-    var runner = streamComponent.createObject(store, { workingDirectory: o.cwd || "", timeoutMs: o.timeoutMs || 30 * 60 * 1000 })
+    var runner = streamComponent.createObject(store, { workingDirectory: o.cwd || "", timeoutMs: o.timeoutMs || 30 * 60 * 1000, input: o.input === true,
+      extraEnv: o.env && typeof o.env === "object" ? o.env : ({}) })
     var over = false
     runner.line.connect(function(text) { if (!over && onLine) onLine(text) })
     runner.finished.connect(function(code, errors) {
@@ -94,43 +95,76 @@ Item {
       runner.destroy()
       if (done) done(127, "couldn't start it")
     }
-    return { stop: function() { if (!over) runner.stop() } }
+    // (With options.input: send(text) and closeInput(), Stream.qml.)
+    return {
+      stop: function() { if (!over) runner.stop() },
+      send: function(text) { if (!over) runner.send(text) },
+      closeInput: function() { if (!over) runner.closeInput() }
+    }
   }
 
-  // Runs argv; done(ok, output) once, then the runner goes away.
+  // The helper that opens archives (bin/uber-notebook-files): a zip of notes,
+  // a backup. Run isolated (python3 -I -S), as an argument list.
+  readonly property string filesHelper: decodeURIComponent(Qt.resolvedUrl("bin/uber-notebook-files").toString().replace(/^file:\/\//, ""))
+  function helper(args, done, options) {
+    exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options)
+  }
+
+  // Runs argv; done(ok, output) once, then the runner goes away. Options:
+  // timeoutMs, maxBytes (its output), okCodes, input (written to its stdin),
+  // keepChildren (what it starts stays on when it's done: wl-copy).
   function exec(argv, done, options) {
     var o = options || {}
-    var runner = runComponent.createObject(store, { timeoutMs: o.timeoutMs || 8000, maxBytes: o.maxBytes || 256 * 1024, okCodes: o.okCodes || [0] })
+    var runner = runComponent.createObject(store, { timeoutMs: o.timeoutMs || 8000, maxBytes: o.maxBytes || 256 * 1024, okCodes: o.okCodes || [0],
+      keepChildren: o.keepChildren === true, input: typeof o.input === "string" ? o.input : "" })
     runner.finished.connect(function(ok, output) {
       try { if (done) done(ok, output) } finally { runner.destroy() }
     })
     runner.start(argv)
   }
 
-  // Reads many files in one go: done({ path: text }). The script only loops
-  // over the paths (or the files a folder pattern matches) it's given.
-  readonly property string readScript: "for f in \"$@\"; do if [ -f \"$f\" ]; then printf '\\036%s\\037' \"$f\"; /usr/bin/cat -- \"$f\"; fi; done"
-  readonly property string globScript: "shopt -s nullglob; for f in \"$1\"/$2; do printf '\\036%s\\037' \"$f\"; /usr/bin/cat -- \"$f\"; done"
+  // Reads many files in one go: done({ path: text }, ok) (ok: the read went
+  // through, so a file not in it isn't there). The script only loops over the
+  // paths (or the files a folder pattern matches) it's given, each file put
+  // after a mark made new for each read ($1), so what's in a file can never
+  // pass for another file.
+  readonly property string readScript: "t=$1; shift; for f in \"$@\"; do if [ -f \"$f\" ]; then printf '\\036%s\\037%s\\037' \"$t\" \"$f\"; /usr/bin/cat -- \"$f\"; fi; done"
+  readonly property string globScript: "shopt -s nullglob; for f in \"$2\"/$3; do printf '\\036%s\\037%s\\037' \"$1\" \"$f\"; /usr/bin/cat -- \"$f\"; done"
 
-  function parseFrames(output) {
+  function readMark() {
+    var s = ""
+    for (var i = 0; i < 4; i++) s += ("0000000" + Math.floor(Math.random() * 4294967296).toString(16)).slice(-8)
+    return s
+  }
+  // What a read printed: { path: text }, only for the frames with its mark,
+  // and only paths `wanted` says it may hold.
+  function parseFrames(output, mark, wanted) {
     var out = {}
-    String(output || "").split("\u001e").forEach(function(frame) {
+    var head = "\u001e" + mark + "\u001f"
+    String(output || "").split(head).forEach(function(frame, i) {
+      if (i === 0) return
       var cut = frame.indexOf("\u001f")
-      if (cut > 0) out[frame.slice(0, cut)] = frame.slice(cut + 1)
+      if (cut <= 0) return
+      var path = frame.slice(0, cut)
+      if (wanted(path)) out[path] = frame.slice(cut + 1)
     })
     return out
   }
 
   function readFiles(paths, done, maxBytes) {
-    if (paths.length === 0) { done({}); return }
-    exec(["/usr/bin/bash", "-c", readScript, "uber-notebook-read"].concat(paths), function(ok, output) {
-      done(ok ? parseFrames(output) : {})
+    if (paths.length === 0) { done({}, true); return }
+    var mark = readMark()
+    var asked = {}
+    paths.forEach(function(p) { asked[p] = true })
+    exec(["/usr/bin/bash", "-c", readScript, "uber-notebook-read", mark].concat(paths), function(ok, output) {
+      done(ok ? parseFrames(output, mark, function(p) { return asked[p] === true }) : {}, ok)
     }, { maxBytes: maxBytes || 32 * 1024 * 1024, timeoutMs: 20000 })
   }
 
   function readGlob(dir, pattern, done, maxBytes) {
-    exec(["/usr/bin/bash", "-c", globScript, "uber-notebook-read", dir, pattern], function(ok, output) {
-      done(ok ? parseFrames(output) : {})
+    var mark = readMark()
+    exec(["/usr/bin/bash", "-c", globScript, "uber-notebook-read", mark, dir, pattern], function(ok, output) {
+      done(ok ? parseFrames(output, mark, function(p) { return p.indexOf(dir + "/") === 0 }) : {}, ok)
     }, { maxBytes: maxBytes || 64 * 1024 * 1024, timeoutMs: 30000 })
   }
 
@@ -188,16 +222,33 @@ Item {
   }
 
   // The agents Omarchy offers (its menu file says which, and what each is
-  // called) that are installed here: done([{ name, label }]).
-  readonly property string omarchyPath: Quickshell.env("OMARCHY_PATH") || "/usr/share/omarchy"
+  // called) that are installed here: done([{ name, label, path }]). Each is
+  // found on the shell's PATH and checked (Agent.AGENTS_SCRIPT), and run by
+  // that full path, never looked up again.
+  readonly property string omarchyPath: "/usr/share/omarchy"
+  property var agentPaths: ({})
+  function findAgents(names, done) {
+    var list = (names || []).filter(function(n) { return /^[a-z][a-z0-9-]{0,30}$/.test(n) })
+    if (list.length === 0) { done({}); return }
+    exec(["/usr/bin/bash", "-c", Agent.AGENTS_SCRIPT, "uber-notebook-agents", String(Quickshell.env("PATH") || "")].concat(list), function(ok, output) {
+      var found = ok ? Agent.agentPaths(output) : {}
+      var all = {}
+      for (var k in store.agentPaths) all[k] = store.agentPaths[k]
+      list.forEach(function(n) { if (found[n]) all[n] = found[n]; else delete all[n] })
+      store.agentPaths = all
+      done(found)
+    }, { timeoutMs: 4000, maxBytes: 65536 })
+  }
   function listAgents(done) {
     var all = Agent.menuAgents(readNow(omarchyPath + "/default/omarchy/omarchy-menu.jsonc", 1024 * 1024) || "")
     if (all.length === 0) { done([]); return }
-    exec(["/usr/bin/bash", "-c", "for a in \"$@\"; do command -v -- \"$a\" >/dev/null && printf '%s\\n' \"$a\"; done; exit 0", "uber-notebook-agents"]
-      .concat(all.map(function(a) { return a.name })), function(ok, output) {
-      var here = String(output || "").split("\n")
-      done(all.filter(function(a) { return here.indexOf(a.name) >= 0 }))
-    }, { timeoutMs: 4000, maxBytes: 16384 })
+    findAgents(all.map(function(a) { return a.name }), function(found) {
+      done(all.filter(function(a) { return !!found[a.name] }).map(function(a) { return { name: a.name, label: a.label, path: found[a.name] } }))
+    })
+  }
+  // An agent's program, found and checked now: done(full path) or done("").
+  function agentPath(name, done) {
+    findAgents([name], function(found) { done(found[name] || "") })
   }
 
   // Your agent made Omarchy's default: the file `omarchy default agent`
@@ -222,15 +273,19 @@ Item {
   // and only Uber Notebook's own links (to `target`) are taken out.
   readonly property var skillFolders: [".agents/skills", ".claude/skills", ".codex/skills", ".hermes/skills", ".pi/agent/skills"]
   readonly property string skillScript: "mode=$1; target=$2; shift 2; for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
-    + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -s -- \"$target\" \"$link\"; fi; "
+    + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; fi; "
     + "elif [ -L \"$link\" ] && [ \"$(/usr/bin/readlink -- \"$link\")\" = \"$target\" ]; then /usr/bin/rm -f -- \"$link\"; fi; done; exit 0"
 
   function skillDirs() { return skillFolders.map(function(f) { return store.home + "/" + f }) }
   function linkSkill(target) {
     exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", "link", target].concat(skillDirs()), null, { timeoutMs: 5000 })
   }
+  // (Each link taken out only if it's still Uber Notebook's: read where it's
+  // kept, then taken out there; by the archive helper, as Uber Notebook stops.)
   function unlinkSkill(target) {
-    Quickshell.execDetached(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", "unlink", target].concat(skillDirs()))
+    skillDirs().forEach(function(dir) {
+      Quickshell.execDetached(["/usr/bin/python3", "-I", "-S", filesHelper, "unlink-link", dir + "/uber-notebook", target])
+    })
   }
 
   // ---- writing files -------------------------------------------------------------------
@@ -254,20 +309,30 @@ Item {
   // text waiting for it replaces an older one.
   function writeFile(path, text, done) {
     if (writing[path]) {
-      queued[path] = { text: text, done: done }
+      // The newest text is what's written next; everyone waiting on an
+      // earlier one hears when that write (which has theirs in it) is done.
+      var q = queued[path] || { text: "", waiters: [] }
+      q.text = text
+      if (done) q.waiters.push(done)
+      queued[path] = q
       return
     }
+    writeNow(path, text, done ? [done] : [])
+  }
+  function writeNow(path, text, waiters) {
     writing[path] = true
     var view = writerComponent.createObject(store, { path: path, blockWrites: stopping })
     function finish(ok, error) {
       delete writing[path]
       view.destroy()
       if (!ok) failed("Couldn't save " + path.replace(home, "~") + (error ? ": " + error : ""))
-      if (done) done(ok)
+      waiters.forEach(function(w) {
+        try { w(ok) } catch (e) { console.warn("Uber Notebook: after saving " + path + ": " + e) }
+      })
       var next = queued[path]
       if (next) {
         delete queued[path]
-        writeFile(path, next.text, next.done)
+        writeNow(path, next.text, next.waiters)
       }
     }
     view.saved.connect(function() { finish(true, "") })
@@ -310,7 +375,9 @@ Item {
     var gen = ++generation
     exec(["/usr/bin/test", "-d", home + "/Documents"], function(ok) {
       if (gen !== store.generation) return
-      store.rootPath = Settings.resolveFolder(store.folder, store.home, ok)
+      var next = Settings.resolveFolder(store.folder, store.home, ok)
+      if (store.rootPath && next !== store.rootPath) store.leaveRoot()
+      store.rootPath = next
       store.mkdirs([store.rootPath], function(made) { if (made && gen === store.generation) store.loadLibrary() })
     })
   }
@@ -479,7 +546,10 @@ Item {
   function readPages(id, done) {
     var nb = index[id]
     if (!nb) { done(null); return }
-    readGlob(Library.pagesDir(rootPath, id), "*.json", function(files) {
+    readGlob(Library.pagesDir(rootPath, id), "*.json", function(files, read) {
+      // (A read that didn't go through isn't an empty notebook: nothing's
+      // made or changed from it.)
+      if (!read) { store.failed("Couldn't read that notebook's pages"); done(null); return }
       var byId = {}
       var onDisk = []
       for (var path in files) {
@@ -736,8 +806,16 @@ Item {
   function isImagePath(path) { return Library.isImagePath(path) }
   function assetName(path) { return Library.assetName(path, new Date()) }
 
-  // A picture on the clipboard, saved into a folder of pictures (a
-  // notebook's or Pages'): done("assets/<name>") or done("").
+  // A picture on the clipboard, at most PASTE_MAX bytes, saved into a folder
+  // of pictures (a notebook's or Pages'): done("assets/<name>") or done("").
+  // It's written to a new file of its own (never through a name that's
+  // there), then named once it's whole and small enough.
+  readonly property real pasteMax: 50 * 1024 * 1024
+  readonly property string pasteScript: "set -C -o pipefail; t=\"$2.part-$RANDOM$RANDOM\"; exec 3> \"$t\" || exit 1; "
+    + "if ! /usr/bin/wl-paste --no-newline --type \"$1\" | /usr/bin/head -c \"$(($3 + 1))\" >&3; then exec 3>&-; /usr/bin/rm -f -- \"$t\"; exit 1; fi; exec 3>&-; "
+    + "n=$(/usr/bin/stat -c %s -- \"$t\") || { /usr/bin/rm -f -- \"$t\"; exit 1; }; "
+    + "if [ \"$n\" -eq 0 ] || [ \"$n\" -gt \"$3\" ]; then /usr/bin/rm -f -- \"$t\"; echo 'too big' >&2; exit 1; fi; "
+    + "/usr/bin/mv --update=none-fail -T -- \"$t\" \"$2\" || { /usr/bin/rm -f -- \"$t\"; exit 1; }"
   function pasteInto(dest, done) {
     exec(["/usr/bin/wl-paste", "--list-types"], function(ok, output) {
       var types = String(output || "").split("\n")
@@ -749,31 +827,60 @@ Item {
       var name = Library.pageId(new Date()) + "." + ext
       store.mkdirs([dest], function(made) {
         if (!made) { done(""); return }
-        // wl-paste writes the picture to its stdout; bash only points that at the file.
-        store.exec(["/usr/bin/bash", "-c", "exec /usr/bin/wl-paste --no-newline --type \"$1\" > \"$2\"", "uber-notebook-paste", pick, dest + "/" + name], function(pasted) {
+        store.exec(["/usr/bin/bash", "-c", store.pasteScript, "uber-notebook-paste", pick, dest + "/" + name, String(store.pasteMax)], function(pasted) {
           done(pasted ? "assets/" + name : "")
-        }, { timeoutMs: 10000 })
+        }, { timeoutMs: 15000 })
       })
     }, { okCodes: [0, 1], timeoutMs: 3000 })
   }
 
+  // What's on the clipboard (or, with `primary`, what's selected: a middle
+  // click's paste), to paste: done({ html, text }) (each "" when it isn't
+  // there, at most 4 MB) or done(null) when there's no text at all (a
+  // picture: pastePicture). Read by wl-paste, so the editor gets HTML to
+  // clean before Qt reads it (Editor.qml: withClipboard).
+  readonly property real clipboardMax: 4 * 1024 * 1024
+  function readClipboard(done, primary) {
+    var which = primary === true ? ["--primary"] : []
+    exec(["/usr/bin/wl-paste"].concat(which, ["--list-types"]), function(ok, output) {
+      var types = ok ? String(output || "").split("\n").map(function(t) { return t.trim() }) : []
+      var html = types.indexOf("text/html") >= 0 ? "text/html" : ""
+      var text = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING", "TEXT"].filter(function(t) { return types.indexOf(t) >= 0 })[0] || ""
+      if (!html && !text) { done(null); return }
+      function readText(htmlText) {
+        if (!text) { done({ html: htmlText, text: "" }); return }
+        store.exec(["/usr/bin/wl-paste"].concat(which, ["--no-newline", "--type", text]), function(ok2, out2) {
+          done({ html: htmlText, text: ok2 ? String(out2 || "") : "" })
+        }, { timeoutMs: 5000, maxBytes: store.clipboardMax })
+      }
+      if (!html) { readText(""); return }
+      store.exec(["/usr/bin/wl-paste"].concat(which, ["--no-newline", "--type", html]), function(ok1, out1) {
+        // (HTML that isn't UTF-8, or too much of it: its text instead.)
+        var h = ok1 ? String(out1 || "") : ""
+        readText(h.indexOf("\u0000") >= 0 ? "" : h)
+      }, { timeoutMs: 5000, maxBytes: store.clipboardMax })
+    }, { okCodes: [0, 1], timeoutMs: 3000, maxBytes: 64 * 1024 })
+  }
+
   // ---- out of Uber Notebook -----------------------------------------------------------------------
 
+  // Text onto the clipboard, given to wl-copy on its stdin (never as an
+  // argument, which anyone on the computer could read while it's held).
   function copyText(text) {
     var value = String(text || "")
     if (!value || value.length > 1000000) return
-    Quickshell.execDetached(["/usr/bin/wl-copy", "--", value])
+    exec(["/usr/bin/wl-copy"], function() {}, { input: value, keepChildren: true, timeoutMs: 10000 })
   }
 
   // A picture onto the clipboard, to paste anywhere: as it is (a PNG, a GIF,
   // an SVG), or a JPEG, WebP or BMP as a PNG (what more apps take), made by
   // ffmpeg when it's here. wl-copy stays on to hand it over, so its output
   // goes nowhere (not to the runner, which would wait for it). done(ok).
-  readonly property string copyPictureScript: "set -o pipefail; case \"$1\" in image/jpeg|image/webp|image/bmp) [ -x /usr/bin/ffmpeg ] && /usr/bin/ffmpeg -nostdin -v error -i \"$2\" -frames:v 1 -c:v png -f image2pipe - | /usr/bin/wl-copy --type image/png >/dev/null 2>&1 && exit 0 ;; esac; /usr/bin/wl-copy --type \"$1\" < \"$2\" >/dev/null 2>&1"
+  readonly property string copyPictureScript: "set -o pipefail; case \"$1\" in image/jpeg|image/webp|image/bmp) [ -x /usr/bin/ffmpeg ] && /usr/bin/ffmpeg -nostdin -v error -protocol_whitelist file -format_whitelist image2,jpeg_pipe,webp_pipe,bmp_pipe -i \"$2\" -frames:v 1 -c:v png -f image2pipe - | /usr/bin/wl-copy --type image/png >/dev/null 2>&1 && exit 0 ;; esac; /usr/bin/wl-copy --type \"$1\" < \"$2\" >/dev/null 2>&1"
   function copyPicture(path, done) {
     var type = Library.pictureType(path)
     if (!type || String(path || "").charAt(0) !== "/") { if (done) done(false); return }
-    exec(["/usr/bin/bash", "-c", copyPictureScript, "uber-notebook-copy-picture", type, path], function(ok) { if (done) done(ok) }, { timeoutMs: 20000 })
+    exec(["/usr/bin/bash", "-c", copyPictureScript, "uber-notebook-copy-picture", type, path], function(ok) { if (done) done(ok) }, { timeoutMs: 20000, keepChildren: true })
   }
 
   // A picture made here (a diagram or an equation, grabbed) written to
@@ -788,9 +895,20 @@ Item {
     exec(["/usr/bin/cp", "--", from, to], function(ok, output) { if (done) done(ok, String(output || "").trim()) }, { timeoutMs: 30000 })
   }
 
+  // A link from a page, a release's notes or an email: only to the web or
+  // an email address (a link in a page can't open a file on this computer).
   function openUrl(url) {
-    if (!/^(https?:|mailto:|file:)/i.test(String(url || ""))) return
-    Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", String(url)])
+    var u = String(url || "")
+    if (!/^(https?:\/\/|mailto:)/i.test(u) || u.length > 8000 || /[\u0000-\u001f\u007f]/.test(u)) return
+    Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", u])
+  }
+
+  // A folder or file of Uber Notebook's own, by its full path (a profile's
+  // folder, the backups folder, a notebook's picture): never from a page.
+  function openLocal(path) {
+    var p = String(path || "")
+    if (p.charAt(0) !== "/" || p.length > 4000 || /[\u0000-\u001f\u007f]/.test(p) || /(^|\/)\.\.(\/|$)/.test(p)) return
+    Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", p])
   }
 
   // A file in its app, as the desktop says: done(true), or done(false, why)
@@ -866,6 +984,22 @@ Item {
         }, { okCodes: [0, 1], timeoutMs: 60000 })
       })
     })
+  }
+
+  // Another folder (another profile): what's waiting is written where it
+  // belongs first, then nothing of this one is kept to be read in the next
+  // (its pages, by their ids, may be the same: a restored backup's are).
+  function leaveRoot() {
+    notebookTimer.stop()
+    var ids = Object.keys(notebookDirty)
+    notebookDirty = ({})
+    ids.forEach(function(id) {
+      var nb = index[id]
+      if (nb && folders[id]) store.writeFile(Library.notebookFile(rootPath, id), Library.stringify(nb))
+    })
+    written = ({})
+    folders = ({})
+    waiting = ({})
   }
 
   // ---- when the shell stops ---------------------------------------------------------------------

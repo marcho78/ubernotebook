@@ -21,8 +21,25 @@ var LANG = "Mermaid"
 var MAX_NODES = 200
 var MAX_EDGES = 400
 var MAX_TEXT = 20000
+// It's read and laid out as it's typed, in the shell, so whatever's written
+// is done at once: at most so many groups, so deep in each other; a line
+// at most so many ranks long (---> is 2); so many ranks down the page; so
+// many points for the long lines to go through, all told; so many classes
+// given (class, :::), all told; so many characters of a line's words
+// (drawn on every line they're on: A & B -->|words| C & D).
+var MAX_GROUPS = 100
+var MAX_DEPTH = 16
+var MAX_LENGTH = 5
+var MAX_RANKS = 400
+var MAX_BENDS = 2000
+var MAX_CLASSES = 2000
+var MAX_LINE_WORDS = 200
 
 function isLang(lang) { return String(lang || "").trim().toLowerCase() === "mermaid" }
+
+// A map from what's written (an id, a class) to what it is, empty to start
+// with: "constructor" or "__proto__" is a name like any other.
+function dict() { return Object.create(null) }
 
 // ---- reading Mermaid -----------------------------------------------------------------------
 
@@ -102,20 +119,27 @@ function labelOf(raw) {
 }
 
 // What follows a node's id at `i` in `s`: its brackets and label, or an
-// `@{ … }`. { shape, label, icon, end } or null.
-function readShape(s, i) {
+// `@{ … }`. { shape, label, icon, end } or null. `closes` (optional, one
+// for each line): where each closing bracket was looked for and found, so
+// a line of brackets that never close is looked through once.
+function readShape(s, i, closes) {
   if (s.charAt(i) === "@" && s.charAt(i + 1) === "{") {
     var close = s.indexOf("}", i + 2)
     if (close < 0) return null
     var body = s.slice(i + 2, close)
-    var props = {}
-    var re = /([a-zA-Z]+)\s*:\s*("([^"]*)"|[^,]+)/g
+    var props = dict()
+    // (A name from where a word starts: not tried again from each letter of a long one.)
+    var re = /\b([a-zA-Z]+)\s*:\s*("([^"]*)"|[^,]+)/g
     var m
     while ((m = re.exec(body)) !== null) props[m[1].toLowerCase()] = (m[3] !== undefined ? m[3] : m[2]).trim()
-    var shape = SHAPE_NAMES[String(props.shape || "").toLowerCase()] || "box"
+    var named = String(props.shape || "").toLowerCase()
+    var shape = Object.prototype.hasOwnProperty.call(SHAPE_NAMES, named) ? SHAPE_NAMES[named] : "box"
     var lab = labelOf(props.label || "")
     return { shape: shape, label: lab.text, icon: props.icon ? iconOf(props.icon) : lab.icon, end: close + 1, given: !!props.label }
   }
+  // (Every shape starts with one of these.)
+  var c = s.charAt(i)
+  if (c !== "(" && c !== "[" && c !== "{" && c !== ">") return null
   for (var k = 0; k < SHAPES.length; k++) {
     var sh = SHAPES[k]
     if (s.substr(i, sh.open.length) !== sh.open) continue
@@ -126,7 +150,7 @@ function readShape(s, i) {
       var q = s.indexOf("\"", from + 1)
       if (q >= 0 && s.substr(q + 1, sh.close.length) === sh.close) end = q + 1
     }
-    if (end < 0) end = s.indexOf(sh.close, from)
+    if (end < 0) end = findClose(s, sh.close, from, closes)
     if (end < 0) continue
     var inner = s.slice(from, end)
     // (A shorter bracket matched first would leave a part of a longer one.)
@@ -139,35 +163,64 @@ function readShape(s, i) {
   return null
 }
 
+// Where `close` is in `s` from `from` on (-1: nowhere): s.indexOf, what
+// it found kept in `closes` for the next look further on the same line.
+function findClose(s, close, from, closes) {
+  if (!closes) return s.indexOf(close, from)
+  var known = closes[close]
+  if (known && known.from <= from && (known.at < 0 || known.at >= from)) return known.at
+  var at = s.indexOf(close, from)
+  closes[close] = { from: from, at: at }
+  return at
+}
+
 // A link at `i`: --> --- -.-> -.- ==> === --o --x <--> ~~~, longer ones
-// (---> and ---- are a rank longer), with text: -- text --> or -->|text|.
-// { style, arrowStart, arrowEnd, label, length, end } or null.
+// (---> and ---- are a rank longer, up to MAX_LENGTH ranks), with text:
+// -- text --> or -->|text|. { style, arrowStart, arrowEnd, label, length,
+// end } or null.
 function readLink(s, i) {
-  var rest = s.slice(i)
+  // (Each read where it is in the line, not from a copy of the rest of it:
+  // a long line of links is read through once.)
   // -- text --> / == text ==> / -. text .-> (the text can't start like a link).
-  var m = /^(<?)(--|==|-\.)\s*([^|>\n\-=.\s](?:[^|>\n]*?[^\s|>\-=.])?)\s*(--+|==+|\.-+)([>ox]?)/.exec(rest)
+  var re = /(<?)(--|==|-\.)\s*([^|>\n\-=.\s](?:[^|>\n]*?[^\s|>\-=.])?)\s*(--+|==+|\.-+)([>ox]?)/y
+  re.lastIndex = i
+  var m = re.exec(s)
   if (m) {
     var dashes = m[4].replace(/\./g, "").length + 1
     return { style: m[2] === "==" ? "thick" : m[2] === "-." ? "dotted" : "solid", arrowStart: m[1] === "<" ? "arrow" : "",
-      arrowEnd: ends(m[5]), label: labelOf(m[3]).text, length: Math.max(1, dashes - (m[5] ? 1 : 2)), end: i + m[0].length }
+      arrowEnd: ends(m[5]), label: lineWords(labelOf(m[3]).text), length: Math.min(MAX_LENGTH, Math.max(1, dashes - (m[5] ? 1 : 2))), end: i + m[0].length }
   }
-  m = /^(<|o|x)?(-{2,}|={2,}|-\.+-|~{3,})([>ox]?)/.exec(rest)
+  re = /(<|o|x)?(-{2,}|={2,}|-\.+-|~{3,})([>ox]?)/y
+  re.lastIndex = i
+  m = re.exec(s)
   if (!m) return null
   var body = m[2]
   var count = body.replace(/\./g, "").length
   var out = { style: body.charAt(0) === "=" ? "thick" : body.charAt(0) === "~" ? "invisible" : body.indexOf(".") >= 0 ? "dotted" : "solid",
     arrowStart: m[1] === "<" ? "arrow" : m[1] === "o" ? "circle" : m[1] === "x" ? "cross" : "", arrowEnd: ends(m[3]),
-    label: "", length: Math.max(1, count - (m[3] ? 1 : 2)), end: i + m[0].length }
+    label: "", length: Math.min(MAX_LENGTH, Math.max(1, count - (m[3] ? 1 : 2))), end: i + m[0].length }
   // -->|text|
-  var lm = /^\s*\|([^|]*)\|/.exec(s.slice(out.end))
+  re = /\s*\|([^|]*)\|/y
+  re.lastIndex = out.end
+  var lm = re.exec(s)
   if (lm) {
-    out.label = labelOf(lm[1]).text
+    out.label = lineWords(labelOf(lm[1]).text)
     out.end += lm[0].length
   }
   return out
 }
 
 function ends(c) { return c === ">" ? "arrow" : c === "o" ? "circle" : c === "x" ? "cross" : "" }
+
+// A line's words, at most MAX_LINE_WORDS characters (cut, with an ellipsis).
+function lineWords(text) {
+  if (text.length <= MAX_LINE_WORDS) return text
+  var cut = text.slice(0, MAX_LINE_WORDS - 1)
+  // (Not half of a character written as two.)
+  var last = cut.charCodeAt(cut.length - 1)
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1)
+  return cut.trim() + "\u2026"
+}
 
 // Mermaid -> { kind: "flowchart", direction, nodes: [{ id, label, shape,
 // icon, group, paint? }], edges: [{ from, to, label, style, arrowStart,
@@ -179,16 +232,26 @@ function parse(text) {
   var src = String(text || "").slice(0, MAX_TEXT).replace(/\r/g, "")
   var lines = src.split("\n")
   var out = { kind: "flowchart", direction: "TD", nodes: [], edges: [], groups: [], errors: [] }
-  var byId = {}
+  var byId = dict()
   var groupStack = []
+  // Each group by its id, and how deep it is (0: in no other).
+  var groupOf = dict()
   var started = false
   // Colors: classes by name, the classes given each id (in order), each
   // id's own style, the lines' styles ("default" or by number).
-  var classDefs = {}
-  var classesOf = {}
-  var styleOf = {}
+  var classDefs = dict()
+  var classesOf = dict()
+  var classesGiven = 0
+  var styleOf = dict()
   var linkStyles = []
-  function giveClass(id, name) { (classesOf[id] = classesOf[id] || []).push(name) }
+  // The shapes' closing marks already looked for on the line being read
+  // (readShape: each looked for once a line).
+  var closes = dict()
+  function giveClass(id, name) {
+    if (classesGiven >= MAX_CLASSES) return
+    classesGiven++
+    ;(classesOf[id] = classesOf[id] || []).push(name)
+  }
   // A `classDef`, `class`, `style` or `linkStyle` line: false when it
   // isn't understood.
   function styleLine(kind, rest) {
@@ -201,11 +264,12 @@ function parse(text) {
       return true
     }
     if (kind === "class") {
-      m = /^(.+?)\s+([\w-]+(?:\s*,\s*[\w-]+)*)\s*$/.exec(rest)
-      if (!m) return false
-      m[1].split(",").forEach(function(id) {
+      var written = classLine(rest)
+      if (!written) return false
+      var names = written.names.split(",")
+      written.ids.split(",").forEach(function(id) {
         id = id.trim()
-        if (id) m[2].split(",").forEach(function(name) { giveClass(id, name.trim()) })
+        for (var k = 0; id && k < names.length && classesGiven < MAX_CLASSES; k++) giveClass(id, names[k].trim())
       })
       return true
     }
@@ -241,23 +305,26 @@ function parse(text) {
   // Ids and their shapes, `&` between them: "A & B[Two]". [ids] and where it ends.
   function readNodes(s, i) {
     var ids = []
+    // (Each read where it is in the line, as readLink's are.)
+    var idAt = /[A-Za-z0-9_\u00c0-\uffff](?:[\w.\u00c0-\uffff]|-(?![-.]))*/y
+    var classAt = /:::([\w-]+)/y
     while (true) {
       while (s.charAt(i) === " " || s.charAt(i) === "\t") i++
-      var m = /^[A-Za-z0-9_\u00c0-\uffff][\w.\u00c0-\uffff-]*/.exec(s.slice(i))
+      // (A link right after an id: "A-->B" reads "A" then "-->", the id
+      // ending before a "--" or "-.".)
+      idAt.lastIndex = i
+      var m = idAt.exec(s)
       if (!m) break
       var id = m[0]
-      // (A link right after an id: "A-->B" reads "A" then "-->".)
-      var dash = id.search(/--|==|-\.|~~/)
-      if (dash > 0) id = id.slice(0, dash)
-      else if (dash === 0) break
       i += id.length
-      var def = readShape(s, i)
+      var def = readShape(s, i, closes)
       if (def) i = def.end
       var n = node(id, def)
       if (n) ids.push(n.id)
       while (s.charAt(i) === " " || s.charAt(i) === "\t") i++
       // ":::class" after it: its colors.
-      var cls = /^:::([\w-]+)/.exec(s.slice(i))
+      classAt.lastIndex = i
+      var cls = classAt.exec(s)
       if (cls) {
         if (n) giveClass(n.id, cls[1])
         i += cls[0].length
@@ -267,6 +334,13 @@ function parse(text) {
       break
     }
     return { ids: ids, end: i }
+  }
+  // A name for a group written without one: "group" and how many there
+  // are, or the next no other group has.
+  function newGroupId() {
+    var n = out.groups.length
+    while (groupOf["group" + n]) n++
+    return "group" + n
   }
   for (var ln = 0; ln < lines.length; ln++) {
     var parts = splitStatements(lines[ln])
@@ -292,18 +366,33 @@ function parse(text) {
         var glabel = rest
         var gm = /^([\w.-]+)\s*\[(.*)\]\s*$/.exec(rest)
         if (gm) { gid = gm[1]; glabel = labelOf(gm[2]).text }
-        else if (/^".*"$/.test(rest)) { glabel = labelOf(rest).text; gid = "group" + out.groups.length }
+        else if (/^".*"$/.test(rest)) { glabel = labelOf(rest).text; gid = newGroupId() }
         else glabel = labelOf(rest).text
-        if (!gid) gid = "group" + out.groups.length
-        out.groups.push({ id: gid, label: glabel, parent: groupStack.length ? groupStack[groupStack.length - 1] : "", direction: "" })
+        if (!gid) gid = newGroupId()
+        var parent = groupStack.length ? groupStack[groupStack.length - 1] : ""
+        // One begun before (even this one, inside itself): the same group,
+        // what's in it this time in it too.
+        if (groupOf[gid]) { groupStack.push(gid); continue }
+        // One too many, or too deep: said, and what's in it is in the
+        // group it's in.
+        var depth = parent ? groupOf[parent].depth + 1 : 0
+        if (out.groups.length >= MAX_GROUPS || depth >= MAX_DEPTH) {
+          out.errors.push({ line: ln + 1, text: line })
+          groupStack.push(parent)
+          continue
+        }
+        var group = { id: gid, label: glabel, parent: parent, direction: "" }
+        groupOf[gid] = { group: group, depth: depth }
+        out.groups.push(group)
         groupStack.push(gid)
         continue
       }
       if (/^end$/i.test(line)) { groupStack.pop(); continue }
       var dir = /^direction\s+(TB|TD|BT|RL|LR)$/i.exec(line)
       if (dir) {
-        if (groupStack.length) groupForId(out, groupStack[groupStack.length - 1]).direction = dir[1].toUpperCase().replace("TB", "TD")
-        else out.direction = dir[1].toUpperCase().replace("TB", "TD")
+        var within = groupStack.length ? groupStack[groupStack.length - 1] : ""
+        if (within) groupOf[within].group.direction = dir[1].toUpperCase().replace("TB", "TD")
+        else if (!groupStack.length) out.direction = dir[1].toUpperCase().replace("TB", "TD")
         continue
       }
       var styled = /^(classDef|class|style|linkStyle)\s+(.*)$/.exec(line)
@@ -313,6 +402,7 @@ function parse(text) {
       }
       if (/^(classDef|class|style|linkStyle|click|accTitle|accDescr|title)\b/.test(line)) continue
       // Nodes and links between them: A --> B -->|x| C & D.
+      closes = dict()
       var first = readNodes(line, 0)
       if (!first.ids.length) { out.errors.push({ line: ln + 1, text: line }); continue }
       var i = first.end
@@ -327,20 +417,19 @@ function parse(text) {
         var next = readNodes(line, i)
         if (!next.ids.length) { ok = false; break }
         i = next.end
-        from.forEach(function(a) {
-          next.ids.forEach(function(b) {
-            if (out.edges.length < MAX_EDGES) out.edges.push({ from: a, to: b, label: link.label, style: link.style, arrowStart: link.arrowStart, arrowEnd: link.arrowEnd, length: link.length })
-          })
-        })
+        // Every pair (A & B --> C & D), till there are as many lines as there can be.
+        for (var fa = 0; fa < from.length && out.edges.length < MAX_EDGES; fa++) {
+          for (var tb = 0; tb < next.ids.length && out.edges.length < MAX_EDGES; tb++) {
+            out.edges.push({ from: from[fa], to: next.ids[tb], label: link.label, style: link.style, arrowStart: link.arrowStart, arrowEnd: link.arrowEnd, length: link.length })
+          }
+        }
         from = next.ids
       }
       if (!ok) out.errors.push({ line: ln + 1, text: line })
     }
   }
   // Groups named as nodes (a link to a subgraph): the group, not a box.
-  var groupIds = {}
-  out.groups.forEach(function(g) { groupIds[g.id] = true })
-  out.nodes = out.nodes.filter(function(n) { return !groupIds[n.id] || out.edges.some(function(e) { return e.from === n.id || e.to === n.id }) })
+  out.nodes = out.nodes.filter(function(n) { return !groupOf[n.id] || out.edges.some(function(e) { return e.from === n.id || e.to === n.id }) })
 
   // Colors, as Mermaid ranks them: `classDef default` (boxes), then the
   // classes given (in order), then the id's own `style`; a line's,
@@ -354,23 +443,60 @@ function parse(text) {
   out.nodes.forEach(function(n) { var p = paintOf(n.id, true); if (p) n.paint = p })
   out.groups.forEach(function(g) { var p = paintOf(g.id, false); if (p) g.paint = p })
   if (linkStyles.length) {
+    // (Each line's styles gathered once, in order, from the lines that name it.)
+    var all = {}
+    var byNumber = []
+    linkStyles.forEach(function(ls) {
+      if (ls.which === "default") { all = mergeStyle(all, ls.style); return }
+      var named = dict()
+      ls.which.forEach(function(k) {
+        if (k < out.edges.length && !named[k]) { named[k] = true; byNumber[k] = mergeStyle(byNumber[k], ls.style) }
+      })
+    })
     out.edges.forEach(function(e, k) {
-      var p = {}
-      linkStyles.forEach(function(ls) { if (ls.which === "default") p = mergeStyle(p, ls.style) })
-      linkStyles.forEach(function(ls) { if (ls.which !== "default" && ls.which.indexOf(k) >= 0) p = mergeStyle(p, ls.style) })
+      var p = mergeStyle(all, byNumber[k])
       if (Object.keys(p).length) e.paint = p
     })
   }
   return out
 }
 
+// A `class` line's ids and classes: "a,b warm" -> { ids: "a,b", names:
+// "warm" }, or null. The classes are the names at its end with commas
+// between them (and spaces round those), after a space; as many as there
+// are (found from the end, so it's quick however long the line is).
+function classLine(rest) {
+  var s = String(rest)
+  var starts = []
+  var i = s.length
+  while (i > 0 && /\s/.test(s.charAt(i - 1))) i--
+  while (i > 0) {
+    var end = i
+    while (i > 0 && /[\w-]/.test(s.charAt(i - 1))) i--
+    if (i === end) break
+    starts.push(i)
+    var j = i
+    while (j > 0 && /\s/.test(s.charAt(j - 1))) j--
+    if (j === 0 || s.charAt(j - 1) !== ",") break
+    j--
+    while (j > 0 && /\s/.test(s.charAt(j - 1))) j--
+    i = j
+  }
+  // The first of those names with a space before it, and an id before that.
+  for (var k = starts.length - 1; k >= 0; k--) {
+    var at = starts[k]
+    var before = at
+    while (before > 0 && /\s/.test(s.charAt(before - 1))) before--
+    if (before === at || before === 0) continue
+    var ids = s.slice(0, before)
+    if (/[\n\r\u2028\u2029]/.test(ids)) return null
+    return { ids: ids, names: s.slice(at).trim() }
+  }
+  return null
+}
+
 // Mermaid's other diagrams (not drawn here).
 var OTHER_KINDS = /^(sequenceDiagram|classDiagram(-v2)?|stateDiagram(-v2)?|erDiagram|journey|gantt|pie|quadrantChart|requirementDiagram|gitGraph|C4Context|C4Container|C4Component|C4Dynamic|C4Deployment|mindmap|timeline|zenuml|sankey(-beta)?|xychart(-beta)?|block(-beta)?|packet(-beta)?|kanban|architecture(-beta)?|radar(-beta)?|treemap(-beta)?)$/i
-
-function groupForId(out, id) {
-  for (var i = 0; i < out.groups.length; i++) if (out.groups[i].id === id) return out.groups[i]
-  return { direction: "" }
-}
 
 // A line's statements: ";" between them (not inside a label's brackets or quotes).
 function splitStatements(line) {
@@ -526,7 +652,7 @@ function readStyle(text) {
     cur += ch
   }
   parts.push(cur)
-  var props = {}
+  var props = dict()
   var last = ""
   parts.forEach(function(part) {
     var at = part.indexOf(":")
@@ -538,7 +664,14 @@ function readStyle(text) {
   })
   var out = {}
   Object.keys(props).forEach(function(k) {
-    var v = props[k].replace(/!important/i, "").replace(/;+\s*$/, "").trim()
+    var v = props[k].replace(/!important/i, "")
+    // ("red;" or "red ; ": the semicolons at its end off.)
+    var stop = v.length
+    while (stop > 0 && /\s/.test(v.charAt(stop - 1))) stop--
+    var from = stop
+    while (from > 0 && v.charAt(from - 1) === ";") from--
+    if (from < stop) v = v.slice(0, from)
+    v = v.trim()
     var c = ""
     if (k === "fill") { c = cssColor(v); if (c) out.fill = c }
     else if (k === "stroke") { c = cssColor(v); if (c) out.stroke = c }
@@ -601,10 +734,15 @@ function layout(g, measure, opts) {
   var GAP_X = 36
   var GAP_RANK = 56
   var PAD = 24
+  // (No more than parse gives, each id once, whatever it's given.)
+  var seen = dict()
+  var nodes = (g.nodes || []).filter(function(n) { if (!n || seen[n.id]) return false; seen[n.id] = true; return true }).slice(0, MAX_NODES)
+  var groups = groupTree(g)
+  if (!nodes.length) return { nodes: dict(), edges: [], groups: [], w: 0, h: 0 }
 
   // Each node's size, its label wrapped.
-  var sizes = {}
-  g.nodes.forEach(function(n) {
+  var sizes = dict()
+  nodes.forEach(function(n) {
     // (Bold words measured bold.)
     var bold = !!(n.paint && n.paint.bold)
     var measureIt = bold ? function(t) { return measureText(t, true) } : measureText
@@ -634,10 +772,10 @@ function layout(g, measure, opts) {
   function breadth(id) { return vertical ? sizes[id].w : sizes[id].h }
   function depthOf(id) { return vertical ? sizes[id].h : sizes[id].w }
 
-  var ids = g.nodes.map(function(n) { return n.id })
-  var index = {}
+  var ids = nodes.map(function(n) { return n.id })
+  var index = dict()
   ids.forEach(function(id, i) { index[id] = i })
-  var edges = g.edges.filter(function(e) { return index[e.from] !== undefined && index[e.to] !== undefined })
+  var edges = (g.edges || []).filter(function(e) { return e && index[e.from] !== undefined && index[e.to] !== undefined }).slice(0, MAX_EDGES)
   // Lines with words on them: each line goes a rank further, its words in
   // the rank between (as big as they are), so words never sit on each other
   // or on a box; the ranks half as far apart.
@@ -646,40 +784,76 @@ function layout(g, measure, opts) {
   if (labelled) GAP_RANK = 24
 
   // Ranks: the longest way to each node from where the arrows start (an
-  // arrow that goes back round a loop counts the other way).
+  // arrow that goes back round a loop counts the other way), a longer line
+  // (--->) as many ranks as it says; if that's more ranks than there can
+  // be, each long line a rank shorter, till they fit.
   var back = backEdges(ids, edges)
-  var dag = edges.map(function(e, k) { return back[k] ? { from: e.to, to: e.from, length: e.length } : { from: e.from, to: e.to, length: e.length } })
-    .filter(function(e) { return e.from !== e.to })
-  var rank = {}
-  ids.forEach(function(id) { rank[id] = 0 })
-  for (var pass = 0; pass < ids.length + 1; pass++) {
-    var moved = false
-    dag.forEach(function(e) {
-      var r = rank[e.from] + Math.max(1, e.length || 1) * SPAN
-      if (r > rank[e.to]) { rank[e.to] = r; moved = true }
-    })
-    if (!moved) break
+  var rank = null
+  for (var longest = MAX_LENGTH; longest >= 1; longest--) {
+    rank = ranksWith(longest)
+    var deepest = 0
+    ids.forEach(function(id) { deepest = Math.max(deepest, rank[id]) })
+    if (deepest < MAX_RANKS) break
   }
-  // A node only arrows leave: as late as it can be (just before the first
-  // it points to), so its lines are short.
-  ids.forEach(function(id) {
-    var ins = dag.filter(function(e) { return e.to === id }).length
-    var outs = dag.filter(function(e) { return e.from === id })
-    if (ins === 0 && outs.length) {
-      var best = Infinity
-      outs.forEach(function(e) { best = Math.min(best, rank[e.to] - Math.max(1, e.length || 1) * SPAN) })
-      if (best > rank[id] && best < Infinity) rank[id] = best
+  function ranksWith(longest) {
+    var dag = edges.map(function(e, k) {
+      var length = Math.min(longest, Math.max(1, e.length || 1))
+      return back[k] ? { from: e.to, to: e.from, length: length } : { from: e.from, to: e.to, length: length }
+    }).filter(function(e) { return e.from !== e.to })
+    var at = dict()
+    var ins = dict()
+    var outs = dict()
+    ids.forEach(function(id) { at[id] = 0; ins[id] = 0; outs[id] = [] })
+    dag.forEach(function(e) { ins[e.to]++; outs[e.from].push(e) })
+    // (Each node once all that lead to it have their ranks: with the arrows
+    // that go back turned round, nothing leads back to itself.)
+    var waiting = dict()
+    var ready = []
+    ids.forEach(function(id) { waiting[id] = ins[id]; if (!ins[id]) ready.push(id) })
+    for (var q = 0; q < ready.length; q++) {
+      outs[ready[q]].forEach(function(e) {
+        at[e.to] = Math.max(at[e.to], at[e.from] + e.length * SPAN)
+        if (--waiting[e.to] === 0) ready.push(e.to)
+      })
     }
-  })
+    // A node only arrows leave: as late as it can be (just before the first
+    // it points to), so its lines are short.
+    ids.forEach(function(id) {
+      if (ins[id] === 0 && outs[id].length) {
+        var best = Infinity
+        outs[id].forEach(function(e) { best = Math.min(best, at[e.to] - e.length * SPAN) })
+        if (best > at[id] && best < Infinity) at[id] = best
+      }
+    })
+    return at
+  }
 
-  // Long lines go through a point on each rank between (a "dummy").
+  // Long lines go through a point on each rank between (a "dummy"), as
+  // many as there can be all told, the shortest lines' first: past that, a
+  // line goes straight.
   var layers = []
   function addTo(r, item) {
     while (layers.length <= r) layers.push([])
     layers[r].push(item)
   }
-  ids.forEach(function(id) { addTo(rank[id], { id: id, real: true, group: groupPath(g, id) }) })
+  var groupOfNode = dict()
+  nodes.forEach(function(n) { var t = n.group ? groups.byId[n.group] : null; groupOfNode[n.id] = t ? t.path : "" })
+  ids.forEach(function(id) { addTo(rank[id], { id: id, real: true, group: groupOfNode[id] }) })
   var chains = []
+  var routed = []
+  var bends = 0
+  edges.map(function(e, k) { return { k: k, between: e.from === e.to ? 0 : Math.max(0, Math.abs(rank[e.from] - rank[e.to]) - 1) } })
+    .sort(function(a, b) { return a.between - b.between || a.k - b.k })
+    .forEach(function(s) { if (bends + s.between <= MAX_BENDS) { bends += s.between; routed[s.k] = true } })
+  // (Words on many lines measured once.)
+  var wordsOf = dict()
+  function wordsSize(text) {
+    if (wordsOf[text]) return wordsOf[text]
+    var wl = wrap(text, measureText, 150)
+    var ww = 0
+    wl.forEach(function(l) { ww = Math.max(ww, measureText(l)) })
+    return (wordsOf[text] = { w: Math.round(ww + 14), h: Math.round(wl.length * (lineH - 2) + 6), lines: wl })
+  }
   edges.forEach(function(e, k) {
     var a = e.from
     var b = e.to
@@ -689,25 +863,30 @@ function layout(g, measure, opts) {
     var lo = Math.min(ra, rb)
     var hi = Math.max(ra, rb)
     var path = [ra <= rb ? a : b]
-    for (var r = lo + 1; r < hi; r++) {
-      var dummyId = "\u0000" + k + ":" + r
-      var words = e.label && r === Math.floor((lo + hi) / 2)
-      addTo(r, { id: dummyId, real: false, label: words, group: commonGroup(groupPath(g, a), groupPath(g, b)) })
-      if (words) {
-        var wl = wrap(e.label, measureText, 150)
-        var ww = 0
-        wl.forEach(function(l) { ww = Math.max(ww, measureText(l)) })
-        sizes[dummyId] = { w: Math.round(ww + 14), h: Math.round(wl.length * (lineH - 2) + 6), lines: wl }
-      } else sizes[dummyId] = { w: 8, h: 8, lines: [] }
-      path.push(dummyId)
+    if (routed[k]) {
+      var group = commonGroup(groupOfNode[a], groupOfNode[b])
+      for (var r = lo + 1; r < hi; r++) {
+        var dummyId = "\u0000" + k + ":" + r
+        var words = e.label && r === Math.floor((lo + hi) / 2)
+        addTo(r, { id: dummyId, real: false, label: words, group: group })
+        if (words) {
+          var size = wordsSize(e.label)
+          sizes[dummyId] = { w: size.w, h: size.h, lines: size.lines }
+        } else sizes[dummyId] = { w: 8, h: 8, lines: [] }
+        path.push(dummyId)
+      }
     }
     path.push(ra <= rb ? b : a)
-    chains.push({ edge: e, path: ra <= rb ? path : path.slice().reverse(), flipped: ra > rb, labelOn: e.label && hi - lo > 1 ? path[Math.floor(path.length / 2)] : "" })
+    chains.push({ edge: e, path: ra <= rb ? path : path.slice().reverse(), flipped: ra > rb, labelOn: e.label && path.length > 2 ? path[Math.floor(path.length / 2)] : "" })
   })
+  // (A rank only a straight line went through: gone.)
+  layers = layers.filter(function(l) { return l.length })
+  var rankOf = dict()
+  layers.forEach(function(l, r) { l.forEach(function(item) { rankOf[item.id] = r }) })
 
   // The order across each rank: by where the nodes they're joined to are
   // (several sweeps down and up), each group kept together.
-  var neighbors = {}
+  var neighbors = dict()
   function link(a, b) {
     (neighbors[a] = neighbors[a] || { up: [], down: [] })
     ;(neighbors[b] = neighbors[b] || { up: [], down: [] })
@@ -719,52 +898,60 @@ function layout(g, measure, opts) {
     for (var i = 0; i + 1 < c.path.length; i++) {
       var p = c.path[i]
       var q = c.path[i + 1]
-      var rp = layerOf(layers, p)
-      var rq = layerOf(layers, q)
-      if (rp < rq) link(p, q)
+      if (rankOf[p] < rankOf[q]) link(p, q)
       else link(q, p)
     }
   })
-  var order = {}
-  layers.forEach(function(layer) { layer.forEach(function(item, i) { order[item.id] = i }) })
+  // (Each one's neighbors, and the outermost group it's in, kept on it.)
+  var order = dict()
+  layers.forEach(function(layer) {
+    layer.forEach(function(item, i) {
+      var nb = neighbors[item.id]
+      item.up = nb ? nb.up : []
+      item.down = nb ? nb.down : []
+      item.top = (item.group || "").split("/")[0]
+      order[item.id] = i
+    })
+  })
   function sweep(down) {
     var from = down ? 1 : layers.length - 2
     var to = down ? layers.length : -1
     for (var r = from; r !== to; r += down ? 1 : -1) {
       var layer = layers[r]
-      layer.forEach(function(item) {
-        var nb = neighbors[item.id] ? (down ? neighbors[item.id].up : neighbors[item.id].down) : []
-        item.key = nb.length ? nb.reduce(function(s, x) { return s + order[x] }, 0) / nb.length : order[item.id]
-      })
+      for (var i = 0; i < layer.length; i++) {
+        var item = layer[i]
+        var nb = down ? item.up : item.down
+        var sum = 0
+        for (var j = 0; j < nb.length; j++) sum += order[nb[j]]
+        item.key = nb.length ? sum / nb.length : order[item.id]
+      }
       groupSort(layer)
-      layer.forEach(function(item, i) { order[item.id] = i })
+      for (var k = 0; k < layer.length; k++) order[layer[k].id] = k
     }
   }
-  // (Each group's members side by side, where the group's average is.)
+  // (Each group's members side by side, where the group's average is: each
+  // group's worked out once, before they're sorted.)
   function groupSort(layer) {
-    var byGroup = {}
-    layer.forEach(function(item) {
-      var k = item.group || ""
-      ;(byGroup[k] = byGroup[k] || []).push(item)
-    })
+    var sum = dict()
+    var count = dict()
+    var i
+    for (i = 0; i < layer.length; i++) {
+      var top = layer[i].top
+      if (!top) continue
+      sum[top] = (sum[top] || 0) + layer[i].key
+      count[top] = (count[top] || 0) + 1
+    }
+    for (i = 0; i < layer.length; i++) layer[i].groupKey = layer[i].top ? sum[layer[i].top] / count[layer[i].top] + 0.0001 : layer[i].key
     layer.sort(function(a, b) {
-      var ga = groupKey(byGroup, a, layer)
-      var gb = groupKey(byGroup, b, layer)
-      if (ga !== gb) return ga - gb
+      if (a.groupKey !== b.groupKey) return a.groupKey - b.groupKey
       return a.key - b.key
     })
-  }
-  function groupKey(byGroup, item, layer) {
-    var top = (item.group || "").split("/")[0]
-    if (!top) return item.key
-    var members = layer.filter(function(x) { return (x.group || "").split("/")[0] === top })
-    return members.reduce(function(s, x) { return s + x.key }, 0) / members.length + (top ? 0.0001 : 0)
   }
   var best = null
   var bestCross = Infinity
   for (var it = 0; it < 8; it++) {
     sweep(it % 2 === 0)
-    var c = crossings(layers, neighbors, order)
+    var c = crossings(layers, order)
     if (c < bestCross) {
       bestCross = c
       best = layers.map(function(l) { return l.map(function(x) { return x.id }) })
@@ -772,7 +959,7 @@ function layout(g, measure, opts) {
     if (c === 0) break
   }
   if (best) {
-    var itemOf = {}
+    var itemOf = dict()
     layers.forEach(function(l) { l.forEach(function(x) { itemOf[x.id] = x }) })
     layers = best.map(function(l) { return l.map(function(id) { return itemOf[id] }) })
     layers.forEach(function(l) { l.forEach(function(x, i) { order[x.id] = i }) })
@@ -782,7 +969,7 @@ function layout(g, measure, opts) {
   // passes down (each under what leads to it, so a chain is straight) and up
   // (each over what it leads to, so a parent is in the middle of its
   // children), ending with one up; never closer to the next than the gap.
-  var across = {}
+  var across = dict()
   layers.forEach(function(layer) {
     var x = 0
     layer.forEach(function(item, i) {
@@ -796,15 +983,24 @@ function layout(g, measure, opts) {
     var base = a.real && b.real ? GAP_X : a.real || b.real ? GAP_X * 0.6 : 14
     return a.group === b.group ? base : base + 18
   }
+  // (Half of each one's breadth, and the gap before it, the same every pass.)
+  layers.forEach(function(layer) {
+    layer.forEach(function(item, i) {
+      item.half = breadth(item.id) / 2
+      item.gap = i > 0 ? gapBetween(layer[i - 1], item) : 0
+    })
+  })
   for (var round = 0; round < 12; round++) {
     var down = round % 2 === 0
     for (var r2 = 0; r2 < layers.length; r2++) {
       var layer2 = layers[down ? r2 : layers.length - 1 - r2]
-      var want = layer2.map(function(item) {
-        var nb = neighbors[item.id] ? (down ? neighbors[item.id].up : neighbors[item.id].down) : []
-        if (!nb.length) return across[item.id]
-        return nb.reduce(function(s, x) { return s + across[x] }, 0) / nb.length
-      })
+      var want = []
+      for (var i2 = 0; i2 < layer2.length; i2++) {
+        var nb2 = down ? layer2[i2].up : layer2[i2].down
+        var sum2 = 0
+        for (var j2 = 0; j2 < nb2.length; j2++) sum2 += across[nb2[j2]]
+        want.push(nb2.length ? sum2 / nb2.length : across[layer2[i2].id])
+      }
       place(layer2, want)
     }
   }
@@ -812,22 +1008,22 @@ function layout(g, measure, opts) {
     // Left to right, then right to left, as near what each wants as it can.
     var pos = want.slice()
     for (var i = 1; i < layer.length; i++) {
-      var min = pos[i - 1] + breadth(layer[i - 1].id) / 2 + gapBetween(layer[i - 1], layer[i]) + breadth(layer[i].id) / 2
+      var min = pos[i - 1] + layer[i - 1].half + layer[i].gap + layer[i].half
       if (pos[i] < min) pos[i] = min
     }
     for (var j = layer.length - 2; j >= 0; j--) {
-      var max = pos[j + 1] - breadth(layer[j + 1].id) / 2 - gapBetween(layer[j], layer[j + 1]) - breadth(layer[j].id) / 2
+      var max = pos[j + 1] - layer[j + 1].half - layer[j + 1].gap - layer[j].half
       if (pos[j] > max) pos[j] = max
     }
-    layer.forEach(function(item, k) { across[item.id] = pos[k] })
+    for (var k = 0; k < layer.length; k++) across[layer[k].id] = pos[k]
     for (var k2 = 1; k2 < layer.length; k2++) {
-      var min2 = across[layer[k2 - 1].id] + breadth(layer[k2 - 1].id) / 2 + gapBetween(layer[k2 - 1], layer[k2]) + breadth(layer[k2].id) / 2
+      var min2 = across[layer[k2 - 1].id] + layer[k2 - 1].half + layer[k2].gap + layer[k2].half
       if (across[layer[k2].id] < min2) across[layer[k2].id] = min2
     }
   }
 
   // Along: rank after rank, each as deep as its deepest node.
-  var along = {}
+  var along = dict()
   var at = 0
   var rankDepth = []
   layers.forEach(function(layer, r) {
@@ -843,14 +1039,14 @@ function layout(g, measure, opts) {
   var minA = Infinity
   ids.forEach(function(id) { minA = Math.min(minA, across[id] - breadth(id) / 2) })
   layers.forEach(function(l) { l.forEach(function(x) { if (!x.real) minA = Math.min(minA, across[x.id] - breadth(x.id) / 2) }) })
-  var groupRoom = groupDepthMax(g) * 16
+  var groupRoom = groups.deepest * 16
   function point(id) {
     var a = across[id] - minA + PAD + groupRoom
-    var b = along[id] + PAD + groupRoom + (g.groups.length ? 14 : 0)
+    var b = along[id] + PAD + groupRoom + (groups.list.length ? 14 : 0)
     return vertical ? { x: a, y: b } : { x: b, y: a }
   }
-  var out = { nodes: {}, edges: [], groups: [], w: 0, h: 0 }
-  g.nodes.forEach(function(n) {
+  var out = { nodes: dict(), edges: [], groups: [], w: 0, h: 0 }
+  nodes.forEach(function(n) {
     var c = point(n.id)
     var s = sizes[n.id]
     out.nodes[n.id] = { x: c.x - s.w / 2, y: c.y - s.h / 2, w: s.w, h: s.h, lines: s.lines, shape: n.shape, icon: n.icon, label: n.label }
@@ -894,37 +1090,35 @@ function layout(g, measure, opts) {
     pts.forEach(function(p) { maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y) })
   })
 
-  // Groups: round what's in them (and the groups in them).
-  var groupBoxes = {}
-  function boxOf(gid) {
-    if (groupBoxes[gid]) return groupBoxes[gid]
-    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-    g.nodes.forEach(function(n) {
-      if (!inGroup(g, n.group, gid)) return
-      var b = out.nodes[n.id]
-      x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.w); y1 = Math.max(y1, b.y + b.h)
-    })
-    g.groups.forEach(function(child) {
-      if (child.parent !== gid) return
-      var cb = boxOf(child.id)
-      if (!cb) return
-      x0 = Math.min(x0, cb.x); y0 = Math.min(y0, cb.y); x1 = Math.max(x1, cb.x + cb.w); y1 = Math.max(y1, cb.y + cb.h)
-    })
-    if (x0 === Infinity) return null
-    var pad = 14
-    var box = { x: x0 - pad, y: y0 - pad - 18, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2 + 18 }
-    // As wide as its name, at least (wider round the middle of what's in it).
-    var named = groupForId(g, gid)
-    var nameW = named.label ? measureText(named.label) * 0.92 + 24 : 0
-    if (nameW > box.w) { box.x -= (nameW - box.w) / 2; box.w = nameW }
-    groupBoxes[gid] = box
-    return box
+  // Groups: round what's in them (and the groups in them), the innermost
+  // first, each then taken in by the group it's in.
+  var reach = dict()
+  function takeIn(gid, x0, y0, x1, y1) {
+    var r = reach[gid] || (reach[gid] = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity })
+    r.x0 = Math.min(r.x0, x0); r.y0 = Math.min(r.y0, y0); r.x1 = Math.max(r.x1, x1); r.y1 = Math.max(r.y1, y1)
   }
-  g.groups.forEach(function(gr) {
-    var b = boxOf(gr.id)
+  nodes.forEach(function(n) {
+    if (!n.group || !groups.byId[n.group]) return
+    var b = out.nodes[n.id]
+    takeIn(n.group, b.x, b.y, b.x + b.w, b.y + b.h)
+  })
+  var boxes = dict()
+  groups.list.slice().sort(function(a, b) { return b.depth - a.depth }).forEach(function(t) {
+    var r = reach[t.id]
+    if (!r) return
+    var pad = 14
+    var box = { x: r.x0 - pad, y: r.y0 - pad - 18, w: r.x1 - r.x0 + pad * 2, h: r.y1 - r.y0 + pad * 2 + 18 }
+    // As wide as its name, at least (wider round the middle of what's in it).
+    var nameW = t.group.label ? measureText(t.group.label) * 0.92 + 24 : 0
+    if (nameW > box.w) { box.x -= (nameW - box.w) / 2; box.w = nameW }
+    boxes[t.id] = box
+    if (t.up) takeIn(t.up, box.x, box.y, box.x + box.w, box.y + box.h)
+  })
+  groups.list.forEach(function(t) {
+    var b = boxes[t.id]
     if (!b) return
-    out.groups.push({ id: gr.id, label: gr.label, x: b.x, y: b.y, w: b.w, h: b.h, depth: groupDepth(g, gr.id) })
-    if (gr.paint) out.groups[out.groups.length - 1].paint = gr.paint
+    out.groups.push({ id: t.id, label: t.group.label, x: b.x, y: b.y, w: b.w, h: b.h, depth: t.depth })
+    if (t.group.paint) out.groups[out.groups.length - 1].paint = t.group.paint
     maxX = Math.max(maxX, b.x + b.w)
     maxY = Math.max(maxY, b.y + b.h)
   })
@@ -972,10 +1166,15 @@ function wrap(text, measure, max) {
 
 // The arrows that go back round a loop (found walking from each start).
 function backEdges(ids, edges) {
-  var state = {}
+  var state = dict()
   var back = {}
-  var out = {}
-  edges.forEach(function(e, k) { (out[e.from] = out[e.from] || []).push(k) })
+  var out = dict()
+  // (Where an arrow from another comes in.)
+  var into = dict()
+  edges.forEach(function(e, k) {
+    (out[e.from] = out[e.from] || []).push(k)
+    if (e.from !== e.to) into[e.to] = true
+  })
   function visit(id) {
     state[id] = 1
     ;(out[id] || []).forEach(function(k) {
@@ -985,43 +1184,74 @@ function backEdges(ids, edges) {
     })
     state[id] = 2
   }
-  var starts = ids.filter(function(id) { return !edges.some(function(e) { return e.to === id && e.from !== id }) })
+  var starts = ids.filter(function(id) { return !into[id] })
   starts.concat(ids).forEach(function(id) { if (!state[id]) visit(id) })
   return back
 }
 
-function layerOf(layers, id) {
-  for (var r = 0; r < layers.length; r++) for (var i = 0; i < layers[r].length; i++) if (layers[r][i].id === id) return r
-  return -1
-}
-
-// How many lines cross between ranks, with this order.
-function crossings(layers, neighbors, order) {
+// How many lines cross between ranks, each rank in its order (`order` of
+// each is where it is in its rank): two cross when one starts left of the
+// other and ends right of it. Going along a rank left to right, each line
+// crosses those from further left that end further right: counted as it
+// goes, in a Fenwick tree of where they end (quick, however many lines).
+function crossings(layers, order) {
   var total = 0
   for (var r = 0; r + 1 < layers.length; r++) {
-    var pairs = []
-    layers[r].forEach(function(item) {
-      ;(neighbors[item.id] ? neighbors[item.id].down : []).forEach(function(d) { pairs.push([order[item.id], order[d]]) })
-    })
-    for (var i = 0; i < pairs.length; i++) for (var j = i + 1; j < pairs.length; j++) {
-      if ((pairs[i][0] - pairs[j][0]) * (pairs[i][1] - pairs[j][1]) < 0) total++
+    var layer = layers[r]
+    var last = -1
+    var i, j, x
+    for (i = 0; i < layer.length; i++) for (j = 0; j < layer[i].down.length; j++) last = Math.max(last, order[layer[i].down[j]])
+    if (last < 0) continue
+    var tree = []
+    for (x = 0; x <= last + 1; x++) tree.push(0)
+    var counted = 0
+    for (i = 0; i < layer.length; i++) {
+      var ends = layer[i].down
+      // (Those from the same one don't cross: all of them counted first.)
+      for (j = 0; j < ends.length; j++) {
+        var notRight = 0
+        for (x = order[ends[j]] + 1; x > 0; x -= x & -x) notRight += tree[x]
+        total += counted - notRight
+      }
+      for (j = 0; j < ends.length; j++) {
+        for (x = order[ends[j]] + 1; x < tree.length; x += x & -x) tree[x]++
+        counted++
+      }
     }
   }
   return total
 }
 
-// A node's groups, outermost first, as "a/b", or "".
-function groupPath(g, id) {
-  var n = null
-  for (var i = 0; i < g.nodes.length; i++) if (g.nodes[i].id === id) { n = g.nodes[i]; break }
-  var path = []
-  var gid = n ? n.group : ""
-  var guard = 0
-  while (gid && guard++ < 20) {
-    path.unshift(gid)
-    gid = groupForId(g, gid).parent || ""
-  }
-  return path.join("/")
+// The groups, each id once (its first), at most MAX_GROUPS: { list, byId,
+// deepest }, each { id, group, up, path, depth }: `up` the group it's in
+// ("" for none), `path` the groups it's in and itself, outermost first
+// ("a/b"), `depth` how many it's in; `deepest`, how many deep the deepest
+// goes. What a group's in is followed out MAX_DEPTH at most, and stops at
+// one already passed: a group written inside itself isn't in itself.
+function groupTree(g) {
+  var byId = dict()
+  var list = []
+  ;(g.groups || []).forEach(function(gr) {
+    if (!gr || !gr.id || byId[gr.id] || list.length >= MAX_GROUPS) return
+    byId[gr.id] = { id: gr.id, group: gr }
+    list.push(byId[gr.id])
+  })
+  var deepest = 0
+  list.forEach(function(t) {
+    var path = []
+    var passed = dict()
+    var cur = t.id
+    while (cur && byId[cur] && !passed[cur] && path.length < MAX_DEPTH) {
+      passed[cur] = true
+      path.unshift(cur)
+      cur = byId[cur].group.parent || ""
+    }
+    t.path = path.join("/")
+    t.depth = path.length - 1
+    t.up = path.length > 1 ? path[path.length - 2] : ""
+    deepest = Math.max(deepest, path.length)
+  })
+  return { list: list, byId: byId, deepest: deepest }
 }
 
 function commonGroup(a, b) {
@@ -1030,29 +1260,6 @@ function commonGroup(a, b) {
   var out = []
   for (var i = 0; i < Math.min(pa.length, pb.length) && pa[i] === pb[i]; i++) out.push(pa[i])
   return out.join("/")
-}
-
-function inGroup(g, nodeGroup, gid) {
-  var cur = nodeGroup
-  var guard = 0
-  while (cur && guard++ < 20) {
-    if (cur === gid) return true
-    cur = groupForId(g, cur).parent || ""
-  }
-  return false
-}
-
-function groupDepth(g, gid) {
-  var d = 0
-  var cur = groupForId(g, gid).parent || ""
-  while (cur && d < 20) { d++; cur = groupForId(g, cur).parent || "" }
-  return d
-}
-
-function groupDepthMax(g) {
-  var m = 0
-  g.groups.forEach(function(gr) { m = Math.max(m, groupDepth(g, gr.id) + 1) })
-  return m
 }
 
 // Where a line from a box's middle toward `to` leaves the box.

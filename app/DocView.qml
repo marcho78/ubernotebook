@@ -8,6 +8,7 @@ import "../Import.js" as Import
 import "../Html.js" as Html
 import "../Templates.js" as Templates
 import "../Agent.js" as Agent
+import "../Permissions.js" as Permissions
 import "../Colors.js" as Colors
 import "../Tags.js" as Tags
 import "../Audio.js" as Audio
@@ -1026,6 +1027,14 @@ FocusScope {
   // or is written into this one (a change not written yet is the old
   // folder's), and Pages opens on what's here: the examples, in an empty one.
   function leaveFolder() {
+    // (What agents asked about here is for this folder's pages: not asked.)
+    agentAsks = []
+    // (An agent at work in this folder stops, and while it does, it can't
+    // change anything: it would go on in the next folder.)
+    if (agentRun) {
+      if (service && service.agentScope) service.agentScope.frozen = true
+      agentRun.stop()
+    }
     saveTimer.stop()
     pageDirty = false
     page = null
@@ -1387,25 +1396,29 @@ FocusScope {
 
   // What you asked, handed to your agent with where you are: Claude Code,
   // Grok and Codex work here, in a panel on the page; the others in a terminal.
-  function askAgent(request) {
-    if (agentPop.mode === "new") askAgentForPage(agentPop.agent, request, agentPop.place === "inside" && agentPop.onPage ? agentPop.onPage.id : "")
-    else askAgentWith(agentPop.agent, request, agentPop.ask, request)
+  // (`terminal`: asked in a terminal, though it could work here.)
+  function askAgent(request, terminal) {
+    if (agentPop.mode === "new") askAgentForPage(agentPop.agent, request, agentPop.place === "inside" && agentPop.onPage ? agentPop.onPage.id : "", terminal)
+    else askAgentWith(agentPop.agent, request, agentPop.ask, request, terminal)
   }
   // `label`: what the panel says you asked (the request itself, or a
   // shorter name for a long one).
-  function askAgentWith(agent, request, ctx, label) {
+  function askAgentWith(agent, request, ctx, label, terminal) {
     if (!page || !workspace) return
-    var here = Agent.runsHere(agent) && typeof workspace.files.stream === "function"
+    var here = !terminal && Agent.runsHere(agent) && typeof workspace.files.stream === "function"
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
     // (A page made for the last one: kept if it's this one, now asked about.)
     settleAgentPage(agentPage !== null && agentPage.id === page.id)
     commit()
-    var prompt = Agent.prompt({
-      request: request, page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
-      scope: ctx.scope, blocks: ctx.blocks, words: ctx.words, line: ctx.line,
-      skill: service && service.skillPath ? service.skillPath : "", here: here
-    })
-    if (here) { runHere(agent, label || request, prompt, { picked: pickedKey(ctx) }); return }
+    function promptFor(inPanel) {
+      return Agent.prompt({
+        request: request, page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
+        scope: ctx.scope, blocks: ctx.blocks, words: ctx.words, line: ctx.line,
+        skill: service && service.skillPath ? service.skillPath : "", here: inPanel, dir: inPanel ? agentDir() : ""
+      })
+    }
+    var prompt = promptFor(here)
+    if (here) { runHere(agent, label || request, prompt, { picked: pickedKey(ctx), terminalPrompt: promptFor(false) }); return }
     workspace.files.launchAgent(prompt)
     toast("Asked " + (Agent.name(agent) || "your agent") + ": it's working in a terminal, and what it changes shows up here")
   }
@@ -1413,9 +1426,9 @@ FocusScope {
   // A new page for what you asked: made here first (at the top of Pages, as
   // Ctrl+N makes one, or inside a page) and opened, then your agent writes
   // it there, so it's where you chose, not somewhere else.
-  function askAgentForPage(agent, request, parentId) {
+  function askAgentForPage(agent, request, parentId, terminal) {
     if (!workspace || !workspace.ready) return
-    var here = Agent.runsHere(agent) && typeof workspace.files.stream === "function"
+    var here = !terminal && Agent.runsHere(agent) && typeof workspace.files.stream === "function"
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
     // (The one made last time: kept if it's where this one goes; gone if
     // it's still empty, and then you were where you were before it.)
@@ -1437,14 +1450,17 @@ FocusScope {
       }
     }
     open(child.id, false)
-    var prompt = Agent.prompt({
-      request: request, scope: "new", page: { id: child.id, title: "" },
-      into: parent ? { id: parent, title: workspace.index.pages[parent].title } : null,
-      skill: service && service.skillPath ? service.skillPath : "", here: here
-    })
+    function promptFor(inPanel) {
+      return Agent.prompt({
+        request: request, scope: "new", page: { id: child.id, title: "" },
+        into: parent ? { id: parent, title: workspace.index.pages[parent].title } : null,
+        skill: service && service.skillPath ? service.skillPath : "", here: inPanel, dir: inPanel ? agentDir() : ""
+      })
+    }
+    var prompt = promptFor(here)
     if (here) {
       agentPage = { id: child.id, from: from }
-      runHere(agent, request, prompt, { owner: child.id })
+      runHere(agent, request, prompt, { owner: child.id, terminalPrompt: promptFor(false) })
       return
     }
     workspace.files.launchAgent(prompt)
@@ -1488,7 +1504,8 @@ FocusScope {
 
   // ---- your agent, working here (Claude Code, Grok, Codex: no terminal) ----
 
-  // While it works: { stop() }; and what it was asked, for a terminal instead.
+  // While it works: { stop() }; and what it was asked, as a terminal's agent
+  // is asked it, for a terminal instead.
   property var agentRun: null
   property string agentRunPrompt: ""
   // The page's conversation with your agent, kept (Workspace's chats), or null.
@@ -1507,10 +1524,89 @@ FocusScope {
   // page it's kept with, the one open by default), or (`o.reply`) the next
   // turn of this one; `o.fresh`: in a new session, told what was said (one
   // that never said its session, or lost it).
+  // The panel's agent works in a folder of its own (where the Markdown it
+  // hands Uber Notebook's commands goes).
+  function agentDir() {
+    return workspace && workspace.files && workspace.files.runtimeDir ? workspace.files.runtimeDir + "/uber-notebook-agent" : ""
+  }
+
+  // What an agent's work needs your yes for, asked in the panel: Uber
+  // Notebook contacting a site for it (Api.agentLink), or one of its own
+  // tools beyond its rules (Claude Code's: agentAsked). [{ key, agent,
+  // action, target, text, always, runs, nos, owner }]: `text` what it wants
+  // to do, `always` what Always says ("": once only); one question for each
+  // key however often it comes (Uber Notebook's own: agent, action and site),
+  // each waiting run going when you answer (by its key, as the panel gives
+  // back a copy). Always keeps your yes in settings (Permissions.js), where
+  // an agent can't change it; `owner`: the run it's for, whose questions go
+  // with it.
+  property var agentAsks: []
+  function askAgentPermission(req) {
+    if (!req || !req.agent || typeof req.run !== "function") return false
+    if (!req.text && !req.target) return false
+    var key = req.key || (req.agent + " " + req.action + " " + req.target)
+    var list = agentAsks.slice()
+    var same = list.filter(function(a) { return a.key === key })[0]
+    if (same) {
+      same.runs.push(req.run)
+      if (typeof req.no === "function") same.nos.push(req.no)
+    } else {
+      list.push({ key: key, agent: req.agent, action: String(req.action || ""), target: String(req.target || ""),
+        text: req.text ? String(req.text) : "have Uber Notebook contact " + req.target + (req.why ? ", " + req.why : ""),
+        always: req.always !== undefined ? String(req.always) : "Always for " + req.target,
+        runs: [req.run], nos: typeof req.no === "function" ? [req.no] : [], owner: req.owner || null })
+    }
+    agentAsks = list
+    agentPanel.visible = true
+    return true
+  }
+  function answerAgentAsk(key, how) {
+    var ask = agentAsks.filter(function(a) { return a.key === key })[0]
+    if (!ask) return
+    agentAsks = agentAsks.filter(function(a) { return a.key !== key })
+    function each(fns, arg) { fns.forEach(function(f) { try { f(arg) } catch (e) { console.warn("Uber Notebook: after you answered: " + e) } }) }
+    if (how !== "once" && !(how === "always" && ask.always)) { each(ask.nos); return }
+    var hosts = [ask.target]
+    if (how === "always" && ask.action && service && typeof service.setSetting === "function") {
+      var next = Permissions.withAllowed(settings.agentPermissions || [], ask.agent, ask.action, ask.target)
+      service.setSetting("agentPermissions", next)
+      hosts = next.filter(function(r) { return r.agent === ask.agent && r.action === ask.action }).map(function(r) { return r.target })
+      // (Others waiting on the same: allowed now too.)
+      var also = agentAsks.filter(function(a) { return a.agent === ask.agent && a.action === ask.action && a.target === ask.target })
+      agentAsks = agentAsks.filter(function(a) { return also.indexOf(a) < 0 })
+      also.forEach(function(a) { each(a.runs, hosts) })
+    }
+    each(ask.runs, hosts)
+  }
+  // An agent asking for a tool beyond its rules, as it works (Claude Code,
+  // Grok; `run`: its stream): allowed at once if you've said Always to the
+  // like, else asked.
+  function agentAsked(agent, ev, run) {
+    var a = Agent.askOf(ev.tool, ev.input, ev.title)
+    function reply(allow) { if (run && typeof run.send === "function") run.send(Agent.answerFor(agent, ev, allow)) }
+    if (a.action && Permissions.allowed(settings.agentPermissions || [], agent, a.action, a.target)) { reply(true); return }
+    askAgentPermission({ key: "tool " + ev.id, agent: agent, action: a.action, target: a.target, text: a.text, always: a.always, owner: run,
+      run: function() { reply(true) }, no: function() { reply(false) } })
+  }
+  // A run's questions, gone with it.
+  function dropAgentAsks(run) {
+    if (run) agentAsks = agentAsks.filter(function(a) { return a.owner !== run })
+  }
+
+  // While it works, Uber Notebook's commands read and change your notes, not
+  // Uber Notebook's settings, profiles or backups, and read files only from
+  // its folder (Scope.js, Service.qml).
+  function agentScope(agent, dir) {
+    if (service && typeof service.beginAgentScope === "function") service.beginAgentScope(Agent.name(agent), dir, agent)
+  }
+  function agentScopeEnd() {
+    if (service && typeof service.endAgentScope === "function") service.endAgentScope()
+  }
+
   function runHere(agent, request, prompt, o) {
     var opts = o || {}
     var files = workspace.files
-    var dir = files.runtimeDir + "/uber-notebook-agent"
+    var dir = agentDir()
     // The model and effort you chose for it (Settings → AI, or the box).
     var choice = { model: settings[agent + "Model"] || "", effort: settings[agent + "Effort"] || "" }
     var choiceText = ""
@@ -1523,13 +1619,31 @@ FocusScope {
     else agentPanel.begin(Agent.name(agent), request, choiceText)
     agentPanel.canReply = true
     // (For a terminal instead: the whole of it, for a reply.)
-    agentRunPrompt = opts.reply && !opts.fresh ? recapPrompt(request) : prompt
+    agentRunPrompt = opts.reply && !opts.fresh ? recapPrompt(request, undefined, true) : (opts.terminalPrompt || prompt)
     saveChat()
     var retried = false
+    // (Its program and folder, once found.)
+    var where = null
     function go(text, session) {
       var lost = false
-      view.agentRun = files.stream(Agent.command(agent, text, choice, session), function(line) {
+      var argv = Agent.command(agent, text, choice, session, where)
+      if (!argv) { view.agentRun = null; view.agentScopeEnd(); agentPanel.end(127, Agent.name(agent) + " couldn't be started"); view.saveChat(); return }
+      // (Claude Code takes its request on its input, and your answers to
+      // what it asks as it works; Grok, over ACP, hello, its session, then
+      // the request, and your answers; the input's closed once it's answered.)
+      var first = Agent.input(agent, text)
+      var run = null
+      run = files.stream(argv, function(line) {
         Agent.fromLine(agent, line).forEach(function(ev) {
+          if (ev.kind === "ask") { view.agentAsked(agent, ev, run); return }
+          if (ev.kind === "control") { if (run && run.send) run.send(Agent.unsupportedFor(agent, ev.id)); return }
+          if (ev.kind === "acp") { if (run && run.send) run.send(Agent.acpSession(dir, session)); return }
+          if (ev.kind === "start" && agent === "grok") {
+            var sid = ev.session || (session && session.resume ? session.id : "")
+            if (!sid) { if (run && run.closeInput) run.closeInput(); agentPanel.take({ kind: "failed", text: "Grok didn't start its session" }); return }
+            if (run && run.send) run.send(Agent.acpPrompt(sid, text))
+          }
+          if ((ev.kind === "done" || ev.kind === "failed") && run && run.closeInput) run.closeInput()
           // (Codex names its conversation as it starts.)
           if (ev.kind === "start" && ev.session && !talk.id) { talk.id = ev.session; view.saveChat() }
           if (ev.kind === "failed" && session.resume && Agent.lostSession(ev.text)) { lost = true; return }
@@ -1540,20 +1654,41 @@ FocusScope {
         // computer: a new one, told what was said.)
         if (session.resume && !retried && (lost || (code !== 0 && Agent.lostSession(errors)))) {
           retried = true
+          view.dropAgentAsks(run)
           talk.id = Agent.newSessionId(agent)
           agentPanel.again()
           go(view.recapPrompt(request), { id: talk.id, resume: false })
           return
         }
+        view.dropAgentAsks(run)
         view.agentRun = null
+        view.agentScopeEnd()
         agentPanel.end(code, Agent.failureText(agent, code, errors))
         view.saveChat()
-      }, { cwd: dir })
+      }, { cwd: dir, input: first !== "", env: Agent.env(agent) })
+      view.agentRun = run
+      if (first && run && run.send) run.send(first)
     }
-    agentRun = { stop: function() { view.agentRun = null; agentPanel.end(-1, ""); view.saveChat() } }
-    files.mkdirs([dir], function() {
+    agentRun = { stop: function() { view.agentRun = null; view.agentScopeEnd(); agentPanel.end(-1, ""); view.saveChat() } }
+    agentScope(agent, dir)
+    files.mkdirs([dir, dir + "/.grok"], function() {
       if (!view.agentRun) return
-      go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh })
+      // Its program, found where it's installed and checked, run by that
+      // full path; Grok's sandbox, in its folder.
+      files.agentPath(agent, function(exe) {
+        if (!view.agentRun) return
+        if (!exe) {
+          view.agentRun = null
+          view.agentScopeEnd()
+          agentPanel.end(127, Agent.name(agent) + " isn't installed where Uber Notebook can find it (on your PATH, owned by you or root, and not changeable by anyone else)")
+          view.saveChat()
+          return
+        }
+        where = { exe: exe, dir: dir }
+        function start() { if (view.agentRun) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
+        if (agent === "grok") files.writeFile(dir + "/.grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir), start)
+        else start()
+      })
     })
   }
   function stopAgent() { if (agentRun) agentRun.stop() }
@@ -1599,12 +1734,13 @@ FocusScope {
   }
   // A conversation started anew, told what was said (`turns`: its panel's,
   // the ones before this request).
-  function recapPrompt(request, turns) {
+  // (`terminal`: as a terminal's agent is told it.)
+  function recapPrompt(request, turns, terminal) {
     var talk = agentTalk
     var here = page ? { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title }
       : talk && workspace.index.pages[talk.owner] ? { id: talk.owner, title: workspace.index.pages[talk.owner].title } : { id: "", title: "" }
     return Agent.prompt({ request: request, page: here, scope: "page", earlier: turns || agentPanel.history,
-      skill: service && service.skillPath ? service.skillPath : "", here: true })
+      skill: service && service.skillPath ? service.skillPath : "", here: !terminal, dir: terminal ? "" : agentDir() })
   }
 
   // What you say back, in the same conversation: where you are now when
@@ -1621,7 +1757,7 @@ FocusScope {
     agentPending = null
     agentPanel.contextNote = ""
     if (!Agent.isSessionId(talk.id)) {
-      runHere(talk.agent, t, recapPrompt(t, agentPanel.transcript()), { reply: true, fresh: true })
+      runHere(talk.agent, t, recapPrompt(t, agentPanel.transcript()), { reply: true, fresh: true, terminalPrompt: recapPrompt(t, agentPanel.transcript(), true) })
       return
     }
     var ctx = pending || pickedNow()
@@ -3080,6 +3216,8 @@ FocusScope {
           readOnly: view.locked
           strikeDone: view.settings.strikeDone !== false
           assetUrl: function(src) { return view.workspace ? view.workspace.assetUrl(src) : "" }
+          assetInfo: function(src, done) { if (view.workspace) view.workspace.assetInfo(src, done); else done(null) }
+          readClipboard: view.workspace && view.workspace.files && typeof view.workspace.files.readClipboard === "function" ? function(done, primary) { view.workspace.files.readClipboard(done, primary) } : null
           pageInfo: function(id) { return view.workspace ? view.workspace.pageMeta(id) : null }
           pagesRevision: view.workspace ? view.workspace.revision : 0
           findPages: function(query) { return view.findPages(query) }
@@ -3466,7 +3604,8 @@ FocusScope {
     files: view.workspace ? view.workspace.files : null
     service: view.service
     parent: view
-    onSent: function(request) { view.askAgent(request) }
+    onSent: function(request) { view.askAgent(request, false) }
+    onSentToTerminal: function(request) { view.askAgent(request, true) }
   }
 
   // Your agent at work, without a terminal: a panel at the bottom right.
@@ -3479,6 +3618,8 @@ FocusScope {
     anchors.margins: 20
     width: Math.min(420, view.width - 40)
     maxHeight: Math.max(220, view.height * 0.62)
+    asks: view.agentAsks
+    onAsked: function(key, how) { view.answerAgentAsk(key, how) }
     onStopRequested: view.stopAgent()
     onReplied: function(text) { view.replyToAgent(text) }
     onNewChatRequested: view.newChat()
@@ -3487,8 +3628,10 @@ FocusScope {
     // answer, there.)
     onDismissed: { view.agentTalk = null; view.agentPending = null; view.settleAgentPage(status === "done") }
     onTerminalRequested: {
-      // (The page made for it stays: the terminal's to write it. The
+      // (What it was doing here stops first: one agent at it, not two. The
+      // page made for it stays: the terminal's to write it. The
       // conversation goes on there, not here.)
+      if (view.agentRun) view.stopAgent()
       view.agentTalk = null
       view.settleAgentPage(true)
       if (!view.workspace || !view.agentRunPrompt) return

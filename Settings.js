@@ -4,6 +4,7 @@
 //
 // Shared by Service.qml, the settings panel and tests/settings.test.cjs, so
 // keep it plain JavaScript with no QML or Node APIs.
+.import "Permissions.js" as Permissions
 
 // Canonical modifier order, and Hyprland's modmask bits for each.
 var MODIFIERS = ["SUPER", "CTRL", "ALT", "SHIFT"]
@@ -139,6 +140,9 @@ function validValue(key, value, fallback, schema) {
   if (type === "folder") {
     var folder = cleanFolder(value)
     return folder === null ? { ok: false } : { ok: true, value: folder }
+  }
+  if (type === "permissions") {
+    return Array.isArray(value) ? { ok: true, value: Permissions.clean(value) } : { ok: false }
   }
   if (type === "profiles") {
     var list = cleanProfiles(value, schema)

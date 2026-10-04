@@ -40,6 +40,7 @@ Item {
     function replaceInOpenPage(id, change) { return view.replaceFromCommand(id, change) }
     function insertInOpenPage(id, change) { return view.insertFromCommand(id, change) }
     function trashPage(id) { view.trashPage(id); return true }
+    function askAgentPermission(req) { return view.askAgentPermission(req) }
   }
 
   UberNotebook.Api {
@@ -55,6 +56,9 @@ Item {
     when: windowShown
 
     function fresh() {
+      api.agentScope = null
+      api.caller = null
+      api.prefetched = ({})
       files.reset()
       view.page = null
       view.history = []
@@ -523,6 +527,14 @@ Item {
       compare(fileOf(r.id).blocks[list[2].id].color, "blue_background")
       compare(json(api.color(r.id, list[2].id, "chartreuse")).ok, false)
       compare(json(api.color(r.id, list[2].id, "#ff8800")).ok, false, "text takes Pages' colors")
+      // A block's id is one of the page's: never what every object has.
+      for (var bad of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+        compare(json(api.color(r.id, bad, "blue")).ok, false, bad)
+        compare(json(api.check(r.id, bad, "true")).ok, false, bad)
+        compare(json(api.removeBlock(r.id, bad)).ok, false, bad)
+      }
+      compare(({}).color, undefined, "nothing set on every object")
+      compare(({}).checked, undefined)
       compare(json(api.color(r.id, list[2].id, "")).ok, true)
       compare(fileOf(r.id).blocks[list[2].id].color, undefined)
       // A card's: its own, one of each.
@@ -859,6 +871,150 @@ Item {
       verify(!prefs.some(function(x) { return x.key === "profiles" || x.key === "folder" || x.key === "inbox" }), "not the ones kept for it")
       api.settings = null
       verify(json(api.help()).fences.indexOf("```gallery") >= 0)
+    }
+
+    // While an agent works in the panel, a file it names is read by the
+    // helper first (a plain file only), and the command, asked again, uses it;
+    // never a device, at any time.
+    function test_25_files_an_agent_names() {
+      fresh()
+      var r = json(api.add("Log", file("a.md", "first")))
+      compare(json(api.append(r.id, "/dev/zero")).ok, false)
+      compare(json(api.append(r.id, "/proc/self/environ")).ok, false)
+      // Any path a command is given goes to the helper (never read there and
+      // then), however it's written.
+      ;["//dev/zero", "/tmp/../dev/zero", "/./proc/self/environ"].forEach(function(p) {
+        compare(json(api.append(r.id, p)).ok, false, p)
+        verify(files.ran.some(function(a) { return a[4] === "read" && a[6] === p }), "read by the helper: " + p)
+      })
+      files.deferHelperReads = true
+      api.agentScope = { agent: "Claude Code", dir: "/tmp/in", frozen: false }
+      function kept(p) { return api.prefetched[api.maxBytes + ":" + p] }
+      var path = file("agent.md", "from the agent")
+      var first = json(api.append(r.id, path))
+      compare(first.ok, false)
+      verify(first.error.indexOf("run the same command again") >= 0, first.error)
+      compare(kinds(fileOf(r.id)).join("|"), "p:0:first|p:0:", "nothing yet")
+      compare(json(api.append(r.id, path)).ok, false, "still being read: asked again, not read twice")
+      compare(files.ran.filter(function(a) { return a[4] === "read" && a[6] === path }).length, 1)
+      files.answerReads()
+      verify(kept(path) !== undefined && kept(path).at > 0, "read")
+      var again = json(api.append(r.id, path))
+      compare(again.ok, true, "asked again: done")
+      compare(again.added, 1)
+      compare(kinds(fileOf(r.id)).join("|"), "p:0:first|p:0:from the agent|p:0:")
+      verify(files.ran.some(function(a) { return a[4] === "read" && a[6] === path }), "read by the helper")
+      // One it couldn't read: said, asked again.
+      compare(json(api.append(r.id, "/tmp/in/missing.md")).ok, false)
+      files.answerReads()
+      verify(json(api.append(r.id, "/tmp/in/missing.md")).error.indexOf("no file there") >= 0)
+      // At most so many at a time: the rest are asked to wait.
+      for (var n = 0; n < api.maxReading; n++) json(api.append(r.id, file("w" + n + ".md", "x")))
+      var busy = json(api.append(r.id, file("w9.md", "x")))
+      verify(busy.error.indexOf("reading other files") >= 0, busy.error)
+      // A read kept too long is read again; none outlives the agent's work.
+      files.answerReads()
+      kept("/tmp/in/w0.md").at = Date.now() - 121000
+      compare(json(api.append(r.id, "/tmp/in/w0.md")).ok, false, "read again, not used")
+      files.answerReads()
+      compare(json(api.append(r.id, "/tmp/in/w0.md")).ok, true)
+      json(api.append(r.id, file("late.md", "late")))
+      api.agentScope = null
+      compare(Object.keys(api.prefetched).length, 0, "nothing kept after")
+      files.answerReads()
+      compare(Object.keys(api.prefetched).length, 0, "and a read that comes after isn't kept")
+      files.deferHelperReads = false
+    }
+
+    // While an agent works, Uber Notebook contacts a site for it only with
+    // your yes: asked in its panel (Allow once, Always for that agent and
+    // site, No); redirects and pictures only from sites it may contact.
+    function test_26_sites_contacted_for_an_agent_only_with_your_yes() {
+      fresh()
+      var r = json(api.add("Links", file("l.md", "x")))
+      function contacted(host) { return files.ran.filter(function(a) { return a.join(" ").indexOf(host) >= 0 && (a[0] === "/usr/bin/curl" || a[2] && String(a[2]).indexOf("curl") >= 0 || a[0] === "/usr/bin/getent") }).length }
+      function cards() { var p = fileOf(r.id); return Object.keys(p.blocks).map(function(k) { return p.blocks[k] }).filter(function(b) { return b.type === "bookmark" }).map(function(b) { return b.data }) }
+      function find(item, name) {
+        if (!item) return null
+        if (item.objectName === name && item.visible) return item
+        for (var i = 0; i < item.children.length; i++) { var hit = find(item.children[i], name); if (hit) return hit }
+        return null
+      }
+      // A button of the panel's question, once it's laid out where you'd click it.
+      function askButton(name) {
+        tryVerify(function() { var st = find(view.agentPanel, "agentPanelAsks"); return st !== null && st.height > 0 && find(view.agentPanel, name) !== null }, 1000, name)
+        wait(50)
+        return find(view.agentPanel, name)
+      }
+      api.settings = Qt.binding(function() { return service.settings })
+      // (Its commands, as the panel's agent's: Service.qml tells the Api who calls.)
+      api.agentScope = { agent: "Grok", id: "grok", dir: "/tmp/in", frozen: false }
+      api.caller = api.agentScope
+      // A site it may not contact yet: the link only, and you're asked.
+      var b = json(api.bookmark(r.id, "https://e.org/?note=private+text"))
+      compare(b.ok, true)
+      verify(b.note.indexOf("asked in the panel") >= 0, b.note)
+      compare(contacted("e.org"), 0, "not contacted")
+      compare(cards()[0].url, "https://e.org/?note=private+text")
+      compare(view.agentAsks.length, 1)
+      compare(view.agentAsks[0].target, "e.org")
+      // Again for the same site: the same question, both waiting on it.
+      var mark = Object.keys(fileOf(r.id).blocks).filter(function(k) { return fileOf(r.id).blocks[k].type === "bookmark" })[0]
+      json(api.bookmark(r.id, "https://e.org/two"))
+      compare(view.agentAsks.length, 1)
+      compare(view.agentAsks[0].runs.length, 2)
+      // Not https: never asked, the card reads it when you ask.
+      verify(json(api.bookmark(r.id, "http://plain.example.com/x")).note.indexOf("when you ask") >= 0)
+      compare(view.agentAsks.length, 1)
+      // Asked in the panel, in words; Allow once: read, nothing kept.
+      tryVerify(function() { return find(view.agentPanel, "agentAskText") !== null }, 1000)
+      verify(find(view.agentPanel, "agentAskText").text.indexOf("Grok wants to have Uber Notebook contact e.org") === 0, find(view.agentPanel, "agentAskText").text)
+      files.fetchPages["https://e.org/?note=private+text"] = '<html><head><title>One</title></head></html>'
+      files.fetchPages["https://e.org/two"] = '<html><head><title>Two</title></head></html>'
+      mouseClick(askButton("agentAskOnce"))
+      tryVerify(function() { return cards().filter(function(d) { return d.title === "One" || d.title === "Two" }).length === 2 }, 2000, "both read")
+      compare(view.agentAsks.length, 0)
+      compare(service.settings.agentPermissions.length, 0, "Allow once: nothing kept")
+      // Always: kept for Grok and that site; the next one is read at once.
+      json(api.bookmark(r.id, "https://docs.example.org/a"))
+      files.fetchPages["https://docs.example.org/a"] = '<html><head><title>Docs</title></head></html>'
+      mouseClick(askButton("agentAskAlways"))
+      tryVerify(function() { return cards().some(function(d) { return d.title === "Docs" }) }, 2000)
+      compare(JSON.stringify(service.settings.agentPermissions), JSON.stringify([{ agent: "grok", action: "contact", target: "docs.example.org" }]))
+      files.fetchPages["https://docs.example.org/b"] = '<html><head><title>Docs B</title><meta property="og:image" content="https://cdn.elsewhere.net/p.png"></head></html>'
+      verify(json(api.bookmark(r.id, "https://docs.example.org/b")).note.indexOf("being read") >= 0)
+      tryVerify(function() { return cards().some(function(d) { return d.title === "Docs B" }) }, 2000, "read without asking")
+      compare(view.agentAsks.length, 0)
+      compare(contacted("cdn.elsewhere.net"), 0, "its picture: not from a site it may not contact")
+      // Sent on to another site: not followed.
+      files.fetchPages["https://docs.example.org/r"] = "REDIRECT https://evil.example.com/?leak=private+text"
+      json(api.bookmark(r.id, "https://docs.example.org/r"))
+      wait(200)
+      compare(contacted("evil.example.com"), 0, "never contacted")
+      verify(cards().some(function(d) { return d.url === "https://docs.example.org/r" && d.title === "" }), "the link kept")
+      // A terminal's agent (or a script) meanwhile: as always, read at once.
+      api.caller = null
+      var others = contacted("other-site.example.com")
+      verify(json(api.bookmark(r.id, "https://other-site.example.com/x")).note.indexOf("being read") >= 0)
+      verify(contacted("other-site.example.com") > others, "not the panel's agent: fetched, not asked")
+      compare(view.agentAsks.length, 0)
+      // Only Grok: Claude is asked about it.
+      api.agentScope = { agent: "Claude Code", id: "claude", dir: "/tmp/in", frozen: false }
+      api.caller = api.agentScope
+      json(api.bookmark(r.id, "https://docs.example.org/c"))
+      compare(view.agentAsks.length, 1, "asked: Grok's yes isn't Claude's")
+      // No: the link stays as it is.
+      mouseClick(askButton("agentAskNo"))
+      compare(view.agentAsks.length, 0)
+      verify(cards().some(function(d) { return d.url === "https://docs.example.org/c" && d.title === "" }))
+      // Without an agent at work: read, as always.
+      api.agentScope = null
+      api.caller = null
+      var before = contacted("plain-site.example.com")
+      api.bookmark(r.id, "https://plain-site.example.com/page")
+      verify(contacted("plain-site.example.com") > before, "fetched when you add one")
+      service.setSetting("agentPermissions", [])
+      api.settings = null
     }
 
     function test_8_without_the_window() {

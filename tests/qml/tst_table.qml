@@ -408,6 +408,30 @@ Item {
       compare(tableAt(0).table.colors[1].join(), "|yellow,|yellow", "colors move with their row")
     }
 
+    // A middle click in a cell: what's selected (read like the clipboard,
+    // with nothing it names loaded), where it's clicked.
+    function test_10_a_middle_click_in_a_cell() {
+      fresh()
+      var e = view.editor
+      var tv = put([["Name", "Qty"], ["Apples", "3"]])
+      var asked = []
+      files.readClipboard = function(done, primary) {
+        asked.push(primary === true)
+        done(primary ? { html: "<b>red</b> <img src=\"http://127.0.0.1:9/x.png\">", text: "red " } : { html: "", text: "the clipboard" })
+      }
+      try {
+        var cell = tv.cellAt(1, 0)
+        tryVerify(function() { return cell && cell.edit.width > 0 }, 1000)
+        mouseClick(cell.edit, 1, cell.edit.cursorRectangle.height / 2, Qt.MiddleButton)
+        compare(asked, [true])
+        var html = tableAt(0).table.rows[1][0]
+        compare(Html.plainText(html).replace(/\s+/g, " "), "red Apples")
+        verify(html.indexOf("img") < 0 && html.indexOf("127.0.0.1") < 0, html)
+      } finally {
+        files.readClipboard = null
+      }
+    }
+
     function test_7_a_locked_page() {
       fresh()
       var e = view.editor

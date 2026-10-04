@@ -17,6 +17,15 @@ const B = load("Backups.js");
 let passed = 0;
 function check(name, fn) { fn(); passed++; }
 
+// The archive helper (bin/uber-notebook-files).
+function helper(args) {
+  const r = spawnSync("/usr/bin/python3", ["-I", "-S", path.join(__dirname, "..", "bin", "uber-notebook-files")].concat(args), { encoding: "utf8" });
+  return { code: r.status, out: r.stdout, err: r.stderr };
+}
+const sha256 = (file) => require("node:crypto").createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+const MAXB = String(1024 * 1024 * 1024);
+const MAXF = "100000";
+
 function run(script, args) {
   const r = spawnSync("/usr/bin/bash", ["-c", script, "uber-notebook-test"].concat(args), { encoding: "utf8" });
   return { code: r.status, out: r.stdout, err: r.stderr };
@@ -135,13 +144,14 @@ try {
   });
 
   check("checked, then put back in a new folder", () => {
-    const c = plain(B.checked(run(B.CHECK_SCRIPT, [file]).out));
+    const c = plain(B.checked(helper(["inspect-backup", file]).out));
     assert.ok(c.ok, c.problem);
     assert.deepEqual(c.manifest.profiles.map((p) => p.name), ["Personal", "Work"]);
+    assert.equal(c.hash, sha256(file), "what it is, to check it's still that when it's put back");
     // Where it goes is taken: beside it, never into it.
     const base = path.join(tmp, "Restored Personal");
     write(path.join(base, "keep.txt"), "mine");
-    const r = run(B.RESTORE_SCRIPT, [file, "p1", base]);
+    const r = helper(["restore-backup", file, "p1", base, c.hash, MAXB, MAXF]);
     assert.equal(r.code, 0, r.err);
     const into = r.out.trim();
     assert.equal(into, base + " 2");
@@ -150,22 +160,35 @@ try {
     assert.equal(fs.readFileSync(path.join(into, "library.json"), "utf8"), "{\"notebooks\":[]}");
     assert.ok(fs.existsSync(path.join(into, ".trash", "old", "notebook.json")));
     assert.ok(!fs.existsSync(path.join(into, "uber-notebook-backup.json")), "only the profile's own files");
-    const w = run(B.RESTORE_SCRIPT, [file, "p2", path.join(tmp, "Restored Work")]);
+    const w = helper(["restore-backup", file, "p2", path.join(tmp, "Restored Work"), c.hash, MAXB, MAXF]);
     assert.equal(fs.readFileSync(path.join(w.out.trim(), "Pages", "index.json"), "utf8"), "{\"work\":true}");
     // Not in it: nothing made.
-    const bad = run(B.RESTORE_SCRIPT, [file, "p7", path.join(tmp, "Nothing")]);
+    const bad = helper(["restore-backup", file, "p7", path.join(tmp, "Nothing"), c.hash, MAXB, MAXF]);
     assert.notEqual(bad.code, 0);
     assert.ok(!fs.existsSync(path.join(tmp, "Nothing")), "the folder it made, taken away again");
+    // Changed since it was looked into: nothing put back.
+    const copy = path.join(tmp, "changed.tar.gz");
+    fs.copyFileSync(file, copy);
+    fs.appendFileSync(copy, "x");
+    const changed = helper(["restore-backup", copy, "p1", path.join(tmp, "Changed"), c.hash, MAXB, MAXF]);
+    assert.notEqual(changed.code, 0);
+    assert.match(changed.err, /changed after it was looked at/);
+    assert.ok(!fs.existsSync(path.join(tmp, "Changed")));
+    // More than its room: stopped, and what it made taken away.
+    const small = helper(["restore-backup", file, "p1", path.join(tmp, "Small"), c.hash, "4", MAXF]);
+    assert.notEqual(small.code, 0);
+    assert.match(small.err, /more than 4 bytes/);
+    assert.ok(!fs.existsSync(path.join(tmp, "Small")));
   });
 
   check("files that aren't backups, or reach outside, refused", () => {
     write(path.join(tmp, "plain.txt"), "not an archive");
-    assert.equal(plain(B.checked(run(B.CHECK_SCRIPT, [path.join(tmp, "plain.txt")]).out)).ok, false);
-    assert.equal(plain(B.checked(run(B.CHECK_SCRIPT, [path.join(tmp, "missing.tar.gz")]).out)).ok, false);
+    assert.equal(plain(B.checked(helper(["inspect-backup", path.join(tmp, "plain.txt")]).out)).ok, false);
+    assert.equal(plain(B.checked(helper(["inspect-backup", path.join(tmp, "missing.tar.gz")]).out)).ok, false);
     // Another archive: no uber-notebook-backup.json.
     const other = path.join(tmp, "other.tar.gz");
     execFileSync("/usr/bin/tar", ["-czf", other, "-C", work, "."]);
-    const o = plain(B.checked(run(B.CHECK_SCRIPT, [other]).out));
+    const o = plain(B.checked(helper(["inspect-backup", other]).out));
     assert.equal(o.ok, false);
     assert.ok(/more than/.test(o.problem), o.problem);
     // One with a link in it.
@@ -175,19 +198,26 @@ try {
     fs.symlinkSync("/etc/passwd", path.join(linky, "p1", "passwd"));
     const lf = path.join(tmp, "linky.tar.gz");
     execFileSync("/usr/bin/tar", ["-czf", lf, "-C", linky, "uber-notebook-backup.json", "p1"]);
-    const l = plain(B.checked(run(B.CHECK_SCRIPT, [lf]).out));
+    const l = plain(B.checked(helper(["inspect-backup", lf]).out));
     assert.equal(l.ok, false);
     assert.ok(/links/.test(l.problem), l.problem);
+    // (Put back anyway: it stops at the link, and takes away what it made.)
+    const forced = helper(["restore-backup", lf, "p1", path.join(tmp, "Linky"), sha256(lf), MAXB, MAXF]);
+    assert.notEqual(forced.code, 0);
+    assert.match(forced.err, /a link or a special file/);
+    assert.ok(!fs.existsSync(path.join(tmp, "Linky")));
     // One with a name that reaches up (made with Python's tarfile, which writes what it's told).
     const up = path.join(tmp, "up.tar.gz");
     execFileSync("/usr/bin/python3", ["-c", "import tarfile,sys,io\nwith tarfile.open(sys.argv[1], 'w:gz') as t:\n  t.add(sys.argv[2], 'uber-notebook-backup.json')\n  d=b'escaped'\n  i=tarfile.TarInfo('p1/../../escape.txt'); i.size=len(d); t.addfile(i, io.BytesIO(d))", up, path.join(linky, "uber-notebook-backup.json")]);
     assert.ok(execFileSync("/usr/bin/tar", ["-tzf", up], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).includes("../escape.txt"));
-    const u = plain(B.checked(run(B.CHECK_SCRIPT, [up]).out));
+    const u = plain(B.checked(helper(["inspect-backup", up]).out));
     assert.equal(u.ok, false, "reaching up: refused");
+    const upRestored = helper(["restore-backup", up, "p1", path.join(tmp, "Up"), sha256(up), MAXB, MAXF]);
+    assert.ok(!fs.existsSync(path.join(tmp, "escape.txt")) && !fs.existsSync(path.join(path.dirname(tmp), "escape.txt")), "never out of its folder");
     // A good one with something extra beside the profiles.
     const extra = path.join(tmp, "extra.tar.gz");
     execFileSync("/usr/bin/tar", ["-czf", extra, "-C", linky, "uber-notebook-backup.json", "-C", tmp, "plain.txt"]);
-    assert.equal(plain(B.checked(run(B.CHECK_SCRIPT, [extra]).out)).ok, false, "something else in it: refused");
+    assert.equal(plain(B.checked(helper(["inspect-backup", extra]).out)).ok, false, "something else in it: refused");
   });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

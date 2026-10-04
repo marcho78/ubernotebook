@@ -13,6 +13,9 @@ DataCard {
 
   readonly property bool has: info.url !== ""
   readonly property bool fetching: editor !== null && editor.dataWork[uid] === true
+  // Its page not read (an agent's bookmark is only its link: nothing is
+  // fetched while one works), read when you ask.
+  readonly property bool unread: has && !info.title && !info.description && !info.image
   // Its link being changed (in the field, as it is now).
   property bool editingLink: false
   readonly property bool asking: !has || editingLink
@@ -135,6 +138,19 @@ DataCard {
           color: bk.look.color ? bk.accent : bk.faint
         }
       }
+      Text {
+        id: readPage
+        objectName: "bookmarkRead"
+        visible: bk.unread && !bk.readOnly && !bk.fetching
+        textFormat: Text.PlainText
+        text: "Get its title and picture"
+        font.family: bk.editor ? bk.editor.uiFamily : ""
+        font.pixelSize: 12
+        font.underline: readHover.hovered
+        color: bk.accent
+        HoverHandler { id: readHover; cursorShape: Qt.PointingHandCursor }
+        TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: bk.act("fetch", { url: bk.info.url }) }
+      }
     }
     Image {
       id: pic
@@ -152,6 +168,8 @@ DataCard {
       onTapped: function(p) {
         var q = tools.mapFromItem(card, p.position.x, p.position.y)
         if (tools.visible && tools.contains(q)) return
+        var r = readPage.mapFromItem(card, p.position.x, p.position.y)
+        if (readPage.visible && readPage.contains(r)) return
         bk.act("open", null)
       }
     }
@@ -174,7 +192,7 @@ DataCard {
           x: 2
           anchors.verticalCenter: parent.verticalCenter
           IconButton { objectName: "bookmarkEdit"; theme: bk.theme; icon: bk.theme ? bk.theme.icons.edit : ""; size: 28; iconSize: 14; tint: bk.ink; tip: "Change the link"; onClicked: bk.editLink() }
-          IconButton { objectName: "bookmarkRefresh"; theme: bk.theme; icon: bk.theme ? bk.theme.icons.refresh : ""; size: 28; iconSize: 14; tint: bk.ink; tip: "Get the page again"; onClicked: bk.act("fetch", { url: bk.info.url }) }
+          IconButton { objectName: "bookmarkRefresh"; theme: bk.theme; icon: bk.theme ? bk.theme.icons.refresh : ""; size: 28; iconSize: 14; tint: bk.ink; tip: bk.unread ? "Get the page" : "Get the page again"; onClicked: bk.act("fetch", { url: bk.info.url }) }
           IconButton { objectName: "bookmarkCopy"; theme: bk.theme; icon: bk.theme ? bk.theme.icons.copy : ""; size: 28; iconSize: 14; tint: bk.ink; tip: "Copy the link"; onClicked: bk.act("copy", null) }
           IconButton { id: colorButton; objectName: "bookmarkColors"; theme: bk.theme; icon: bk.theme ? bk.theme.icons.palette : ""; size: 28; iconSize: 14; tint: bk.ink; tip: "Its colors"; onClicked: bk.askColors(colorButton) }
         }

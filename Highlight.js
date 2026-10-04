@@ -104,7 +104,7 @@ def("bash|sh|shell|zsh|console|shellscript|fish|ksh", {
   keywords: "if then else elif fi case esac for select while until do done in function return break continue exit " +
     "local export readonly declare typeset set unset shift source alias eval exec trap time",
   literals: "true false",
-  builtins: "echo printf read cd pwd test pushd popd mkdir rm cp mv ls cat grep sed awk find xargs sudo chmod chown ln " +
+  builtins: "echo printf read cd pwd test pushd popd mkdir rm cp mv ls cat grep sed awk find xargs chmod chown ln " +
     "touch tee sort uniq head tail cut tr wc curl wget git"
 })
 def("c|h", withC({ preprocessor: true, allCaps: true, keywords: C_KEYWORDS, types: C_TYPES, literals: "NULL true false" }))
@@ -520,7 +520,9 @@ function yamlValue(out, text) {
   } else {
     var h = rest.search(/(^|[ \t])#/)
     if (h >= 0) { value = rest.slice(0, h); tail = rest.slice(h) }
-    var trimmed = value.replace(/[ \t]+$/, "")
+    var cut = value.length
+    while (cut > 0 && (value.charAt(cut - 1) === " " || value.charAt(cut - 1) === "\t")) cut--
+    var trimmed = value.slice(0, cut)
     var kind = /^(true|false|yes|no|on|off|null|~)$/i.test(trimmed) ? "literal"
       : /^[-+]?(\d[\d_]*(\.\d*)?([eE][-+]?\d+)?|\.inf|\.nan|0x[0-9a-fA-F]+|0o[0-7]+)$/i.test(trimmed) ? "number"
       : /^[&*!]/.test(trimmed) ? "meta"
@@ -539,6 +541,46 @@ function yamlDashes(out, text) {
   text.split(/(-)/).forEach(function(part) { out.add(part, part === "-" ? "keyword" : "") })
 }
 
+// A line's key, as [all of it, the dashes before it, the key, the colon
+// after it] (what /^([ \t]*(?:-[ \t]+)*)("[^"\n]*"|'[^'\n]*'|[^\s#'"{\[\-][^#\n]*?|-[^\s#][^#\n]*?)([ \t]*:)(?=[ \t]|$)/
+// finds), or null, in one pass along it: that pattern takes as long as the
+// line squared when there's no key (a long line of spaces).
+function yamlKey(line) {
+  var lead = /^[ \t]*(?:-[ \t]+)*/.exec(line)[0]
+  var s = lead.length
+  var q = line.charAt(s)
+  var n = line.length
+  function blank(at) { var ch = line.charAt(at); return ch === " " || ch === "\t" }
+  // The colon, and what's after it: a space, a tab or the line's end.
+  function colonAt(at) { return line.charAt(at) === ":" && (at + 1 === n || blank(at + 1)) }
+  if (q === "\"" || q === "'") {
+    var close = line.indexOf(q, s + 1)
+    if (close < 0) return null
+    var c = close + 1
+    while (c < n && blank(c)) c++
+    return colonAt(c) ? [line.slice(0, c + 1), lead, line.slice(s, close + 1), line.slice(close + 1, c + 1)] : null
+  }
+  var from
+  if (q === "-") {
+    if (s + 1 >= n || /[\s#]/.test(line.charAt(s + 1))) return null
+    from = s + 2
+  } else {
+    if (s >= n || /[\s#'"{\[\-]/.test(q)) return null
+    from = s + 1
+  }
+  // The first colon with a space after it, before any "#"; its key ends
+  // where the spaces before it start.
+  for (var at = from; at < n; at++) {
+    if (line.charAt(at) === "#") return null
+    if (colonAt(at)) {
+      var end = at
+      while (end > from && blank(end - 1)) end--
+      return [line.slice(0, at + 1), lead, line.slice(s, end), line.slice(end, at + 1)]
+    }
+  }
+  return null
+}
+
 // YAML, line by line: keys, values, comments, and block text (after | or >).
 function yaml(src) {
   var out = emitter()
@@ -552,7 +594,7 @@ function yaml(src) {
     }
     if (/^[ \t]*#/.test(line)) { out.add(line, "comment"); return }
     if (/^(---|\.\.\.)([ \t]|$)/.test(line)) { out.add(line.slice(0, 3), "meta"); yamlValue(out, line.slice(3)); return }
-    var m = /^([ \t]*(?:-[ \t]+)*)("[^"\n]*"|'[^'\n]*'|[^\s#'"{\[\-][^#\n]*?|-[^\s#][^#\n]*?)([ \t]*:)(?=[ \t]|$)/.exec(line)
+    var m = yamlKey(line)
     if (m) {
       yamlDashes(out, m[1])
       out.add(m[2], "property")

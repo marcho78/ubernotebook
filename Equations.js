@@ -23,6 +23,24 @@ var MAX_TEX = 4000
 // line is drawn this much bigger, to look the size of the words around it.
 var INLINE_SCALE = 1.2
 
+// How big a drawing can be. MathJax draws what it's asked to: a
+// `\rule{1000000em}{1000000em}` is under 500 bytes of SVG, and as an image
+// more pixels than any memory holds. Real math is far smaller: the biggest
+// matrix MAX_TEX characters make is about 67 × 61 em, a 30-line aligned
+// derivation about 20 × 100 em (525 × 2500 px at 26 px an em, the large
+// view's 100%), in at most about 470 KB of SVG and 16000 tags. Past these
+// it's too big to draw (tooBig says why).
+// Ems across or down, and across times down.
+var MAX_EM = 400
+var MAX_EM_AREA = 10000
+// Characters of SVG, and tags in it (each "<").
+var MAX_SVG = 1000000
+var MAX_TAGS = 40000
+// As an image, at any size (`sized`): pixels across or down (what graphics
+// cards take), and in all (256 MB at four bytes each).
+var MAX_PX = 16384
+var MAX_PX_AREA = 8192 * 8192
+
 function isLang(lang) { return String(lang || "").trim().toLowerCase() === "math" }
 
 function clean(tex) {
@@ -32,22 +50,34 @@ function clean(tex) {
 // ---- what's been drawn -------------------------------------------------------------
 
 // Drawings kept while Uber Notebook runs, shared by every editor: key ("D:"
-// on its own, "I:" in a line, then its LaTeX) -> { svg, error }.
+// on its own, "I:" in a line, then its LaTeX) -> { svg, error }. Up to
+// MAX_DRAWN of them, with up to MAX_DRAWN_SVG characters of SVG in all;
+// then they're all let go (and drawn again as they're needed).
 var drawn = {}
 var drawnCount = 0
+var drawnChars = 0
 var MAX_DRAWN = 600
+var MAX_DRAWN_SVG = 16000000
 
 function cached(key) { return Object.prototype.hasOwnProperty.call(drawn, key) ? drawn[key] : null }
 
+// One too big to draw is kept as what's wrong with it, without its SVG.
 function remember(key, value) {
-  if (drawnCount >= MAX_DRAWN) forget()
-  if (!Object.prototype.hasOwnProperty.call(drawn, key)) drawnCount++
-  drawn[key] = value
+  var why = value && value.svg ? tooBig(value.svg) : ""
+  var kept = why ? { svg: "", error: value.error || why } : value
+  if (drawnCount >= MAX_DRAWN || drawnChars + charsOf(kept) > MAX_DRAWN_SVG) forget()
+  if (Object.prototype.hasOwnProperty.call(drawn, key)) drawnChars -= charsOf(drawn[key])
+  else drawnCount++
+  drawn[key] = kept
+  drawnChars += charsOf(kept)
 }
+
+function charsOf(value) { return value && value.svg ? String(value.svg).length : 0 }
 
 function forget() {
   drawn = {}
   drawnCount = 0
+  drawnChars = 0
 }
 
 function key(tex, display) { return (display ? "D:" : "I:") + clean(tex) }
@@ -95,14 +125,57 @@ function errorOf(svg) {
   return m ? Html.decodeEntities(m[1]) : ""
 }
 
+// Why it's too big to draw, in a few plain words to show in its place; or
+// "" (it isn't). Its box is read however MathJax wrote it (1e+28, Infinity).
+function tooBig(svg) {
+  var text = String(svg || "")
+  var much = tooMuch(text)
+  if (much) return much
+  var m = /viewBox="[^"\s]+ [^"\s]+ ([^"\s]+) ([^"\s]+)"/.exec(text)
+  var w = m ? parseFloat(m[1]) / 1000 : 0
+  var h = m ? parseFloat(m[2]) / 1000 : 0
+  if (w > MAX_EM || h > MAX_EM) return "Too big to draw: " + amount(w) + " \u00d7 " + amount(h) + " em, at most " + MAX_EM + " a side"
+  if (w * h > MAX_EM_AREA) return "Too big to draw: " + amount(w) + " \u00d7 " + amount(h) + " em, at most " + MAX_EM_AREA + " em\u00b2 in all"
+  return ""
+}
+
+// Why there's too much SVG to read, or too many tags in it; or "".
+function tooMuch(svg) {
+  var text = String(svg || "")
+  if (text.length > MAX_SVG) return "Too much to draw: " + Math.ceil(text.length / 1000) + " KB, at most " + MAX_SVG / 1000 + " KB"
+  if (tagCount(text, MAX_TAGS + 1) > MAX_TAGS) return "Too much to draw: more than " + MAX_TAGS + " parts"
+  return ""
+}
+
+// Its tags ("<"), counted up to `most`.
+function tagCount(text, most) {
+  var n = 0
+  for (var i = text.indexOf("<"); i >= 0 && n < most; i = text.indexOf("<", i + 1)) n++
+  return n
+}
+
+// A size in ems, as it's said: whole ones (rounded up) from 10, tenths under.
+function amount(n) { return String(n >= 10 ? Math.ceil(n) : Math.ceil(n * 10) / 10) }
+
+// The most px an em it can be drawn at on its own (past that `sized` gives
+// null, its image too big), for zooming in on it; 0 when it's too big at
+// any size.
+function maxEm(svg) {
+  var b = measure(svg)
+  if (!b || tooBig(svg)) return 0
+  // (A hair under, so it's still drawn at that, rounding and all.)
+  return Math.min(MAX_PX / b.w, MAX_PX / b.h, Math.sqrt(MAX_PX_AREA / (b.w * b.h))) * 0.999999
+}
+
 // Drawn `em` px an em, in `color` ("#rrggbb"): { svg, width, height, depth }
-// (px), or null. `middle` (px; for one in a line of text): it's made taller
-// above or below, so its middle is that far above its baseline; Qt puts an
-// image's middle half the text's x-height above the line (as CSS's
-// "middle"), so then the two baselines are one.
+// (px), or null (as when it's too big: tooBig, maxEm). `middle` (px; for
+// one in a line of text): it's made taller above or below, so its middle is
+// that far above its baseline; Qt puts an image's middle half the text's
+// x-height above the line (as CSS's "middle"), so then the two baselines
+// are one.
 function sized(svg, em, color, middle) {
   var b = measure(svg)
-  if (!b) return null
+  if (!b || tooBig(svg)) return null
   var text = String(svg)
   if (middle > 0) {
     var vb = /viewBox="(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)"/.exec(text)
@@ -120,6 +193,7 @@ function sized(svg, em, color, middle) {
   }
   var w = Math.max(1, b.w * em)
   var h = Math.max(1, b.h * em)
+  if (!(w <= MAX_PX && h <= MAX_PX && w * h <= MAX_PX_AREA)) return null
   var out = text
     .replace(/^<svg\b([^>]*?)\swidth="[^"]*"/, "<svg$1 width=\"" + w.toFixed(2) + "px\"")
     .replace(/^<svg\b([^>]*?)\sheight="[^"]*"/, "<svg$1 height=\"" + h.toFixed(2) + "px\"")
@@ -157,7 +231,7 @@ function texOfImage(src) {
 // A block's text as the editor shows it: each equation's link as its
 // image. `drawing(tex)` gives what's drawn ({ svg }, Qt-ready: `sized`) or
 // null while it's being drawn (then its placeholder, `em` px an em in
-// `color`).
+// `color`; as for one that isn't Qt-ready, or too big to be an image).
 function toImages(inner, drawing, em, color) {
   var text = String(inner || "")
   if (text.indexOf(PREFIX) < 0) return text
@@ -165,12 +239,23 @@ function toImages(inner, drawing, em, color) {
     var tex = texOf(Html.decodeEntities(url))
     if (!tex) return all
     var d = typeof drawing === "function" ? drawing(tex) : null
-    var svg = d && d.svg ? d.svg : placeholder(tex, em, color)
-    var size = /width="([\d.]+)px" height="([\d.]+)px"/.exec(svg) || /height="([\d.]+)px"[^>]*width="([\d.]+)px"/.exec(svg)
-    var w = size ? Math.round(parseFloat(size[1])) : Math.round(em * 2)
-    var h = size ? Math.round(parseFloat(size[2])) : Math.round(em)
-    return "<img src=\"" + imageUrl(svg, tex) + "\" width=\"" + w + "\" height=\"" + h + "\" style=\"vertical-align: middle;\" />"
+    var svg = d && d.svg ? d.svg : ""
+    var size = svg ? imageSize(svg) : null
+    if (!size || tooMuch(svg) || !(size[0] <= MAX_PX && size[1] <= MAX_PX && size[0] * size[1] <= MAX_PX_AREA)) {
+      svg = placeholder(tex, em, color)
+      size = imageSize(svg) || [Math.round(em * 2), Math.round(em)]
+    }
+    return "<img src=\"" + imageUrl(svg, tex) + "\" width=\"" + size[0] + "\" height=\"" + size[1] + "\" style=\"vertical-align: middle;\" />"
   })
+}
+
+// The whole px an image of it is, as its <svg> says: [width, height], or
+// null (not in px).
+function imageSize(svg) {
+  var tag = /^<svg\b[^>]*>/.exec(String(svg || ""))
+  var w = tag ? /\swidth="([\d.]+)px"/.exec(tag[0]) : null
+  var h = tag ? /\sheight="([\d.]+)px"/.exec(tag[0]) : null
+  return w && h ? [Math.round(parseFloat(w[1])), Math.round(parseFloat(h[1]))] : null
 }
 
 // And back, as it's kept: each equation's image as its link.

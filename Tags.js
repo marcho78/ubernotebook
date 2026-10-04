@@ -25,6 +25,8 @@ var NAME = new RegExp("^" + CHARS + "+$")
 function clean(value) {
   var t = String(value || "").trim().replace(/^#/, "").replace(/[\/-]+$/, "")
   if (!t || t.length > MAX || !NAME.test(t) || /^[\/-]/.test(t) || /^\d+$/.test(t)) return ""
+  // (A tag's name is a key in what's kept: never the one that isn't.)
+  if (t.toLowerCase() === "__proto__") return ""
   return t.toLowerCase()
 }
 

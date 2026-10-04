@@ -22,78 +22,129 @@ var MAX_PREVIEW = 600
 var MAX_ATTACHMENTS = 50
 var MAX_HTML = 400000
 
+// Reading an email holds up the shell until it's done, so these keep any
+// .eml (up to the 64 MB that's read) quick to read, however it's made;
+// what's past them is left out.
+var MAX_TEXT = 400000      // a plain body's characters
+var MAX_PARTS = 500        // parts read, the message and its multiparts counted
+var MAX_DEPTH = 12         // multiparts in multiparts (one deeper is just a part)
+var MAX_DASHES = 1000000   // lines starting "--" looked at, for boundaries, in all
+var MAX_HEAD = 256 * 1024  // a header block's characters (one longer has no body)
+var MAX_FIELDS = 500       // a header block's lines read
+var MAX_LINE = 16 * 1024   // a header's characters (its folded lines joined)
+var MAX_PARAMS = 50        // a header's parameters read (name*0=, name*1=: one each)
+var MAX_PIECES = 64        // RFC 2231's pieces of one read: name*0= to name*63=
+var MAX_PARAM = 2000       // a parameter's characters, its pieces put together
+
 function line(value, max) {
   return String(typeof value === "string" ? value : "").replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max || 300)
 }
 
 // ---- bytes ---------------------------------------------------------------------------------
 
-var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+// Bytes are lists of numbers (no more than a `max` asked for), and text is
+// made from them a few thousand characters at a time: in the shell's
+// JavaScript, a string added to for each character is slow, and big.
 
-function base64Bytes(text) {
-  var s = String(text || "").replace(/[^A-Za-z0-9+\/]/g, "")
+var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+// Each base64 character's value, by its code.
+var B64_VALUES = b64Values()
+function b64Values() {
+  var out = []
+  for (var i = 0; i < 128; i++) out.push(B64.indexOf(String.fromCharCode(i)))
+  return out
+}
+
+// (Read a piece at a time, so a few bytes of a long one are quick.)
+function base64Bytes(text, max) {
+  var s = String(text || "")
+  var most = max === undefined ? Infinity : max
+  var values = B64_VALUES
   var out = []
   var buf = 0
   var bits = 0
-  for (var i = 0; i < s.length; i++) {
-    buf = (buf << 6) | B64.indexOf(s.charAt(i))
-    bits += 6
-    if (bits >= 8) {
-      bits -= 8
-      out.push((buf >> bits) & 0xff)
+  for (var at = 0; at < s.length && out.length < most; at += 65536) {
+    var piece = s.slice(at, at + 65536).replace(/[^A-Za-z0-9+\/]+/g, "")
+    for (var i = 0; i < piece.length && out.length < most; i++) {
+      buf = (buf << 6) | values[piece.charCodeAt(i)]
+      bits += 6
+      if (bits >= 8) {
+        bits -= 8
+        out.push((buf >> bits) & 0xff)
+      }
     }
   }
   return out
 }
 
 function bytesBase64(bytes) {
-  var out = ""
+  var out = []
+  var codes = []
   for (var i = 0; i < bytes.length; i += 3) {
     var a = bytes[i], b = bytes[i + 1], c = bytes[i + 2]
     var n = (a << 16) | ((b || 0) << 8) | (c || 0)
-    out += B64.charAt((n >> 18) & 63) + B64.charAt((n >> 12) & 63)
-      + (b === undefined ? "=" : B64.charAt((n >> 6) & 63))
-      + (c === undefined ? "=" : B64.charAt(n & 63))
+    codes.push(B64.charCodeAt((n >> 18) & 63), B64.charCodeAt((n >> 12) & 63),
+               b === undefined ? 61 : B64.charCodeAt((n >> 6) & 63), c === undefined ? 61 : B64.charCodeAt(n & 63))
+    if (codes.length >= 4096) { out.push(chars(codes)); codes = [] }
   }
-  return out
+  out.push(chars(codes))
+  return out.join("")
+}
+
+// Character codes as text, a few thousand at a time.
+function chars(codes) {
+  var out = []
+  for (var i = 0; i < codes.length; i += 4096) out.push(String.fromCharCode.apply(null, codes.slice(i, i + 4096)))
+  return out.join("")
+}
+
+// A hex digit's value, by its code (-1: not one).
+function hex(code) {
+  if (code >= 48 && code <= 57) return code - 48
+  if (code >= 65 && code <= 70) return code - 55
+  if (code >= 97 && code <= 102) return code - 87
+  return -1
 }
 
 // "=C3=A9" and soft line breaks ("=" at a line's end), as bytes.
-function quotedBytes(text, inHeader) {
+function quotedBytes(text, inHeader, max) {
   var s = String(text || "").replace(/=\r?\n/g, "")
   if (inHeader) s = s.replace(/_/g, " ")
+  var most = max === undefined ? Infinity : max
+  var digit = hex
+  var push = utf8Push
   var out = []
-  for (var i = 0; i < s.length; i++) {
-    var ch = s.charAt(i)
-    if (ch === "=" && /^[0-9A-Fa-f]{2}$/.test(s.substr(i + 1, 2))) { out.push(parseInt(s.substr(i + 1, 2), 16)); i += 2 }
-    else {
-      var code = s.charCodeAt(i)
-      if (code < 0x80) out.push(code)
-      else utf8Of(ch).forEach(function(b) { out.push(b) })
-    }
+  for (var i = 0; i < s.length && out.length < most; i++) {
+    var code = s.charCodeAt(i)
+    var high = code === 61 ? digit(s.charCodeAt(i + 1)) : -1
+    var low = high >= 0 ? digit(s.charCodeAt(i + 2)) : -1
+    if (low >= 0) { out.push(high * 16 + low); i += 2 }
+    else if (code < 0x80) out.push(code)
+    else push(out, code)
   }
   return out
 }
 
 // A string's characters as bytes (what's read is each byte a character
 // when it came in raw: 8bit mail read as text keeps its UTF-8).
-function rawBytes(text) {
-  var out = []
+function rawBytes(text, max) {
   var s = String(text || "")
-  for (var i = 0; i < s.length; i++) {
+  var most = max === undefined ? Infinity : max
+  var out = []
+  for (var i = 0; i < s.length && out.length < most; i++) {
     var code = s.charCodeAt(i)
     if (code < 0x80) out.push(code)
-    else utf8Of(s.charAt(i)).forEach(function(b) { out.push(b) })
+    else if (code < 0x800) out.push(0xc0 | (code >> 6), 0x80 | (code & 63))
+    else out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 63), 0x80 | (code & 63))
   }
   return out
 }
 
-function utf8Of(ch) {
-  var cp = ch.codePointAt ? ch.codePointAt(0) : ch.charCodeAt(0)
-  if (cp < 0x80) return [cp]
-  if (cp < 0x800) return [0xc0 | (cp >> 6), 0x80 | (cp & 63)]
-  if (cp < 0x10000) return [0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63)]
-  return [0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 63), 0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63)]
+// A character's UTF-8 bytes, added to `out` (each UTF-16 unit on its own).
+function utf8Push(out, code) {
+  if (code < 0x80) out.push(code)
+  else if (code < 0x800) out.push(0xc0 | (code >> 6), 0x80 | (code & 63))
+  else out.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 63), 0x80 | (code & 63))
 }
 
 // Windows-1252's characters from 0x80 to 0x9f (else as Latin-1).
@@ -110,38 +161,48 @@ function decode(bytes, charset) {
   return u === null ? cp1252(bytes) : u
 }
 function latin1(bytes) {
-  var out = ""
-  for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i])
-  return out
+  return chars(bytes)
 }
 function cp1252(bytes) {
-  var out = ""
-  for (var i = 0; i < bytes.length; i++) {
-    var b = bytes[i]
-    out += String.fromCharCode(b >= 0x80 && b < 0xa0 ? CP1252[b - 0x80] : b)
-  }
-  return out
+  return chars(bytes.map(function(b) { return b >= 0x80 && b < 0xa0 ? CP1252[b - 0x80] : b }))
 }
 // UTF-8, or null if it isn't.
 function utf8(bytes) {
-  var out = ""
+  var out = []
+  var codes = []
   for (var i = 0; i < bytes.length; i++) {
     var b = bytes[i]
-    var cp
-    var more
-    if (b < 0x80) { out += String.fromCharCode(b); continue }
-    else if (b >= 0xc2 && b < 0xe0) { cp = b & 0x1f; more = 1 }
-    else if (b >= 0xe0 && b < 0xf0) { cp = b & 0x0f; more = 2 }
-    else if (b >= 0xf0 && b < 0xf5) { cp = b & 0x07; more = 3 }
-    else return null
+    var cp = b
+    var more = 0
+    if (b >= 0x80) {
+      if (b >= 0xc2 && b < 0xe0) { cp = b & 0x1f; more = 1 }
+      else if (b >= 0xe0 && b < 0xf0) { cp = b & 0x0f; more = 2 }
+      else if (b >= 0xf0 && b < 0xf5) { cp = b & 0x07; more = 3 }
+      else return null
+    }
     for (var k = 0; k < more; k++) {
       var c = bytes[++i]
       if (c === undefined || (c & 0xc0) !== 0x80) return null
       cp = (cp << 6) | (c & 0x3f)
     }
-    out += String.fromCodePoint(cp)
+    if (cp > 0x10ffff) return null
+    if (cp < 0x10000) codes.push(cp)
+    else codes.push(0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff))
+    if (codes.length >= 4096) { out.push(chars(codes)); codes = [] }
   }
-  return out
+  out.push(chars(codes))
+  return out.join("")
+}
+
+// Bytes cut at `max`, and back to where a character starts (half of a UTF-8
+// one at the end would make all of it look like it isn't UTF-8).
+function cut(bytes, max) {
+  var end = Math.min(bytes.length, max)
+  var start = end
+  while (start > 0 && end - start < 3 && (bytes[start - 1] & 0xc0) === 0x80) start--
+  var lead = bytes[start - 1]
+  if (start > 0 && lead >= 0xc0 && start - 1 + (lead >= 0xf0 ? 4 : lead >= 0xe0 ? 3 : 2) > end) end = start - 1
+  return bytes.slice(0, end)
 }
 
 // ---- headers -------------------------------------------------------------------------------
@@ -156,51 +217,77 @@ function words(text) {
   })
 }
 
-// A message (or a part): { headers: { name: value }, body } (names in lower
-// case, lines folded onto the next joined, the first of each kept).
-function split(source) {
+// A message, or one of its parts (in `source`, from start to end): { headers:
+// { name: value }, source, start, end }, its body being source from start to
+// end (left where it is, not copied out again for each multipart it's in).
+// Its header block ends at its first blank line, if that's in its first
+// MAX_HEAD characters; else it's all header.
+function split(source, start, end) {
   var s = String(source || "")
-  var m = /\r?\n\r?\n/.exec(s)
-  var head = m ? s.slice(0, m.index) : s
-  var body = m ? s.slice(m.index + m[0].length) : ""
+  var from = start || 0
+  var to = end === undefined ? s.length : end
+  var head = s.slice(from, Math.min(to, from + MAX_HEAD + 4))
+  var m = /\r?\n\r?\n/.exec(head)
+  if (m && m.index > MAX_HEAD) m = null
+  return { headers: fields(m ? head.slice(0, m.index) : head), source: s, start: m ? from + m.index + m[0].length : to, end: to }
+}
+
+// A header block's fields: { name: value } (names in lower case, lines
+// folded onto the next joined, the first of each kept; of its first
+// MAX_HEAD characters, MAX_FIELDS lines read, MAX_LINE characters of each).
+function fields(head) {
+  var s = String(head || "").slice(0, MAX_HEAD).replace(/\r?\n[ \t]+/g, " ")
   var headers = {}
-  head.replace(/\r?\n[ \t]+/g, " ").split(/\r?\n/).forEach(function(l) {
+  for (var at = 0, n = 0; at < s.length && n < MAX_FIELDS; n++) {
+    var nl = s.indexOf("\n", at)
+    if (nl < 0) nl = s.length
+    var l = s.slice(at, nl)
+    at = nl + 1
     var colon = l.indexOf(":")
-    if (colon <= 0) return
+    if (colon <= 0) continue
     var name = l.slice(0, colon).trim().toLowerCase()
-    if (!/^[a-z0-9-]+$/.test(name) || headers[name] !== undefined) return
-    headers[name] = l.slice(colon + 1).trim()
-  })
-  return { headers: headers, body: body }
+    if (!/^[a-z0-9-]+$/.test(name) || headers[name] !== undefined) continue
+    headers[name] = l.slice(colon + 1).trim().slice(0, MAX_LINE)
+  }
+  return headers
 }
 
 // "text/plain; charset=utf-8; name=\"a b.txt\"" -> { value: "text/plain",
-// params: { charset, name } } (RFC 2231's name*=UTF-8''... and name*0=, name*1= too).
+// params: { charset, name } } (RFC 2231's name*=UTF-8''... and name*0=, name*1= too;
+// the first MAX_PARAMS read, MAX_PARAM characters of each).
 function params(header) {
   var s = String(header || "")
   var parts = []
-  var cur = ""
+  var from = 0
   var quoted = false
-  for (var i = 0; i < s.length; i++) {
-    var ch = s.charAt(i)
-    if (ch === "\"" && s.charAt(i - 1) !== "\\") quoted = !quoted
-    if (ch === ";" && !quoted) { parts.push(cur); cur = "" } else cur += ch
+  var most = MAX_PARAMS
+  for (var i = 0; i < s.length && parts.length <= most; i++) {
+    var ch = s.charCodeAt(i)
+    if (ch === 34 && s.charCodeAt(i - 1) !== 92) quoted = !quoted
+    else if (ch === 59 && !quoted) { parts.push(s.slice(from, i)); from = i + 1 }
   }
-  parts.push(cur)
+  if (parts.length <= most) parts.push(s.slice(from))
   var out = { value: parts[0].trim().toLowerCase(), params: {} }
-  var pieces = {}
+  // RFC 2231's pieces, by name, then by number: only the numbers read are
+  // kept, and they're put together in order.
+  var pieces = Object.create(null)
   parts.slice(1).forEach(function(p) {
     var eq = p.indexOf("=")
     if (eq < 0) return
     var key = p.slice(0, eq).trim().toLowerCase()
     var val = p.slice(eq + 1).trim().replace(/^"([\s\S]*)"$/, "$1").replace(/\\"/g, "\"")
     var cont = /^([a-z0-9-]+)\*(\d+)(\*?)$/.exec(key)
-    if (cont) { (pieces[cont[1]] = pieces[cont[1]] || [])[Number(cont[2])] = { v: val, enc: cont[3] === "*" }; return }
-    if (/\*$/.test(key)) { out.params[key.slice(0, -1)] = ext(val, true); return }
-    out.params[key] = words(val)
+    if (cont) {
+      var at = Number(cont[2])
+      if (at < MAX_PIECES) (pieces[cont[1]] = pieces[cont[1]] || Object.create(null))[at] = { v: val, enc: cont[3] === "*" }
+      return
+    }
+    if (/\*$/.test(key)) { out.params[key.slice(0, -1)] = ext(val, true).slice(0, MAX_PARAM); return }
+    out.params[key] = words(val).slice(0, MAX_PARAM)
   })
   for (var k in pieces) {
-    var list = pieces[k].filter(function(x) { return x })
+    var list = []
+    for (var n = 0; n < MAX_PIECES; n++) if (pieces[k][n]) list.push(pieces[k][n])
     var charset = "utf-8"
     var text = list.map(function(x, i) {
       if (!x.enc) return x.v
@@ -208,7 +295,7 @@ function params(header) {
       if (i === 0) { var m = /^([^']*)'[^']*'([\s\S]*)$/.exec(v); if (m) { charset = m[1] || "utf-8"; v = m[2] } }
       return v
     }).join("")
-    out.params[k] = list.some(function(x) { return x.enc }) ? decode(percentBytes(text), charset) : text
+    out.params[k] = (list.some(function(x) { return x.enc }) ? decode(percentBytes(text), charset) : text).slice(0, MAX_PARAM)
   }
   return out
 }
@@ -222,8 +309,11 @@ function percentBytes(text) {
   var out = []
   var s = String(text || "")
   for (var i = 0; i < s.length; i++) {
-    if (s.charAt(i) === "%" && /^[0-9A-Fa-f]{2}$/.test(s.substr(i + 1, 2))) { out.push(parseInt(s.substr(i + 1, 2), 16)); i += 2 }
-    else rawBytes(s.charAt(i)).forEach(function(b) { out.push(b) })
+    var code = s.charCodeAt(i)
+    var high = code === 37 ? hex(s.charCodeAt(i + 1)) : -1
+    var low = high >= 0 ? hex(s.charCodeAt(i + 2)) : -1
+    if (low >= 0) { out.push(high * 16 + low); i += 2 }
+    else utf8Push(out, code)
   }
   return out
 }
@@ -233,17 +323,17 @@ function percentBytes(text) {
 function addresses(header) {
   var s = words(String(header || ""))
   var list = []
-  var cur = ""
+  var from = 0
   var quoted = false
   var angle = 0
   for (var i = 0; i < s.length; i++) {
-    var ch = s.charAt(i)
-    if (ch === "\"") quoted = !quoted
-    else if (ch === "<" && !quoted) angle++
-    else if (ch === ">" && !quoted) angle = Math.max(0, angle - 1)
-    if ((ch === "," || ch === ";") && !quoted && angle === 0) { list.push(cur); cur = "" } else cur += ch
+    var ch = s.charCodeAt(i)
+    if (ch === 34) quoted = !quoted
+    else if (ch === 60 && !quoted) angle++
+    else if (ch === 62 && !quoted) angle = Math.max(0, angle - 1)
+    else if ((ch === 44 || ch === 59) && !quoted && angle === 0) { list.push(s.slice(from, i)); from = i + 1 }
   }
-  list.push(cur)
+  list.push(s.slice(from))
   return list.map(function(a) {
     var t = a.trim()
     if (!t) return null
@@ -282,41 +372,110 @@ function date(header) {
 
 // ---- the message ---------------------------------------------------------------------------
 
-// One part's body as bytes, by its Content-Transfer-Encoding.
-function partBytes(part) {
-  var enc = String(part.headers["content-transfer-encoding"] || "").trim().toLowerCase()
-  if (enc === "base64") return base64Bytes(part.body)
-  if (enc === "quoted-printable") return quotedBytes(part.body, false)
-  return rawBytes(part.body)
+function encoding(part) {
+  return String(part.headers["content-transfer-encoding"] || "").trim().toLowerCase()
+}
+// A part's body (copied out of the message, so only when it's needed): all
+// of it, or its first `max` characters.
+function body(part, max) {
+  return part.source.slice(part.start, max === undefined ? part.end : Math.min(part.end, part.start + max))
 }
 
-// The parts of a message, flattened: [{ type, charset, name, cid, disposition, part }].
-function walk(part, out, depth) {
-  var ct = params(part.headers["content-type"] || "text/plain")
-  var cd = params(part.headers["content-disposition"] || "")
-  if (/^multipart\//.test(ct.value) && ct.params.boundary && depth < 12) {
-    var b = "--" + ct.params.boundary
-    var chunks = String(part.body).split(b)
-    chunks.slice(1).forEach(function(chunk) {
-      if (/^--/.test(chunk)) return
-      // (The line break before a boundary is the boundary's, not the part's.)
-      walk(split(chunk.replace(/^[ \t]*\r?\n/, "").replace(/\r?\n$/, "")), out, depth + 1)
-    })
-    return out
+// One part's body as bytes, by its Content-Transfer-Encoding: all of them,
+// or at most `max` (from at most four characters each: none takes more).
+function partBytes(part, max) {
+  var enc = encoding(part)
+  var s = body(part, max === undefined ? undefined : 4 * max)
+  var bytes = enc === "base64" ? base64Bytes(s, max) : enc === "quoted-printable" ? quotedBytes(s, false, max) : rawBytes(s, max)
+  return max !== undefined && (bytes.length >= max || part.start + s.length < part.end) ? cut(bytes, max) : bytes
+}
+
+// How many bytes a part's body is: counted, not decoded, a million
+// characters at a time.
+function partSize(part) {
+  var enc = encoding(part)
+  var n = 0
+  for (var at = part.start; at < part.end; ) {
+    var s = part.source.slice(at, Math.min(part.end, at + 1048576))
+    // (Quoted-printable is counted a line at a time, so nothing escaped is cut in two.)
+    var nl = enc === "quoted-printable" && at + s.length < part.end ? s.lastIndexOf("\n") : -1
+    if (nl >= 0) s = s.slice(0, nl + 1)
+    at += s.length
+    if (enc === "base64") n += s.replace(/[^A-Za-z0-9+\/]+/g, "").length
+    else n += utf8Length(enc === "quoted-printable" ? s.replace(/=\r?\n/g, "").replace(/=[0-9A-Fa-f]{2}/g, "=") : s)
   }
-  if (ct.value === "message/rfc822" && depth < 12) {
-    out.push({ type: ct.value, charset: "", name: cd.params.filename || ct.params.name || "Forwarded message.eml", cid: "", disposition: "attachment", part: part })
-    return out
-  }
-  out.push({
-    type: ct.value || "text/plain",
-    charset: ct.params.charset || "",
-    name: cd.params.filename || ct.params.name || "",
-    cid: String(part.headers["content-id"] || "").replace(/^<|>$/g, ""),
-    disposition: cd.value,
-    part: part
-  })
+  return enc === "base64" ? Math.floor(n * 3 / 4) : n
+}
+// How many bytes text is in UTF-8 (each UTF-16 unit on its own, as rawBytes has it).
+function utf8Length(s) {
+  var high = s.replace(/[\u0000-\u007f]+/g, "")
+  return s.length + high.length + high.replace(/[\u0080-\u07ff]+/g, "").length
+}
+
+// The parts of a message, flattened: [{ type, charset, name, cid, disposition, part }]
+// (at most MAX_PARTS read in all, the message and its multiparts counted;
+// past MAX_DASHES lines looked at for boundaries, no more).
+function walk(top) {
+  var out = []
+  var read = 0
+  var dashes = MAX_DASHES
+  visit(top, 0)
   return out
+
+  function visit(part, depth) {
+    read++
+    var ct = params(part.headers["content-type"] || "text/plain")
+    var cd = params(part.headers["content-disposition"] || "")
+    var boundary = ct.params.boundary || ""
+    if (/^multipart\//.test(ct.value) && boundary && depth < MAX_DEPTH) {
+      // (A boundary is on a line of its own: one with a line break in it isn't found.)
+      if (boundary.indexOf("\n") >= 0) return
+      var s = part.source
+      var b = "--" + boundary
+      for (var at = delimiter(part, b, part.start); at >= 0 && read < MAX_PARTS; ) {
+        var next = delimiter(part, b, at + b.length)
+        if (read >= MAX_PARTS) return
+        var from = at + b.length
+        var to = next >= 0 ? next : part.end
+        at = next
+        if (to - from >= 2 && s.startsWith("--", from)) continue
+        // (The rest of the boundary's line is the boundary's, and so is the
+        // line break before the next one.)
+        var nl = s.indexOf("\n", from)
+        if (nl >= 0 && nl < to && /^[ \t]*\r?$/.test(s.slice(from, nl))) from = nl + 1
+        if (to > from && s.charAt(to - 1) === "\n") { to--; if (to > from && s.charAt(to - 1) === "\r") to-- }
+        visit(split(s, from, to), depth + 1)
+      }
+      return
+    }
+    if (ct.value === "message/rfc822" && depth < MAX_DEPTH) {
+      out.push({ type: ct.value, charset: "", name: cd.params.filename || ct.params.name || "Forwarded message.eml", cid: "", disposition: "attachment", part: part })
+      return
+    }
+    out.push({
+      type: ct.value || "text/plain",
+      charset: ct.params.charset || "",
+      name: cd.params.filename || ct.params.name || "",
+      cid: String(part.headers["content-id"] || "").replace(/^<|>$/g, ""),
+      disposition: cd.value,
+      part: part
+    })
+  }
+
+  // Where the next "--boundary" in a multipart's body starts, from `from`
+  // on, or -1. One starts a line, so it's found by its line's "\n--" and
+  // then compared: no boundary, however long or odd, makes that slow. (With
+  // too many such lines looked at, -1, and no more parts are read.)
+  function delimiter(part, b, from) {
+    var s = part.source
+    var q = s.indexOf("\n--", Math.max(from - 1, 0))
+    while (q >= 0 && q + 1 + b.length <= part.end) {
+      if (--dashes < 0) { read = MAX_PARTS; return -1 }
+      if (s.startsWith(b, q + 1)) return q + 1
+      q = s.indexOf("\n--", q + 1)
+    }
+    return -1
+  }
 }
 
 // A message, read: { subject, from, to, cc, date, text, html, attachments:
@@ -325,18 +484,18 @@ function parse(source) {
   var top = split(source)
   var h = top.headers
   if (!h.from && !h.subject && !h.to && !h["content-type"]) return null
-  var parts = walk(top, [], 0)
+  var parts = walk(top)
   var text = ""
   var html = ""
   var attachments = []
   parts.forEach(function(p, i) {
     var isAttachment = p.disposition === "attachment" || (p.name && p.disposition !== "inline") || (!/^text\/(plain|html)$/.test(p.type) && !p.cid)
     if (isAttachment) {
-      if (attachments.length < MAX_ATTACHMENTS) attachments.push({ name: line(p.name, 200) || "Attachment " + (attachments.length + 1), type: p.type, size: partBytes(p.part).length, index: i })
+      if (attachments.length < MAX_ATTACHMENTS) attachments.push({ name: line(p.name, 200) || "Attachment " + (attachments.length + 1), type: p.type, size: partSize(p.part), index: i })
       return
     }
-    if (p.type === "text/plain" && !text) text = decode(partBytes(p.part), p.charset).replace(/\r\n?/g, "\n")
-    else if (p.type === "text/html" && !html) html = decode(partBytes(p.part), p.charset)
+    if (p.type === "text/plain" && !text) text = partText(p, MAX_TEXT).replace(/\r\n?/g, "\n")
+    else if (p.type === "text/html" && !html) html = partText(p, MAX_HTML)
   })
   return {
     subject: line(words(h.subject || ""), 300),
@@ -345,19 +504,24 @@ function parse(source) {
     cc: addresses(h.cc),
     date: date(h.date),
     text: text,
-    html: html.slice(0, MAX_HTML),
+    html: html,
     attachments: attachments,
     parts: parts
   }
+}
+
+// A part's words in its charset: at most `max` characters (from at most
+// three bytes each, the most one takes).
+function partText(p, max) {
+  return decode(partBytes(p.part, 3 * max), p.charset).slice(0, max)
 }
 
 // An attachment's bytes, as base64 (to be written as a file).
 function attachmentBase64(message, index) {
   var p = message && message.parts ? message.parts[index] : null
   if (!p) return ""
-  var enc = String(p.part.headers["content-transfer-encoding"] || "").trim().toLowerCase()
-  if (p.type === "message/rfc822") return bytesBase64(rawBytes(p.part.body))
-  if (enc === "base64") return String(p.part.body).replace(/[^A-Za-z0-9+\/=]/g, "")
+  if (p.type === "message/rfc822") return bytesBase64(rawBytes(body(p.part)))
+  if (encoding(p.part) === "base64") return body(p.part).replace(/[^A-Za-z0-9+\/=]/g, "")
   return bytesBase64(partBytes(p.part))
 }
 
@@ -380,18 +544,106 @@ function entities(text) {
       return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : ""
     }
     var v = named[e.toLowerCase()]
-    return v !== undefined ? v : all
+    return typeof v === "string" ? v : all
   })
 }
 
+// HTML read once through, the way a browser reads it: its words (as they're
+// written, entities and all) to text(words), its tags to tag(name, closing,
+// { href, alt }) (the name in lower case). A "<" that doesn't start a tag is
+// words; a comment, <!doctype ...>, <?xml ...?> or CDATA is a tag named "!";
+// an element named in `hidden` is just its two tags, what's between them
+// skipped (with no end tag after it, just its tag). A tag the HTML ends in
+// the middle of is left out, and so is all after it. (Not with regexes:
+// [\s\S]*? and [^>]* look for an end again from each "<", and some HTML
+// makes that take minutes.)
+function readHtml(html, hidden, text, tag) {
+  var s = String(html || "")
+  var ends = {}
+  var from = 0  // (where the words not given yet start)
+  var at = 0
+  for (var lt = s.indexOf("<"); lt >= 0; lt = s.indexOf("<", at)) {
+    var c = s.charCodeAt(lt + 1)
+    var closing = c === 47
+    var first = closing ? s.charCodeAt(lt + 2) : c
+    var named = (first >= 65 && first <= 90) || (first >= 97 && first <= 122)
+    var mark = c === 33 ? (s.startsWith("<!--", lt) ? "-->" : s.startsWith("<![CDATA[", lt) ? "]]>" : ">") : c === 63 || (closing && !named) ? ">" : ""
+    // (A "<" that's words stays with the words around it.)
+    if (!mark && !named) { at = lt + 1; continue }
+    if (lt > from) text(s.slice(from, lt))
+    if (mark) {
+      var end = s.indexOf(mark, lt + (mark === "-->" ? 4 : mark === "]]>" ? 9 : 2))
+      if (end < 0) return
+      tag("!", false, null)
+      at = from = end + mark.length
+      continue
+    }
+    var t = tagAt(s, closing ? lt + 2 : lt + 1)
+    if (!t) return
+    at = from = t.end
+    if (!closing && hidden[t.name] === 1 && ends[t.name] !== false) {
+      var re = ends[t.name] || (ends[t.name] = new RegExp("</" + t.name + "\\s*>", "gi"))
+      re.lastIndex = at
+      var m = re.exec(s)
+      if (m) { tag(t.name, false, t.attrs); tag(t.name, true, null); at = from = m.index + m[0].length; continue }
+      // (None after this one, so none after any later one either.)
+      ends[t.name] = false
+    }
+    tag(t.name, closing, t.attrs)
+  }
+  if (s.length > from) text(s.slice(from))
+}
+
+// A tag, from just past its "<" or "</": { name (in lower case), attrs:
+// { href, alt } (as written, or null), end (just past its ">") }, or null if
+// the HTML ends first. As a browser reads one: a "/" between attributes is
+// a space, and a value in quotes is all one, ">" and all.
+function tagAt(s, i) {
+  var space = isSpace
+  var n = s.length
+  var from = i
+  while (i < n && !space(s.charCodeAt(i)) && s.charCodeAt(i) !== 47 && s.charCodeAt(i) !== 62) i++
+  var t = { name: s.slice(from, i).toLowerCase(), attrs: { href: null, alt: null }, end: 0 }
+  for (;;) {
+    while (i < n && (space(s.charCodeAt(i)) || s.charCodeAt(i) === 47)) i++
+    if (i >= n) return null
+    if (s.charCodeAt(i) === 62) { t.end = i + 1; return t }
+    from = i++
+    while (i < n && !space(s.charCodeAt(i)) && s.charCodeAt(i) !== 47 && s.charCodeAt(i) !== 62 && s.charCodeAt(i) !== 61) i++
+    var key = s.slice(from, i).toLowerCase()
+    while (i < n && space(s.charCodeAt(i))) i++
+    var value = ""
+    if (s.charCodeAt(i) === 61) {
+      i++
+      while (i < n && space(s.charCodeAt(i))) i++
+      var q = s.charCodeAt(i)
+      if (q === 34 || q === 39) {
+        var close = s.indexOf(s.charAt(i), i + 1)
+        if (close < 0) return null
+        value = s.slice(i + 1, close)
+        i = close + 1
+      } else {
+        from = i
+        while (i < n && !space(s.charCodeAt(i)) && s.charCodeAt(i) !== 62) i++
+        value = s.slice(from, i)
+      }
+    }
+    if ((key === "href" || key === "alt") && t.attrs[key] === null) t.attrs[key] = value
+  }
+}
+// HTML's spaces: space, tab, line feed, form feed and return.
+function isSpace(c) {
+  return c === 32 || c === 9 || c === 10 || c === 12 || c === 13
+}
+
 // HTML as plain text (for the preview and search).
+var BREAKS = { p: 1, div: 1, li: 1, tr: 1, h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, blockquote: 1 }
 function htmlText(html) {
-  return entities(String(html || "")
-    .replace(/<(head|style|script|title)[\s\S]*?<\/\1\s*>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|tr|h[1-6]|blockquote)\s*>/gi, "\n")
-    .replace(/<[^>]*>/g, " "))
+  var out = []
+  readHtml(html, { head: 1, style: 1, script: 1, title: 1 }, function(words) { out.push(words) }, function(t, closing) {
+    out.push(t === "br" || (closing && BREAKS[t] === 1) ? "\n" : " ")
+  })
+  return entities(out.join(""))
     .replace(/[ \t\u00a0]+/g, " ").split("\n").map(function(l) { return l.trim() }).join("\n")
     .replace(/\n{3,}/g, "\n\n").trim()
 }
@@ -408,34 +660,37 @@ function preview(message) {
   return line(t, MAX_PREVIEW)
 }
 
-// HTML safe to show in Pages (Qt's rich text): its structure and links,
-// without scripts, styles, forms, pictures (from the web: they'd say you
-// opened it), or attributes but a link's address (to the web or an email).
+// HTML safe to show in Pages (Qt's rich text): its structure and links, and
+// nothing else. What's shown is made anew, not passed on: these tags, with
+// no attributes but a link's address (to the web or an email); every word
+// escaped (entities left as written); a picture, its words (from the web,
+// it'd say you opened it); scripts, styles, forms and the like left out,
+// with what's in them. So no "<" comes out but these tags'.
 var KEEP = { a: 1, b: 1, strong: 1, i: 1, em: 1, u: 1, s: 1, strike: 1, del: 1, br: 1, p: 1, div: 1, span: 1, ul: 1, ol: 1, li: 1,
              h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, blockquote: 1, pre: 1, code: 1, table: 1, thead: 1, tbody: 1, tr: 1, td: 1, th: 1, hr: 1, sub: 1, sup: 1 }
+var HIDDEN = { head: 1, style: 1, script: 1, title: 1, template: 1, noscript: 1, object: 1, iframe: 1, svg: 1, math: 1, form: 1, select: 1, textarea: 1, button: 1 }
 function safeHtml(html) {
-  var s = String(html || "")
-    .replace(/<(head|style|script|title|template|noscript|object|iframe|svg|math|form|select|textarea|button)\b[\s\S]*?<\/\1\s*>/gi, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")
-    .replace(/<!doctype[^>]*>/gi, "")
-  var out = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, function(all, close, tag, attrs) {
-    var t = tag.toLowerCase()
+  var out = []
+  readHtml(html, HIDDEN, function(words) { out.push(safeWords(words)) }, function(t, closing, attrs) {
     if (t === "img") {
-      var alt = /\balt\s*=\s*("([^"]*)"|'([^']*)')/i.exec(attrs)
-      var words_ = alt ? (alt[2] || alt[3] || "").trim() : ""
-      return words_ ? "[" + escape(entities(words_)) + "]" : ""
+      var alt = !closing && attrs && attrs.alt !== null ? attrs.alt.trim() : ""
+      if (alt) out.push("[" + escape(entities(alt)) + "]")
+      return
     }
-    if (!KEEP[t]) return ""
-    if (close) return "</" + t + ">"
-    if (t === "a") {
-      var hm = /\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs)
-      var href = hm ? entities(hm[2] || hm[3] || hm[4] || "").trim() : ""
-      return /^(https?:\/\/|mailto:)/i.test(href) ? "<a href=\"" + escape(href) + "\">" : "<a>"
+    if (KEEP[t] !== 1) return
+    if (closing) out.push("</" + t + ">")
+    else if (t === "a") {
+      var href = attrs && attrs.href !== null ? entities(attrs.href).trim() : ""
+      out.push(/^(https?:\/\/|mailto:)/i.test(href) ? "<a href=\"" + escape(href) + "\">" : "<a>")
     }
-    return "<" + t + (t === "br" || t === "hr" ? " /" : "") + ">"
+    else out.push("<" + t + (t === "br" || t === "hr" ? " /" : "") + ">")
   })
-  return out.replace(/<\/?(html|body|meta|link|base)[^>]*>/gi, "")
+  return out.join("")
+}
+// Words as HTML: "<", ">" and a "&" that doesn't start an entity escaped
+// (entities left as they're written, for Qt).
+function safeWords(text) {
+  return String(text).replace(/&(?!(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]*);)/gi, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 // Plain text as HTML: lines kept, web links and emails made links, quoted

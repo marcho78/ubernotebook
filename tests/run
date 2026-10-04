@@ -49,7 +49,33 @@ node tests/profiles.test.cjs
 node tests/backups.test.cjs
 node tests/updates.test.cjs
 node tests/legacy.test.cjs
+node tests/env.test.cjs
+node tests/scope.test.cjs
+node tests/permissions.test.cjs
+node tests/files.test.cjs
+node tests/markdownview.test.cjs
 lua tests/hypr.test.lua
+
+# Running programs (Run.qml, Stream.qml) for real, in a Quickshell started
+# offscreen (nothing is shown), each test from a copy that imports this
+# folder by its full path. Each prints PASS or FAIL lines, then DONE.
+shell=/usr/bin/quickshell
+if [[ -x $shell ]]; then
+  tmp=$(/usr/bin/mktemp -d)
+  trap '/usr/bin/rm -rf -- "$tmp"' EXIT
+  for t in tests/shell/*.qml; do
+    /usr/bin/sed "s|@PLUGIN@|file://$PWD|" "$t" > "$tmp/$(/usr/bin/basename "$t")"
+    out=$(UBER_NOTEBOOK_TEST_SECRET=s3cret BASH_ENV=/dev/null TAR_OPTIONS=-v QT_QPA_PLATFORM=offscreen /usr/bin/timeout 120 "$shell" -p "$tmp/$(/usr/bin/basename "$t")" 2>&1 | /usr/bin/sed 's/\x1b\[[0-9;]*m//g') || true
+    if echo "$out" | grep -q "FAIL" || ! echo "$out" | grep -q "DONE"; then
+      echo "$out" | grep -E "PASS|FAIL|ERROR|DONE" >&2
+      echo "shell: $t failed" >&2
+      exit 1
+    fi
+    echo "shell: $(echo "$out" | grep -c "PASS") checks passed in $(/usr/bin/basename "$t")"
+  done
+else
+  echo "shell: skipped (no quickshell)"
+fi
 
 runner=/usr/lib/qt6/bin/qmltestrunner
 if [[ -x $runner ]]; then

@@ -228,24 +228,48 @@ function merge(book, people, now) {
   var added = 0
   var updated = 0
   var stamp = (now || new Date()).toISOString()
+  // Who's there, looked up rather than searched for every card: by each
+  // email and number (the first person with it), and by name (those with
+  // neither, in order). Emails and numbers are only ever added to someone.
+  var byKey = Object.create(null)
+  var byName = Object.create(null)
+  function keysOf(c) {
+    return c.emails.map(function(e) { return "e:" + e.value }).concat(c.phones.map(function(x) { return "p:" + phoneKey(x.value) }))
+  }
+  function rememberKeys(at) {
+    keysOf(n.contacts[at]).forEach(function(k) { if (!(k in byKey) || byKey[k] > at) byKey[k] = at })
+  }
+  function remember(at) {
+    rememberKeys(at)
+    var o = n.contacts[at]
+    if (!o.name || o.emails.length || o.phones.length) return
+    var name = o.name.toLowerCase()
+    if (!(name in byName)) byName[name] = { list: [], next: 0 }
+    byName[name].list.push(at)
+  }
+  for (var at = 0; at < n.contacts.length; at++) remember(at)
   people.forEach(function(p) {
     var c = cleanContact(p)
     if (!c) return
-    var keys = c.emails.map(function(e) { return "e:" + e.value }).concat(c.phones.map(function(x) { return "p:" + phoneKey(x.value) }))
-    var hit = null
-    n.contacts.forEach(function(o) {
-      if (hit) return
-      var mine = o.emails.map(function(e) { return "e:" + e.value }).concat(o.phones.map(function(x) { return "p:" + phoneKey(x.value) }))
-      if (keys.some(function(k) { return mine.indexOf(k) >= 0 })) hit = o
-    })
-    if (!hit && c.name) hit = n.contacts.filter(function(o) { return o.name && o.name.toLowerCase() === c.name.toLowerCase() && !o.emails.length && !o.phones.length })[0] || null
-    if (hit) {
+    var hitAt = -1
+    keysOf(c).forEach(function(k) { if (k in byKey && (hitAt < 0 || byKey[k] < hitAt)) hitAt = byKey[k] })
+    if (hitAt < 0 && c.name && c.name.toLowerCase() in byName) {
+      var same = byName[c.name.toLowerCase()]
+      while (same.next < same.list.length) {
+        var o = n.contacts[same.list[same.next]]
+        if (!o.emails.length && !o.phones.length) { hitAt = same.list[same.next]; break }
+        same.next++
+      }
+    }
+    if (hitAt >= 0) {
+      var hit = n.contacts[hitAt]
       var before = JSON.stringify(hit)
       ;["name", "company", "title", "birthday", "address", "website"].forEach(function(f) { if (!hit[f] && c[f]) hit[f] = c[f] })
-      if (c.notes && hit.notes.indexOf(c.notes) < 0) hit.notes = hit.notes ? hit.notes + "\n" + c.notes : c.notes
+      if (c.notes && hit.notes.indexOf(c.notes) < 0) hit.notes = text(hit.notes ? hit.notes + "\n" + c.notes : c.notes, 4000)
       hit.phones = cleanList(hit.phones.concat(c.phones), cleanPhone)
       hit.emails = cleanList(hit.emails.concat(c.emails), cleanEmail)
       if (JSON.stringify(hit) !== before) { hit.modified = stamp; updated++ }
+      rememberKeys(hitAt)
       return
     }
     if (n.contacts.length >= MAX) return
@@ -253,6 +277,7 @@ function merge(book, people, now) {
     c.created = stamp
     c.modified = stamp
     n.contacts.push(c)
+    remember(n.contacts.length - 1)
     added++
   })
   return { book: n, added: added, updated: updated }

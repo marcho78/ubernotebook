@@ -8,6 +8,8 @@ const { load, plain } = require("./load.cjs");
 const Agent = load("Agent.js");
 const Docs = load("Docs.js");
 let passed = 0;
+// Where an agent's program is, and its working folder (Store.qml finds them).
+const W = (agent) => ({ exe: "/usr/bin/" + agent, dir: "/run/user/1000/uber-notebook-agent" });
 function check(name, fn) { fn(); passed++; }
 
 const base = { request: "Turn this into to-dos", page: { id: "p1", title: "Lisbon" }, skill: "/plugins/uber-notebook/skills/uber-notebook/SKILL.md" };
@@ -75,14 +77,33 @@ check("/agent is in the slash menu", () => {
 check("Claude Code works here: its command, and the prompt says so", () => {
   assert.ok(Agent.runsHere("claude"));
   assert.ok(!Agent.runsHere("gemini"), "the others open in a terminal");
-  assert.equal(Agent.command("gemini", "x"), null);
-  const argv = plain(Agent.command("claude", "-starts with a dash"));
-  assert.deepEqual(argv.slice(0, 4), ["/usr/bin/bash", "-c", "exec \"$@\" < /dev/null", "uber-notebook-agent"], "nothing to read on its input");
-  assert.equal(argv[4], "claude");
-  for (const a of ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"]) assert.ok(argv.includes(a), a);
-  assert.equal(argv[argv.indexOf("--permission-mode") + 1], "auto", "as Omarchy starts it");
-  assert.equal(argv[argv.indexOf("--allowedTools") + 1], "Bash(omarchy-shell uber-notebook *)", "Uber Notebook's commands allowed");
-  assert.deepEqual(argv.slice(-2), ["--", "-starts with a dash"], "the prompt last, after --, never read as an option");
+  assert.equal(Agent.command("gemini", "x", undefined, undefined, W("gemini")), null);
+  const argv = plain(Agent.command("claude", "-starts with a dash", undefined, undefined, W("claude")));
+  assert.deepEqual(argv.slice(0, 4), ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent"], "its input kept: it reads its request and your answers there");
+  assert.equal(argv[4], "/usr/bin/claude", "by its full path");
+  for (const a of ["-p", "--verbose", "--include-partial-messages", "--restricted"]) assert.ok(argv.includes(a), a);
+  assert.equal(argv[argv.indexOf("--input-format") + 1], "stream-json");
+  assert.equal(argv[argv.indexOf("--output-format") + 1], "stream-json");
+  assert.equal(argv[argv.indexOf("--permission-prompt-tool") + 1], "stdio", "what's beyond its rules is asked of Uber Notebook (you)");
+  assert.equal(argv[argv.indexOf("--tools") + 1], "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch");
+  assert.ok(!argv.includes("--permission-mode"), "asked, not refused or let through");
+  const allowed = argv.slice(argv.indexOf("--allowedTools") + 1, argv.indexOf("--allowedTools") + 4);
+  assert.deepEqual(allowed, ["Bash(omarchy-shell uber-notebook-agent *)", "Edit(//run/user/1000/uber-notebook-agent/**)", "Write(//run/user/1000/uber-notebook-agent/**)"],
+    "Uber Notebook's commands, and files in its own folder, without asking");
+  assert.ok(!argv.some((a) => a.indexOf("starts with a dash") >= 0), "the request isn't in its command line");
+  // Its request on its input, and your answers to what it asks.
+  assert.deepEqual(JSON.parse(Agent.input("claude", "-starts with a dash")), { type: "user", message: { role: "user", content: "-starts with a dash" } });
+  assert.ok(Agent.input("claude", "x").endsWith("\n"));
+  assert.equal(Agent.input("codex", "x"), "", "Codex: in its command line");
+  assert.deepEqual(JSON.parse(Agent.answer("r1", true, { url: "https://e.org" })), { type: "control_response", response: { subtype: "success", request_id: "r1", response: { behavior: "allow", updatedInput: { url: "https://e.org" } } } });
+  assert.deepEqual(JSON.parse(Agent.answer("r2", false, {})).response.response, { behavior: "deny", message: "The user said no." });
+  assert.equal(JSON.parse(Agent.unsupported("r3")).response.subtype, "error");
+  assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "control_request", request_id: "r9", request: { subtype: "can_use_tool", tool_name: "WebFetch", input: { url: "https://e.org/a" } } }))),
+    [{ kind: "ask", id: "r9", tool: "WebFetch", input: { url: "https://e.org/a" } }]);
+  assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "control_request", request_id: "r10", request: { subtype: "something_else" } }))), [{ kind: "control", id: "r10" }]);
+  assert.equal(Agent.command("claude", "x", {}, null, { exe: "claude", dir: "/run/x" }), null, "never looked up on PATH");
+  assert.equal(Agent.command("claude", "x", {}, null, { exe: "/usr/bin/claude", dir: "" }), null, "a folder of its own");
+  assert.equal(Agent.command("claude", "x", {}, null, { exe: "/usr/bin/claude", dir: "/run/*" }), null);
   const here = Agent.prompt(Object.assign({ scope: "page", here: true }, base));
   assert.ok(here.includes("with no terminal: what you write shows in a small panel on the page"));
   assert.ok(!Agent.prompt(Object.assign({ scope: "page" }, base)).includes("small panel"), "not in a terminal's prompt");
@@ -141,15 +162,15 @@ check("how it went wrong", () => {
 });
 
 check("the model and effort you chose, on each one's command line", () => {
-  const c = plain(Agent.command("claude", "p", { model: "sonnet", effort: "low" }));
+  const c = plain(Agent.command("claude", "p", { model: "sonnet", effort: "low" }, undefined, W("claude")));
   assert.deepEqual(c.slice(c.indexOf("--model"), c.indexOf("--model") + 4), ["--model", "sonnet", "--effort", "low"]);
-  assert.deepEqual(c.slice(-2), ["--", "p"], "the prompt still last");
-  const g = plain(Agent.command("grok", "p", { model: "grok-4.7-build-fast", effort: "low" }));
+  assert.ok(!c.includes("p"), "the request on its input, not here");
+  const g = plain(Agent.command("grok", "p", { model: "grok-4.7-build-fast", effort: "low" }, undefined, W("grok")));
   assert.deepEqual(g.slice(g.indexOf("-m"), g.indexOf("-m") + 4), ["-m", "grok-4.7-build-fast", "--reasoning-effort", "low"]);
-  const x = plain(Agent.command("codex", "p", { model: "gpt-5.5", effort: "high" }));
+  const x = plain(Agent.command("codex", "p", { model: "gpt-5.5", effort: "high" }, undefined, W("codex")));
   assert.deepEqual(x.slice(x.indexOf("-m"), x.indexOf("-m") + 4), ["-m", "gpt-5.5", "-c", "model_reasoning_effort=\"high\""]);
-  assert.ok(!plain(Agent.command("grok", "p", {})).includes("-m"), "nothing chosen: as Grok is set up");
-  assert.ok(!plain(Agent.command("grok", "p", { model: "x; rm -rf /", effort: "$(boom)" })).some((a) => /rm -rf|boom/.test(a)), "never anything but a model's name");
+  assert.ok(!plain(Agent.command("grok", "p", {}, undefined, W("grok"))).includes("-m"), "nothing chosen: as Grok is set up");
+  assert.ok(!plain(Agent.command("grok", "p", { model: "x; rm -rf /", effort: "$(boom)" }, undefined, W("grok"))).some((a) => /rm -rf|boom/.test(a)), "never anything but a model's name");
   assert.ok(Agent.prompt(Object.assign({ scope: "page" }, base)).includes("don't open the files my notes are kept in, or Uber Notebook's own files and code"));
 });
 
@@ -189,37 +210,118 @@ check("the models each can work with, and the efforts each takes", () => {
 check("a script of several commands: each kind of change, in order, once", () => {
   const script = "omarchy-shell uber-notebook icon p \u2728 && omarchy-shell uber-notebook cover p gradient:6\nput replace b1; omarchy-shell uber-notebook replace p b1 \"$f\"\nomarchy-shell uber-notebook replace p b2 \"$f\"\nomarchy-shell uber-notebook color p b3 blue_background\nomarchy-shell uber-notebook board p b4 columnColor Done green";
   const want = ["Changing a page's icon", "Changing a page's cover", "Rewriting part of the page", "Coloring a block", "Changing a board"];
-  assert.deepEqual(plain(Agent.fromLine("grok", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "run_terminal_command", input: { command: script } }] } }))).map((e) => e.text), want);
+  assert.deepEqual(plain(Agent.fromLine("grok", JSON.stringify({ jsonrpc: "2.0", method: "session/update", params: { sessionId: "s", update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "run_terminal_command", rawInput: { command: script } } } }))).map((e) => e.text), want);
   assert.deepEqual(plain(Agent.fromLine("codex", JSON.stringify({ type: "item.started", item: { type: "command_execution", command: "/usr/bin/bash -lc '" + script + "'" } }))).map((e) => e.text), want);
 });
 
-check("Grok and Codex work here too: their commands, as Omarchy starts them", () => {
+check("finding an agent: where it's installed, checked, by its full path", () => {
+  assert.deepEqual(plain(Agent.agentPaths("claude\t/home/me/.local/bin/claude\ngrok\t/usr/bin/grok\nbad line\nx\trelative/path\nclaude\t/other\n")),
+    { claude: "/home/me/.local/bin/claude", grok: "/usr/bin/grok" });
+  assert.ok(Agent.AGENTS_SCRIPT.includes("readlink -e") && Agent.AGENTS_SCRIPT.includes("8#$m & 022"), "where links lead, checked; nothing anyone else can change");
+  const p = Agent.prompt(Object.assign({ scope: "page", here: true, dir: "/run/user/1000/uber-notebook-agent" }, base));
+  assert.ok(p.includes("as a file in /run/user/1000/uber-notebook-agent (your working folder)"), "it's told where its files go");
+  assert.ok(p.includes("run each as omarchy-shell uber-notebook-agent <command>"), "and the commands' panel name");
+  assert.ok(!Agent.prompt(Object.assign({ scope: "page", here: false }, base)).includes("uber-notebook-agent"), "not in a terminal: the usual name");
+  // Its steps, by either name.
+  assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "omarchy-shell uber-notebook-agent blocks 1111" } }] } }))).map((e) => e.text), ["Reading the page"]);
+});
+
+check("finding an agent for real: the path on the PATH (a version manager's shim kept), checked where it leads", () => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path"), { spawnSync } = require("node:child_process");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "uber-notebook-agents-"));
+  try {
+    const bin = path.join(tmp, "bin"), shims = path.join(tmp, "shims"), open = path.join(tmp, "open"), plain = path.join(tmp, "plain");
+    for (const d of [bin, shims, open, plain]) fs.mkdirSync(d, { mode: 0o755 });
+    // A version manager: one program, its shims links to it by each tool's name.
+    fs.writeFileSync(path.join(bin, "manager"), "#!/bin/sh\n", { mode: 0o755 });
+    fs.symlinkSync(path.join(bin, "manager"), path.join(shims, "claude"));
+    fs.symlinkSync(path.join(bin, "manager"), path.join(shims, "grok"));
+    // A program installed plainly; one in a folder anyone can change; one anyone can change.
+    fs.writeFileSync(path.join(plain, "codex"), "#!/bin/sh\n", { mode: 0o755 });
+    // (A link to it, safe as that is, in a folder anyone can change: anyone could swap the link.)
+    fs.symlinkSync(path.join(bin, "manager"), path.join(open, "grok"));
+    fs.chmodSync(open, 0o777);
+    fs.writeFileSync(path.join(plain, "gemini"), "#!/bin/sh\n", { mode: 0o755 });
+    fs.chmodSync(path.join(plain, "gemini"), 0o777);
+    const run = (PATH, names) => spawnSync("/usr/bin/bash", ["-c", Agent.AGENTS_SCRIPT, "uber-notebook-agents", PATH].concat(names), { encoding: "utf8", env: { PATH: "/usr/bin" } });
+    const found = plain_(Agent.agentPaths(run([open, shims, plain].join(":"), ["claude", "grok", "codex", "gemini"]).stdout));
+    assert.equal(found.claude, path.join(shims, "claude"), "the shim, as it's on the PATH: the manager knows the tool by that name");
+    assert.equal(found.grok, path.join(shims, "grok"), "not the one in a folder anyone can change (first on the PATH)");
+    assert.equal(found.codex, path.join(plain, "codex"));
+    assert.equal(found.gemini, undefined, "not one anyone can change");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+  function plain_(v) { return JSON.parse(JSON.stringify(v)) }
+});
+
+check("what Claude Code asks, in words; Always only for what can be allowed for good", () => {
+  const ask = (tool, input) => plain(Agent.askOf(tool, input));
+  assert.deepEqual(ask("WebFetch", { url: "https://Docs.Example.com/a" }), { action: "contact", target: "docs.example.com", text: "contact docs.example.com, to read https://Docs.Example.com/a", always: "Always for docs.example.com" });
+  assert.equal(ask("WebFetch", { url: "http://plain.example.com/" }).always, "", "not https: once only");
+  assert.deepEqual(ask("WebSearch", { query: "lisbon trams" }), { action: "search", target: "web", text: "search the web for \u201clisbon trams\u201d", always: "Always let it search" });
+  assert.equal(ask("Bash", { command: "git log -3" }).always, "Always for git commands");
+  for (const c of ["git status && curl x", "ls; rm -rf ~", "cat a | sh", "echo $(id)", "ls > /tmp/x", "bash -c x", "env x=1 sh", "python3 -c x", "/usr/bin/git x", "xargs rm", "find . -delete", "sudo x"]) {
+    assert.equal(ask("Bash", { command: c }).always, "", c);
+  }
+  assert.equal(Agent.programOf("LANG=C make -j4"), "make");
+  assert.deepEqual(ask("mcp__figma__get_screenshot", {}), { action: "tool", target: "mcp__figma__get_screenshot", text: "use figma\u2019s get_screenshot", always: "Always for this tool" });
+  assert.equal(ask("Read", { file_path: "/etc/passwd" }).text, "read /etc/passwd");
+  assert.equal(ask("Edit", { file_path: "/home/me/x" }).always, "", "a file outside its folder: once only");
+  assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "WebFetch", input: { url: "https://e.org/a" } }, { type: "tool_use", name: "WebSearch", input: {} }] } }))).map((e) => e.text), ["Reading e.org", "Searching the web"]);
+});
+
+check("Grok and Codex work here too: their commands, in their sandboxes", () => {
   assert.ok(Agent.runsHere("grok"));
   assert.ok(Agent.runsHere("codex"));
-  const g = plain(Agent.command("grok", "-a prompt"));
-  assert.equal(g[4], "grok");
-  assert.equal(g[g.indexOf("--output-format") + 1], "streaming-messages-json");
-  assert.ok(g.includes("--include-partial-messages"));
-  assert.equal(g[g.indexOf("--permission-mode") + 1], "bypassPermissions", "as Omarchy starts Grok");
-  assert.equal(g[g.length - 1], "--single=-a prompt", "the prompt as --single's value, never read as an option");
-  const c = plain(Agent.command("codex", "-a prompt"));
-  assert.deepEqual(c.slice(4, 7), ["codex", "exec", "--json"]);
+  const g = plain(Agent.command("grok", "-a prompt", undefined, undefined, W("grok")));
+  assert.deepEqual(g.slice(4), ["/usr/bin/grok", "agent", "stdio"], "its agent protocol (ACP), on its input and output");
+  assert.ok(!g.some((a) => a.indexOf("a prompt") >= 0), "the request not in its command line");
+  assert.deepEqual(plain(Agent.env("grok")), { GROK_SANDBOX: "uber-notebook" }, "in its sandbox: its agent mode takes it from there");
+  assert.deepEqual(plain(Agent.env("claude")), {});
+  const box = Agent.grokSandbox("/run/user/1000");
+  assert.ok(box.includes('[profiles.uber-notebook]\nextends = "strict"\nrestrict_network = false\nread_only = ["/run/user/1000/quickshell"]\n'), box);
+  assert.equal(Agent.grokSandbox("/run/user/1000\"]\nread_write = [\"/"), "", "nothing but a folder's path in it");
+  const c = plain(Agent.command("codex", "-a prompt", undefined, undefined, W("codex")));
+  assert.deepEqual(c.slice(4, 7), ["/usr/bin/codex", "exec", "--json"]);
   assert.ok(c.includes("--approve-for-me"), "as Omarchy starts Codex");
+  assert.equal(c[c.indexOf("sandbox_workspace_write.network_access=false") - 1], "-c", "no network in its sandbox");
   assert.ok(c.includes("--skip-git-repo-check"), "its folder isn't a git repository");
   assert.deepEqual(c.slice(-2), ["--", "-a prompt"]);
 });
 
-// Grok's lines (streaming-messages-json) are Claude Code's, with its own tools' names.
-check("what Grok says, as the panel shows it", () => {
-  const f = (o) => plain(Agent.fromLine("grok", JSON.stringify(o)));
-  assert.deepEqual(f({ type: "system", subtype: "init", model: "grok-4.6", permissionMode: "default" }), [{ kind: "start", model: "grok-4.6", session: "" }]);
-  assert.deepEqual(f({ type: "assistant", message: { content: [{ type: "text", text: "I'll read `ideas.md`." }, { type: "tool_use", name: "read_file", input: { target_file: "ideas.md" } }] } }),
-    [{ kind: "answer", text: "I'll read `ideas.md`." }, { kind: "step", text: "Reading ideas.md" }]);
-  assert.deepEqual(f({ type: "assistant", message: { content: [{ type: "tool_use", name: "run_terminal_command", input: { command: "omarchy-shell uber-notebook insertAfter p1 b1 /run/user/1000/x.md" } }] } }),
+// Grok over ACP (JSON-RPC, a message a line), as grok 1.0.46 speaks it.
+check("Grok over ACP: hello, its session (Always-approve off), the request, what it says, and your answers", () => {
+  const id = "01a108d9-b7d2-7a71-9149-2d1ef7ff75fe";
+  assert.deepEqual(JSON.parse(Agent.input("grok", "x")), { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } } });
+  assert.deepEqual(JSON.parse(Agent.acpSession("/run/x", null)), { jsonrpc: "2.0", id: 2, method: "session/new", params: { cwd: "/run/x", mcpServers: [], _meta: { yoloMode: false } } });
+  assert.deepEqual(JSON.parse(Agent.acpSession("/run/x", { id: id, resume: true })).method, "session/load");
+  assert.deepEqual(JSON.parse(Agent.acpPrompt(id, "-a prompt")).params, { sessionId: id, prompt: [{ type: "text", text: "-a prompt" }] });
+  const f = (o) => plain(Agent.fromLine("grok", JSON.stringify(Object.assign({ jsonrpc: "2.0" }, o))));
+  assert.deepEqual(f({ id: 1, result: { protocolVersion: 1 } }), [{ kind: "acp", stage: "ready" }]);
+  assert.deepEqual(f({ id: 2, result: { sessionId: id, configOptions: [] } }), [{ kind: "start", model: "", session: id }]);
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "I'll" } } } }), [{ kind: "typing", text: "I'll", fresh: false }]);
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "run_terminal_command", rawInput: { command: "omarchy-shell uber-notebook-agent insertAfter p1 b1 /run/user/1000/x.md" } } } }),
     [{ kind: "step", text: "Writing on the page" }]);
-  assert.deepEqual(f({ type: "stream_event", event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "I'll" } } }), [{ kind: "typing", text: "I'll", fresh: false }]);
-  assert.deepEqual(f({ type: "result", subtype: "success", is_error: false, duration_ms: 3870, result: "A printed zine for the launch" }),
-    [{ kind: "done", text: "A printed zine for the launch", seconds: 3.9, denied: [] }]);
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c2", title: "web_fetch", rawInput: { url: "https://e.org/a" } } } }), [{ kind: "step", text: "Reading e.org" }]);
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call_update", toolCallId: "c2", status: "completed" } } }), [], "updates: nothing more to show");
+  assert.deepEqual(f({ method: "_x.ai/session_notification", params: {} }), [], "its own extras: nothing");
+  assert.equal(f({ id: 3, result: { stopReason: "end_turn" } })[0].kind, "done");
+  assert.equal(f({ id: 3, result: { stopReason: "cancelled" } })[0].kind, "done", "after a No: done, waiting to be told what instead");
+  assert.equal(f({ id: 3, result: { stopReason: "refusal" } })[0].kind, "failed");
+  assert.deepEqual(f({ id: 3, error: { code: -32000, message: "Session not found" } }), [{ kind: "failed", text: "Session not found" }]);
+  assert.ok(Agent.lostSession("Session not found"), "gone: asked anew");
+  // It asks: you're asked; your answer, the option that says it.
+  const options = [{ optionId: "allow-always-domain", kind: "allow_always" }, { optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }];
+  const ask = f({ id: 7, method: "session/request_permission", params: { sessionId: id, toolCall: { toolCallId: "c3", title: "Fetch: https://e.org", kind: "fetch", rawInput: { variant: "WebFetch", url: "https://e.org" } }, options: options } });
+  assert.deepEqual(ask, [{ kind: "ask", id: 7, tool: "WebFetch", input: { variant: "WebFetch", url: "https://e.org" }, title: "Fetch: https://e.org", options: options }]);
+  assert.deepEqual(JSON.parse(Agent.answerFor("grok", ask[0], true)), { jsonrpc: "2.0", id: 7, result: { outcome: { outcome: "selected", optionId: "allow-once" } } }, "once: never Grok's own Always (yours is kept in Uber Notebook)");
+  assert.equal(JSON.parse(Agent.answerFor("grok", ask[0], false)).result.outcome.optionId, "reject-once");
+  assert.deepEqual(JSON.parse(Agent.answerFor("grok", { id: 8, options: [] }, true)).result.outcome, { outcome: "cancelled" }, "no option that says it: cancelled");
+  assert.equal(plain(Agent.askOf(ask[0].tool, ask[0].input, ask[0].title)).always, "Always for e.org");
+  assert.equal(plain(Agent.askOf("Unknown", {}, "Do a thing")).text, "do this: Do a thing");
+  assert.deepEqual(f({ id: 9, method: "fs/read_text_file", params: {} }), [{ kind: "control", id: 9 }], "anything else it asks: not done");
+  assert.equal(JSON.parse(Agent.unsupportedFor("grok", 9)).error.code, -32601);
 });
 
 // Codex's lines (exec --json), as codex-cli 0.160 prints them.
@@ -246,42 +348,39 @@ check("what Codex says, as the panel shows it", () => {
 check("a conversation: started with its id, gone on with in the same one", () => {
   const id = "13ffd9f2-02b8-4c3b-aff2-d13aee8e4464";
   const tail = (argv) => plain(argv).slice(4);
-  // Claude Code: --session-id to start, --resume to go on; the prompt last.
-  const c1 = tail(Agent.command("claude", "Hi", {}, { id: id, resume: false }));
+  // Claude Code: --session-id to start, --resume to go on; what's said, on its input.
+  const c1 = tail(Agent.command("claude", "Hi", {}, { id: id, resume: false }, W("claude")));
   assert.deepEqual(c1.slice(c1.indexOf("--session-id"), c1.indexOf("--session-id") + 2), ["--session-id", id]);
-  const c2 = tail(Agent.command("claude", "And then?", { model: "opus" }, { id: id, resume: true }));
+  const c2 = tail(Agent.command("claude", "And then?", { model: "opus" }, { id: id, resume: true }, W("claude")));
   assert.deepEqual(c2.slice(c2.indexOf("--resume"), c2.indexOf("--resume") + 2), ["--resume", id]);
   assert.equal(c2.indexOf("--session-id"), -1);
-  assert.deepEqual(c2.slice(-2), ["--", "And then?"]);
+  assert.ok(!c2.includes("And then?"), "not in its command line");
   assert.ok(c2.indexOf("--model") > 0);
-  // Grok: the same, as --flag=value.
-  const g1 = tail(Agent.command("grok", "Hi", {}, { id: id, resume: false }));
-  assert.ok(g1.indexOf("--session-id=" + id) > 0);
-  const g2 = tail(Agent.command("grok", "And then?", {}, { id: id, resume: true }));
-  assert.ok(g2.indexOf("--resume=" + id) > 0);
-  assert.equal(g2[g2.length - 1], "--single=And then?");
+  // Grok: names its own (session/new), gone on with by it (session/load).
+  assert.equal(Agent.newSessionId("grok"), "");
+  assert.equal(JSON.parse(Agent.acpSession("/run/x", { id: id, resume: true })).params.sessionId, id);
   // Codex: its own id, from its first line; exec's options, then resume.
-  const x1 = tail(Agent.command("codex", "Hi", {}, { id: "", resume: false }));
-  assert.deepEqual(x1, ["codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "--", "Hi"]);
+  const x1 = tail(Agent.command("codex", "Hi", {}, { id: "", resume: false }, W("codex")));
+  assert.deepEqual(x1, ["/usr/bin/codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false", "--", "Hi"]);
   const t = "01a105cd-1057-70a1-8862-616924424b31";
-  const x2 = tail(Agent.command("codex", "-and then?", { effort: "low" }, { id: t, resume: true }));
-  assert.deepEqual(x2, ["codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "model_reasoning_effort=\"low\"", "resume", "--", t, "-and then?"]);
+  const x2 = tail(Agent.command("codex", "-and then?", { effort: "low" }, { id: t, resume: true }, W("codex")));
+  assert.deepEqual(x2, ["/usr/bin/codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false", "-c", "model_reasoning_effort=\"low\"", "resume", "--", t, "-and then?"]);
   // Not an id: not on the command line (a new conversation, as before).
-  const bad = tail(Agent.command("claude", "Hi", {}, { id: "--dangerous", resume: true }));
+  const bad = tail(Agent.command("claude", "Hi", {}, { id: "--dangerous", resume: true }, W("claude")));
   assert.equal(bad.indexOf("--resume"), -1);
   assert.equal(bad.indexOf("--dangerous"), -1);
-  assert.deepEqual(tail(Agent.command("claude", "Hi", {})), tail(Agent.command("claude", "Hi", {}, null)), "none: as before");
+  assert.deepEqual(tail(Agent.command("claude", "Hi", {}, undefined, W("claude"))), tail(Agent.command("claude", "Hi", {}, null, W("claude"))), "none: as before");
 });
 
-check("a conversation's id: a new one for Claude Code and Grok, Codex's from its first line", () => {
+check("a conversation's id: a new one for Claude Code, Grok's and Codex's from their first answer", () => {
   let n = 0;
   const seq = () => ((n++ * 7) % 16) / 16;
   const made = Agent.newSessionId("claude", seq);
   assert.ok(Agent.isSessionId(made), made);
   assert.equal(made.charAt(14), "4", "a version 4 UUID");
   assert.ok("89ab".indexOf(made.charAt(19)) >= 0);
-  assert.ok(Agent.isSessionId(Agent.newSessionId("grok")));
-  assert.notEqual(Agent.newSessionId("grok"), Agent.newSessionId("grok"));
+  assert.notEqual(Agent.newSessionId("claude"), Agent.newSessionId("claude"));
+  assert.equal(Agent.newSessionId("grok"), "", "Grok names its own (its session/new)");
   assert.equal(Agent.newSessionId("codex"), "", "Codex names its own");
   assert.equal(Agent.isSessionId("13FFD9F2-02B8-4C3B-AFF2-D13AEE8E4464"), true);
   assert.equal(Agent.isSessionId("t1"), false);
@@ -290,7 +389,7 @@ check("a conversation's id: a new one for Claude Code and Grok, Codex's from its
   const t = "01a105cd-1057-70a1-8862-616924424b31";
   assert.deepEqual(plain(Agent.fromLine("codex", JSON.stringify({ type: "thread.started", thread_id: t }))), [{ kind: "start", model: "", session: t }]);
   const u = "96265d42-9b62-4091-a10d-7004d41b5418";
-  assert.deepEqual(plain(Agent.fromLine("grok", JSON.stringify({ type: "system", subtype: "init", session_id: u, model: "grok-4.6" }))), [{ kind: "start", model: "grok-4.6", session: u }]);
+  assert.deepEqual(plain(Agent.fromLine("grok", JSON.stringify({ jsonrpc: "2.0", id: 2, result: { sessionId: u } }))), [{ kind: "start", model: "", session: u }]);
   assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "system", subtype: "init", session_id: u, model: "claude-opus-5-5" }))), [{ kind: "start", model: "claude-opus-5-5", session: u }]);
 });
 

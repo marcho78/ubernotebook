@@ -167,7 +167,8 @@ Item {
       click(named(mv, "meetingSummarize"))
       tryVerify(function() { return files.streamed.length === 1 }, 1000)
       compare(files.launched.length, 0, "no terminal")
-      var asked = files.streamed[0].argv[files.streamed[0].argv.length - 1]
+      // (Claude Code's request: on its input.)
+      var asked = JSON.parse(files.streamed[0].sent[0]).message.content
       verify(asked.indexOf("Summarize this meeting") >= 0)
       verify(asked.indexOf(uid) >= 0, "the meeting block, for the agent")
       compare(view.agentPanel.request, "Summarize this meeting", "the panel says it short")

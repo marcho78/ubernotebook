@@ -534,6 +534,15 @@ Item {
     onSelectionEndChanged: if (activeFocus) block.editor.selectionChangedIn(block)
     onActiveFocusChanged: block.editor.focusChangedIn(block, activeFocus)
 
+    // A middle click pastes what's selected, the way Ctrl+V pastes (not Qt's
+    // own paste, which loads the pictures the selection's HTML names).
+    MouseArea {
+      anchors.fill: parent
+      enabled: !textEdit.readOnly
+      acceptedButtons: Qt.MiddleButton
+      onClicked: function(mouse) { block.editor.pastePrimary(block, mouse.x, mouse.y) }
+    }
+
     // Ctrl+click opens a link; Ctrl+hover shows it can.
     HoverHandler {
       id: hover
@@ -617,7 +626,8 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: 10
       visible: block.mathSized !== null
-      readonly property real fit: block.mathSized ? Math.min(1, parent.width / Math.max(1, block.mathSized.width)) : 1
+      // (In the block's width, and no taller than a block can be.)
+      readonly property real fit: block.mathSized ? Math.min(1, parent.width / Math.max(1, block.mathSized.width), 2000 / Math.max(1, block.mathSized.height)) : 1
       width: block.mathSized ? block.mathSized.width * fit : 0
       height: block.mathSized ? block.mathSized.height * fit : 0
       sourceSize.width: Math.ceil(width * 2)
@@ -628,9 +638,12 @@ Item {
     Text {
       visible: block.mathCode && block.mathSized === null
       anchors.horizontalCenter: parent.horizontalCenter
+      width: Math.min(implicitWidth, parent.width - 20)
       y: 10
+      wrapMode: Text.Wrap
       textFormat: Text.PlainText
-      text: "Drawing\u2026"
+      // (Too big to draw: said instead of drawn.)
+      text: block.mathError !== "" && block.mathDrawing && !block.mathDrawing.svg ? block.mathError : "Drawing\u2026"
       font.family: block.editor.uiFamily
       font.pixelSize: 12
       color: Qt.alpha(block.editor.ink, 0.45)

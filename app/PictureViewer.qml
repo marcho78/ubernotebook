@@ -60,6 +60,10 @@ Rectangle {
     width: Math.min(implicitWidth > 0 ? implicitWidth : parent.width, parent.width - 160)
     height: Math.min(implicitHeight > 0 ? implicitHeight : parent.height, parent.height - (caption.visible ? 150 : 110))
     fillMode: Image.PreserveAspectFit
+    // (Read no bigger than it can be shown: a picture of any size takes no
+    // more than the screen does. One smaller isn't made bigger.)
+    sourceSize.width: Math.min(8192, Math.ceil(Math.max(1, pv.width - 160) * Math.max(1, Screen.devicePixelRatio)))
+    sourceSize.height: Math.min(8192, Math.ceil(Math.max(1, pv.height - 110) * Math.max(1, Screen.devicePixelRatio)))
     asynchronous: true
     smooth: true
     mipmap: true

@@ -226,4 +226,93 @@ check("file names and where things are", () => {
   assert.equal(Import.resolvePath("/n/a.md", "https://x.org/a.png"), "");
 });
 
+check("a notebook's page: its blocks, its pictures, its drawing", () => {
+  const Workspace = load("Workspace.js");
+  const Sketch = load("Sketch.js");
+  const copied = [];
+  const ctx = { image: (src) => { copied.push(src); return src === "assets/gone.png" ? "" : "assets/moved-" + src.slice(7); } };
+  const page = {
+    title: "", template: "", blocks: [
+      { uid: "b1", type: "h1", html: "Trip to Lisbon", indent: 0 },
+      { uid: "b2", type: "bullet", html: "Pack <span style=\"font-weight:700;\">light</span>", indent: 0 },
+      { uid: "b3", type: "bullet", html: "Shoes", indent: 1 },
+      { uid: "b4", type: "check", html: "Book a hotel", checked: true, indent: 0 },
+      { uid: "b5", type: "time", label: "9:00", html: "Flight <span style=\"font-style:italic;\">TP 1351</span>", indent: 0 },
+      { uid: "b6", type: "callout", tone: "blue", html: "Bring the adapter", indent: 0 },
+      { uid: "b7", type: "image", src: "assets/beach.png", width: 0.5, align: "left", ratio: 1.5, indent: 0 },
+      { uid: "b8", type: "image", src: "assets/gone.png", width: 0.6, align: "center", indent: 0 },
+      { uid: "b9", type: "habit", html: "Walk", days: "1010100", indent: 0 },
+      { uid: "ba", type: "calendar", month: "2026-10", marks: {}, indent: 0 },
+      { uid: "bb", type: "divider", style: "wave", indent: 0 },
+      { uid: "bc", type: "page", indent: 0 }
+    ],
+    ink: [
+      { tool: "pen", color: "#1f2430", width: 2.2, points: [100, 900, 300, 1000, 430, 950] },
+      { tool: "pen", color: "#1e4fa3", width: 2.2, points: [200, 1100, 220, 1120] },
+      { tool: "marker", color: "#fff27a", width: 13.2, points: [50, 1000, 400, 1000] },
+      { tool: "pen", color: "#ff8800", width: 3, points: [600, 960, 610, 970] }
+    ]
+  };
+  const r = plain(Import.fromNotebookPage(page, ctx));
+  assert.equal(r.title, "Trip to Lisbon", "named for its first line, as the notebook lists it");
+  assert.deepEqual(copied, ["assets/beach.png", "assets/gone.png"]);
+  const types = r.blocks.map((b) => b.type + ":" + b.indent);
+  assert.deepEqual(types, ["h1:0", "bullet:0", "bullet:1", "check:0", "p:0", "callout:0", "image:0", "habit:0", "calendar:0", "divider:0", "sketch:0"],
+    "every block but the picture that couldn't be copied and a page block that points nowhere; the drawing at the end");
+  assert.equal(r.blocks[1].html, page.blocks[1].html, "the formatting as it was");
+  assert.equal(r.blocks[3].checked, true);
+  assert.equal(r.blocks[4].html, '<span style=" font-weight:700;">9:00</span> Flight <span style="font-style:italic;">TP 1351</span>', "a time slot: its time, then its text");
+  assert.equal(r.blocks[5].color, "blue_background", "a sticky note keeps its color");
+  assert.deepEqual([r.blocks[6].src, r.blocks[6].width, r.blocks[6].align, r.blocks[6].ratio], ["assets/moved-beach.png", 0.5, "left", 1.5]);
+  assert.equal(r.blocks[7].days, "1010100");
+  assert.equal(r.blocks[9].style, "wave");
+  r.blocks.forEach((b) => assert.equal(b.uid, undefined, "new ids, made when it's saved"));
+  // The drawing: from its top stroke down, the size it was next to the page.
+  const sk = r.blocks[10].sketch;
+  const scale = Sketch.WIDTH / 860;
+  assert.equal(sk.background, "plain");
+  assert.equal(sk.strokes.length, 4);
+  assert.deepEqual(sk.strokes.map((s) => s.color), ["", "blue", "yellow", "#ff8800"], "the page's ink, Pages' own colors (dark-theme twins too), one of yours");
+  assert.deepEqual(sk.strokes.map((s) => s.tool), ["pen", "pen", "marker", "pen"]);
+  assert.equal(sk.strokes[0].points[0], Math.round(100 * scale * 10) / 10);
+  assert.equal(sk.strokes[0].points[1], 20, "its top stroke at the top, with room round it");
+  assert.equal(sk.strokes[1].points[3], Math.round(((1120 - 900) * scale + 20) * 10) / 10);
+  assert.equal(sk.height, Math.ceil(220 * scale + 40));
+  assert.equal(sk.strokes[2].width, Math.round(13.2 * scale * 10) / 10, "a highlighter as wide as it was");
+  // Through Pages' own checks: every block comes through as it is.
+  const made = plain(Workspace.newPage({ title: r.title, blocks: r.blocks }));
+  const flat = plain(Workspace.flatten(made));
+  assert.deepEqual(flat.map((b) => b.type + ":" + b.indent), types);
+  assert.equal(flat[10].sketch.strokes.length, 4);
+  assert.equal(flat[6].src, "assets/moved-beach.png");
+});
+
+check("a notebook's page: blank, titled, drawn on only, drawn on a lot", () => {
+  const blank = plain(Import.fromNotebookPage({ title: "", blocks: [{ uid: "b1", type: "p", html: "", indent: 0 }], ink: [] }, {}));
+  assert.equal(blank.title, "");
+  assert.deepEqual(blank.blocks.map((b) => b.type), ["p"]);
+  assert.equal(plain(Import.fromNotebookPage({ title: "Plans", blocks: [{ type: "p", html: "first line", indent: 0 }] })).title, "Plans");
+  assert.deepEqual(plain(Import.fromNotebookPage(null)).blocks.map((b) => b.type), ["p"], "nothing: an empty page");
+  // A long stroke in parts that join up; more strokes than a sketch holds: two.
+  const Sketch = load("Sketch.js");
+  const long = [];
+  for (let i = 0; i < 15000; i++) long.push(i % 800, 100 + i / 20);
+  const many = [{ tool: "pen", color: "#1f2430", width: 2, points: long }];
+  for (let i = 0; i < Sketch.MAX_STROKES + 5; i++) many.push({ tool: "pen", color: "#1f2430", width: 2, points: [i % 800, 120, i % 800 + 5, 125] });
+  const r = plain(Import.fromNotebookPage({ title: "Scribbles", blocks: [], ink: many }));
+  const sketches = r.blocks.filter((b) => b.type === "sketch").map((b) => b.sketch);
+  assert.equal(sketches.length, 2, "a second sketch for what doesn't fit in one");
+  const strokes = sketches.reduce((n, s) => n + s.strokes.length, 0);
+  assert.equal(strokes, 2 + Sketch.MAX_STROKES + 5, "the long stroke in two parts, and every other stroke");
+  assert.ok(sketches.every((s) => s.height === sketches[0].height), "the same frame");
+  const [a, b] = [sketches[0].strokes[0].points, sketches[0].strokes[1].points];
+  assert.deepEqual(a.slice(-2), b.slice(0, 2), "the parts join up");
+  assert.ok(sketches[0].height <= Sketch.MAX_HEIGHT);
+  // Something drawn very tall: smaller, to fit.
+  const tall = plain(Import.fromNotebookPage({ blocks: [], ink: [{ tool: "pen", color: "#1f2430", width: 2, points: [10, 0, 10, 9000] }] }));
+  assert.equal(tall.blocks[0].type, "sketch", "a page with only a drawing on it is the drawing");
+  assert.equal(tall.blocks[0].sketch.height, Sketch.MAX_HEIGHT);
+  assert.ok(tall.blocks[0].sketch.strokes[0].points[3] <= Sketch.MAX_HEIGHT - 20);
+});
+
 console.log(`import: ${passed} checks passed`);

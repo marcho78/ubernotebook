@@ -12,6 +12,12 @@ QtObject {
   property string runtimeDir: "/tmp"
   // path -> text
   property var disk: ({})
+  // The helper's reads answered later, as the real one's are (else at once).
+  property bool deferHelperReads: false
+  property var heldReads: []
+  function answerReads() { var list = heldReads; heldReads = []; list.forEach(function(f) { f() }) }
+  // Store.readClipboard(done, primary), when a test sets one (null: Qt's paste).
+  property var readClipboard: null
   property var copied: ""
   property var trashed: []
   property var notified: []
@@ -48,6 +54,13 @@ QtObject {
   }
 
   function reset() {
+    ran = []
+    deferHelperReads = false
+    heldReads = []
+    readClipboard = null
+    privateHosts = ({})
+    failWrites = ""
+    missingAgent = ""
     disk = ({})
     index = ({})
     written = ({})
@@ -96,10 +109,13 @@ QtObject {
   function readFiles(paths, done) {
     var out = {}
     paths.forEach(function(p) { if (files.disk[p] !== undefined) out[p] = files.disk[p] })
-    done(out)
+    done(out, true)
   }
 
+  // (A path with failWrites in it isn't written: done(false).)
+  property string failWrites: ""
   function writeFile(path, text, done) {
+    if (failWrites && String(path).indexOf(failWrites) >= 0) { if (done) done(false); return }
     disk[path] = String(text)
     if (done) done(true)
   }
@@ -111,13 +127,35 @@ QtObject {
 
   // The programs Workspace.qml runs: listing a folder, grep, cp, finding
   // what's in folders to import.
+  // A stand-in for a file's sha256: 64 hex digits that change with it.
+  function fakeHash(text) {
+    var s = String(text)
+    var out = ""
+    for (var round = 0; out.length < 64; round++) {
+      var h = 2166136261 + round
+      for (var i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0
+      out += ("00000000" + h.toString(16)).slice(-8)
+    }
+    return out.slice(0, 64)
+  }
+
+  // Hosts whose address is on your own network: { host: "192.168.1.5" }.
+  property var privateHosts: ({})
+
+  // Every command run, in order ([argv, ...]), for tests to read.
+  property var ran: []
+  // The archive helper (Store.qml), as its commands' first words.
+  readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
+  function helper(args, done, options) { exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options) }
+
   function exec(argv, done, options) {
+    ran = ran.concat([argv.slice()])
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-scan") {
       var out = ""
       argv.slice(4).forEach(function(root) {
-        if (disk[root] !== undefined) { out += "R\t" + root + "\n" + root + "\n"; return }
+        if (disk[root] !== undefined) { out += "R\t" + root + "\u0000" + root + "\u0000"; return }
         var inside = Object.keys(disk).filter(function(p) { return p.indexOf(root + "/") === 0 }).sort()
-        if (inside.length) out += "R\t" + root + "\n" + inside.join("\n") + "\n"
+        if (inside.length) out += "R\t" + root + "\u0000" + inside.join("\u0000") + "\u0000"
       })
       done(true, out)
       return
@@ -195,17 +233,27 @@ QtObject {
       done(true, String(disk[out2].length) + "\n" + out2 + "\n")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-backup-check") {
-      var tarred = disk[argv[4]]
-      if (tarred === undefined || String(tarred).indexOf("FAKE-TAR:") !== 0) { done(true, "readable:0\n"); return }
-      done(true, "readable:1\ntypes:-d\noutside:0\ndots:0\n---\n" + JSON.stringify(JSON.parse(String(tarred).slice(9)).manifest))
+    // The archive helper (bin/uber-notebook-files): a backup looked into,
+    // and one profile in it put back (only if it's still the one looked into).
+    if (argv[0] === "/usr/bin/python3" && argv[3] === filesHelper && argv[4] === "read") {
+      var held2 = disk[argv[6]]
+      var said = JSON.stringify(held2 === undefined ? { ok: false, error: "there's no file there" } : String(held2).length > Number(argv[5]) ? { ok: false, error: "more than " + argv[5] + " bytes" } : { ok: true, text: String(held2) })
+      if (deferHelperReads) heldReads.push(function() { done(true, said) })
+      else done(true, said)
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-restore") {
-      var held = JSON.parse(String(disk[argv[4]]).slice(9)).files[argv[5]]
+    if (argv[0] === "/usr/bin/python3" && argv[3] === filesHelper && argv[4] === "inspect-backup") {
+      var tarred = disk[argv[5]]
+      if (tarred === undefined || String(tarred).indexOf("FAKE-TAR:") !== 0) { done(true, "readable:0\n"); return }
+      done(true, "readable:1\ntypes:-d\noutside:0\ndots:0\nhash:" + fakeHash(tarred) + "\n---\n" + JSON.stringify(JSON.parse(String(tarred).slice(9)).manifest))
+      return
+    }
+    if (argv[0] === "/usr/bin/python3" && argv[3] === filesHelper && argv[4] === "restore-backup") {
+      if (disk[argv[5]] === undefined || fakeHash(disk[argv[5]]) !== argv[8]) { done(false, "the backup changed after it was looked at"); return }
+      var held = JSON.parse(String(disk[argv[5]]).slice(9)).files[argv[6]]
       if (!held) { done(false, "not in it"); return }
-      var dest = argv[6]
-      for (var k3 = 2; Object.keys(disk).some(function(p) { return p === dest || p.indexOf(dest + "/") === 0 }); k3++) dest = argv[6] + " " + k3
+      var dest = argv[7]
+      for (var k3 = 2; Object.keys(disk).some(function(p) { return p === dest || p.indexOf(dest + "/") === 0 }); k3++) dest = argv[7] + " " + k3
       for (var rel2 in held) disk[dest + "/" + rel2] = held[rel2]
       done(true, dest + "\n")
       return
@@ -213,6 +261,13 @@ QtObject {
     if (argv[0] === "/usr/bin/gio" && argv[1] === "trash") {
       argv.slice(3).forEach(function(p) { files.trashed.push(p); delete disk[p] })
       done(true, "")
+      return
+    }
+    // (Never over a file that's there: it fails.)
+    if (argv[0] === "/usr/bin/cp" && argv[1] === "--update=none-fail") {
+      var ok = disk[argv[3]] !== undefined && disk[argv[4]] === undefined
+      if (ok) disk[argv[4]] = disk[argv[3]]
+      done(ok, ok ? "" : "cp: not copied")
       return
     }
     if (argv[0] === "/usr/bin/cp" && disk[argv[2]] !== undefined) {
@@ -236,6 +291,13 @@ QtObject {
       done(true, mine.join("\n") + (mine.length ? "\n" : ""))
       return
     }
+    // A file in assets, as it is: its size, and that it's a plain file.
+    if (argv[0] === "/usr/bin/stat" && argv[1] === "-c" && argv[2] === "%s\t%F") {
+      var st = disk[argv[4]]
+      if (st === undefined) { done(false, "No such file"); return }
+      done(true, String(st).length + "\tregular file\n")
+      return
+    }
     // A file copied into assets: its size.
     // An email's attachment: its base64, decoded into a file.
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-unpack") {
@@ -257,10 +319,25 @@ QtObject {
       done(html !== undefined, html || "")
       return
     }
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-fetch-image") {
-      var type = fetchPictures[argv[4]]
+    // A page's picture: its host looked up (a public address, unless
+    // privateHosts names it), then fetched from there into a file.
+    if (argv[0] === "/usr/bin/getent" && argv[1] === "ahosts") {
+      done(true, (privateHosts[argv[2]] || "93.184.215.14") + "     STREAM " + argv[2] + "\n")
+      return
+    }
+    // A page read step by step for an agent (Workspace.fetchBookmarkWithin):
+    // "REDIRECT <url>" in fetchPages says it's sent on.
+    if (argv[0] === "/usr/bin/curl" && argv.indexOf("\n%{http_code}\t%{redirect_url}") > 0) {
+      var page = fetchPages[argv[argv.length - 1]]
+      if (page === undefined) { done(false, "\n000\t"); return }
+      if (String(page).indexOf("REDIRECT ") === 0) { done(true, "\n301\t" + String(page).slice(9)); return }
+      done(true, String(page) + "\n200\t")
+      return
+    }
+    if (argv[0] === "/usr/bin/curl" && argv.indexOf("-o") > 0) {
+      var type = fetchPictures[argv[argv.length - 1]]
       if (type === undefined) { done(false, ""); return }
-      disk[argv[5]] = "PNG"
+      disk[argv[argv.indexOf("-o") + 1]] = "PNG"
       done(true, type)
       return
     }
@@ -313,6 +390,7 @@ QtObject {
   }
   property var opened: []
   function openUrl(url) { opened = opened.concat([String(url)]) }
+  function openLocal(path) { opened = opened.concat([String(path)]) }
   // A file in its app: opened, unless its name matches `noApp` (no app for
   // it here but a web browser).
   property var noApp: null
@@ -324,7 +402,10 @@ QtObject {
   function openPath(path) { console.log("open:", path) }
   // The agents installed (Store.qml: listAgents), and choosing one.
   property var agentList: [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
-  function listAgents(done) { done(agentList) }
+  function listAgents(done) { done(agentList.map(function(a) { return { name: a.name, label: a.label, path: "/usr/bin/" + a.name } })) }
+  // An agent's program (Store.qml: found and checked): "" when missingAgent names it.
+  property string missingAgent: ""
+  function agentPath(name, done) { done(name === missingAgent ? "" : "/usr/bin/" + name) }
   function setDefaultAgent(name, done) { agent = name; done(true) }
   function defaultAgent(done) { done(agent) }
   function launchAgent(prompt) { launched = launched.concat([String(prompt)]) }
@@ -339,10 +420,14 @@ QtObject {
   property var streamed: []
   property var streamNow: null
   function stream(argv, onLine, done, options) {
-    var s = { argv: argv, cwd: (options || {}).cwd || "", onLine: onLine, done: done }
+    var s = { argv: argv, cwd: (options || {}).cwd || "", input: (options || {}).input === true, env: (options || {}).env || {}, onLine: onLine, done: done, sent: [], closed: false }
     streamed = streamed.concat([s])
     streamNow = s
-    return { stop: function() { if (!s.done) return; var d = s.done; s.done = null; Qt.callLater(function() { d(-1, "") }) } }
+    return {
+      stop: function() { if (!s.done) return; var d = s.done; s.done = null; Qt.callLater(function() { d(-1, "") }) },
+      send: function(text) { if (s.input && !s.closed) s.sent.push(String(text)) },
+      closeInput: function() { s.closed = true }
+    }
   }
   function streamFeed(line) { if (streamNow && streamNow.done) streamNow.onLine(String(line)) }
   function streamEnd(code, errors) { var s = streamNow; if (s && s.done) { var d = s.done; s.done = null; d(code, errors || "") } }

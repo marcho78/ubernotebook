@@ -65,14 +65,17 @@ Pop {
         anchors.centerIn: parent
         visible: pop.sized !== null
         source: pop.sized ? "data:image/svg+xml;utf8," + encodeURIComponent(pop.sized.svg) : ""
-        sourceSize.width: pop.sized ? Math.round(pop.sized.width) : 0
-        sourceSize.height: pop.sized ? Math.round(pop.sized.height) : 0
-        width: pop.sized ? Math.min(pop.sized.width, parent.width) : 0
-        height: pop.sized ? pop.sized.height * width / Math.max(1, pop.sized.width) : 0
+        // (Drawn the size it's shown, at most 400 px tall.)
+        readonly property real fit: pop.sized ? Math.min(1, parent.width / Math.max(1, pop.sized.width), 400 / Math.max(1, pop.sized.height)) : 1
+        sourceSize.width: Math.ceil(width)
+        sourceSize.height: Math.ceil(height)
+        width: pop.sized ? pop.sized.width * fit : 0
+        height: pop.sized ? pop.sized.height * fit : 0
       }
       Text {
         anchors.centerIn: parent
-        visible: pop.sized === null
+        // (Too big to draw, or a mistake: what's wrong is said below.)
+        visible: pop.sized === null && pop.error === ""
         textFormat: Text.PlainText
         text: pop.shown ? "Drawing\u2026" : "Nothing yet"
         font.family: pop.theme.uiFont

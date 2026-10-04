@@ -12,6 +12,7 @@ import "Blocks.js" as Blocks
 import "Board.js" as Board
 import "Files.js" as Files
 import "Bookmark.js" as Bookmark
+import "Permissions.js" as Permissions
 import "Library.js" as Library
 import "Profiles.js" as Profiles
 import "Defaults.js" as Defaults
@@ -52,6 +53,59 @@ QtObject {
   property var backups: null
 
   readonly property int maxBytes: 2 * 1024 * 1024
+  // While an agent works in the panel (Service.qml: Scope.js), what it may do.
+  property var agentScope: null
+  // That scope while the command going now is the panel's agent's (its
+  // uber-notebook-agent commands, Service.qml); null for yours, a script's
+  // or a terminal's agent's.
+  property var caller: null
+  // Files a command is given, read for it ("max:path" -> { text, error, at,
+  // started }; readGiven): never there and then (one that never ends would
+  // hold up the shell), but by the archive helper, which reads only a plain
+  // file, not a link, at most so many bytes; asked again, the command uses
+  // that. At most maxReading at a time, maxKept kept, maxKeptChars of text;
+  // a read is kept two minutes, and none from before an agent began or
+  // ended its work (readsGen).
+  property var prefetched: ({})
+  property int reading: 0
+  property int readsGen: 0
+  readonly property int maxReading: 4
+  readonly property int maxKept: 32
+  readonly property real maxKeptChars: 48 * 1024 * 1024
+  onAgentScopeChanged: { prefetched = ({}); readsGen++ }
+
+  // A link an agent puts on a page while it works: kept as its link, and
+  // its page read for it only from a site you've let it have contacted
+  // (Settings → AI: Permissions.js); any other https site is asked about in
+  // the panel first (Allow once, Always, No: DocView.askAgentPermission).
+  // What the command says of it.
+  function agentLink(id, url) {
+    var who = caller ? String(caller.id || "") : ""
+    var host = Permissions.hostOf(url)
+    if (!who || !host) return "added as its link only: the card reads its page when you ask"
+    var list = settings && settings.agentPermissions ? settings.agentPermissions : []
+    function read(hosts) {
+      workspace.fetchBookmarkWithin(url, hosts, function(data) {
+        if (!data || (!data.title && !data.description && !data.image)) return
+        api.editPageNow(id, function(p) {
+          var changed = false
+          for (var k in p.blocks) {
+            var x = p.blocks[k]
+            if (x.type !== "bookmark" || !x.data || x.data.url !== url || x.data.title || x.data.description || x.data.image) continue
+            x.data = Blocks.cleanData("bookmark", data)
+            changed = true
+          }
+          return changed ? undefined : false
+        }, true)
+      })
+    }
+    if (Permissions.allowed(list, who, "contact", host)) {
+      read(Permissions.clean(list).filter(function(r) { return r.agent === who && r.action === "contact" }).map(function(r) { return r.target }))
+      return "its page is being read (" + host + " is a site you've let it contact); the card shows it in a moment"
+    }
+    viewDoes("askAgentPermission", { agent: who, action: "contact", target: host, why: "to get a link's title and picture", run: read })
+    return "added as its link only: the user is asked in the panel before Uber Notebook contacts " + host
+  }
 
   function answer(o) { return JSON.stringify(o) }
   function fail(message) { return JSON.stringify({ ok: false, error: message }) }
@@ -89,14 +143,61 @@ QtObject {
     return ui && typeof ui[what] === "function" ? ui[what](a, b) : false
   }
 
-  // A Markdown file's text: { text } or { error }.
-  function readMarkdown(path) {
+  // A block of a page by its id (a UUID that's the page's own: never
+  // anything an object has by itself, like __proto__), or null.
+  function blockOf(page, block) {
+    var id = String(block || "")
+    return page && page.blocks && Workspace.isUuid(id) && Object.prototype.hasOwnProperty.call(page.blocks, id) ? page.blocks[id] : null
+  }
+
+  // A Markdown file's text: { text } or { error } (readGiven).
+  function readMarkdown(path) { return readGiven(path, maxBytes, "give the Markdown file's full path") }
+
+  // A file given to a command, read by the helper: { text } or { error }.
+  // The first time it's read in the background, and the command is told to
+  // run again (`needed`: what to say when the path isn't a full one).
+  function readGiven(path, max, needed) {
     var p = String(path || "").trim()
     if (p.indexOf("~/") === 0 && files && files.home) p = files.home + p.slice(1)
-    if (!p || p.charAt(0) !== "/") return { error: "give the Markdown file's full path" }
-    var text = files ? files.readNow(p, maxBytes) : null
-    if (text === null) return { error: "couldn't read " + p + " (is it there, and under 2 MB?)" }
-    return { text: text }
+    if (!p || p.charAt(0) !== "/" || /[\u0000-\u001f]/.test(p)) return { error: needed }
+    if (!files || typeof files.helper !== "function") return { error: "couldn't read " + p }
+    var key = max + ":" + p
+    var got = keptRead(key)
+    // (A helper that answers at once, as in the tests, has it already.)
+    if (!got) { startRead(key, p, max); got = keptRead(key) }
+    if (got && got.at) {
+      delete prefetched[key]
+      return got.error ? { error: "couldn't read " + p + ": " + got.error } : { text: got.text }
+    }
+    if (got) return { error: "reading that file first (only a plain file, at most " + Math.round(max / 1048576) + " MB): run the same command again in a moment" }
+    return { error: "Uber Notebook is reading other files: run the same command again in a moment" }
+  }
+  // What was read for `key` (or is being read), or null: none, or kept too
+  // long (a read two minutes old, or one a minute in the reading, goes).
+  function keptRead(key) {
+    if (!Object.prototype.hasOwnProperty.call(prefetched, key)) return null
+    var e = prefetched[key]
+    var now = Date.now()
+    if ((e.at && now - e.at >= 120000) || (!e.at && now - e.started >= 60000)) { delete prefetched[key]; return null }
+    return e
+  }
+  function startRead(key, p, max) {
+    var keys = Object.keys(prefetched)
+    var chars = 0
+    keys.forEach(function(k) { var e = prefetched[k]; if (e && typeof e.text === "string") chars += e.text.length })
+    if (reading >= maxReading || keys.length >= maxKept || chars >= maxKeptChars) return
+    var gen = readsGen
+    prefetched[key] = { at: 0, started: Date.now() }
+    reading++
+    // (Its answer is JSON: each character of the file at most six there.)
+    files.helper(["read", String(max), p], function(ok, out) {
+      reading = Math.max(0, reading - 1)
+      if (gen !== readsGen) return
+      var r = null
+      try { r = JSON.parse(String(out || "")) } catch (e) { r = null }
+      prefetched[key] = r && r.ok && typeof r.text === "string" ? { text: r.text, at: Date.now() }
+        : { error: r && r.error ? String(r.error).slice(0, 200) : "it couldn't be read", at: Date.now() }
+    }, { timeoutMs: 20000, maxBytes: 6 * max + 4096 })
   }
 
   // Markdown as blocks, "[[Page title]]" a link to the page called that.
@@ -191,10 +292,9 @@ QtObject {
         { use: "backup <profile>", does: "a backup (a .tar.gz in the backup folder) of the open profile (\"\"), every profile (all; not the demo), or one by its name or id; written in a moment" },
         { use: "backups", does: "the backups in the backup folder, newest first: name, file, made, size, automatic; and how the last one went (last, lastFailed, working)" },
         { use: "restoreBackup <file> <open>", does: "a backup put back (only when the user asks): each profile in it a new profile in a new folder (nothing there is changed); open true opens the first" },
-        { use: "appVersion", does: "the version running, and whether there's a newer one: latest, updateAvailable, status (current, available, none: no releases yet, failed), checked, releases" },
+        { use: "appVersion", does: "the version running, and whether there's a newer one: latest, updateAvailable, status (current, available, none: no releases yet, failed), checked, releases, and update: how the user installs it (a command they run in a terminal; Uber Notebook doesn't install anything itself)" },
         { use: "checkUpdate", does: "asks GitHub for the newest version now; appVersion says what it found a few seconds later" },
-        { use: "releaseNotes", does: "what's new, as Markdown: the newer releases' notes, or (up to date) this version's" },
-        { use: "installUpdate", does: "installs the newer version with omarchy plugin update (only when the user asks; only an Uber Notebook installed from git): Uber Notebook starts again" }
+        { use: "releaseNotes", does: "what's new, as Markdown: the newer releases' notes, or (up to date) this version's" }
       ],
       fences: "read gives (and add, append, replace and insertAfter take) these as fenced code: "
         + "```board (## a column, - a card under it), ```bookmark (a link), ```contact (someone in People: their name, email or id), "
@@ -359,12 +459,10 @@ QtObject {
   function importContacts(path) {
     var not = unready()
     if (not) return fail(not)
+    var got = readGiven(path, 32 * 1024 * 1024, "give the file's full path (a .vcf or a .csv)")
+    if (got.error) return fail(got.error)
     var p = String(path || "").trim()
-    if (p.indexOf("~/") === 0 && files && files.home) p = files.home + p.slice(1)
-    if (!p || p.charAt(0) !== "/") return fail("give the file's full path (a .vcf or a .csv)")
-    var text = files ? files.readNow(p, 32 * 1024 * 1024) : null
-    if (text === null) return fail("couldn't read " + p + " (is it there, and under 32 MB?)")
-    var people = Contacts.fromFile(p, text)
+    var people = Contacts.fromFile(p, got.text)
     if (!people.length) return fail("there are no contacts in " + p + " (a .vcf or a .csv with a header row)")
     var r = Contacts.merge(workspace.contacts, people, new Date())
     workspace.setContacts(r.book)
@@ -856,7 +954,7 @@ QtObject {
     var err = editPageNow(id, function(p) {
       var lockedNow = lockedNote(p)
       if (lockedNow) return lockedNow
-      var b = p.blocks ? p.blocks[block] : null
+      var b = blockOf(p, block)
       if (!b || b.type !== "check") return "that isn't a to-do on the page (blocks <page id> gives them)"
       if (b.checked === want) return false
       b.checked = want
@@ -879,7 +977,7 @@ QtObject {
     var err = editPageNow(id, function(p) {
       var lockedNow = lockedNote(p)
       if (lockedNow) return lockedNow
-      var b = p.blocks ? p.blocks[block] : null
+      var b = blockOf(p, block)
       if (!b) return "there's no block with that id on the page (blocks <page id> gives them)"
       if (Blocks.hasData(b.type)) {
         var d = Blocks.cleanData(b.type, b.data)
@@ -923,7 +1021,7 @@ QtObject {
     var err = editPageNow(id, function(p) {
       var lockedNow = lockedNote(p)
       if (lockedNow) return lockedNow
-      var bl = p.blocks ? p.blocks[block] : null
+      var bl = blockOf(p, block)
       if (!bl || bl.type !== "board") return "that isn't a board on the page (blocks <page id> gives them)"
       var d = Blocks.cleanData("board", bl.data)
       function col(x) {
@@ -1065,7 +1163,7 @@ QtObject {
     var err = editPageNow(id, function(p) {
       var lockedNow = lockedNote(p)
       if (lockedNow) return lockedNow
-      var b = p.blocks ? p.blocks[block] : null
+      var b = blockOf(p, block)
       if (!b || b.type !== "image") return "that isn't a picture on the page (blocks <page id> gives them)"
       if (w) b.width = Math.round(Math.max(15, Math.min(100, n))) / 100
       if (al) b.align = al
@@ -1140,7 +1238,7 @@ QtObject {
     var act = String(action || "")
     writeOpen()
     var page = workspace.readPageNow(id)
-    var gb = page && page.blocks ? page.blocks[block] : null
+    var gb = (page ? blockOf(page, block) : null)
     if (!gb || gb.type !== "gallery") return fail("that isn't a gallery on the page (blocks <page id> gives them)")
     if (lockedNote(page)) return fail(lockedNote(page))
     if (act === "add") {
@@ -1150,7 +1248,7 @@ QtObject {
         api.importPictures(paths, function(srcs) {
           if (!srcs.length) return
           api.editPageNow(id, function(p) {
-            var x = p.blocks ? p.blocks[block] : null
+            var x = blockOf(p, block)
             if (!x || x.type !== "gallery") return false
             var d = Blocks.cleanData("gallery", x.data)
             d.images = d.images.concat(srcs.map(function(s) { return { src: s, caption: "" } }))
@@ -1162,7 +1260,7 @@ QtObject {
     }
     var result = {}
     var err = editPageNow(id, function(p) {
-      var x = p.blocks[block]
+      var x = blockOf(p, block)
       var d = Blocks.cleanData("gallery", x.data)
       function at(ref) {
         var r = String(ref || "").trim()
@@ -1208,22 +1306,32 @@ QtObject {
     if (!live(id)) return fail(noPage)
     writeOpen()
     var page = workspace.readPageNow(id)
-    var b = page && page.blocks ? page.blocks[block] : null
+    var b = (page ? blockOf(page, block) : null)
     if (!b || (b.type !== "bookmark" && b.type !== "link")) return fail("that isn't a bookmark or a link to a page (blocks <page id> gives them)")
     if (lockedNote(page)) return fail(lockedNote(page))
     var t = String(target || "").trim()
     if (b.type === "link") {
       var to = Workspace.isUuid(t) && workspace.index.pages[t] ? t : Workspace.pageNamed(workspace.index, t)
       if (!to || !live(to)) return fail("there's no page with that id or title (list or find gives them)")
-      var err = editPageNow(id, function(p) { p.blocks[block].target = to }, true)
+      var err = editPageNow(id, function(p) { var x = blockOf(p, block); if (!x) return "there's no block with that id on the page (blocks <page id> gives them)"; x.target = to }, true)
       return err ? fail(err) : answer({ ok: true, id: id, block: block, target: to, title: workspace.index.pages[to].title || "Untitled" })
     }
     if (t && !/^[a-z][a-z0-9+.-]*:/i.test(t) && /^[^\s\/]+\.[a-z]{2,}(\/|$)/i.test(t)) t = "https://" + t
     var u = Bookmark.cleanUrl(t)
     if (!u) return fail("that isn't a web link (https://...)")
+    if (caller) {
+      // (While an agent works, nothing is fetched for it: a link it gives
+      // could carry what it read. The card keeps the link; refreshing it reads it.)
+      var e2 = editPageNow(id, function(p) {
+        var x = blockOf(p, block)
+        if (!x || x.type !== "bookmark") return "that isn't a bookmark"
+        x.data = Blocks.cleanData("bookmark", { url: u, title: "", description: "", site: Bookmark.domain(u), image: "" })
+      }, true)
+      return e2 ? fail(e2) : answer({ ok: true, id: id, block: block, url: u, note: agentLink(id, u) })
+    }
     workspace.fetchBookmark(u, function(data) {
       api.editPageNow(id, function(p) {
-        var x = p.blocks ? p.blocks[block] : null
+        var x = blockOf(p, block)
         if (!x || x.type !== "bookmark") return false
         var d = Blocks.cleanData("bookmark", x.data)
         var got = data || { url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }
@@ -1292,6 +1400,10 @@ QtObject {
     if (raw && !/^[a-z][a-z0-9+.-]*:/i.test(raw) && /^[^\s\/]+\.[a-z]{2,}(\/|$)/i.test(raw)) raw = "https://" + raw
     var u = Bookmark.cleanUrl(raw)
     if (!u) return fail("that isn't a web link (https://...)")
+    if (caller) {
+      if (!appendNow(id, [{ type: "bookmark", indent: 0, data: { url: u, site: Bookmark.domain(u) } }])) return fail("couldn't add it to that page")
+      return answer({ ok: true, id: id, url: u, note: agentLink(id, u) })
+    }
     workspace.fetchBookmark(u, function(data) { api.appendNow(id, [{ type: "bookmark", indent: 0, data: data || { url: u } }]) })
     return answer({ ok: true, id: id, url: u, note: "its page is being read; the card shows at the end of the page in a moment" })
   }
@@ -1343,12 +1455,9 @@ QtObject {
   function importCalendar(path) {
     var not = unready()
     if (not) return fail(not)
-    var p = String(path || "").trim()
-    if (p.indexOf("~/") === 0 && files && files.home) p = files.home + p.slice(1)
-    if (!p || p.charAt(0) !== "/") return fail("give the .ics file's full path")
-    var text = files ? files.readNow(p, 16 * 1024 * 1024) : null
-    if (text === null) return fail("couldn't read " + p)
-    var events = Calendar.fromIcs(text)
+    var got = readGiven(path, 16 * 1024 * 1024, "give the .ics file's full path")
+    if (got.error) return fail(got.error)
+    var events = Calendar.fromIcs(got.text)
     if (!events.length) return fail("there are no events in it")
     var cal = workspace.calendar
     var added = 0
@@ -1566,14 +1675,6 @@ QtObject {
     if (!updates) return fail("the update check isn't here")
     var n = updates.notes()
     return "# " + n.title + "\n\n" + n.markdown + "\n" + (n.url ? "\n" + n.url + "\n" : "")
-  }
-  // The newer version installed (only when the user asks): Uber Notebook starts again.
-  function installUpdate() {
-    if (!updates) return fail("the update check isn't here")
-    if (!updates.available) return fail(updates.status === "idle" || updates.status === "checking" ? "it hasn't been asked yet: checkUpdate, then appVersion" : "there's no newer version (appVersion)")
-    if (!updates.managed) return fail("Uber Notebook wasn't installed from git, so it can't update itself; the user can reinstall it with omarchy plugin add")
-    updates.install()
-    return answer({ ok: true, version: updates.latest.version, note: "updating to " + updates.latest.version + " with omarchy plugin update: Uber Notebook starts again when it's done" })
   }
 
   // ---- backups ----------------------------------------------------------------------------------

@@ -1,0 +1,491 @@
+#!/usr/bin/python3 -IS
+# uber-notebook-files - the archives Uber Notebook opens: a zip of notes to
+# import (a Notion or Obsidian export), and a backup to look into and put
+# back. Run as /usr/bin/python3 -I -S <this file> <command> ... (isolated:
+# no user site, no environment), by Workspace.qml and Backups.qml.
+#
+# Everything is read from one open file (opened without following a link,
+# and only if it's a regular file), and written below a folder this made
+# itself, through folders opened without following links, as new files
+# (never over one that's there). Nothing in an archive can name a place
+# outside that folder, be a link or a device, or take more than the room it's
+# given (bytes and files, counted as they're written).
+#
+#   unzip <zip> <folder> <max bytes> <max files>
+#       The zip into <folder> (an empty folder of Uber Notebook's own), and
+#       the zips that were in it (Notion exports in parts) into the same
+#       folder, all within one budget. Prints JSON: { ok, files, bytes,
+#       skipped } or { ok: false, error }.
+#   inspect-backup <backup.tar.gz>
+#       What's in a backup: "readable:1", "types:<-d...>", "outside:<n>",
+#       "dots:<n>", "hash:<sha256 of the file>", "---", its
+#       uber-notebook-backup.json (at most 200 KB). "readable:0" when it
+#       isn't one.
+#   read <max bytes> <file>
+#       A text file (a regular file, not a link to one, at most <max bytes>),
+#       as JSON: { ok: true, text } or { ok: false, error }.
+#   create-owned <file> <text>
+#       A small file of Uber Notebook's own (its entry in the app launcher):
+#       made only where nothing is ("made"); one that's there already is left
+#       as it is ("same" when it's exactly that text, else "taken").
+#   remove-owned <file> <text>
+#       That file taken away only if it's still exactly that text, a plain
+#       file ("removed"); anything else there is left ("kept").
+#   unlink-link <link> <target>
+#       A link of Uber Notebook's own (its skill, in an agent's folder) taken
+#       away only if it's a link to <target> ("removed", else "kept").
+#   restore-backup <backup.tar.gz> <pN> <folder> <sha256> <max bytes> <max files>
+#       One profile (pN/ in the backup) into a new folder: <folder>, or
+#       "<folder> 2"... if that's taken, never one that's there. The backup
+#       must still be the one inspected (its sha256); if it isn't, or
+#       anything fails, the new folder is taken away again. Prints the folder.
+
+import errno
+import hashlib
+import json
+import os
+import shutil
+import stat
+import sys
+import tarfile
+import zipfile
+import zlib
+
+MANIFEST = "uber-notebook-backup.json"
+CHUNK = 1024 * 1024
+
+
+class Refused(Exception):
+    pass
+
+
+def open_regular(path):
+    """A regular file, opened without following a link at its end."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise Refused("not a regular file")
+    return os.fdopen(fd, "rb")
+
+
+def parts_of(name):
+    """An archive member's path as its parts, or None when it isn't one
+    that stays where it's put (absolute, .., odd characters, too long)."""
+    if not name or len(name.encode("utf-8", "surrogateescape")) > 4096 or name.startswith("/"):
+        return None
+    parts = [p for p in name.split("/") if p != ""]
+    for p in parts:
+        if p in (".", "..") or len(p.encode("utf-8", "surrogateescape")) > 255:
+            return None
+        if any(ord(c) < 32 or ord(c) == 127 for c in p):
+            return None
+    return parts
+
+
+def open_dir(name, parent_fd):
+    return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
+
+
+def folder_for(root_fd, parts):
+    """The folder at `parts` below root_fd, made as needed, every step
+    opened without following a link. An open fd the caller closes."""
+    fd = os.dup(root_fd)
+    try:
+        for p in parts:
+            try:
+                os.mkdir(p, 0o700, dir_fd=fd)
+            except FileExistsError:
+                pass
+            nfd = open_dir(p, fd)
+            os.close(fd)
+            fd = nfd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+class Budget:
+    def __init__(self, max_bytes, max_files):
+        self.max_bytes = max_bytes
+        self.max_files = max_files
+        self.bytes = 0
+        self.files = 0
+
+    def file(self):
+        self.files += 1
+        if self.files > self.max_files:
+            raise Refused("more than %d files" % self.max_files)
+
+    def take(self, n):
+        self.bytes += n
+        if self.bytes > self.max_bytes:
+            raise Refused("more than %d bytes" % self.max_bytes)
+
+
+def write_new(dir_fd, name, source, budget):
+    """`source` (a file object) as a new file `name` in dir_fd."""
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dir_fd)
+    try:
+        with os.fdopen(fd, "wb", closefd=False) as out:
+            while True:
+                chunk = source.read(CHUNK)
+                if not chunk:
+                    break
+                budget.take(len(chunk))
+                out.write(chunk)
+    except BaseException:
+        os.close(fd)
+        try:
+            os.unlink(name, dir_fd=dir_fd)
+        except OSError:
+            pass
+        raise
+    os.close(fd)
+
+
+# ---- a text file -------------------------------------------------------------------------------
+
+def cmd_read(max_bytes, path):
+    limit = int(max_bytes)
+    try:
+        with open_regular(path) as f:
+            if os.fstat(f.fileno()).st_size > limit:
+                raise Refused("more than %d bytes" % limit)
+            data = f.read(limit + 1)
+            if len(data) > limit:
+                raise Refused("more than %d bytes" % limit)
+    except FileNotFoundError:
+        print(json.dumps({"ok": False, "error": "there's no file there"}))
+        return
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            print(json.dumps({"ok": False, "error": "that's a link: give the file itself"}))
+            return
+        print(json.dumps({"ok": False, "error": (e.strerror or str(e))[:200]}))
+        return
+    except Refused as e:
+        print(json.dumps({"ok": False, "error": str(e)[:200]}))
+        return
+    print(json.dumps({"ok": True, "text": data.decode("utf-8", "replace")}))
+
+
+# ---- files of Uber Notebook's own ---------------------------------------------------------------
+
+def parent_of(path):
+    """(the folder's fd, the name in it) for an absolute path."""
+    folder, name = os.path.split(path)
+    if not path.startswith("/") or not name or name in (".", ".."):
+        raise Refused("not a file's full path")
+    return os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC), name
+
+
+def holds_exactly(dfd, name, data):
+    """Whether `name` in dfd is a plain file (not a link) holding `data`."""
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except OSError:
+        return False, None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size != len(data):
+            return False, st
+        with os.fdopen(fd, "rb", closefd=False) as f:
+            return f.read(len(data) + 1) == data, st
+    finally:
+        os.close(fd)
+
+
+def cmd_create_owned(path, text):
+    data = text.encode("utf-8")
+    dfd, name = parent_of(path)
+    try:
+        try:
+            fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        except FileExistsError:
+            same, _ = holds_exactly(dfd, name, data)
+            print("same" if same else "taken")
+            return
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        print("made")
+    finally:
+        os.close(dfd)
+
+
+def cmd_remove_owned(path, text):
+    dfd, name = parent_of(path)
+    try:
+        same, st = holds_exactly(dfd, name, text.encode("utf-8"))
+        # (Still that file, not one put there since.)
+        now = os.stat(name, dir_fd=dfd, follow_symlinks=False) if same else None
+        if same and now is not None and (now.st_ino, now.st_dev) == (st.st_ino, st.st_dev):
+            os.unlink(name, dir_fd=dfd)
+            print("removed")
+        else:
+            print("kept")
+    finally:
+        os.close(dfd)
+
+
+def cmd_unlink_link(path, target):
+    dfd, name = parent_of(path)
+    try:
+        try:
+            ours = os.readlink(name, dir_fd=dfd) == target
+        except OSError:
+            ours = False
+        if ours:
+            os.unlink(name, dir_fd=dfd)
+            print("removed")
+        else:
+            print("kept")
+    finally:
+        os.close(dfd)
+
+
+# ---- a zip of notes ---------------------------------------------------------------------------
+
+def is_link(info):
+    return stat.S_ISLNK((info.external_attr >> 16) & 0o177777)
+
+
+def unzip_into(zf, root_fd, budget, skipped):
+    for info in zf.infolist():
+        parts = parts_of(info.filename)
+        if parts is None:
+            skipped["names"] += 1
+            continue
+        if is_link(info):
+            skipped["links"] += 1
+            continue
+        kind = stat.S_IFMT((info.external_attr >> 16) & 0o177777)
+        if kind and kind not in (stat.S_IFREG, stat.S_IFDIR):
+            skipped["special"] += 1
+            continue
+        if not parts:
+            continue
+        if info.is_dir():
+            try:
+                os.close(folder_for(root_fd, parts))
+            except OSError:
+                skipped["names"] += 1
+            continue
+        budget.file()
+        try:
+            dfd = folder_for(root_fd, parts[:-1])
+        except OSError:
+            skipped["names"] += 1
+            continue
+        try:
+            with zf.open(info) as source:
+                write_new(dfd, parts[-1], source, budget)
+        except FileExistsError:
+            skipped["taken"] += 1
+        except (OSError, zipfile.BadZipFile, zipfile.LargeZipFile, EOFError, NotImplementedError, RuntimeError):
+            skipped["unreadable"] += 1
+        finally:
+            os.close(dfd)
+
+
+def cmd_unzip(path, folder, max_bytes, max_files):
+    budget = Budget(int(max_bytes), int(max_files))
+    skipped = {"names": 0, "links": 0, "special": 0, "taken": 0, "unreadable": 0}
+    root_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        with open_regular(path) as f, zipfile.ZipFile(f) as zf:
+            unzip_into(zf, root_fd, budget, skipped)
+        # Zips that were in it, at its top (an export in parts): into the
+        # same folder, within the same budget, then gone.
+        for name in sorted(os.listdir(root_fd)):
+            if not name.lower().endswith(".zip"):
+                continue
+            try:
+                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=root_fd)
+            except OSError:
+                continue
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                os.close(fd)
+                continue
+            try:
+                with os.fdopen(fd, "rb") as inner, zipfile.ZipFile(inner) as zf:
+                    unzip_into(zf, root_fd, budget, skipped)
+            except zipfile.BadZipFile:
+                skipped["unreadable"] += 1
+                continue
+            os.unlink(name, dir_fd=root_fd)
+    finally:
+        os.close(root_fd)
+    print(json.dumps({"ok": True, "files": budget.files, "bytes": budget.bytes, "skipped": skipped}))
+
+
+# ---- a backup ---------------------------------------------------------------------------------
+
+class Hashing:
+    """A file read through, its sha256 kept as it's read."""
+
+    def __init__(self, f):
+        self.f = f
+        self.h = hashlib.sha256()
+
+    def read(self, n=-1):
+        data = self.f.read(n)
+        self.h.update(data)
+        return data
+
+    def rest(self):
+        while True:
+            data = self.f.read(CHUNK)
+            if not data:
+                return self.h.hexdigest()
+            self.h.update(data)
+
+
+TYPES = {tarfile.REGTYPE: "-", tarfile.AREGTYPE: "-", tarfile.DIRTYPE: "d", tarfile.SYMTYPE: "l", tarfile.LNKTYPE: "h",
+         tarfile.CHRTYPE: "c", tarfile.BLKTYPE: "b", tarfile.FIFOTYPE: "p", tarfile.CONTTYPE: "-"}
+
+
+def belongs(name):
+    """A name a backup holds: its manifest, or pN and what's in it."""
+    parts = parts_of(name)
+    if parts is None or not parts:
+        return False
+    if parts == [MANIFEST]:
+        return True
+    head = parts[0]
+    return len(head) in (2, 3) and head[0] == "p" and head[1:].isdigit()
+
+
+def cmd_inspect(path):
+    try:
+        with open_regular(path) as f:
+            src = Hashing(f)
+            types = set()
+            outside = 0
+            dots = 0
+            manifest = b""
+            with tarfile.open(fileobj=src, mode="r|gz") as tf:
+                for m in tf:
+                    types.add(TYPES.get(m.type, "?"))
+                    raw = m.name
+                    if parts_of(raw) is None:
+                        if ".." in raw.split("/"):
+                            dots += 1
+                        else:
+                            outside += 1
+                    elif not belongs(raw):
+                        outside += 1
+                    if raw.strip("/") == MANIFEST and m.isreg():
+                        manifest = tf.extractfile(m).read(200000)
+            digest = src.rest()
+    except (OSError, Refused, tarfile.TarError, EOFError, zlib.error):
+        print("readable:0")
+        return
+    print("readable:1")
+    print("types:" + "".join(sorted(types)))
+    print("outside:%d" % outside)
+    print("dots:%d" % dots)
+    print("hash:" + digest)
+    print("---")
+    sys.stdout.write(manifest.decode("utf-8", "replace"))
+
+
+def new_folder(base):
+    """A new folder: base, or "base 2"..., made here (never one that's
+    there). (parent fd, its name)."""
+    parent, name = os.path.split(base.rstrip("/"))
+    if not parent or not name or parts_of(name) is None:
+        raise Refused("not a folder's full path")
+    pfd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    for i in range(1, 1000):
+        candidate = name if i == 1 else "%s %d" % (name, i)
+        try:
+            os.mkdir(candidate, 0o700, dir_fd=pfd)
+            return pfd, candidate
+        except FileExistsError:
+            continue
+    os.close(pfd)
+    raise Refused("no free name for the folder")
+
+
+def cmd_restore(path, member, base, expected, max_bytes, max_files):
+    if not (len(member) in (2, 3) and member[0] == "p" and member[1:].isdigit()):
+        raise Refused("not a profile in a backup")
+    budget = Budget(int(max_bytes), int(max_files))
+    pfd, name = new_folder(base)
+    done = False
+    found = False
+    try:
+        root_fd = open_dir(name, pfd)
+        try:
+            with open_regular(path) as f:
+                src = Hashing(f)
+                with tarfile.open(fileobj=src, mode="r|gz") as tf:
+                    for m in tf:
+                        parts = parts_of(m.name)
+                        if parts is None or len(parts) < 1 or parts[0] != member:
+                            continue
+                        found = True
+                        inner = parts[1:]
+                        if not inner:
+                            continue
+                        if m.isdir():
+                            os.close(folder_for(root_fd, inner))
+                        elif m.isreg():
+                            budget.file()
+                            dfd = folder_for(root_fd, inner[:-1])
+                            try:
+                                write_new(dfd, inner[-1], tf.extractfile(m), budget)
+                                os.utime(inner[-1], (m.mtime, m.mtime), dir_fd=dfd, follow_symlinks=False)
+                            finally:
+                                os.close(dfd)
+                        else:
+                            raise Refused("a link or a special file in it")
+                digest = src.rest()
+        finally:
+            os.close(root_fd)
+        if digest != expected:
+            raise Refused("the backup changed after it was looked at")
+        if not found:
+            raise Refused("that profile isn't in the backup")
+        done = True
+    finally:
+        if not done:
+            # (Only the folder this made, without following links in it.)
+            shutil.rmtree(name, dir_fd=pfd, ignore_errors=True)
+        os.close(pfd)
+    print(os.path.join(os.path.dirname(base.rstrip("/")), name))
+
+
+def main(argv):
+    try:
+        if len(argv) == 6 and argv[1] == "unzip":
+            cmd_unzip(argv[2], argv[3], argv[4], argv[5])
+        elif len(argv) == 4 and argv[1] == "read":
+            cmd_read(argv[2], argv[3])
+        elif len(argv) == 4 and argv[1] == "create-owned":
+            cmd_create_owned(argv[2], argv[3])
+        elif len(argv) == 4 and argv[1] == "remove-owned":
+            cmd_remove_owned(argv[2], argv[3])
+        elif len(argv) == 4 and argv[1] == "unlink-link":
+            cmd_unlink_link(argv[2], argv[3])
+        elif len(argv) == 3 and argv[1] == "inspect-backup":
+            cmd_inspect(argv[2])
+        elif len(argv) == 8 and argv[1] == "restore-backup":
+            cmd_restore(argv[2], argv[3], argv[4], argv[5], argv[6], argv[7])
+        else:
+            sys.stderr.write("usage: uber-notebook-files unzip|inspect-backup|restore-backup ...\n")
+            return 2
+    except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error) as e:
+        if argv[1:2] == ["unzip"]:
+            print(json.dumps({"ok": False, "error": str(e)[:300]}))
+            return 1
+        sys.stderr.write(str(e)[:300] + "\n")
+        return 3
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

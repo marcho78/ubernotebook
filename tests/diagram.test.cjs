@@ -361,4 +361,190 @@ check("words inside their diamond, and their circle", () => {
   assert.equal(c.w, c.h);
 });
 
+// Read and laid out (when there's anything to lay out), and how long that took.
+function timed(text) {
+  const t0 = process.hrtime.bigint();
+  const g = D.parse(text);
+  const l = g.nodes.length ? D.layout(g, measure, {}) : null;
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  return { g: plain(g), l: l && plain(l), ms };
+}
+function within(b, g) { return b.x >= g.x && b.y >= g.y && b.x + b.w <= g.x + g.w && b.y + b.h <= g.y + g.h; }
+
+check("a very long line, and a group inside itself: laid out at once, never thrown", () => {
+  const long = timed("graph TD\nA " + "-".repeat(18000) + "> B");
+  assert.ok(long.ms < 100, "quick: " + long.ms.toFixed(1) + " ms");
+  assert.equal(long.g.edges[0].length, D.MAX_LENGTH);
+  assert.equal(long.l.edges[0].points.length, D.MAX_LENGTH + 1, "through a point on each rank between");
+  const inside = timed("graph TD\nsubgraph a\nsubgraph a\nx\nend\nend");
+  assert.ok(inside.ms < 100, "quick: " + inside.ms.toFixed(1) + " ms");
+  assert.deepEqual(inside.g.groups.map((g) => [g.id, g.parent]), [["a", ""]], "the one group");
+  assert.equal(inside.g.nodes[0].group, "a");
+  assert.deepEqual(inside.g.errors, []);
+  assert.deepEqual(inside.l.groups.map((g) => [g.id, g.depth]), [["a", 0]]);
+  assert.ok(within(inside.l.nodes.x, inside.l.groups[0]));
+  // Nothing in it at all: an empty drawing.
+  assert.deepEqual(plain(D.layout(parse("graph TD"), measure, {})), { nodes: {}, edges: [], groups: [], w: 0, h: 0 });
+});
+
+check("a line's length: a rank longer for each dash, up to MAX_LENGTH ranks", () => {
+  const length = (t) => parse("graph TD\n" + t).edges[0].length;
+  assert.equal(length("A " + "-".repeat(D.MAX_LENGTH + 1) + "> B"), D.MAX_LENGTH, "as long as it can be");
+  assert.equal(length("A " + "-".repeat(D.MAX_LENGTH + 2) + "> B"), D.MAX_LENGTH, "a dash more: no longer");
+  assert.equal(length("A -- t " + "-".repeat(D.MAX_LENGTH) + "> B"), D.MAX_LENGTH);
+  assert.equal(length("A -- t " + "-".repeat(D.MAX_LENGTH + 1) + "> B"), D.MAX_LENGTH);
+  assert.equal(length("A " + "=".repeat(D.MAX_LENGTH + 2) + "> B"), D.MAX_LENGTH);
+  assert.equal(length("A " + "~".repeat(D.MAX_LENGTH + 2) + " B"), D.MAX_LENGTH);
+  assert.equal(length("A " + "~".repeat(D.MAX_LENGTH + 3) + " B"), D.MAX_LENGTH);
+  // However long it's given as, laid out no longer.
+  const box = (id) => ({ id: id, label: id, shape: "box", icon: "", group: "" });
+  const l = plain(D.layout({ direction: "TD", nodes: [box("a"), box("b")], edges: [{ from: "a", to: "b", label: "", style: "solid", length: 1e9 }], groups: [] }, measure, {}));
+  assert.equal(l.edges[0].points.length, D.MAX_LENGTH + 1);
+});
+
+check("groups: one begun again, or inside itself, is the one group, round all that's in it", () => {
+  const again = parse("graph TD\nsubgraph a [First]\nx\nend\nsubgraph b\nsubgraph a\ny\nend\nend");
+  assert.deepEqual(again.groups.map((g) => [g.id, g.label, g.parent]), [["a", "First", ""], ["b", "b", ""]]);
+  assert.deepEqual(again.nodes.map((n) => n.group), ["a", "a"]);
+  const l = plain(D.layout(again, measure, {}));
+  const a = l.groups.find((g) => g.id === "a");
+  for (const id of ["x", "y"]) assert.ok(within(l.nodes[id], a), id + " inside a");
+  assert.ok(!l.groups.some((g) => g.id === "b"), "b, with nothing in it, not drawn");
+  // a inside b inside a, as written: b in a, and no further.
+  const loop = parse("graph TD\nsubgraph a\nsubgraph b\nsubgraph a\nsubgraph b\nx --> y\nend\nend\nend\nend");
+  assert.deepEqual(loop.groups.map((g) => [g.id, g.parent]), [["a", ""], ["b", "a"]]);
+  assert.deepEqual(loop.nodes.map((n) => n.group), ["b", "b"]);
+  assert.deepEqual(plain(D.layout(loop, measure, {})).groups.map((g) => [g.id, g.depth]), [["a", 0], ["b", 1]]);
+  // A group with a quoted name gets an id no other group has.
+  const named = parse("graph TD\nsubgraph group0\nx\nend\nsubgraph \"Title\"\ny\nend");
+  assert.equal(new Set(named.groups.map((g) => g.id)).size, 2);
+  // Given groups in each other some other way: laid out all the same.
+  const odd = { direction: "TD", nodes: [{ id: "x", label: "x", shape: "box", icon: "", group: "a" }], edges: [],
+    groups: [{ id: "a", label: "A", parent: "b" }, { id: "b", label: "B", parent: "a" }, { id: "a", label: "Again", parent: "" }] };
+  const lo = plain(D.layout(odd, measure, {}));
+  assert.deepEqual(lo.groups.map((g) => g.id).sort(), ["a", "b"]);
+  assert.ok(lo.groups.every((g) => Number.isFinite(g.x) && g.w > 0));
+});
+
+check("groups: at most MAX_GROUPS, MAX_DEPTH deep; one past that is said, what's in it kept", () => {
+  const nest = (n) => "graph TD\n" + Array.from({ length: n }, (_, i) => "subgraph g" + i).join("\n") + "\nx\n" + "end\n".repeat(n);
+  const deep = parse(nest(D.MAX_DEPTH));
+  assert.equal(deep.groups.length, D.MAX_DEPTH);
+  assert.deepEqual(deep.errors, []);
+  assert.equal(deep.nodes[0].group, "g" + (D.MAX_DEPTH - 1));
+  assert.equal(Math.max(...plain(D.layout(deep, measure, {})).groups.map((g) => g.depth)), D.MAX_DEPTH - 1);
+  const deeper = parse(nest(D.MAX_DEPTH + 1));
+  assert.equal(deeper.groups.length, D.MAX_DEPTH);
+  assert.deepEqual(deeper.errors.map((e) => e.line), [D.MAX_DEPTH + 2], "the one too deep, said");
+  assert.match(D.problem(deeper), new RegExp("isn't understood: subgraph g" + D.MAX_DEPTH + "$"));
+  assert.equal(deeper.nodes[0].group, "g" + (D.MAX_DEPTH - 1), "what's in it: in the group it's in");
+  const many = (n) => "graph TD\n" + Array.from({ length: n }, (_, i) => "subgraph s" + i + "\nn" + i + "\nend").join("\n");
+  const full = parse(many(D.MAX_GROUPS));
+  assert.equal(full.groups.length, D.MAX_GROUPS);
+  assert.deepEqual(full.errors, []);
+  const over = parse(many(D.MAX_GROUPS + 1));
+  assert.equal(over.groups.length, D.MAX_GROUPS);
+  assert.deepEqual(over.errors.map((e) => e.text), ["subgraph s" + D.MAX_GROUPS]);
+  assert.equal(over.nodes[D.MAX_GROUPS].group, "", "what's in it: in no group");
+  assert.equal(plain(D.layout(over, measure, {})).groups.length, D.MAX_GROUPS);
+});
+
+check("ranks: at most MAX_RANKS down the page; past that, the long lines a rank shorter till they fit", () => {
+  // A chain of lines MAX_LENGTH ranks long, MAX_RANKS - 1 ranks in all.
+  const lengths = [];
+  for (let total = 0; total < D.MAX_RANKS - 1; total += lengths[lengths.length - 1]) lengths.push(Math.min(D.MAX_LENGTH, D.MAX_RANKS - 1 - total));
+  const chain = (ls) => "graph TD\n" + ls.map((len, i) => "n" + i + " " + "-".repeat(len + 1) + "> n" + (i + 1)).join("\n");
+  const fits = plain(D.layout(parse(chain(lengths)), measure, {}));
+  assert.equal(fits.edges[0].points.length, D.MAX_LENGTH + 1, "as long as it's written");
+  // One rank more.
+  const over = plain(D.layout(parse(chain(lengths.concat([1]))), measure, {}));
+  assert.equal(over.edges[0].points.length, D.MAX_LENGTH, "a rank shorter");
+  for (let i = 0; i < lengths.length; i++) assert.ok(over.nodes["n" + i].y < over.nodes["n" + (i + 1)].y, "still in order");
+});
+
+check("points for long lines: at most MAX_BENDS all told; past that, the longest go straight", () => {
+  // A chain n0 .. n100, and lines from n0 to n100 (99 points each) and to
+  // one nearer for the rest: MAX_BENDS points.
+  const lines = Array.from({ length: 100 }, (_, i) => "n" + i + " --> n" + (i + 1));
+  const longest = Math.floor(D.MAX_BENDS / 99);
+  for (let k = 0; k < longest; k++) lines.push("n0 --> n100");
+  const rest = D.MAX_BENDS - longest * 99;
+  if (rest) lines.push("n0 --> n" + (rest + 1));
+  const points = (l, to) => l.edges.filter((e) => e.from === "n0" && e.to === to).map((e) => e.points.length);
+  const all = plain(D.layout(parse("graph TD\n" + lines.join("\n")), measure, {}));
+  assert.deepEqual(points(all, "n100"), Array(longest).fill(101), "every one through its points");
+  // One more line needing a point: it gets it, and one of the longest goes straight.
+  const over = plain(D.layout(parse("graph TD\n" + lines.join("\n") + "\nn0 --> n2"), measure, {}));
+  assert.deepEqual(points(over, "n2"), [3]);
+  assert.deepEqual(points(over, "n100"), Array(longest - 1).fill(101).concat([2]));
+  for (let i = 0; i < 100; i++) assert.ok(over.nodes["n" + i].y < over.nodes["n" + (i + 1)].y, "still in order");
+});
+
+check("classes given: at most MAX_CLASSES all told; past that, left out", () => {
+  const start = "graph TD\na[A] --> b\nclassDef warm fill:#ffedd5\nclassDef cool fill:#dbeafe\nclass b " + Array(D.MAX_CLASSES - 1).fill("x").join(",");
+  assert.deepEqual(parse(start + "\nclass a warm").nodes[0].paint, { fill: "#ffedd5" }, "the last there can be");
+  const over = parse(start + "\nclass a warm\nclass a cool");
+  assert.deepEqual(over.nodes[0].paint, { fill: "#ffedd5" }, "one more: left out");
+  assert.deepEqual(over.errors, []);
+});
+
+check("a line's words: at most MAX_LINE_WORDS characters, cut with an ellipsis", () => {
+  const exact = "x".repeat(D.MAX_LINE_WORDS);
+  assert.equal(parse("graph TD\na -->|" + exact + "| b").edges[0].label, exact);
+  const cut = parse("graph TD\na -->|" + exact + "y| b").edges[0].label;
+  assert.equal(cut, "x".repeat(D.MAX_LINE_WORDS - 1) + "\u2026");
+  assert.equal(parse("graph TD\na -- " + exact + "y --> b").edges[0].label, cut, "written either way");
+  // One long label on 400 lines (A & ... -->|words| B & ...): at once.
+  const many = timed("graph TD\n" + Array.from({ length: 20 }, (_, i) => "a" + i).join(" & ") + " -->|" + "word ".repeat(3700) + "| " + Array.from({ length: 20 }, (_, i) => "b" + i).join(" & "));
+  assert.equal(many.g.edges.length, D.MAX_EDGES);
+  assert.ok(many.g.edges.every((e) => e.label.length <= D.MAX_LINE_WORDS));
+  assert.ok(many.ms < 100, "quick: " + many.ms.toFixed(1) + " ms");
+});
+
+check("ids are names like any other: constructor, __proto__, toString", () => {
+  const g = D.parse("graph TD\n__proto__[Proto] --> constructor[Maker]\nhasOwnProperty --> toString\nclassDef warm fill:#ffedd5\nclass constructor warm\nstyle __proto__ fill:#dbeafe");
+  const p = plain(g);
+  assert.deepEqual(p.nodes.map((n) => [n.id, n.label]), [["__proto__", "Proto"], ["constructor", "Maker"], ["hasOwnProperty", "hasOwnProperty"], ["toString", "toString"]]);
+  assert.deepEqual(p.nodes.map((n) => n.paint), [{ fill: "#dbeafe" }, { fill: "#ffedd5" }, undefined, undefined]);
+  assert.deepEqual(p.errors, []);
+  // Nothing of theirs on every object.
+  const object = Object.getPrototypeOf(g);
+  for (const k of ["id", "label", "shape", "icon"]) assert.equal(object[k], undefined, k);
+  const l = D.layout(g, measure, {});
+  assert.deepEqual(Object.keys(l.nodes).sort(), ["__proto__", "constructor", "hasOwnProperty", "toString"]);
+  assert.equal(l.edges.length, 2);
+});
+
+check("whatever's written, under the cap: read and laid out at once", () => {
+  const R = (s, n) => s.repeat(n);
+  const ids = (p, n) => Array.from({ length: n }, (_, i) => p + i);
+  const chain = ids("n", 199).map((x, i) => x + "-->n" + (i + 1)).join("\n");
+  let seed = 1;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const tangle = Array.from({ length: 400 }, (_, i) => "n" + Math.floor(rnd() * 200) + " -->|" + i + "| n" + Math.floor(rnd() * 200)).join("\n");
+  const inputs = {
+    "a long line with words": "A -- x " + R("-", 18000) + "> B",
+    "long lines down a long chain": chain + "\n" + R("n0-->|x|n199\n", 200),
+    "a tangle of 200 boxes and 400 lines with words": tangle,
+    "groups a thousand deep": ids("subgraph g", 1000).join("\n") + "\nx-->y\n",
+    "a group begun again and again": R("subgraph a\nx-->y\nend\n", 800),
+    "ids each given every class": "a-->b\nclass " + R("a,", 4500) + "a " + R("x,", 4500) + "x",
+    "a class line nearly a list": "a-->b\nclass x " + R("a , ", 4900) + "a !",
+    "a linkStyle naming lines over and over": chain + "\nlinkStyle " + Array.from({ length: 1700 }, (_, i) => i % 400).join(",") + " stroke:red",
+    "every pair, many times over": R("a&", 4900) + "a-->" + R("a&", 4900) + "a",
+    "one long word in @{ }": "a@{ " + R("a", 19000) + " }",
+    "semicolons in a style": "a-->b\nclassDef x fill:(" + R(";", 19000) + "x",
+    "brackets that never close": R("a(((x))-->", 1900),
+    "ids of dashes and dots": R("a-.-", 4900) + "b",
+    "the same line, many times": R("a-->b;", 3300),
+  };
+  for (const name of Object.keys(inputs)) {
+    const text = "graph TD\n" + inputs[name];
+    assert.ok(text.length <= D.MAX_TEXT, name + " is under the cap");
+    timed(text);
+    const r = timed(text);
+    assert.ok(r.ms < 100, name + ": " + r.ms.toFixed(1) + " ms");
+  }
+});
+
 console.log(`diagram: ${passed} checks passed`);

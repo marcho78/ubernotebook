@@ -16,6 +16,21 @@ DataCard {
   readonly property bool pdf: has && info.kind === "pdf"
   readonly property bool showing: pdf && info.open
   readonly property string url: has && editor ? editor.assetUrl(info.src) : ""
+  // A PDF's pages are shown only from a plain file of at most maxPdf bytes,
+  // as it really is (not as the page says): 1 yes, 0 no, -1 asking.
+  readonly property real maxPdf: 200 * 1024 * 1024
+  property int pdfOk: -1
+  onUrlChanged: checkPdf()
+  Component.onCompleted: checkPdf()
+  function checkPdf() {
+    pdfOk = -1
+    if (!pdf || !editor) return
+    var src = info.src
+    editor.assetInfo(src, function(r) {
+      if (src !== fb.info.src) return
+      fb.pdfOk = r !== null && r.regular && r.size <= fb.maxPdf ? 1 : 0
+    })
+  }
   function sample() { return info.name || "File" }
 
   readonly property string glyph: {
@@ -128,7 +143,7 @@ DataCard {
     // A PDF's pages.
     PdfDocument {
       id: pdfDoc
-      source: fb.pdf ? fb.url : ""
+      source: fb.pdf && fb.pdfOk === 1 ? fb.url : ""
     }
     Rectangle {
       id: frame
@@ -188,10 +203,13 @@ DataCard {
         }
       }
       Text {
-        visible: pdfDoc.status === PdfDocument.Error
+        visible: pdfDoc.status === PdfDocument.Error || fb.pdfOk === 0
         anchors.centerIn: parent
+        width: Math.min(implicitWidth, parent.width - 40)
+        wrapMode: Text.Wrap
+        horizontalAlignment: Text.AlignHCenter
         textFormat: Text.PlainText
-        text: "The PDF couldn't be read"
+        text: fb.pdfOk === 0 ? "Too big to show here (over 200 MB, or not a plain file): Open opens it in its app" : "The PDF couldn't be read"
         font.family: fb.editor ? fb.editor.uiFamily : ""
         font.pixelSize: 13
         color: fb.faint

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
 import "../Agent.js" as Agent
+import "../Permissions.js" as Permissions
 import "../Audio.js" as Audio
 import "../Backups.js" as Backups
 import "../Colors.js" as Colors
@@ -513,7 +514,7 @@ Popup {
         visible: prow.asking === ""
         theme: panel.theme; icon: panel.theme.icons.folder; size: 30; iconSize: 14
         tip: "Open the folder"
-        onClicked: panel.service.store.openUrl("file://" + panel.profiles.pathOf(prow.modelData.folder))
+        onClicked: panel.service.store.openLocal(panel.profiles.pathOf(prow.modelData.folder))
       }
       IconButton {
         visible: prow.asking === "" && prow.modelData.demo
@@ -700,10 +701,10 @@ Popup {
           }
           Line {
             label: "Quick notes go to"
-            note: panel.s.quickTo === "pages" ? "A page in your Pages Inbox: the first line is its title, the rest Markdown." : "A page in the Quick notes notebook."
+            note: panel.s.quickTo !== "notebook" ? "A page in your Pages Inbox: the first line is its title, the rest Markdown." : "A page in the Quick notes notebook."
             Choice {
-              options: [{ label: "Quick notes", value: "notebook" }, { label: "Pages Inbox", value: "pages" }]
-              value: panel.s.quickTo || "notebook"
+              options: [{ label: "Pages Inbox", value: "pages" }, { label: "Quick notes", value: "notebook" }]
+              value: panel.s.quickTo || "pages"
               onPicked: function(v) { panel.set("quickTo", v) }
             }
           }
@@ -1003,6 +1004,34 @@ Popup {
           }
         }
 
+        // What you've let agents have done for them without asking
+        // (Permissions.js): sites Uber Notebook may contact for each.
+        Group {
+          visible: panel.section === "ai"
+          title: "What agents may do without asking"
+          note: "When an agent in the panel wants to contact a site, search the web, run a command or use one of your connectors beyond its rules, you're asked in the panel first. Always puts it here, for that agent only. Agents can't change this list."
+          Line {
+            visible: Permissions.clean(panel.s.agentPermissions).length === 0
+            label: "Nothing yet"
+            note: "Everything is asked about."
+          }
+          Repeater {
+            model: Permissions.clean(panel.s.agentPermissions)
+            delegate: Line {
+              required property var modelData
+              objectName: "aiPermission"
+              label: Permissions.describe(modelData).label
+              note: Permissions.describe(modelData).note
+              TextButton {
+                objectName: "aiPermissionRemove"
+                theme: panel.theme
+                text: "Remove"
+                onClicked: panel.set("agentPermissions", Permissions.without(panel.s.agentPermissions, modelData.agent, modelData.action, modelData.target))
+              }
+            }
+          }
+        }
+
         // ======== Audio ========
 
         Group {
@@ -1272,7 +1301,7 @@ Popup {
               IconButton {
                 theme: panel.theme; icon: panel.theme.icons.folder; size: 30; iconSize: 14
                 tip: "Open the folder"
-                onClicked: panel.service.store.openUrl("file://" + panel.backups.folder)
+                onClicked: panel.service.store.openLocal(panel.backups.folder)
               }
             }
           }

@@ -46,6 +46,9 @@ Pop {
   }
 
   signal sent(string request)
+  // The same, in a terminal instead (Claude Code, Grok and Codex work here;
+  // there, your agent runs as you set it up, with all its own controls).
+  signal sentToTerminal(string request)
 
   width: Math.min(560, (parent ? parent.width : 560) - 40)
   padding: 14
@@ -102,6 +105,12 @@ Pop {
     if (known && !agent) { chooser.open(); return }
     close()
     sent(r)
+  }
+  function sendToTerminal(request) {
+    var r = String(request || "").trim()
+    if (!r) return
+    close()
+    sentToTerminal(r)
   }
 
   contentItem: Column {
@@ -365,6 +374,21 @@ Pop {
         }
       }
       IconButton {
+        objectName: "agentAskTerminal"
+        visible: pop.known && Agent.runsHere(pop.agent)
+        anchors.right: askButton.left
+        anchors.rightMargin: 6
+        anchors.verticalCenter: parent.verticalCenter
+        theme: pop.theme
+        icon: pop.theme.icons.terminal
+        tip: "Ask " + Agent.name(pop.agent) + " in a terminal instead, with all its own controls"
+        size: 30
+        iconSize: 14
+        active: field.text.trim() !== ""
+        onClicked: pop.sendToTerminal(field.text)
+      }
+      IconButton {
+        id: askButton
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         theme: pop.theme
@@ -382,7 +406,7 @@ Pop {
       wrapMode: Text.Wrap
       textFormat: Text.PlainText
       text: Agent.runsHere(pop.agent)
-        ? Agent.name(pop.agent) + " works here, in a panel on the page, through Uber Notebook's commands: what it changes shows up as it goes, each change a step you can undo."
+        ? Agent.name(pop.agent) + " works here, in a panel on the page, through Uber Notebook's commands: what it changes shows up as it goes, each change a step you can undo. The terminal button beside Ask asks it in a terminal instead, with all its own controls."
         : "It opens in a terminal and works through Uber Notebook's commands: what it changes shows up here, each change a step you can undo."
       font.family: pop.theme.uiFont
       font.pixelSize: 11

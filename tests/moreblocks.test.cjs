@@ -185,4 +185,16 @@ check("a gallery: what it keeps, the Library's pictures, Markdown", () => {
   assert.ok(W.pageText(page).includes("Beach day"), "found by its captions");
 });
 
+check("a bookmark's page read once along it, in time whatever it holds", () => {
+  for (const h of ["<meta ".repeat(100000), "<meta name='x' ".repeat(37000) + ">", "<title ".repeat(85000), "<title>".repeat(85000), "</head>".repeat(85000)]) {
+    const t = Date.now();
+    BM.parse(h, "https://e.org");
+    assert.ok(Date.now() - t < 1500, (Date.now() - t) + " ms");
+  }
+  // The first tag of the first name with something in it; the title when there's none.
+  const page = '<title>T</title><meta property="og:title" content=" "><meta name="og:title" content="First"><meta property="og:title" content="Second">';
+  assert.equal(BM.parse(page, "https://e.org").title, "First");
+  assert.equal(BM.parse('<title x="1">Plain &amp; simple</title><meta name="og:title">', "https://e.org").title, "Plain & simple");
+});
+
 console.log(`moreblocks: ${passed} checks passed`);

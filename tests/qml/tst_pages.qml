@@ -532,6 +532,130 @@ Item {
       })
     }
 
+    // Another folder (another profile) with a page of the same id (a restored
+    // backup's are): its own page is read, never the one written here.
+    function test_20_another_folder_same_ids() {
+      fresh()
+      var p = ws.createPage({ title: "Private A", blocks: [{ type: "p", html: "only in A", indent: 0 }] })
+      verify(ws.written[p.id] !== undefined, "written this session")
+      var a = files.rootPath
+      var b = a + "-other"
+      var copy = JSON.parse(files.disk[ws.pagePath(p.id)])
+      copy.title = "Page B"
+      for (var k in copy.blocks) if (copy.blocks[k].html !== undefined) copy.blocks[k].html = "only in B"
+      files.disk[b + "/Pages/" + p.id + ".json"] = JSON.stringify(copy)
+      files.disk[b + "/Pages/index.json"] = files.disk[a + "/Pages/index.json"]
+      files.rootPath = b
+      tryCompare(ws, "folder", b + "/Pages", 1000)
+      tryVerify(function() { return ws.ready && ws.generation > 0 }, 2000)
+      wait(200)
+      tryCompare(ws, "ready", true, 2000)
+      compare(ws.written[p.id], undefined, "nothing of A's kept")
+      var got = null
+      ws.readPage(p.id, function(page) { got = page })
+      tryVerify(function() { return got !== null }, 2000)
+      compare(got.title, "Page B")
+      verify(Workspace.pageText(got).indexOf("only in A") < 0, "A's text never in B")
+      files.rootPath = a
+      tryCompare(ws, "folder", a + "/Pages", 1000)
+    }
+
+    // Pasting reads the clipboard itself (wl-paste, in the app): its HTML with
+    // nothing in it Qt would load (a picture, a background), and a middle
+    // click pastes what's selected the same way, where it's clicked.
+    function test_21_pasting_html_without_what_it_names() {
+      fresh()
+      var e = view.editor
+      var asked = []
+      var clipboard = { html: "<p>Hello <b>world</b><img src=\"http://127.0.0.1:9/pixel.png\"></p>"
+        + "<style>p { background: url(http://127.0.0.1:9/bg.png) }</style><p style=\"background-image:url(http://127.0.0.1:9/b.png)\">more</p>", text: "Hello world\nmore" }
+      var selection = { html: "", text: "picked " }
+      // Through the view's own forwarding to the store, as in the app.
+      files.readClipboard = function(done, primary) { asked.push(primary === true); done(primary ? selection : clipboard) }
+      try {
+        var last = e.uidAt(e.model.count - 1)
+        e.focusBlock(last, 0)
+        keyClick(Qt.Key_V, Qt.ControlModifier)
+        compare(asked, [false], "the clipboard, not what's selected")
+        var list = e.serialize()
+        var at = list.map(function(b) { return Html.plainText(b.html || "") }).indexOf("Hello world")
+        verify(at >= 0, "pasted: " + JSON.stringify(list.map(function(b) { return b.html })))
+        verify(/font-weight:700/.test(list[at].html), "bold kept")
+        var all = JSON.stringify(list)
+        verify(all.indexOf("127.0.0.1") < 0 && all.indexOf("<img") < 0 && all.indexOf("url(") < 0, "nothing it names: " + all)
+        verify(list.some(function(b) { return Html.plainText(b.html || "") === "more" }), "its text all there")
+        // A middle click at the start of "Hello world": what's selected, there.
+        var item = e.items[e.uidAt(at)]
+        mouseClick(item.edit, 1, item.edit.cursorRectangle.height / 2, Qt.MiddleButton)
+        compare(asked, [false, true], "what's selected")
+        compare(Html.plainText(e.serialize()[at].html), "picked Hello world")
+        // Nothing selected: nothing pasted (not a picture from the clipboard).
+        selection = null
+        var before = JSON.stringify(e.serialize())
+        mouseClick(item.edit, 1, item.edit.cursorRectangle.height / 2, Qt.MiddleButton)
+        compare(asked.length, 3)
+        compare(JSON.stringify(e.serialize()), before)
+        // A locked page: no paste at all.
+        selection = { html: "", text: "never" }
+        view.setFormat("locked", true)
+        mouseClick(item.edit, 1, item.edit.cursorRectangle.height / 2, Qt.MiddleButton)
+        compare(asked.length, 3, "not even read")
+        compare(JSON.stringify(e.serialize()), before)
+        view.setFormat("locked", false)
+        // Plain text, its empty lines kept (as Qt pastes it): a block each.
+        clipboard = { html: "", text: "one\n\ntwo" }
+        var count = e.model.count
+        e.focusBlock(e.uidAt(count - 1), -1)
+        keyClick(Qt.Key_Return)
+        keyClick(Qt.Key_V, Qt.ControlModifier)
+        compare(e.serialize().slice(count).map(function(b) { return Html.plainText(b.html || "") }), ["one", "", "two"])
+        before = JSON.stringify(e.serialize())
+        // Without wl-paste (tests): no middle-click paste.
+        files.readClipboard = null
+        mouseClick(item.edit, 1, item.edit.cursorRectangle.height / 2, Qt.MiddleButton)
+        compare(JSON.stringify(e.serialize()), before)
+      } finally {
+        files.readClipboard = null
+      }
+    }
+
+    // A paste whose clipboard comes late: only into the page it was for,
+    // still open and not locked since; never into another.
+    function test_22_a_late_clipboard_goes_nowhere_else() {
+      fresh()
+      var e = view.editor
+      var waiting = []
+      files.readClipboard = function(done, primary) { waiting.push(done) }
+      try {
+        var first = view.page.id
+        e.focusBlock(e.uidAt(e.model.count - 1), -1)
+        keyClick(Qt.Key_V, Qt.ControlModifier)
+        compare(waiting.length, 1)
+        // Another page opened before the clipboard came.
+        view.newPage("")
+        tryVerify(function() { return view.page && view.page.id !== first }, 2000)
+        var before = JSON.stringify(e.serialize())
+        waiting[0]({ html: "", text: "LATE" })
+        compare(JSON.stringify(e.serialize()), before, "nothing in the page open now")
+        verify(JSON.stringify(fileOf(first)).indexOf("LATE") < 0, "nor in the one it was for")
+        // Locked while it was read: nothing.
+        e.focusBlock(e.uidAt(0), 0)
+        keyClick(Qt.Key_V, Qt.ControlModifier)
+        compare(waiting.length, 2)
+        view.setFormat("locked", true)
+        waiting[1]({ html: "", text: "LOCKED" })
+        compare(JSON.stringify(e.serialize()), before)
+        view.setFormat("locked", false)
+        // In time, on the same page: pasted.
+        e.focusBlock(e.uidAt(0), 0)
+        keyClick(Qt.Key_V, Qt.ControlModifier)
+        waiting[2]({ html: "", text: "ON TIME" })
+        verify(JSON.stringify(e.serialize()).indexOf("ON TIME") >= 0)
+      } finally {
+        files.readClipboard = null
+      }
+    }
+
     function test_8_the_open_page_reloads_after_the_store_changes_it() {
       fresh()
       var home = view.page.id

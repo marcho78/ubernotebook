@@ -52,6 +52,7 @@ function parseAttrs(text) {
 }
 
 // "font-weight:700; color:#c00" -> { "font-weight": "700", color: "#c00" }.
+// (Only properties named as CSS names them.)
 function parseStyle(text) {
   var style = {}
   String(text || "").split(";").forEach(function(part) {
@@ -59,7 +60,7 @@ function parseStyle(text) {
     if (colon < 0) return
     var key = part.slice(0, colon).trim().toLowerCase()
     var value = part.slice(colon + 1).trim()
-    if (key && value) style[key] = value
+    if (/^-?[a-z][a-z-]{0,40}$/.test(key) && value) style[key] = value
   })
   return style
 }
@@ -197,7 +198,7 @@ function serialize(runs) {
     if (run.img) { out += imgTag(run.img); return }
     var css = styleText(run.style || {})
     var text = escapeText(run.text)
-    out += css ? "<span style=\"" + css + "\">" + text + "</span>" : text
+    out += css ? "<span style=\"" + escapeAttr(css) + "\">" + text + "</span>" : text
   })
   closeLink()
   return out
@@ -406,9 +407,30 @@ function clearFormatting(inner) {
   })
 }
 
+// A color, a font or a size as a run's text may keep it ("" when it isn't
+// one): a color as #rrggbb (or its name), a font by its names (letters,
+// digits, spaces, quotes, commas), a size in px from 1 to 400.
+function cleanLook(key, value) {
+  var v = String(value || "").trim()
+  if (key === "color" || key === "background-color") {
+    var c = normalColor(v)
+    return /^#[0-9a-f]{6}$/.test(c) || /^[a-z]{3,30}$/.test(c) ? c : ""
+  }
+  if (key === "font-family") {
+    var f = v.replace(/"/g, "'")
+    return /^[A-Za-z0-9 ,'_.-]{1,200}$/.test(f) ? f : ""
+  }
+  if (key === "font-size") {
+    var px = /^[0-9]{1,4}(\.[0-9]{1,3})?\s*(px|pt)$/.test(v) ? pxSize(v) : 0
+    return px >= 1 && px <= 400 ? px + "px" : ""
+  }
+  return v
+}
+
 // Pasted text keeps what it says (bold, italic, underline, strikethrough,
 // links, line breaks) and drops how the page it came from looked (fonts,
-// sizes, colors, backgrounds), unless keepLook: then only oddities go.
+// sizes, colors, backgrounds), unless keepLook: then only oddities go. Links
+// go only to the web, to an email address, or inside Uber Notebook.
 function sanitize(inner, keepLook) {
   var keep = keepLook
     ? ["font-weight", "font-style", "text-decoration", "color", "background-color", "font-family", "font-size", "vertical-align"]
@@ -427,7 +449,13 @@ function sanitize(inner, keepLook) {
       else delete style["text-decoration"]
     }
     if (style["vertical-align"] && !/^(sub|super)$/.test(style["vertical-align"])) delete style["vertical-align"]
-    var href = /^(https?:|mailto:|file:)/i.test(run.href || "") || isInternal(run.href) ? run.href : ""
+    ;["color", "background-color", "font-family", "font-size"].forEach(function(key) {
+      if (!style[key]) return
+      var v = cleanLook(key, style[key])
+      if (v) style[key] = v
+      else delete style[key]
+    })
+    var href = /^(https?:|mailto:)/i.test(run.href || "") || isInternal(run.href) ? run.href : ""
     return { text: run.text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, ""), style: style, href: href }
   }).filter(function(run) { return run && (run.br || run.text) })
   return serialize(merged(runs))
@@ -596,6 +624,119 @@ function wrapBlock(inner, lineHeight, linkColor, tagStyle) {
   return "<p style=\"" + style + "\">" + decorateLinks(content, linkColor, tagStyle) + "</p>"
 }
 
+// ---- HTML from elsewhere, before Qt reads it ------------------------------------------------
+
+// What's dropped from HTML with everything in it (its text too), and what's
+// dropped as a tag (what's in it stays): anything Qt would fetch or load, or
+// that isn't writing.
+var DROP_ALL = ["script", "style", "svg", "math", "iframe", "object", "embed", "video", "audio", "picture", "template",
+  "noscript", "canvas", "head", "title", "textarea", "select", "frameset", "noframes", "applet", "xml"]
+var DROP_TAG = ["img", "image", "link", "meta", "base", "input", "source", "track", "frame", "area", "map", "param", "button", "form", "html", "body"]
+// The attributes a tag keeps (a link's only to the web, an email address,
+// or a place on the page; a style's without anything it would fetch).
+var KEEP_ATTRS = ["href", "colspan", "rowspan", "style", "class", "align", "valign", "dir", "start", "type", "bgcolor", "width", "height", "color", "face", "size",
+  "border", "cellpadding", "cellspacing", "name", "lang"]
+
+function cleanStyleText(value) {
+  return String(value || "").split(";").filter(function(part) {
+    var colon = part.indexOf(":")
+    if (colon < 0) return false
+    var key = part.slice(0, colon).trim().toLowerCase()
+    var v = part.slice(colon + 1).toLowerCase()
+    return /^-?[a-z][a-z-]{0,40}$/.test(key) && key.indexOf("image") < 0 && key !== "behavior" && key !== "content"
+      && v.indexOf("url(") < 0 && v.indexOf("expression") < 0 && v.indexOf("@import") < 0 && v.indexOf("\\") < 0
+  }).map(function(part) { return part.trim() }).join("; ")
+}
+
+// HTML from elsewhere (the clipboard) with nothing in it that Qt would fetch
+// or load: no pictures, stylesheets, scripts, frames or media, no background
+// attributes, no url() in a style, every attribute but a few dropped, every
+// "<" that doesn't start a tag written as text. What it says, and how it's
+// laid out (paragraphs, lists, headings, tables, bold...), as it was.
+function withoutResources(html) {
+  var s = String(html || "")
+  // (Qt's mark on HTML it wrote, which it reads its spaces by, wherever it is.)
+  var QT = "<meta name=\"qrichtext\" content=\"1\" />"
+  var out = s.indexOf(QT) >= 0 ? [QT] : []
+  var i = 0
+  var n = s.length
+  while (i < n) {
+    var lt = s.indexOf("<", i)
+    if (lt < 0) { out.push(s.slice(i)); break }
+    if (lt > i) out.push(s.slice(i, lt))
+    i = lt
+    if (s.substr(i, 4) === "<!--") {
+      // (Where a copied part starts and ends, as browsers and Qt mark it: Qt
+      // reads only what's between.)
+      var marker = /^<!--(Start|End)Fragment-->/.exec(s.substr(i, 20))
+      if (marker) { out.push(marker[0]); i += marker[0].length; continue }
+      var endC = s.indexOf("-->", i + 4)
+      i = endC < 0 ? n : endC + 3
+      continue
+    }
+    var c = s.charAt(i + 1)
+    if (c === "!" || c === "?") {
+      var endD = s.indexOf(">", i)
+      i = endD < 0 ? n : endD + 1
+      continue
+    }
+    var closing = c === "/"
+    var at = closing ? i + 2 : i + 1
+    var m = /^[A-Za-z][A-Za-z0-9-]{0,40}/.exec(s.substr(at, 41))
+    if (!m) { out.push("&lt;"); i += 1; continue }
+    var name = m[0].toLowerCase()
+    // The tag's end, past quoted values.
+    var j = at + m[0].length
+    var quote = ""
+    while (j < n) {
+      var ch = s.charAt(j)
+      if (quote) { if (ch === quote) quote = "" }
+      else if (ch === "\"" || ch === "'") quote = ch
+      else if (ch === ">") break
+      j++
+    }
+    var attrsText = s.slice(at + m[0].length, j)
+    i = j < n ? j + 1 : n
+    if (DROP_ALL.indexOf(name) >= 0) {
+      if (!closing && !/\/\s*$/.test(attrsText)) {
+        // Everything up to its end goes.
+        // (Its name is letters, digits and "-": nothing a pattern reads.)
+        var closer = new RegExp("</" + name, "ig")
+        closer.lastIndex = i
+        var found = closer.exec(s)
+        if (!found) { i = n; continue }
+        var gt = s.indexOf(">", found.index)
+        i = gt < 0 ? n : gt + 1
+      }
+      continue
+    }
+    if (DROP_TAG.indexOf(name) >= 0) continue
+    if (closing) { out.push("</" + name + ">"); continue }
+    var attrs = []
+    var re = /([A-Za-z_:][-A-Za-z0-9_:.]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g
+    var a
+    while ((a = re.exec(attrsText)) !== null) {
+      var key = a[1].toLowerCase()
+      if (KEEP_ATTRS.indexOf(key) < 0) continue
+      var value = decodeEntities(a[3] !== undefined ? a[3] : a[4] !== undefined ? a[4] : a[5] !== undefined ? a[5] : "")
+      if (key === "href" && !/^(https?:|mailto:|#)/i.test(value.trim())) continue
+      if (key === "style") value = cleanStyleText(value)
+      attrs.push(key + "=\"" + escapeAttr(value) + "\"")
+    }
+    out.push("<" + name + (attrs.length ? " " + attrs.join(" ") : "") + (/\/\s*$/.test(attrsText) ? " /" : "") + ">")
+  }
+  return out.join("")
+}
+
+// Plain text (with \n for line breaks) as HTML paragraphs, spaces as typed.
+function plainParagraphs(text) {
+  return String(text || "").replace(/\r\n/g, "\n").replace(/[\r\u2028\u2029]/g, "\n").split("\n")
+    .map(function(line) {
+      // (An empty line as Qt writes one: an empty <p> isn't a paragraph to it.)
+      return line === "" ? "<p style=\"-qt-paragraph-type:empty;\"><br /></p>" : "<p style=\"white-space:pre-wrap;\">" + escapeText(line) + "</p>"
+    }).join("")
+}
+
 // ---- plain text -----------------------------------------------------------------
 
 function plainText(inner) {
@@ -606,17 +747,18 @@ function plainText(inner) {
   }).join("")
 }
 
-// Plain text (with \n for line breaks) as a block's inside.
+// Plain text (with \n for line breaks) as a block's inside. (Split on a plain
+// "\n": Qt's engine can't split on a pattern into that many pieces.)
 function fromPlainText(text) {
-  return String(text || "").split(/\r?\n|\u2028/).map(escapeText).join("<br />")
+  return String(text || "").replace(/\r\n/g, "\n").replace(/[\r\u2028]/g, "\n").split("\n").map(escapeText).join("<br />")
 }
 
-// A link a person typed or pasted, made safe to open: http(s), mailto or file,
+// A link a person typed or pasted, made safe to open: http(s) or mailto,
 // else "" (a bare "example.com" gets https://).
 function cleanUrl(text) {
   var url = String(text || "").trim()
   if (!url || url.length > 2000 || /[\u0000-\u001f\u007f\s]/.test(url)) return ""
-  if (/^(https?:\/\/|mailto:|file:\/\/)/i.test(url)) return url
+  if (/^(https?:\/\/|mailto:)/i.test(url)) return url
   if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return ""
   if (/^[^\/@]+\.[a-z]{2,}(\/.*)?$/i.test(url)) return "https://" + url
   return ""

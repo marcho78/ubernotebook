@@ -57,6 +57,22 @@ Item {
       verify(saved.text.indexOf("Before we go!") >= 0)
     }
 
+    // A middle click pastes what's selected (the primary selection), read
+    // through the view's forwarding to the store, not the clipboard.
+    function test_2b_middle_click_pastes_whats_selected() {
+      openFirst()
+      var asked = []
+      fakeStore.readClipboard = function(done, primary) { asked.push(primary === true); done(primary ? { html: "", text: "picked " } : { html: "", text: "the clipboard" }) }
+      try {
+        var item = view.editor.items[view.editor.uidAt(0)]
+        mouseClick(item.edit, 1, item.edit.cursorRectangle.height / 2, Qt.MiddleButton)
+        compare(asked, [true])
+        verify(/^picked Before/.test(item.edit.getText(0, item.edit.length)), item.edit.getText(0, item.edit.length))
+      } finally {
+        fakeStore.readClipboard = null
+      }
+    }
+
     function test_3_turns_pages() {
       openFirst()
       view.next()

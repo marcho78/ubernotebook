@@ -109,7 +109,9 @@ function checked(output) {
   if (/[^-d]/.test(fields.types || "")) return { ok: false, problem: "That backup has links or special files in it, so it isn't put back.", manifest: null }
   var m = readManifest(text.slice(cut + 5))
   if (!m) return { ok: false, problem: notOurs, manifest: null }
-  return { ok: true, problem: "", manifest: m }
+  // (What restoring it checks it still is.)
+  var hash = /^[0-9a-f]{64}$/.test(fields.hash || "") ? fields.hash : ""
+  return { ok: true, problem: "", manifest: m, hash: hash }
 }
 
 // The backups in a folder (the list script's lines: "<modified>\t<size>\t<name>"),
@@ -210,27 +212,10 @@ var BACKUP_SCRIPT = [
   "printf '%s\\n' \"$out\""
 ].join("\n")
 
-// What's in a file, before it's put back: whether tar reads it, what kinds
-// of things are in it (- files, d folders), how many names fall outside
-// what a backup holds or reach up (..), then its uber-notebook-backup.json.
-var CHECK_SCRIPT = [
-  "f=$1",
-  "names=$(/usr/bin/tar -tzf \"$f\" 2>/dev/null) || { echo 'readable:0'; exit 0; }",
-  "echo 'readable:1'",
-  "echo \"types:$(/usr/bin/tar -tvzf \"$f\" 2>/dev/null | /usr/bin/cut -c1 | /usr/bin/sort -u | /usr/bin/tr -d '\\n')\"",
-  "echo \"outside:$(printf '%s\\n' \"$names\" | /usr/bin/grep -cvE '^(" + MANIFEST.replace(/\./g, "\\.") + "|p[0-9]{1,2}(/.*)?)$')\"",
-  "echo \"dots:$(printf '%s\\n' \"$names\" | /usr/bin/grep -cE '(^|/)\\.\\.(/|$)')\"",
-  "echo '---'",
-  "/usr/bin/tar -xzOf \"$f\" " + MANIFEST + " 2>/dev/null | /usr/bin/head -c 200000"
-].join("\n")
-
-// One profile put back: <file> <p1...> <where>; a new folder ("<where> 2"...
-// if that's taken), never one that's there. Prints the folder.
-var RESTORE_SCRIPT = [
-  "f=$1; n=$2; base=$3",
-  "d=$base; i=2",
-  "while [ -e \"$d\" ]; do d=\"$base $i\"; i=$((i+1)); done",
-  "/usr/bin/mkdir -p -- \"$d\" || exit 3",
-  "if ! /usr/bin/tar -xzf \"$f\" -C \"$d\" --strip-components=1 --no-same-owner \"$n\"; then /usr/bin/rm -rf -- \"$d\"; exit 3; fi",
-  "printf '%s\\n' \"$d\""
-].join("\n")
+// Looking into a backup and putting one back is the archive helper's
+// (bin/uber-notebook-files): inspect-backup prints whether it's readable,
+// the kinds of things in it ("-" files, "d" folders), how many names fall
+// outside what a backup holds or reach up (..), the file's sha256, then its
+// uber-notebook-backup.json (checked() reads that); restore-backup puts one
+// profile back from that same file (if it's still the one looked into),
+// into a new folder.

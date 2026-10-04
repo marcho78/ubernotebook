@@ -68,6 +68,9 @@ FocusScope {
   property real sketchNib: Sketch.NIBS[1]
   // "assets/x.png" -> a URL the page can show. Set by the page.
   property var assetUrl: function(src) { return "" }
+  // A picture's or file's real size, and whether it's a plain file:
+  // done({ size, regular }) or done(null).
+  property var assetInfo: function(src, done) { done(null) }
 
   // "paper" (a notebook: every line on a rule) or "doc" (a page in Pages).
   property string layout: "paper"
@@ -663,7 +666,11 @@ FocusScope {
 
   // ---- loading and saving ----------------------------------------------------------------
 
+  // How many times a page was loaded (a paste whose clipboard comes after
+  // another page, or none, is in the editor goes nowhere: withClipboard).
+  property int loads: 0
   function load(blocks) {
+    loads++
     burstTimer.stop()
     burstOpen = false
     inOp = false
@@ -3775,10 +3782,67 @@ FocusScope {
   property string lastCopied: ""
   property var copiedBlocks: null
 
+  // The clipboard read: its formatted text (as cleaned HTML, see
+  // withClipboard) here, to be read the way Qt reads HTML; its plain text in
+  // clipText (Qt pastes only the text into it: nothing it names is loaded).
   TextEdit {
     id: clipArea
     visible: false
     textFormat: TextEdit.RichText
+  }
+  TextEdit {
+    id: clipText
+    visible: false
+    textFormat: TextEdit.PlainText
+  }
+
+  // How the clipboard's read for pasting: function(done, primary), done({ html,
+  // text }) or done(null), wl-paste's (Store.qml: readClipboard). Without it
+  // (tests), Qt's own paste, and no middle-click paste.
+  property var readClipboard: null
+  property bool clipReady: false
+  // The clipboard's plain text, read with its HTML (null: Qt's, clipText).
+  property var clipPlain: null
+  // The clipboard's formatted text put in clipArea, then fn(): its HTML read
+  // by readClipboard and cleaned of everything Qt would fetch or load
+  // (Html.withoutResources: pictures, stylesheets, backgrounds...), or its
+  // text as paragraphs. (Qt's own paste would load the pictures the HTML
+  // names: a page copied from the web, pasted, would call its server.)
+  // With `primary`: what's selected anywhere (a middle click's paste).
+  function withClipboard(fn, primary) {
+    function go() {
+      clipReady = true
+      try { fn() } catch (e) { console.warn("Uber Notebook: pasting: " + e) } finally { clipReady = false; clipPlain = null }
+    }
+    if (typeof readClipboard !== "function") {
+      if (primary === true) return
+      clipArea.text = ""
+      clipArea.paste()
+      go()
+      return
+    }
+    // (Read while you go on: when it comes, only into the page it was for,
+    // still open, and not locked since.)
+    var loaded = loads
+    readClipboard(function(c) {
+      if (loads !== loaded || readOnly) return
+      var text = c && typeof c.text === "string" ? c.text.replace(/\r\n?/g, "\n").replace(/[\u2028\u2029]/g, "\n") : ""
+      var html = c && typeof c.html === "string" ? Html.withoutResources(c.html) : ""
+      // (Put in as Qt's paste puts in HTML: a part of a document.)
+      clipArea.text = ""
+      if (html !== "" || text !== "") clipArea.insert(0, html !== "" ? html : Html.plainParagraphs(text))
+      clipPlain = text
+      go()
+    }, primary === true)
+  }
+  // A middle click in a block's text: what's selected anywhere pasted where
+  // it's clicked, the way Ctrl+V pastes. (Qt's own middle-click paste reads
+  // the selection's HTML as it is, and loads the pictures it names.)
+  function pastePrimary(item, x, y) {
+    if (readOnly || !item || !item.edit) return
+    item.edit.forceActiveFocus()
+    item.edit.cursorPosition = item.edit.positionAt(x, y)
+    withClipboard(function() { pasteNow(item, false, true) }, true)
   }
   TextSelection {
     id: clipSelection
@@ -3832,11 +3896,10 @@ FocusScope {
 
   // What's on the clipboard, as plain text ("\n" between lines).
   function clipboardText() {
-    clipArea.text = ""
-    clipArea.paste()
-    clipSelection.selectionStart = 0
-    clipSelection.selectionEnd = clipArea.length
-    return String(clipSelection.text || "").replace(/[\u2028\u2029]/g, "\n")
+    if (clipReady && clipPlain !== null) return clipPlain
+    clipText.text = ""
+    clipText.paste()
+    return String(clipText.text || "").replace(/[\u2028\u2029]/g, "\n")
   }
 
   // Blocks put in at an index (their depths kept, from 0), as one step; the
@@ -3855,10 +3918,10 @@ FocusScope {
     if (!keepFocus) focusBlock(last, -1)
   }
 
-  // What's on the clipboard, as blocks: [{ type, html, checked }].
+  // What's on the clipboard, as blocks: [{ type, html, checked }]. (Inside
+  // withClipboard, which puts it in clipArea first.)
   function clipboardBlocks(keepLook) {
-    clipArea.text = ""
-    clipArea.paste()
+    if (!clipReady) return []
     var n = clipArea.length
     if (n === 0) return []
     clipSelection.selectionStart = 0
@@ -3911,11 +3974,14 @@ FocusScope {
     return out
   }
 
-  function paste(item, plainOnly) {
+  function paste(item, plainOnly) { withClipboard(function() { pasteNow(item, plainOnly) }) }
+  // (`textOnly`: a middle click's, with no picture when there's no text.)
+  function pasteNow(item, plainOnly, textOnly) {
+    if (!item || indexOf(item.uid) < 0) return
     var edit = item.edit
     var list = clipboardBlocks(false)
     if (list.length === 0) {
-      pastePicture(item.uid)
+      if (!textOnly) pastePicture(item.uid)
       return
     }
     if (plainOnly) list = list.map(function(b) { return { type: b.type === "code" ? "code" : "p", html: Html.fromPlainText(Html.plainText(b.html || "")) } })
@@ -4004,7 +4070,9 @@ FocusScope {
   }
 
   // Pasting with blocks picked: after them.
-  function pasteAfter(uid, plainOnly) {
+  function pasteAfter(uid, plainOnly) { withClipboard(function() { pasteAfterNow(uid, plainOnly) }) }
+  function pasteAfterNow(uid, plainOnly) {
+    if (indexOf(uid) < 0) return
     var list = clipboardBlocks(false)
     if (list.length === 0) { pastePicture(uid); return }
     var index = indexOf(uid)

@@ -1,11 +1,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import "../MarkdownView.js" as MarkdownView
 
 // What's new: a newer version's release notes (or, up to date, the notes of
 // the one running, from CHANGELOG.md), read here in Uber Notebook. With a newer
-// one: Update now (Uber Notebook installed from git updates itself with `omarchy
-// plugin update`, and starts again), or the command to run, to copy.
+// one: the command that installs it (`omarchy plugin update`), to copy and run
+// in a terminal, where it shows what changes and asks first.
 Popup {
   id: rn
 
@@ -105,9 +106,9 @@ Popup {
         y: 18
         width: notesFlick.width - 12
         wrapMode: Text.Wrap
-        // (Release notes come without pictures or HTML: nothing in them is fetched.)
-        textFormat: Text.MarkdownText
-        text: rn.shown.markdown
+        // (Rich text Qt draws without fetching anything: MarkdownView.js.)
+        textFormat: Text.RichText
+        text: MarkdownView.rich(rn.shown.markdown, 14)
         font.family: rn.theme.uiFont
         font.pixelSize: 14
         lineHeight: 1.25
@@ -118,36 +119,22 @@ Popup {
       }
     }
 
-    // Update now (or how), the release on GitHub, close.
+    // How to update, the release on GitHub, close.
     Item {
       id: foot
       anchors.bottom: parent.bottom
       width: parent.width
-      height: footRow.height + 32 + (problemText.visible ? problemText.height + 8 : 0)
+      height: footRow.height + 32
       Rectangle { width: parent.width; height: 1; color: rn.theme.line }
-      Text {
-        id: problemText
-        objectName: "releaseNotesProblem"
-        visible: rn.updates !== null && rn.updates.installing !== "" && rn.updates.installing !== "running"
-        x: 28
-        y: 14
-        width: parent.width - 56
-        wrapMode: Text.Wrap
-        textFormat: Text.PlainText
-        text: rn.updates ? rn.updates.installing : ""
-        font.family: rn.theme.uiFont
-        font.pixelSize: 12
-        color: rn.theme.urgent
-      }
       Row {
         id: footRow
         x: 28
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 16
         spacing: 8
-        // Not from git: the command, to copy.
+        // The command, to copy and run in a terminal.
         Rectangle {
-          visible: rn.updates !== null && rn.updates.available && !rn.updates.managed && !rn.own
+          visible: rn.updates !== null && rn.updates.available && !rn.own
           anchors.verticalCenter: parent.verticalCenter
           width: Math.min(300, commandText.implicitWidth + 24)
           height: 32
@@ -170,21 +157,12 @@ Popup {
         }
         TextButton {
           objectName: "releaseNotesCopy"
-          visible: rn.updates !== null && rn.updates.available && !rn.updates.managed && !rn.own
+          visible: rn.updates !== null && rn.updates.available && !rn.own
           anchors.verticalCenter: parent.verticalCenter
           theme: rn.theme
           icon: rn.copied ? rn.theme.icons.check : rn.theme.icons.copy
           text: rn.copied ? "Copied" : "Copy"
           onClicked: { if (rn.service && rn.service.store) rn.service.store.copyText(rn.updates.updateCommand); rn.copied = true }
-        }
-        TextButton {
-          objectName: "releaseNotesUpdate"
-          visible: rn.updates !== null && rn.updates.available && rn.updates.managed && !rn.own
-          anchors.verticalCenter: parent.verticalCenter
-          theme: rn.theme
-          primary: true
-          text: rn.updates && rn.updates.installing === "running" ? "Updating…" : "Update now"
-          onClicked: if (rn.updates.installing !== "running") rn.updates.install()
         }
         TextButton {
           objectName: "releaseNotesGitHub"

@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 import qs.Commons
 import "Defaults.js" as Defaults
 import "Settings.js" as Settings
+import "Scope.js" as Scope
 
 // Uber Notebook: notebooks that look and feel like paper, and pages made of
 // blocks (Pages), on Omarchy.
@@ -116,7 +117,7 @@ Item {
   // Several at once ({ key: value }), as one change.
   function setSettings(changes) {
     var next = Settings.clone(user)
-    for (var key in changes) if (defaults && defaults[key] !== undefined) next[key] = changes[key]
+    for (var key in changes) if (defaults && Object.prototype.hasOwnProperty.call(defaults, key)) next[key] = changes[key]
     user = Settings.overrides(defaults, Settings.merge(defaults, next, schema))
     persistTimer.restart()
   }
@@ -252,6 +253,7 @@ Item {
     settings: root.settings
     updates: updatesItem
     backups: backupsItem
+    agentScope: root.agentScope
     onInboxMade: function(id) { root.setSetting("inbox", id) }
   }
 
@@ -353,7 +355,8 @@ Item {
   // Take the shortcuts and rules back out of Hyprland when Uber Notebook is
   // disabled or reloaded; write everything waiting to be written.
   Component.onDestruction: {
-    if (launcherEntry) Quickshell.execDetached(["/usr/bin/rm", "-f", "--", desktopFile])
+    // (Only the entry as it was written: one changed or put there since is left.)
+    if (launcherEntry && launcherText) Quickshell.execDetached(["/usr/bin/python3", "-I", "-S", storeItem.filesHelper, "remove-owned", desktopFile, launcherText])
     if (agentSkill) storeItem.unlinkSkill(skillDir)
     // Writes from here on finish before the shell goes on stopping.
     storeItem.stopping = true
@@ -414,8 +417,8 @@ Item {
     if (profilesItem.firstRun) { show({}); return }
     var value = String(text || "").trim()
     if (value) {
-      if (settings.quickTo === "pages") quickToPages(value)
-      else quickToNotebook(value)
+      if (settings.quickTo === "notebook") quickToNotebook(value)
+      else quickToPages(value)
       return
     }
     if (ui && typeof ui.openQuick === "function") ui.openQuick()
@@ -510,18 +513,15 @@ Item {
   // ---- in the app launcher ----------------------------------------------------------------------
   //
   // An entry in ~/.local/share/applications, so Uber Notebook is in the Omarchy
-  // launcher (and any other) with its icon, like an app. It's written when
+  // launcher (and any other) with its icon, like an app. It's made when
   // Uber Notebook starts and taken out when it stops, so turning Uber Notebook off (or
-  // removing it) leaves nothing behind.
+  // removing it) leaves nothing behind. Only ever its own: it's made only where
+  // there's nothing of that name, and taken out only if it's exactly what was
+  // made (the archive helper's create-owned and remove-owned).
 
   readonly property string desktopFile: home + "/.local/share/applications/marcho78-uber-notebook.desktop"
-
-  FileView {
-    id: desktopWriter
-    atomicWrites: true
-    preload: false
-    printErrors: false
-  }
+  // What was made (or found there, the same), to take out when it stops.
+  property string launcherText: ""
 
   Timer {
     id: launcherTimer
@@ -532,154 +532,190 @@ Item {
       if (!entry) return
       storeItem.exec(["/usr/bin/mkdir", "-p", "--", root.home + "/.local/share/applications"], function(ok) {
         if (!ok) return
-        desktopWriter.path = root.desktopFile
-        desktopWriter.setText(entry)
+        storeItem.helper(["create-owned", root.desktopFile, entry], function(made, out) {
+          var r = String(out || "").trim()
+          if (made && (r === "made" || r === "same")) root.launcherText = entry
+        }, { timeoutMs: 5000, maxBytes: 4096 })
       })
     }
   }
 
   // ---- IPC --------------------------------------------------------------------------------------
 
-  IpcHandler {
-    target: "uber-notebook"
+  // While an agent works in Uber Notebook's panel (DocView), what it may do
+  // through the commands below: Scope.js. null the rest of the time.
+  property var agentScope: null
+  // (`agent`: its name, `id`: which it is, claude, grok or codex: Permissions.js.)
+  function beginAgentScope(agent, dir, id) {
+    agentScope = { agent: String(agent || "An agent"), id: String(id || ""), dir: String(dir || ""), frozen: false }
+  }
+  function endAgentScope() { agentScope = null }
+  // A command, from you (`forAgent` false: uber-notebook, a script's or a
+  // terminal's agent's too: as always) or from the panel's agent
+  // (uber-notebook-agent: as Scope.js says while it works, none otherwise),
+  // the Api told which while it runs.
+  function scoped(forAgent, command, args, run) {
+    var why = Scope.forCaller(forAgent, agentScope, command, args)
+    if (why) return JSON.stringify({ ok: false, error: why })
+    apiItem.caller = forAgent ? agentScope : null
+    try { return run() } finally { apiItem.caller = null }
+  }
 
-    function toggle(): void { root.toggle({}) }
-    function show(): void { if (!root.windowOpen) root.show({}) }
-    function hide(): void { root.hide() }
-    // uber-notebook quick            opens the quick-note card
-    // uber-notebook quick "Buy milk"  saves it straight away
-    function quick(text: string): void { root.quick(String(text || "").slice(0, 20000)) }
-    function search(text: string): void { root.show({ search: String(text || "").slice(0, 200) }) }
-    function shelf(): void { root.show({ shelf: true }) }
-    // uber-notebook pages: straight to Pages.
-    function pages(): void { root.show({ pages: true }) }
-    // The calendar, on a day ("" is today).
-    function calendar(day: string): void { root.show({ calendar: /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) ? String(day) : "today" }) }
-    // uber-notebook importNotes ~/notes: files or a folder (a Notion or Obsidian export) into Pages.
-    function importNotes(path: string): void {
-      var p = String(path || "")
-      if (p.indexOf("~/") === 0) p = root.home + p.slice(1)
-      workspaceItem.importPaths([p], "", function(r) {
-        root.osd("\u{f0e27}", r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into Pages" : "Nothing to import there")
-      })
-    }
-    // uber-notebook open <page id>: a page in Pages (a reminder's notification does this).
-    function open(id: string): void { if (/^[0-9a-f-]{36}$/.test(String(id || ""))) root.show({ page: String(id) }) }
-    function settings(): void { root.show({ settings: true }) }
-    // omarchy-shell uber-notebook set paper grid   (values are checked like the settings panel's)
-    function set(key: string, value: string): string {
-      if (!root.defaults || root.defaults[key] === undefined) return "unknown setting"
-      var parsed = value
-      if (value === "true" || value === "false") parsed = value === "true"
-      else if (/^-?\d{1,6}$/.test(value)) parsed = Number(value)
-      root.setSetting(key, parsed)
-      return JSON.stringify(root.settings[key])
-    }
-    function reset(): void { root.resetSettings() }
-    // omarchy-shell uber-notebook mirror: the Markdown copy made up to date now, and how it is.
-    function mirror(): string {
-      if (!mirrorItem.on) return JSON.stringify({ ok: false, error: "the Markdown copy is off: omarchy-shell uber-notebook set mirror true" })
-      mirrorItem.sync()
-      return JSON.stringify({ ok: !mirrorItem.problem, folder: root.mirrorPath, status: mirrorItem.status, files: mirrorItem.files })
-    }
+  // The commands, under two names: uber-notebook (yours, a script's, a
+  // terminal's agent's: as always) and uber-notebook-agent (the panel's
+  // agent's: Scope.js), each made from this one handler.
+  Instantiator {
+    model: [{ name: "uber-notebook", agent: false }, { name: "uber-notebook-agent", agent: true }]
+    // (Which one it is kept beside the handler, not on it: what's on an
+    // IpcHandler goes out over IPC, and these can't.)
+    delegate: QtObject {
+      id: commands
+      required property var modelData
+      readonly property bool agent: modelData.agent
+      readonly property IpcHandler handler: IpcHandler {
+        target: commands.modelData.name
 
-    // For AI agents and scripts: pages in and out, answered in JSON
-    // (omarchy-shell uber-notebook help lists them; Api.qml does them).
-    function help(): string { return apiItem.help() }
-    function list(): string { return apiItem.list() }
-    function find(words: string): string { return apiItem.find(words) }
-    function read(id: string): string { return apiItem.read(id) }
-    function add(title: string, file: string): string { return apiItem.add(title, file) }
-    function addTo(page: string, title: string, file: string): string { return apiItem.addTo(page, title, file) }
-    function append(id: string, file: string): string { return apiItem.append(id, file) }
-    function blocks(id: string): string { return apiItem.blocks(id) }
-    function tags(): string { return apiItem.tags() }
-    function library(kind: string, words: string): string { return apiItem.library(kind, words) }
-    function contacts(words: string): string { return apiItem.contacts(words) }
-    function contact(which: string): string { return apiItem.contact(which) }
-    function addContact(name: string, phone: string, email: string): string { return apiItem.addContact(name, phone, email) }
-    function importContacts(file: string): string { return apiItem.importContacts(file) }
-    function tagged(tag: string): string { return apiItem.tagged(tag) }
-    function tagColor(tag: string, color: string): string { return apiItem.tagColor(tag, color) }
-    function projects(): string { return apiItem.projects() }
-    function templates(): string { return apiItem.templates() }
-    function events(from: string, to: string): string { return apiItem.events(from, to) }
-    function addEvent(what: string, repeat: string): string { return apiItem.addEvent(what, repeat) }
-    function removeEvent(id: string): string { return apiItem.removeEvent(id) }
-    function fromTemplate(template: string, title: string, parent: string): string { return apiItem.fromTemplate(template, title, parent) }
-    function project(id: string, status: string, due: string): string { return apiItem.project(id, status, due) }
-    function archive(id: string): string { return apiItem.archive(id, true) }
-    function unarchive(id: string): string { return apiItem.archive(id, false) }
-    function replace(page: string, block: string, file: string): string { return apiItem.replace(page, block, file) }
-    function insertAfter(page: string, block: string, file: string): string { return apiItem.insertAfter(page, block, file) }
-    function trash(id: string): string { return apiItem.trash(id) }
-    function rename(id: string, title: string): string { return apiItem.rename(id, title) }
-    function move(id: string, parent: string, position: string): string { return apiItem.move(id, parent, position) }
-    function icon(id: string, emoji: string): string { return apiItem.icon(id, emoji) }
-    function cover(id: string, cover: string): string { return apiItem.cover(id, cover) }
-    function lock(id: string, on: string): string { return apiItem.lock(id, on) }
-    function favorite(id: string, on: string): string { return apiItem.favorite(id, on) }
-    function trashed(): string { return apiItem.trashed() }
-    function restore(id: string): string { return apiItem.restore(id) }
-    function duplicate(id: string): string { return apiItem.duplicate(id) }
-    function makeTemplate(id: string): string { return apiItem.makeTemplate(id) }
-    function history(id: string): string { return apiItem.history(id) }
-    function version(id: string, name: string): string { return apiItem.version(id, name) }
-    function restoreVersion(id: string, name: string): string { return apiItem.restoreVersion(id, name) }
-    function check(page: string, block: string, on: string): string { return apiItem.check(page, block, on) }
-    function color(page: string, block: string, color: string): string { return apiItem.color(page, block, color) }
-    function removeBlock(page: string, block: string): string { return apiItem.removeBlock(page, block) }
-    function board(page: string, block: string, action: string, a: string, b: string): string { return apiItem.board(page, block, action, a, b) }
-    function attach(page: string, file: string): string { return apiItem.attach(page, file) }
-    function bookmark(page: string, url: string): string { return apiItem.bookmark(page, url) }
-    function editEvent(id: string, field: string, value: string): string { return apiItem.editEvent(id, field, value) }
-    function editContact(which: string, field: string, value: string): string { return apiItem.editContact(which, field, value) }
-    function removeContact(id: string): string { return apiItem.removeContact(id) }
-    function importCalendar(file: string): string { return apiItem.importCalendar(file) }
-    function picture(page: string, block: string, width: string, align: string): string { return apiItem.picture(page, block, width, align) }
-    function addGallery(page: string, pictures: string, columns: string): string { return apiItem.addGallery(page, pictures, columns) }
-    function gallery(page: string, block: string, action: string, a: string, b: string): string { return apiItem.gallery(page, block, action, a, b) }
-    function setLink(page: string, block: string, link: string): string { return apiItem.setLink(page, block, link) }
-    function describeTemplate(template: string, text: string): string { return apiItem.describeTemplate(template, text) }
-    function addTemplate(title: string, file: string, description: string): string { return apiItem.addTemplate(title, file, description) }
-    function preferences(): string { return apiItem.preferences() }
-    function renameTag(tag: string, to: string): string { return apiItem.renameTag(tag, to) }
-    function removeTag(tag: string): string { return apiItem.removeTag(tag) }
-    function notebooks(): string { return apiItem.notebooks() }
-    function notebook(id: string): string { return apiItem.notebook(id) }
-    function readNotebook(id: string, page: string): string { return apiItem.readNotebook(id, page) }
-    function addToNotebook(id: string, file: string): string { return apiItem.addToNotebook(id, file) }
-    // omarchy-shell uber-notebook profiles: [{ id, name, folder, open, demo }].
-    function profiles(): string { return apiItem.profileList() }
-    // omarchy-shell uber-notebook profile Business: another profile open (its name or id).
-    function profile(which: string): string { return apiItem.openProfile(which) }
-    function addProfile(name: string, folder: string, open: string): string { return apiItem.addProfile(name, folder, open) }
-    function renameProfile(which: string, name: string): string { return apiItem.renameProfile(which, name) }
-    function profileFolder(which: string, folder: string): string { return apiItem.profileFolder(which, folder) }
-    function removeProfile(which: string): string { return apiItem.removeProfile(which) }
-    function demo(): string { return apiItem.demo(false) }
-    function restartDemo(): string { return apiItem.demo(true) }
-    function backup(which: string): string { return apiItem.backup(which) }
-    function backups(): string { return apiItem.backupList() }
-    function restoreBackup(file: string, open: string): string { return apiItem.restoreBackup(file, open) }
-    function appVersion(): string { return apiItem.appVersion() }
-    function checkUpdate(): string { return apiItem.checkUpdate() }
-    function releaseNotes(): string { return apiItem.releaseNotes() }
-    function installUpdate(): string { return apiItem.installUpdate() }
-    function status(): string {
-      return JSON.stringify({
-        open: root.windowOpen,
-        hyprland: root.hyprStatus,
-        takenShortcuts: root.takenBinds,
-        folder: root.rootPath,
-        profile: profilesItem.current ? profilesItem.current.name : "",
-        version: root.version,
-        updateAvailable: updatesItem.available,
-        notebooks: storeItem.notebooks.length,
-        pages: Object.keys(workspaceItem.index.pages).length,
-        ready: storeItem.ready,
-        connected: !!root.shell
-      })
+        function toggle(): void { root.toggle({}) }
+        function show(): void { if (!root.windowOpen) root.show({}) }
+        function hide(): void { root.hide() }
+        // uber-notebook quick            opens the quick-note card
+        // uber-notebook quick "Buy milk"  saves it straight away
+        function quick(text: string): void { if (!commands.agent) root.quick(String(text || "").slice(0, 20000)) }
+        function search(text: string): void { root.show({ search: String(text || "").slice(0, 200) }) }
+        function shelf(): void { root.show({ shelf: true }) }
+        // uber-notebook pages: straight to Pages.
+        function pages(): void { root.show({ pages: true }) }
+        // The calendar, on a day ("" is today).
+        function calendar(day: string): void { root.show({ calendar: /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) ? String(day) : "today" }) }
+        // uber-notebook importNotes ~/notes: files or a folder (a Notion or Obsidian export) into Pages.
+        function importNotes(path: string): void {
+          if (commands.agent) return
+          var p = String(path || "")
+          if (p.indexOf("~/") === 0) p = root.home + p.slice(1)
+          workspaceItem.importPaths([p], "", function(r) {
+            root.osd("\u{f0e27}", r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into Pages" : "Nothing to import there")
+          })
+        }
+        // uber-notebook open <page id>: a page in Pages (a reminder's notification does this).
+        function open(id: string): void { if (/^[0-9a-f-]{36}$/.test(String(id || ""))) root.show({ page: String(id) }) }
+        function settings(): void { root.show({ settings: true }) }
+        // omarchy-shell uber-notebook set paper grid   (values are checked like the settings panel's)
+        function set(key: string, value: string): string {
+          if (commands.agent) return "not for the panel's agent: Uber Notebook's settings are yours"
+          if (!root.defaults || !Object.prototype.hasOwnProperty.call(root.defaults, key)) return "unknown setting"
+          var parsed = value
+          if (value === "true" || value === "false") parsed = value === "true"
+          else if (/^-?\d{1,6}$/.test(value)) parsed = Number(value)
+          root.setSetting(key, parsed)
+          return JSON.stringify(root.settings[key])
+        }
+        function reset(): void { if (!commands.agent) root.resetSettings() }
+        // omarchy-shell uber-notebook mirror: the Markdown copy made up to date now, and how it is.
+        function mirror(): string {
+          if (commands.agent) return JSON.stringify({ ok: false, error: "not for the panel's agent: the Markdown copy is yours to make" })
+          if (!mirrorItem.on) return JSON.stringify({ ok: false, error: "the Markdown copy is off: omarchy-shell uber-notebook set mirror true" })
+          mirrorItem.sync()
+          return JSON.stringify({ ok: !mirrorItem.problem, folder: root.mirrorPath, status: mirrorItem.status, files: mirrorItem.files })
+        }
+
+        // For AI agents and scripts: pages in and out, answered in JSON
+        // (omarchy-shell uber-notebook help lists them; Api.qml does them).
+        function help(): string { return root.scoped(commands.agent, "help", [], function() { return apiItem.help() }) }
+        function list(): string { return root.scoped(commands.agent, "list", [], function() { return apiItem.list() }) }
+        function find(words: string): string { return root.scoped(commands.agent, "find", [words], function() { return apiItem.find(words) }) }
+        function read(id: string): string { return root.scoped(commands.agent, "read", [id], function() { return apiItem.read(id) }) }
+        function add(title: string, file: string): string { return root.scoped(commands.agent, "add", [title, file], function() { return apiItem.add(title, file) }) }
+        function addTo(page: string, title: string, file: string): string { return root.scoped(commands.agent, "addTo", [page, title, file], function() { return apiItem.addTo(page, title, file) }) }
+        function append(id: string, file: string): string { return root.scoped(commands.agent, "append", [id, file], function() { return apiItem.append(id, file) }) }
+        function blocks(id: string): string { return root.scoped(commands.agent, "blocks", [id], function() { return apiItem.blocks(id) }) }
+        function tags(): string { return root.scoped(commands.agent, "tags", [], function() { return apiItem.tags() }) }
+        function library(kind: string, words: string): string { return root.scoped(commands.agent, "library", [kind, words], function() { return apiItem.library(kind, words) }) }
+        function contacts(words: string): string { return root.scoped(commands.agent, "contacts", [words], function() { return apiItem.contacts(words) }) }
+        function contact(which: string): string { return root.scoped(commands.agent, "contact", [which], function() { return apiItem.contact(which) }) }
+        function addContact(name: string, phone: string, email: string): string { return root.scoped(commands.agent, "addContact", [name, phone, email], function() { return apiItem.addContact(name, phone, email) }) }
+        function importContacts(file: string): string { return root.scoped(commands.agent, "importContacts", [file], function() { return apiItem.importContacts(file) }) }
+        function tagged(tag: string): string { return root.scoped(commands.agent, "tagged", [tag], function() { return apiItem.tagged(tag) }) }
+        function tagColor(tag: string, color: string): string { return root.scoped(commands.agent, "tagColor", [tag, color], function() { return apiItem.tagColor(tag, color) }) }
+        function projects(): string { return root.scoped(commands.agent, "projects", [], function() { return apiItem.projects() }) }
+        function templates(): string { return root.scoped(commands.agent, "templates", [], function() { return apiItem.templates() }) }
+        function events(from: string, to: string): string { return root.scoped(commands.agent, "events", [from, to], function() { return apiItem.events(from, to) }) }
+        function addEvent(what: string, repeat: string): string { return root.scoped(commands.agent, "addEvent", [what, repeat], function() { return apiItem.addEvent(what, repeat) }) }
+        function removeEvent(id: string): string { return root.scoped(commands.agent, "removeEvent", [id], function() { return apiItem.removeEvent(id) }) }
+        function fromTemplate(template: string, title: string, parent: string): string { return root.scoped(commands.agent, "fromTemplate", [template, title, parent], function() { return apiItem.fromTemplate(template, title, parent) }) }
+        function project(id: string, status: string, due: string): string { return root.scoped(commands.agent, "project", [id, status, due], function() { return apiItem.project(id, status, due) }) }
+        function archive(id: string): string { return root.scoped(commands.agent, "archive", [id], function() { return apiItem.archive(id, true) }) }
+        function unarchive(id: string): string { return root.scoped(commands.agent, "unarchive", [id], function() { return apiItem.archive(id, false) }) }
+        function replace(page: string, block: string, file: string): string { return root.scoped(commands.agent, "replace", [page, block, file], function() { return apiItem.replace(page, block, file) }) }
+        function insertAfter(page: string, block: string, file: string): string { return root.scoped(commands.agent, "insertAfter", [page, block, file], function() { return apiItem.insertAfter(page, block, file) }) }
+        function trash(id: string): string { return root.scoped(commands.agent, "trash", [id], function() { return apiItem.trash(id) }) }
+        function rename(id: string, title: string): string { return root.scoped(commands.agent, "rename", [id, title], function() { return apiItem.rename(id, title) }) }
+        function move(id: string, parent: string, position: string): string { return root.scoped(commands.agent, "move", [id, parent, position], function() { return apiItem.move(id, parent, position) }) }
+        function icon(id: string, emoji: string): string { return root.scoped(commands.agent, "icon", [id, emoji], function() { return apiItem.icon(id, emoji) }) }
+        function cover(id: string, cover: string): string { return root.scoped(commands.agent, "cover", [id, cover], function() { return apiItem.cover(id, cover) }) }
+        function lock(id: string, on: string): string { return root.scoped(commands.agent, "lock", [id, on], function() { return apiItem.lock(id, on) }) }
+        function favorite(id: string, on: string): string { return root.scoped(commands.agent, "favorite", [id, on], function() { return apiItem.favorite(id, on) }) }
+        function trashed(): string { return root.scoped(commands.agent, "trashed", [], function() { return apiItem.trashed() }) }
+        function restore(id: string): string { return root.scoped(commands.agent, "restore", [id], function() { return apiItem.restore(id) }) }
+        function duplicate(id: string): string { return root.scoped(commands.agent, "duplicate", [id], function() { return apiItem.duplicate(id) }) }
+        function makeTemplate(id: string): string { return root.scoped(commands.agent, "makeTemplate", [id], function() { return apiItem.makeTemplate(id) }) }
+        function history(id: string): string { return root.scoped(commands.agent, "history", [id], function() { return apiItem.history(id) }) }
+        function version(id: string, name: string): string { return root.scoped(commands.agent, "version", [id, name], function() { return apiItem.version(id, name) }) }
+        function restoreVersion(id: string, name: string): string { return root.scoped(commands.agent, "restoreVersion", [id, name], function() { return apiItem.restoreVersion(id, name) }) }
+        function check(page: string, block: string, on: string): string { return root.scoped(commands.agent, "check", [page, block, on], function() { return apiItem.check(page, block, on) }) }
+        function color(page: string, block: string, color: string): string { return root.scoped(commands.agent, "color", [page, block, color], function() { return apiItem.color(page, block, color) }) }
+        function removeBlock(page: string, block: string): string { return root.scoped(commands.agent, "removeBlock", [page, block], function() { return apiItem.removeBlock(page, block) }) }
+        function board(page: string, block: string, action: string, a: string, b: string): string { return root.scoped(commands.agent, "board", [page, block, action, a, b], function() { return apiItem.board(page, block, action, a, b) }) }
+        function attach(page: string, file: string): string { return root.scoped(commands.agent, "attach", [page, file], function() { return apiItem.attach(page, file) }) }
+        function bookmark(page: string, url: string): string { return root.scoped(commands.agent, "bookmark", [page, url], function() { return apiItem.bookmark(page, url) }) }
+        function editEvent(id: string, field: string, value: string): string { return root.scoped(commands.agent, "editEvent", [id, field, value], function() { return apiItem.editEvent(id, field, value) }) }
+        function editContact(which: string, field: string, value: string): string { return root.scoped(commands.agent, "editContact", [which, field, value], function() { return apiItem.editContact(which, field, value) }) }
+        function removeContact(id: string): string { return root.scoped(commands.agent, "removeContact", [id], function() { return apiItem.removeContact(id) }) }
+        function importCalendar(file: string): string { return root.scoped(commands.agent, "importCalendar", [file], function() { return apiItem.importCalendar(file) }) }
+        function picture(page: string, block: string, width: string, align: string): string { return root.scoped(commands.agent, "picture", [page, block, width, align], function() { return apiItem.picture(page, block, width, align) }) }
+        function addGallery(page: string, pictures: string, columns: string): string { return root.scoped(commands.agent, "addGallery", [page, pictures, columns], function() { return apiItem.addGallery(page, pictures, columns) }) }
+        function gallery(page: string, block: string, action: string, a: string, b: string): string { return root.scoped(commands.agent, "gallery", [page, block, action, a, b], function() { return apiItem.gallery(page, block, action, a, b) }) }
+        function setLink(page: string, block: string, link: string): string { return root.scoped(commands.agent, "setLink", [page, block, link], function() { return apiItem.setLink(page, block, link) }) }
+        function describeTemplate(template: string, text: string): string { return root.scoped(commands.agent, "describeTemplate", [template, text], function() { return apiItem.describeTemplate(template, text) }) }
+        function addTemplate(title: string, file: string, description: string): string { return root.scoped(commands.agent, "addTemplate", [title, file, description], function() { return apiItem.addTemplate(title, file, description) }) }
+        function preferences(): string { return root.scoped(commands.agent, "preferences", [], function() { return apiItem.preferences() }) }
+        function renameTag(tag: string, to: string): string { return root.scoped(commands.agent, "renameTag", [tag, to], function() { return apiItem.renameTag(tag, to) }) }
+        function removeTag(tag: string): string { return root.scoped(commands.agent, "removeTag", [tag], function() { return apiItem.removeTag(tag) }) }
+        function notebooks(): string { return root.scoped(commands.agent, "notebooks", [], function() { return apiItem.notebooks() }) }
+        function notebook(id: string): string { return root.scoped(commands.agent, "notebook", [id], function() { return apiItem.notebook(id) }) }
+        function readNotebook(id: string, page: string): string { return root.scoped(commands.agent, "readNotebook", [id, page], function() { return apiItem.readNotebook(id, page) }) }
+        function addToNotebook(id: string, file: string): string { return root.scoped(commands.agent, "addToNotebook", [id, file], function() { return apiItem.addToNotebook(id, file) }) }
+        // omarchy-shell uber-notebook profiles: [{ id, name, folder, open, demo }].
+        function profiles(): string { return root.scoped(commands.agent, "profiles", [], function() { return apiItem.profileList() }) }
+        // omarchy-shell uber-notebook profile Business: another profile open (its name or id).
+        function profile(which: string): string { return root.scoped(commands.agent, "profile", [which], function() { return apiItem.openProfile(which) }) }
+        function addProfile(name: string, folder: string, open: string): string { return root.scoped(commands.agent, "addProfile", [name, folder, open], function() { return apiItem.addProfile(name, folder, open) }) }
+        function renameProfile(which: string, name: string): string { return root.scoped(commands.agent, "renameProfile", [which, name], function() { return apiItem.renameProfile(which, name) }) }
+        function profileFolder(which: string, folder: string): string { return root.scoped(commands.agent, "profileFolder", [which, folder], function() { return apiItem.profileFolder(which, folder) }) }
+        function removeProfile(which: string): string { return root.scoped(commands.agent, "removeProfile", [which], function() { return apiItem.removeProfile(which) }) }
+        function demo(): string { return root.scoped(commands.agent, "demo", [], function() { return apiItem.demo(false) }) }
+        function restartDemo(): string { return root.scoped(commands.agent, "restartDemo", [], function() { return apiItem.demo(true) }) }
+        function backup(which: string): string { return root.scoped(commands.agent, "backup", [which], function() { return apiItem.backup(which) }) }
+        function backups(): string { return root.scoped(commands.agent, "backups", [], function() { return apiItem.backupList() }) }
+        function restoreBackup(file: string, open: string): string { return root.scoped(commands.agent, "restoreBackup", [file, open], function() { return apiItem.restoreBackup(file, open) }) }
+        function appVersion(): string { return root.scoped(commands.agent, "appVersion", [], function() { return apiItem.appVersion() }) }
+        function checkUpdate(): string { return root.scoped(commands.agent, "checkUpdate", [], function() { return apiItem.checkUpdate() }) }
+        function releaseNotes(): string { return root.scoped(commands.agent, "releaseNotes", [], function() { return apiItem.releaseNotes() }) }
+        function status(): string {
+          return JSON.stringify({
+            open: root.windowOpen,
+            hyprland: root.hyprStatus,
+            takenShortcuts: root.takenBinds,
+            folder: root.rootPath,
+            profile: profilesItem.current ? profilesItem.current.name : "",
+            version: root.version,
+            updateAvailable: updatesItem.available,
+            notebooks: storeItem.notebooks.length,
+            pages: Object.keys(workspaceItem.index.pages).length,
+            ready: storeItem.ready,
+            connected: !!root.shell
+          })
+        }
+      }
     }
   }
 

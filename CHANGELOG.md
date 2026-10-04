@@ -10,6 +10,10 @@ The first version.
 
 ### Changed
 
+- **Pages first.** Uber Notebook opens in Pages (the first time; then where
+  you were), and a quick note goes to the Pages Inbox unless you choose the
+  Quick notes notebook. The notebooks stay as they are: Pages is where new
+  things come.
 - **Omanote is now Uber Notebook.** The command is `omarchy-shell
   uber-notebook`, the plugin `marcho78.uber-notebook`, the agents' skill
   `uber-notebook`, and new notes go in `~/Documents/Uber Notebook` (a
@@ -20,6 +24,25 @@ The first version.
 
 ### Added
 
+- **Claude Code and Grok ask you, in the panel, for what's beyond their
+  rules**: a web page, a web search, a command, one of your connectors'
+  tools, a file elsewhere (Grok over its agent protocol, in its sandbox,
+  Always-approve off for these runs). *Allow once*, *Always* (for that agent and that site,
+  searching, that program or that tool) or *No*; what you've allowed for
+  good is in Settings → AI, to take back. Claude Code runs in its restricted
+  mode; each takes its request and your answers on its input.
+
+- **A terminal instead, whenever you like**: *In a terminal* beside *Ask* in
+  the agent box, and *Open in a terminal instead* in the panel all along (it
+  stops there first), for Claude Code, Grok and Codex as you set them up,
+  with all their own controls.
+
+- **Move to Pages…**, in a notebook's menu on the shelf: it becomes a page
+  with a page inside it for each of its pages, in order, written when they
+  were: their text, their pictures (copied into Pages) and what's drawn on
+  them (a sketch at each page's end). The notebook goes to the trash only once
+  all of it is in Pages and saved; if a picture can't be copied or something
+  can't be saved, it stays on the shelf too.
 - **The shelf.** Your notebooks, cover up on the desk: leather with gold foil
   and an elastic band, linen and smooth card with paper labels, kraft with a
   typed stamp, and marbled composition books with their name box; spiral,
@@ -250,11 +273,11 @@ The first version.
   it starts and once a day (Settings → About; off, only when you ask);
   a newer one shows at the foot of Pages' sidebar, in the shelf's corner
   and by About, a click from its release notes (read in Uber Notebook, without
-  pictures or HTML); *Update now* for an Uber Notebook installed with
-  `omarchy plugin add` (`omarchy plugin update`), else the command to
-  copy; *Release notes* for the version you have, from `CHANGELOG.md`;
-  `appVersion`, `checkUpdate`, `releaseNotes` and `installUpdate` for
-  agents.
+  pictures or HTML), with the command that installs it (`omarchy plugin
+  update marcho78.uber-notebook`), to copy and run in a terminal, where it
+  shows what changes and asks first (Uber Notebook never installs anything
+  itself); *Release notes* for the version you have, from `CHANGELOG.md`;
+  `appVersion`, `checkUpdate` and `releaseNotes` for agents.
 - **Follow me on X** (@devsec_ai) at the foot of Pages' sidebar, in the
   shelf's corner and in Settings → About.
 - **Profiles**: notes kept apart (personal, work, the demo...), each a
@@ -415,3 +438,43 @@ The first version.
   for a floating, opaque notebook, IPC, and settings on its shell.json entry.
 - **Paper sounds** when a page turns and a notebook opens (can be turned off),
   and **reduce motion**.
+
+### Security
+
+- **Your agent, in the panel, reads and changes your notes as you ask, and
+  nothing contacts a site for it without your yes.** While one works, Uber
+  Notebook's commands read and change your notes (pages, People, the
+  calendar, templates), not Uber Notebook's settings, profiles or backups;
+  files they take come only from its folder, read by a helper first. A link
+  it adds is kept as its link: Uber Notebook contacts the site (for its title
+  and picture) only after you answer in the panel, *Allow once*, *Always for
+  that site* or *No*; redirects and pictures only from sites it may contact.
+  **Settings → AI** lists the sites you've allowed, for each agent, to take
+  back; an agent can't change them. Agents are found where they're
+  installed, checked, and run by their full path.
+- **Nothing installs itself**: no *Update now*, no `installUpdate` command;
+  Uber Notebook shows the `omarchy plugin update` command to run yourself.
+- **Archives** (a zip you import, a backup you put back) are opened by a small
+  helper (`bin/uber-notebook-files`, Python, isolated): nothing in them can land
+  outside its folder, be a link or a device, or take more than its room; a
+  backup is put back only if it's still the file looked into.
+- **Text from elsewhere stays text**: a page's formatting can't carry a
+  picture or a style Uber Notebook wouldn't write; what you paste (Ctrl+V, or
+  a middle click) is read with `wl-paste` and cleaned before Qt reads it, so a
+  page copied from the web can't make it fetch its pictures; links go only to the web,
+  email or Uber Notebook; an agent's answer and release notes are drawn
+  without fetching anything; an email's HTML is rebuilt from a short list of
+  tags.
+- **Budgets** on what can be slow or big: equations ("Too big to draw"),
+  diagrams, imports, emails, contacts, code highlighting, an agent's output,
+  a pasted picture, a file copied in, a PDF shown, a picture shown large, a
+  recording.
+- **Commands** get only the environment a tool needs and `PATH=/usr/bin`, end
+  with anything they started, and never write over a file that's there;
+  `ffmpeg` reads files only as files; `curl` ignores `~/.curlrc`; text you copy
+  goes to `wl-copy` on its input; a bookmark's picture is fetched only from
+  the internet, never from your computer or network.
+- **Files of its own only**: its launcher entry and skill links are made only
+  where nothing is, and taken out only if they're still its own; the Markdown
+  copy never writes over or takes away a file you edited there; switching
+  profiles keeps nothing of one in the other.

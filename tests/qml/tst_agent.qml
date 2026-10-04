@@ -53,6 +53,12 @@ Item {
       for (var i = 0; i < text.length; i++) keyClick(text.charAt(i))
     }
     function lastPrompt() { return files.launched[files.launched.length - 1] || "" }
+    // What a run was asked: on its input (Claude Code: its first line), or
+    // last in its command line (the others).
+    function said(run) {
+      if (run.sent && run.sent.length) return JSON.parse(run.sent[0]).message.content
+      return String(run.argv[run.argv.length - 1])
+    }
 
     function test_1_slash_agent_on_an_empty_line() {
       fresh()
@@ -188,6 +194,8 @@ Item {
       tryVerify(function() { return !view.agentBox.visible }, 1000)
     }
 
+    // What a rich text says, its tags and spaces at the ends left out.
+    function words(item) { return item ? String(item.text).replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").trim() : "" }
     function named(item, name) { return find(item, function(it) { return it.objectName === name }) }
     function all(item, test, out) {
       var list = out || []
@@ -211,8 +219,11 @@ Item {
       tryVerify(function() { return files.streamed.length === 1 }, 1000)
       compare(files.launched.length, 0, "no terminal")
       var run = files.streamed[0]
-      compare(run.argv[4], "claude")
-      var prompt = run.argv[run.argv.length - 1]
+      compare(run.argv[4], "/usr/bin/claude", "by its full path")
+      // While it works, the commands change only its page, files only from its folder.
+      compare(service.agentScope.frozen, false)
+      compare(service.agentScope.dir, "/tmp/uber-notebook-agent")
+      var prompt = said(run)
       verify(prompt.indexOf("What I'd like: Turn this into to-dos") >= 0, prompt)
       verify(prompt.indexOf("(page id " + view.page.id + ")") >= 0)
       verify(prompt.indexOf("small panel on the page") >= 0, "it knows where its words go")
@@ -228,12 +239,13 @@ Item {
       tryVerify(function() { var st = named(panel, "agentPanelStep"); return st !== null && st.text === "Reading the page" }, 1000)
       files.streamFeed(JSON.stringify({ type: "stream_event", event: { type: "content_block_start", content_block: { type: "text", text: "" } } }))
       files.streamFeed(JSON.stringify({ type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text: "Made the " } } }))
-      tryCompare(named(panel, "agentPanelAnswer"), "text", "Made the ", 1000)
+      tryVerify(function() { return words(named(panel, "agentPanelAnswer")) === "Made the" }, 1000, "as it's written")
       files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Made the to-dos.", duration_ms: 4200, permission_denials: [] }))
       compare(panel.status, "done")
-      compare(named(panel, "agentPanelAnswer").text, "Made the to-dos.")
+      compare(words(named(panel, "agentPanelAnswer")), "Made the to-dos.")
       files.streamEnd(0, "")
       compare(view.agentRun, null)
+      compare(service.agentScope, null, "its scope ends with it")
       compare(named(panel, "agentPanelStatus").text, "done in 4.2s")
       tryVerify(function() { return !view.agentBox.visible }, 1000)
       wait(50)
@@ -245,7 +257,7 @@ Item {
       verify(aiButton.swatch.a > 0, "a mark under it")
       mouseClick(aiButton)
       tryVerify(function() { return panel.visible }, 1000, "back to it")
-      compare(named(panel, "agentPanelAnswer").text, "Made the to-dos.")
+      compare(words(named(panel, "agentPanelAnswer")), "Made the to-dos.")
       verify(!view.agentBox.visible, "not the box")
       // A new chat: the box.
       mouseClick(named(panel, "agentPanelNew"))
@@ -283,8 +295,120 @@ Item {
       verify(!panel.visible)
     }
 
-    // Grok and Codex work here too, each as Omarchy starts it, their steps
-    // and answers in the same panel.
+    // In a terminal whenever you like (there your agent runs as you set it
+    // up, with all its own controls): from the box, or from the panel, even
+    // while it works (it stops here first); told what a terminal's agent is.
+    function test_6c_in_a_terminal_whenever_you_like() {
+      fresh()
+      files.agent = "claude"
+      view.openAgent("page")
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      verify(named(root.Window.window.contentItem, "agentAskTerminal") !== null, "there, for an agent that works here")
+      view.agentBox.sendToTerminal("Turn this into to-dos")
+      compare(files.launched.length, 1)
+      compare(files.streamed.length, 0, "not here")
+      verify(lastPrompt().indexOf("What I'd like: Turn this into to-dos") >= 0, lastPrompt())
+      verify(lastPrompt().indexOf("(your working folder)") < 0 && lastPrompt().indexOf("small panel on the page") < 0, "told what a terminal's agent is")
+      // From the panel, while it works: it stops here first.
+      view.openAgent("page")
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      view.agentBox.send("Summarize this page")
+      tryVerify(function() { return files.streamed.length === 1 && view.agentRun !== null }, 1000)
+      var panel = view.agentPanel
+      verify(said(files.streamed[0]).indexOf("(your working folder)") >= 0, "here: its folder")
+      tryVerify(function() { return named(panel, "agentPanelTerminal") !== null && !view.agentBox.visible }, 1000, "there while it works")
+      compare(named(panel, "agentPanelTerminal").text, "Stop, and open in a terminal")
+      wait(50)
+      mouseClick(named(panel, "agentPanelTerminal"))
+      compare(files.streamed[0].done, null, "stopped here first: one agent at it")
+      tryCompare(view, "agentRun", null, 1000)
+      compare(files.launched.length, 2)
+      verify(lastPrompt().indexOf("What I'd like: Summarize this page") >= 0, lastPrompt())
+      verify(lastPrompt().indexOf("(your working folder)") < 0, "told what a terminal's agent is")
+      verify(!panel.visible)
+    }
+
+    // Claude Code asking for a tool beyond its rules, as it works: you're
+    // asked in the panel, your answer going back on its input. Always is
+    // kept for that agent and what it says (a command: only a plain one);
+    // once it's answered, its input's closed, and a question still waiting
+    // goes with it.
+    function test_6d_asked_as_it_works() {
+      fresh()
+      files.agent = "claude"
+      view.openAgent("page")
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      view.agentBox.send("Look this up")
+      tryVerify(function() { return files.streamed.length === 1 }, 1000)
+      var run = files.streamed[0]
+      compare(run.input, true, "it reads its input")
+      verify(said(run).indexOf("What I'd like: Look this up") >= 0, "its request, there")
+      var panel = view.agentPanel
+      function ask(id, tool, input) { files.streamFeed(JSON.stringify({ type: "control_request", request_id: id, request: { subtype: "can_use_tool", tool_name: tool, input: input } })) }
+      function last() { return JSON.parse(run.sent[run.sent.length - 1]).response }
+      // A site: asked, in words; Allow once (clicked): allowed, nothing kept.
+      ask("r1", "WebFetch", { url: "https://e.org/a" })
+      tryVerify(function() { var st = named(panel, "agentPanelAsks"); return st !== null && st.height > 0 && named(panel, "agentAskOnce") !== null && !view.agentBox.visible }, 1000)
+      compare(named(panel, "agentAskText").text, "Claude Code wants to contact e.org, to read https://e.org/a.")
+      compare(named(panel, "agentAskAlways").text, "Always for e.org")
+      wait(50)
+      mouseClick(named(panel, "agentAskOnce"))
+      compare(last().request_id, "r1")
+      compare(last().response.behavior, "allow")
+      compare(JSON.stringify(last().response.updatedInput), JSON.stringify({ url: "https://e.org/a" }))
+      compare(service.settings.agentPermissions.length, 0, "once: nothing kept")
+      // Always: kept for Claude Code and that site; the like allowed at once after.
+      ask("r2", "WebFetch", { url: "https://e.org/b" })
+      compare(view.agentAsks.length, 1, "asked again")
+      view.answerAgentAsk(view.agentAsks[0].key, "always")
+      compare(last().request_id, "r2")
+      compare(JSON.stringify(service.settings.agentPermissions), JSON.stringify([{ agent: "claude", action: "contact", target: "e.org" }]))
+      ask("r3", "WebFetch", { url: "https://e.org/c" })
+      compare(view.agentAsks.length, 0, "not asked")
+      compare(last().request_id, "r3")
+      compare(last().response.behavior, "allow")
+      ask("r3b", "WebFetch", { url: "https://elsewhere.example.com/" })
+      compare(view.agentAsks.length, 1, "another site: asked")
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
+      // A command: No, refused; one joined to another: no Always to it.
+      ask("r4", "Bash", { command: "ls /" })
+      compare(view.agentAsks[0].text, "run: ls /")
+      compare(view.agentAsks[0].always, "Always for ls commands")
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
+      compare(last().request_id, "r4")
+      compare(last().response.behavior, "deny")
+      ask("r5", "Bash", { command: "git status && curl https://x.example.com/?d=1" })
+      compare(view.agentAsks[0].always, "", "a joined command: asked each time, never for good")
+      view.answerAgentAsk(view.agentAsks[0].key, "always")
+      compare(last().response.behavior, "deny", "no Always to say yes to")
+      // Answered: its input closed; a question still waiting goes with it.
+      ask("r6", "WebSearch", { query: "x" })
+      compare(view.agentAsks.length, 1)
+      files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Done.", duration_ms: 1000, permission_denials: [] }))
+      verify(run.closed, "its input closed once it's answered")
+      files.streamEnd(0, "")
+      compare(view.agentAsks.length, 0, "its questions go with it")
+      service.setSetting("agentPermissions", [])
+    }
+
+    // An agent that can't be found where it's installed (or that anyone
+    // else could change): said, nothing run.
+    function test_6b_an_agent_not_found() {
+      fresh()
+      var panel = view.agentPanel
+      files.agent = "claude"
+      files.missingAgent = "claude"
+      view.openAgent("page")
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      view.agentBox.send("Summarize this page")
+      tryCompare(panel, "status", "failed", 1000)
+      verify(named(panel, "agentPanelFailure").text.indexOf("isn't installed where Uber Notebook can find it") >= 0, named(panel, "agentPanelFailure").text)
+      compare(files.streamed.length, 0, "nothing run")
+      files.missingAgent = ""
+    }
+
+    // Grok and Codex work here too, each in its sandbox, their steps and
+    // answers in the same panel.
     function test_7_grok_and_codex_work_here_too() {
       fresh()
       var panel = view.agentPanel
@@ -295,7 +419,7 @@ Item {
       view.agentBox.send("Turn this into to-dos")
       tryVerify(function() { return files.streamed.length === 1 }, 1000)
       compare(files.launched.length, 0, "no terminal")
-      compare(files.streamed[0].argv.slice(4, 7), ["codex", "exec", "--json"])
+      compare(files.streamed[0].argv.slice(4, 7), ["/usr/bin/codex", "exec", "--json"])
       compare(panel.agentLabel, "Codex")
       files.streamFeed(JSON.stringify({ type: "thread.started", thread_id: "t1" }))
       files.streamFeed(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "I'll read the page first." } }))
@@ -312,8 +436,7 @@ Item {
       tryVerify(function() { return !view.agentBox.visible }, 1000)
       wait(50)
       mouseClick(named(panel, "agentPanelClose"))
-      // Grok: Claude Code's kind of lines, its own tools (a new chat: the
-      // page's is Codex's).
+      // Grok: over ACP, its agent protocol (a new chat: the page's is Codex's).
       files.agent = "grok"
       view.openAgent("page")
       tryVerify(function() { return panel.visible && panel.agentLabel === "Codex" }, 1000, "the page's conversation")
@@ -321,16 +444,41 @@ Item {
       tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
       view.agentBox.send("Summarize this page")
       tryVerify(function() { return files.streamed.length === 2 }, 1000)
-      var g = files.streamed[1].argv
-      compare(g[4], "grok")
-      verify(g[g.length - 1].indexOf("--single=") === 0)
+      var run = files.streamed[1]
+      compare(run.argv.slice(4), ["/usr/bin/grok", "agent", "stdio"])
+      // In its sandbox (its agent mode takes it from its environment), written in its folder first.
+      compare(run.env.GROK_SANDBOX, "uber-notebook")
+      verify(String(files.disk["/tmp/uber-notebook-agent/.grok/sandbox.toml"]).indexOf('extends = "strict"') >= 0, "its sandbox")
       compare(panel.agentLabel, "Grok")
-      files.streamFeed(JSON.stringify({ type: "system", subtype: "init", model: "grok-4.6" }))
-      files.streamFeed(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "run_terminal_command", input: { command: "omarchy-shell uber-notebook read " + view.page.id } }] } }))
+      function acp(o) { files.streamFeed(JSON.stringify(Object.assign({ jsonrpc: "2.0" }, o))) }
+      function sentAt(n) { return JSON.parse(run.sent[n]) }
+      // Hello, then its session (it asks, Always-approve or not), then the request.
+      compare(sentAt(0).method, "initialize")
+      compare(run.sent.length, 1, "its session only once it's said hello")
+      acp({ id: 1, result: { protocolVersion: 1 } })
+      compare(sentAt(1).method, "session/new")
+      compare(sentAt(1).params._meta.yoloMode, false)
+      compare(sentAt(1).params.cwd, "/tmp/uber-notebook-agent")
+      var sid = "01a108d9-b7d2-7a71-9149-2d1ef7ff75fe"
+      acp({ id: 2, result: { sessionId: sid } })
+      compare(sentAt(2).method, "session/prompt")
+      compare(sentAt(2).params.sessionId, sid)
+      verify(sentAt(2).params.prompt[0].text.indexOf("What I'd like: Summarize this page") >= 0)
+      acp({ method: "session/update", params: { sessionId: sid, update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "run_terminal_command", rawInput: { command: "omarchy-shell uber-notebook-agent read " + view.page.id } } } })
       compare(panel.steps, ["Reading the page"])
-      files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, duration_ms: 3870, result: "It's a page about trams." }))
+      // It asks: you're asked; No, its reject option.
+      acp({ id: 5, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "Execute `curl -sI https://e.org`", kind: "execute",
+        rawInput: { variant: "Bash", command: "curl -sI https://e.org" } }, options: [{ optionId: "always-allow", kind: "allow_always" }, { optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })
+      compare(view.agentAsks.length, 1)
+      compare(view.agentAsks[0].text, "run: curl -sI https://e.org")
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
+      compare(JSON.stringify(sentAt(run.sent.length - 1)), JSON.stringify({ jsonrpc: "2.0", id: 5, result: { outcome: { outcome: "selected", optionId: "reject-once" } } }))
+      acp({ method: "session/update", params: { sessionId: sid, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "It's a page " } } } })
+      acp({ method: "session/update", params: { sessionId: sid, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "about trams." } } } })
+      acp({ id: 3, result: { stopReason: "end_turn" } })
       compare(panel.status, "done")
       compare(panel.answer, "It's a page about trams.")
+      verify(run.closed, "its input closed once it's answered")
       files.streamEnd(0, "")
     }
 
@@ -474,7 +622,7 @@ Item {
       tryVerify(function() { return view.page && view.page.id === id }, 2000)
       compare(view.agentPage.id, id)
       var run = files.streamed[0]
-      verify(run.argv[run.argv.length - 1].indexOf("(page id " + id + ")") >= 0)
+      verify(said(run).indexOf("(page id " + id + ")") >= 0)
       // It writes on it (as its append does), and it's done.
       verify(view.appendFromCommand(id, [{ type: "check", html: "Passport", indent: 0 }]) === true)
       files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Made the list.", duration_ms: 3000, permission_denials: [] }))
@@ -589,7 +737,7 @@ Item {
       var a2 = files.streamed[1].argv
       compare(a2[a2.indexOf("--resume") + 1], id, "the same conversation")
       compare(a2.indexOf("--session-id"), -1)
-      compare(a2.slice(-2), ["--", "Lisbon, 4 days"])
+      compare(said(files.streamed[1]), "Lisbon, 4 days")
       compare(reply.text, "", "sent, the box empty")
       compare(panel.status, "working")
       // What was said before, above.
@@ -601,7 +749,7 @@ Item {
       files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Added a packing list for Lisbon.", duration_ms: 5200, permission_denials: [] }))
       files.streamEnd(0, "")
       compare(panel.status, "done")
-      compare(named(panel, "agentPanelAnswer").text, "Added a packing list for Lisbon.")
+      compare(words(named(panel, "agentPanelAnswer")), "Added a packing list for Lisbon.")
       tryVerify(function() { return reply.input.activeFocus }, 1000, "back in the box, to go on")
       // On another page, blocks picked: it's told so, then your words.
       var other = ws.createPage({ title: "Weekend in Porto", blocks: [{ type: "p", html: "Day one", indent: 0 }, { type: "p", html: "Day two", indent: 0 }] })
@@ -611,7 +759,7 @@ Item {
       e.selectBlocks(e.uidAt(0), e.uidAt(1))
       panel.replied("Do the same here")
       tryVerify(function() { return files.streamed.length === 3 }, 1000)
-      var p3 = files.streamed[2].argv[files.streamed[2].argv.length - 1]
+      var p3 = said(files.streamed[2])
       verify(p3.indexOf("I'm on another page now: \u201cWeekend in Porto\u201d (page id " + other.id + ").") === 0, p3)
       verify(p3.indexOf("The blocks I've picked: " + e.uidAt(0) + ", " + e.uidAt(1)) > 0, p3)
       verify(/Do the same here$/.test(p3), p3)
@@ -620,7 +768,7 @@ Item {
       // Said again from here, the same picked: just your words.
       panel.replied("Shorter, please")
       tryVerify(function() { return files.streamed.length === 4 }, 1000)
-      compare(files.streamed[3].argv[files.streamed[3].argv.length - 1], "Shorter, please")
+      compare(said(files.streamed[3]), "Shorter, please")
       compare(all(panel, function(it) { return it.objectName === "agentPanelTurn" }).length, 3)
       files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Shortened.", duration_ms: 700, permission_denials: [] }))
       files.streamEnd(0, "")
@@ -689,7 +837,7 @@ Item {
       tryVerify(function() { return !view.agentBox.visible }, 1000)
       wait(50)
       mouseClick(named(panel, "agentPanelClose"))
-      // Grok: --session-id=, then --resume= the same (a new chat).
+      // Grok: its own session (session/new), gone on with (session/load) (a new chat).
       files.agent = "grok"
       view.openAgent("page")
       tryVerify(function() { return panel.visible }, 1000)
@@ -697,16 +845,25 @@ Item {
       tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
       view.agentBox.send("What's this page about?")
       tryVerify(function() { return files.streamed.length === 5 }, 1000)
-      var g1 = files.streamed[4].argv.filter(function(a) { return a.indexOf("--session-id=") === 0 })
-      compare(g1.length, 1)
-      var gid = g1[0].slice("--session-id=".length)
-      files.streamFeed(JSON.stringify({ type: "result", subtype: "success", is_error: false, duration_ms: 800, result: "Trams." }))
+      function acp(o) { files.streamFeed(JSON.stringify(Object.assign({ jsonrpc: "2.0" }, o))) }
+      var r1 = files.streamed[4]
+      var gid = "01a108d9-b7d2-7a71-9149-2d1ef7ff75fe"
+      acp({ id: 1, result: {} })
+      compare(JSON.parse(r1.sent[1]).method, "session/new")
+      acp({ id: 2, result: { sessionId: gid } })
+      acp({ method: "session/update", params: { sessionId: gid, update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Trams." } } } })
+      acp({ id: 3, result: { stopReason: "end_turn" } })
       files.streamEnd(0, "")
       panel.replied("More?")
       tryVerify(function() { return files.streamed.length === 6 }, 1000)
-      var g2 = files.streamed[5].argv
-      verify(g2.indexOf("--resume=" + gid) > 0, g2.join(" "))
-      compare(g2[g2.length - 1], "--single=More?")
+      var r2 = files.streamed[5]
+      acp({ id: 1, result: {} })
+      var load = JSON.parse(r2.sent[1])
+      compare(load.method, "session/load", "the same conversation")
+      compare(load.params.sessionId, gid)
+      acp({ id: 2, result: {} })
+      compare(JSON.parse(r2.sent[2]).params.sessionId, gid, "gone on with, by its id")
+      compare(JSON.parse(r2.sent[2]).params.prompt[0].text, "More?")
       files.streamEnd(0, "")
     }
 
@@ -744,7 +901,7 @@ Item {
       // Ctrl+J: back to it, the reply box ready; a reply goes on in it.
       view.openAgent("auto")
       tryVerify(function() { return panel.visible }, 1000)
-      compare(named(panel, "agentPanelAnswer").text, "Which city?")
+      compare(words(named(panel, "agentPanelAnswer")), "Which city?")
       compare(named(panel, "agentPanelStatus").text, "", "nothing said of how long it took, back then")
       var reply = named(panel, "agentPanelReply")
       tryVerify(function() { return reply.input.activeFocus }, 1000, "the reply box ready")
@@ -766,7 +923,7 @@ Item {
       view.openAgent("page")
       tryVerify(function() { return panel.visible }, 1000)
       compare(all(panel, function(it) { return it.objectName === "agentPanelTurn" }).length, 1)
-      compare(named(panel, "agentPanelAnswer").text, "Wrote it.")
+      compare(words(named(panel, "agentPanelAnswer")), "Wrote it.")
       // Its own conversation gone (cleared out): a new one, told what was said.
       panel.replied("Make it for 3 days")
       tryVerify(function() { return files.streamed.length === 3 }, 1000)
@@ -780,7 +937,7 @@ Item {
       var id2 = a4[a4.indexOf("--session-id") + 1]
       verify(id2 && id2 !== id, "a new session: " + id2)
       compare(a4.indexOf("--resume"), -1)
-      var p4 = a4[a4.length - 1]
+      var p4 = said(files.streamed[3])
       verify(p4.indexOf("- I said: Make a packing list") >= 0 && p4.indexOf("You said: Which city?") >= 0 && p4.indexOf("- I said: Lisbon") >= 0, p4)
       verify(p4.indexOf("What I'd like now: Make it for 3 days") >= 0, p4)
       compare(panel.status, "working")
@@ -796,7 +953,7 @@ Item {
       compare(named(panel, "agentPanelContext").text, "The 2 blocks you picked go with it")
       panel.replied("Turn these into to-dos")
       tryVerify(function() { return files.streamed.length === 5 }, 1000)
-      var p5 = files.streamed[4].argv[files.streamed[4].argv.length - 1]
+      var p5 = said(files.streamed[4])
       verify(p5.indexOf("The blocks I've picked: " + e.uidAt(0) + ", " + e.uidAt(1)) === 0, p5)
       verify(/Turn these into to-dos$/.test(p5), p5)
       compare(named(panel, "agentPanelContext"), null, "said once")
@@ -845,7 +1002,7 @@ Item {
       compare(view.page.id, id)
       view.openAgent("auto")
       tryVerify(function() { return panel.visible }, 1000)
-      compare(named(panel, "agentPanelAnswer").text, "Which genre do you like?")
+      compare(words(named(panel, "agentPanelAnswer")), "Which genre do you like?")
       panel.replied("Science fiction")
       tryVerify(function() { return files.streamed.length === 2 }, 1000)
       verify(files.streamed[1].argv.indexOf("--resume") > 0)

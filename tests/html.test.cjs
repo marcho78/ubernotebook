@@ -160,4 +160,99 @@ check("links inside Uber Notebook", () => {
   assert.equal(Html.plainText(Html.refreshPageLinks('<a href="' + page + '">Old <b>name</b></a>', () => "")), "Old name", "unknown pages keep their text");
 });
 
+check("text from a page file can't become anything but text: no pictures, no odd styles, no odd links", () => {
+  const Workspace = load("Workspace.js");
+  const Blocks = load("Blocks.js");
+  // A style whose value, decoded, closes its attribute and starts a picture;
+  // through the page's checks and the editor's (and once more), still text.
+  const evil = '<span style="font-family:&quot;&gt;&lt;span style=\'font-family:&quot;&gt;&lt;img src=&quot;https://example.invalid/track.png&quot;&gt;\'&gt;">hello</span>';
+  const pageId = "6f1c2b9e-0d3a-4f6e-9b1c-2e8a7d5f4c3b";
+  const blockId = "7a2d3c4b-1e5f-4a6b-8c7d-9e0f1a2b3c4d";
+  const page = Workspace.cleanPage({ title: "t", content: [blockId], blocks: { [blockId]: { type: "p", html: evil } } }, pageId);
+  let html = page.blocks[blockId].html;
+  for (let pass = 0; pass < 3; pass++) {
+    assert.ok(!/<img|<span[^>]*<|style="[^"]*"[^>]*"/i.test(html), "pass " + pass + ": " + html);
+    html = plain(Blocks.cleanList(Workspace.flatten({ content: [blockId], blocks: { [blockId]: { id: blockId, type: "p", html: html } } }), { nest: true }))[0].html;
+  }
+  assert.equal(Html.plainText(html), "hello");
+  // Every kept look is one Uber Notebook could have written; anything else goes.
+  const looks = [
+    ['<span style="color: red&quot; onclick=&quot;x">a</span>', ""],
+    ['<span style="color:#C00">a</span>', "color:#cc0000;"],
+    ['<span style="background-color: url(https://x.invalid/a.png)">a</span>', ""],
+    ['<span style="color: expression(alert(1))">a</span>', ""],
+    ['<span style="font-family:\'iA Writer Mono S\'">a</span>', "font-family:'iA Writer Mono S';"],
+    ['<span style="font-family: x&quot;&gt;&lt;img src=y&gt;">a</span>', ""],
+    ['<span style="font-size:24px">a</span>', "font-size:24px;"],
+    ['<span style="font-size:18pt">a</span>', "font-size:24px;"],
+    ['<span style="font-size:99999px">a</span>', ""],
+    ['<span style="font-size:calc(1px*9e9)">a</span>', ""],
+    ['<span style="x&quot;y:1; font-weight:bold">a</span>', "font-weight:700;"]
+  ];
+  for (const [input, css] of looks) {
+    const out = Html.sanitize(input, true);
+    assert.equal(out, css ? '<span style="' + css + '">a</span>' : "a", input);
+    assert.equal(Html.sanitize(out, true), out, "the same the second time: " + input);
+  }
+  // Links: the web, email, Uber Notebook's own; nothing else.
+  for (const [href, kept] of [["https://e.org", true], ["mailto:a@b.org", true], ["uber-notebook://page/" + pageId, true],
+    ["file:///etc/passwd", false], ["javascript:alert(1)", false], ["data:text/html,x", false], ["FILE:///x", false], ["vbscript:x", false]]) {
+    const out = Html.sanitize('<a href="' + href + '">a</a>', true);
+    assert.equal(out, kept ? '<a href="' + href + '">a</a>' : "a", href);
+  }
+  assert.equal(Html.cleanUrl("file:///home/me/secret.txt"), "", "a typed link to a file isn't one");
+  assert.equal(Html.cleanUrl("https://e.org/a"), "https://e.org/a");
+  // Whatever a run's style says, it's written as one attribute.
+  assert.equal(Html.serialize([{ text: "a", style: { "font-family": '"x"><img src=y>' }, href: "" }]),
+    '<span style="font-family:&quot;x&quot;&gt;&lt;img src=y&gt;;">a</span>');
+});
+
+check("HTML from the clipboard: nothing in it Qt would load, its writing kept", () => {
+  const w = Html.withoutResources;
+  // Pictures, stylesheets, scripts, frames, media: gone (what's inside them too).
+  assert.equal(w('<p>Hi <img src="http://t.example/p.png"> there</p>'), "<p>Hi  there</p>");
+  assert.equal(w('<link rel="stylesheet" href="http://t.example/s.css"><style>p { background: url(x) }</style><p>a</p>'), "<p>a</p>");
+  assert.equal(w('<script>alert(1)</script><SCRIPT type="x">b</SCRIPT>c<svg><image href="http://t.example/i.png"/></svg>'), "c");
+  assert.equal(w('<iframe src="http://t.example/"></iframe><video src="v.mp4"></video><object data="o"></object>d'), "d");
+  assert.equal(w("<script>never closed <p>text</p>"), "", "an element that isn't closed: the rest goes");
+  assert.equal(w("<img/src=http://t.example/x.png>e"), "e");
+  // Attributes: only a few, and nothing that would load.
+  assert.equal(w('<table background="http://t.example/b.png" border="1"><tr><td bgcolor="#fff" onclick="x()">c</td></tr></table>'),
+    '<table border="1"><tr><td bgcolor="#fff">c</td></tr></table>');
+  assert.equal(w('<p style="color:#c00; background-image:url(http://t.example/b.png); font-weight:700">x</p>'), '<p style="color:#c00; font-weight:700">x</p>');
+  assert.equal(w('<p style="background: URL(http://t.example/b.png)">x</p>'), '<p style="">x</p>');
+  assert.equal(w('<p style="background:u\\72l(http://t.example/b.png)">x</p>'), '<p style="">x</p>', "nor written with escapes");
+  assert.equal(w('<a href="https://e.org/?a=1&amp;b=2">w</a><a href="javascript:alert(1)">j</a><a href="file:///etc/passwd">f</a>'),
+    '<a href="https://e.org/?a=1&amp;b=2">w</a><a>j</a><a>f</a>');
+  // Comments and declarations go; a "<" that isn't a tag is text.
+  assert.equal(w('<!DOCTYPE html><!-- <img src="http://t.example/c.png"> --><?xml x?>1 < 2 <3'), "1 &lt; 2 &lt;3");
+  assert.equal(w('<!-- never closed <img src="x">'), "");
+  // Quoted ">" inside a tag doesn't end it.
+  assert.equal(w('<a href="https://e.org/?q=>" title="x">t</a>'), '<a href="https://e.org/?q=&gt;">t</a>');
+  // Where the copied part starts and ends, and Qt's mark on HTML it wrote
+  // (Qt reads its spaces by it): kept, as Qt's own paste reads them.
+  assert.equal(w('<html><head><meta name="qrichtext" content="1" /><style>p { white-space: pre-wrap }</style></head><body><!--StartFragment-->a  b<!--EndFragment--></body></html>'),
+    '<meta name="qrichtext" content="1" /><!--StartFragment-->a  b<!--EndFragment-->');
+  // Its text as paragraphs when there's no HTML, spaces and "<" as typed, an
+  // empty line as Qt writes one (an empty <p> isn't a paragraph to Qt).
+  assert.equal(Html.plainParagraphs("a  b\r\n<c>\u2028\nd"),
+    '<p style="white-space:pre-wrap;">a  b</p><p style="white-space:pre-wrap;">&lt;c&gt;</p><p style="-qt-paragraph-type:empty;"><br /></p><p style="white-space:pre-wrap;">d</p>');
+});
+
+check("HTML from the clipboard: a lot of it, read in time", () => {
+  const cases = {
+    "many dropped elements": "<style>a</style>x".repeat(250000),
+    "many opened, one closed": "<script>".repeat(500000) + "</script>",
+    "a quote never closed": '<p title="' + "a b=c ".repeat(600000),
+    "many stray <": "< ".repeat(1500000),
+    "many tags with attributes": '<span style="color:#c00" class="a">x</span>'.repeat(90000)
+  };
+  for (const [name, html] of Object.entries(cases)) {
+    const t = Date.now();
+    Html.withoutResources(html);
+    const ms = Date.now() - t;
+    assert.ok(ms < 3000, name + ": " + ms + " ms for " + html.length + " characters");
+  }
+});
+
 console.log(`html: ${passed} checks passed`);

@@ -44,9 +44,9 @@ var DEFAULTS = {
   // Where the last session left off, so the notebook opens there again.
   lastNotebook: "",
   zoom: 100,
-  // Notebooks or Pages: which one Uber Notebook opens in (the one you were in), and
-  // the page you were on in Pages.
-  space: "notebooks",
+  // Pages or Notebooks: which one Uber Notebook opens in (the one you were in;
+  // Pages, the first time), and the page you were on in Pages.
+  space: "pages",
   lastPage: "",
   // The Inbox in Pages: where pages agents and scripts add go (Api.qml).
   inbox: "",
@@ -55,9 +55,9 @@ var DEFAULTS = {
   exportTo: "ask",
   // Colors of your own you picked last, newest first ("#ff8800,#1e66f5").
   recentColors: "",
-  // Where a quick note goes: "notebook" (a page in the Quick notes notebook)
-  // or "pages" (a page in the Pages Inbox, its text read as Markdown).
-  quickTo: "notebook",
+  // Where a quick note goes: "pages" (a page in the Pages Inbox, its text
+  // read as Markdown) or "notebook" (a page in the Quick notes notebook).
+  quickTo: "pages",
   // A Markdown copy of every page (Pages and notebooks), kept up to date in a
   // folder for Obsidian, git or any editor: off, or on, in `mirrorFolder`
   // ("" is a Markdown folder in the notes folder).
@@ -103,6 +103,9 @@ var DEFAULTS = {
   grokEffort: "",
   codexModel: "",
   codexEffort: "",
+  // What you've let agents in the panel have done for them without asking
+  // (Permissions.js): [{ agent, action: "contact", target: a site }].
+  agentPermissions: [],
   // Pages' sidebar: what's left out of it (search, calendar, library, people,
   // today, favorites, projects, tags, import, templates, archive, trash),
   // and the sections folded (favorites, projects, pages, tags).
@@ -163,6 +166,7 @@ var SCHEMA = {
     grokEffort: "string",
     codexModel: "string",
     codexEffort: "string",
+    agentPermissions: "permissions",
     sidebarHidden: "list",
     sidebarFolded: "list"
   },

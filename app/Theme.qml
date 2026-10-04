@@ -87,7 +87,7 @@ QtObject {
 
   // Glyphs from the Nerd Font (Material Design icons).
   readonly property var icons: ({
-    back: "\u{f004d}", shelf: "\u{f125f}", notebook: "\u{f082e}", notebookPlus: "\u{f1612}",
+    back: "\u{f004d}", shelf: "\u{f125f}", terminal: "\u{f018d}", notebook: "\u{f082e}", notebookPlus: "\u{f1612}",
     left: "\u{f0141}", right: "\u{f0142}", down: "\u{f0140}", plus: "\u{f0415}", close: "\u{f0156}",
     search: "\u{f0349}", pages: "\u{f0836}", more: "\u{f01d8}", cog: "\u{f08bb}",
     undo: "\u{f054c}", redo: "\u{f044e}",

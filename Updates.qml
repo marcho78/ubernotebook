@@ -6,8 +6,9 @@ import "Updates.js" as Updates
 // Uber Notebook starts and once a day after that while Settings has it on, and
 // whenever you ask. It's one plain request for that list: nothing of yours
 // goes with it. A newer one shows in the sidebar, on the shelf and in
-// Settings, with its notes; Uber Notebook installed from git (`omarchy plugin
-// add`) updates itself with `omarchy plugin update`, on your click.
+// Settings, with its notes and the command that installs it (`omarchy plugin
+// update`), to run in a terminal: it shows what changes and asks first.
+// Uber Notebook never installs anything itself.
 Item {
   id: up
 
@@ -32,11 +33,9 @@ Item {
   property var checkedAt: null
   // A git checkout, so `omarchy plugin update` can update it.
   property bool managed: false
-  // "", "running", or why the update didn't go.
-  property string installing: ""
   readonly property string updateCommand: "omarchy plugin update " + pluginId
 
-  readonly property string curlScript: "/usr/bin/curl -sS -L --proto =https --proto-redir =https --max-time 15 --max-filesize 2000000 -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -A 'Uber Notebook' -w '\\n%{http_code}' -- \"$1\""
+  readonly property string curlScript: "/usr/bin/curl -q -sS -L --proto =https --proto-redir =https --max-time 15 --max-filesize 2000000 -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -A 'Uber Notebook' -w '\\n%{http_code}' -- \"$1\""
 
   function check(done) {
     if (status === "checking") { if (done) done(); return }
@@ -71,19 +70,6 @@ Item {
     return { title: "What's in " + current, markdown: own ? own.notes : "The notes for this version aren't here.", url: "" }
   }
 
-  // The update, from git: `omarchy plugin update <id> --yes` fetches it,
-  // checks it and has the shell load it again (Uber Notebook starts again).
-  readonly property string installScript: "p=$(command -v omarchy-plugin-update || echo /usr/share/omarchy/bin/omarchy-plugin-update); \"$p\" \"$1\" --yes 2>&1"
-  function install(done) {
-    if (!managed) { installing = "Uber Notebook wasn't installed from git, so it can't update itself: reinstall it with omarchy plugin add."; if (done) done(false); return }
-    if (installing === "running") return
-    installing = "running"
-    files.exec(["/usr/bin/bash", "-c", installScript, "uber-notebook-install", pluginId], function(ok, out) {
-      up.installing = ok ? "" : (String(out || "").trim().split("\n").pop().replace(/^omarchy-plugin-update:\s*/, "") || "The update didn't go.")
-      if (done) done(ok)
-    }, { timeoutMs: 180000, maxBytes: 256 * 1024 })
-  }
-
   // How it is, for agents: { version, latest, updateAvailable, status, ... }.
   function summary() {
     return {
@@ -94,8 +80,7 @@ Item {
       problem: problem,
       checked: checkedAt ? checkedAt.toISOString() : "",
       automatic: automatic,
-      canUpdateItself: managed,
-      update: managed ? "Settings → About → Update now, or: " + updateCommand + " --yes" : "reinstall from git (omarchy plugin add <its git URL>) to update with omarchy plugin update",
+      update: managed ? "the user runs " + updateCommand + " in a terminal (it shows the changes and asks first)" : "reinstall from git (omarchy plugin add <its git URL>) to update with omarchy plugin update",
       releases: newer.map(function(r) { return { version: r.version, name: r.name, date: r.date, url: r.url } })
     }
   }

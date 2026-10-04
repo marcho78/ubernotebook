@@ -219,14 +219,19 @@ function recordCommand(kind, file, options) {
     "-f", "pulse", "-i", input, "-t", limit, "-filter_complex", graph].concat(out)
 }
 
+// What ffmpeg may read a recording as: a file on this computer (nothing it
+// names elsewhere), in one of these formats (not a playlist or a list of
+// other files).
+var FILE_ONLY = "-protocol_whitelist file -format_whitelist ogg,wav,mp3,flac,matroska,mov,aac,w64,caf,aiff,amr"
+
 // A shell script that makes a recording louder (BOOST) into a new Opus file:
 // arguments the recording, the new file, the filter. With "keep" as the
 // fourth, the recording stays (a note made louder later, which Undo takes
 // back); else it goes once the new file is made, or becomes it if that
 // fails. Then it prints the new file's levels (for its waveform).
-var LOUDER_SCRIPT = "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -i \"$1\" -af \"$3\" -c:a libopus -b:a 32k -application voip \"$2\"; s=$?; "
+var LOUDER_SCRIPT = "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y " + FILE_ONLY + " -i \"$1\" -af \"$3\" -c:a libopus -b:a 32k -application voip \"$2\"; s=$?; "
   + "if [ \"$4\" != keep ]; then if [ $s -eq 0 ]; then /usr/bin/rm -f -- \"$1\"; else /usr/bin/mv -f -- \"$1\" \"$2\" || exit 3; fi; elif [ $s -ne 0 ]; then exit 3; fi; "
-  + "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -i \"$2\" -filter_complex "
+  + "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin " + FILE_ONLY + " -i \"$2\" -filter_complex "
   + "\"[0:a]aformat=channel_layouts=mono,aresample=16000,asetnsamples=n=1600:p=0,astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=RMS_level,ametadata=mode=print:file=/dev/stdout\" -f null -; exit 0"
 
 // A shell script that writes out a recording with voxtype: an Opus file
@@ -234,7 +239,7 @@ var LOUDER_SCRIPT = "/usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -i
 // the WAV taken away after. Arguments: the file, a WAV to make (or "" when
 // the file is one already, as it is), the filter (or "").
 var TRANSCRIBE_SCRIPT = "in=\"$1\"; wav=\"$2\"; af=\"${3:-anull}\"; "
-  + "if [ -n \"$wav\" ]; then /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y -i \"$in\" -af \"$af\" -ar 16000 -ac 1 -c:a pcm_s16le \"$wav\" || exit 3; in=\"$wav\"; fi; "
+  + "if [ -n \"$wav\" ]; then /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y " + FILE_ONLY + " -i \"$in\" -af \"$af\" -ar 16000 -ac 1 -c:a pcm_s16le \"$wav\" || exit 3; in=\"$wav\"; fi; "
   + "/usr/bin/voxtype -q transcribe \"$in\" 2>/dev/null; s=$?; [ -n \"$wav\" ] && /usr/bin/rm -f -- \"$wav\"; exit $s"
 
 // What a test of the microphone heard (its levels, as the meter shows them):

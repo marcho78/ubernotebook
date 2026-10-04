@@ -115,6 +115,8 @@ Item {
   function replaceInOpenPage(id, change) { return content.item ? content.item.docView.replaceFromCommand(id, change) : false }
   function insertInOpenPage(id, change) { return content.item ? content.item.docView.insertFromCommand(id, change) : false }
   function setProjectOfOpenPage(id, next) { return content.item ? content.item.docView.setProjectOfOpenPage(id, next) : false }
+  // An agent's work needing your yes (Api.agentLink): asked in its panel.
+  function askAgentPermission(req) { return content.item ? content.item.docView.askAgentPermission(req) : false }
   function trashPage(id) {
     if (!content.item) return false
     content.item.docView.trashPage(id)
@@ -307,7 +309,7 @@ Item {
       id: quickNote
       anchors.fill: parent
       theme: quickTheme
-      destination: root.service ? (root.service.settings.quickTo || "notebook") : "notebook"
+      destination: root.service ? (root.service.settings.quickTo || "pages") : "pages"
       recorder: root.service ? root.service.recorder : null
       onDestinationPicked: function(to) { if (root.service) root.service.setSetting("quickTo", to) }
       onKept: function(text) {

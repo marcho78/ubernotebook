@@ -37,6 +37,10 @@ Item {
   // What the last one did, for Settings: "" or a line (`failed` if it didn't go).
   property string note: ""
   property bool failed: false
+  // The most a profile put back may take: bytes, files (an archive that says
+  // more is stopped, and what it made taken away).
+  readonly property real restoreMaxBytes: 64 * 1024 * 1024 * 1024
+  readonly property int restoreMaxFiles: 2000000
 
   // The profiles a backup takes: "" (the open one), "all" (every one but the
   // demo, which starts over as new), or one by its id or name.
@@ -104,8 +108,9 @@ Item {
     var p = String(path || "").trim()
     if (p.indexOf("~/") === 0) p = home + p.slice(1)
     if (!p || p.charAt(0) !== "/") { done({ ok: false, problem: "Give the backup's full path.", manifest: null }); return }
-    files.exec(["/usr/bin/bash", "-c", Backups.CHECK_SCRIPT, "uber-notebook-backup-check", p], function(ok, out) {
+    files.helper(["inspect-backup", p], function(ok, out) {
       var r = ok ? Backups.checked(out) : { ok: false, problem: "That backup couldn't be read.", manifest: null }
+      if (r.ok && !r.hash) r = { ok: false, problem: "That backup couldn't be read.", manifest: null }
       r.path = p
       done(r)
     }, { timeoutMs: 5 * 60 * 1000, maxBytes: 512 * 1024 })
@@ -126,7 +131,8 @@ Item {
         if (!todo.length) { bk.added(made, open, done); return }
         var p = todo.shift()
         var base = Backups.restoreFolder(p.name)
-        bk.files.exec(["/usr/bin/bash", "-c", Backups.RESTORE_SCRIPT, "uber-notebook-restore", c.path, p.dir, bk.home + base.slice(1)], function(ok, out) {
+        // (From the file looked into: if it isn't that any more, nothing.)
+        bk.files.helper(["restore-backup", c.path, p.dir, bk.home + base.slice(1), c.hash, String(bk.restoreMaxBytes), String(bk.restoreMaxFiles)], function(ok, out) {
           var at = ok ? String(out || "").trim().split("\n").pop() : ""
           if (at) made.push({ name: p.name, folder: bk.home && at.indexOf(bk.home + "/") === 0 ? "~" + at.slice(bk.home.length) : at, saved: p.saved })
           next()

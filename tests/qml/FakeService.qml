@@ -57,4 +57,10 @@ QtObject {
   // The update check (Updates.qml) and backups (Backups.qml), when a test has them.
   property var updates: null
   property var backups: null
+
+  // While an agent works in the panel (Service.qml: Scope.js): what it's
+  // limited to, or null.
+  property var agentScope: null
+  function beginAgentScope(agent, dir, id) { agentScope = { agent: agent, id: id, dir: dir, frozen: false } }
+  function endAgentScope() { agentScope = null }
 }

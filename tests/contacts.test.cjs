@@ -106,4 +106,20 @@ check("a birthday as it's said", () => {
   assert.equal(K.birthdayInfo({ birthday: "" }, now), null);
 });
 
+
+check("a big import: matched by lookup, in time", () => {
+  const people = Array.from({ length: 20000 }, (_, i) => ({ name: "P" + i, emails: [{ value: "p" + i + "@x.org" }], phones: [{ value: "+1 555 " + String(1000000 + i) }] }));
+  const t = Date.now();
+  const r = K.merge(K.make(), people, new Date());
+  const again = K.merge(r.book, people.map((p) => ({ name: p.name, phones: p.phones })), new Date());
+  const ms = Date.now() - t;
+  assert.equal(r.added, 20000);
+  assert.equal(again.added, 0, "each found again by number");
+  assert.equal(again.updated, 0);
+  assert.ok(ms < 8000, ms + " ms");
+  // Notes kept, however many cards bring one: as long as a person's notes can be.
+  const notes = K.merge(K.make(), Array.from({ length: 50 }, (_, i) => ({ name: "Sam", emails: [{ value: "sam@x.org" }], notes: "note " + i + " " + "x".repeat(200) })), new Date());
+  assert.equal(notes.book.contacts.length, 1);
+  assert.ok(notes.book.contacts[0].notes.length <= 4000);
+});
 console.log("contacts: " + passed + " checks passed");

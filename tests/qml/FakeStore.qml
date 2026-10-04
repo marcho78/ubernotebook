@@ -11,6 +11,8 @@ QtObject {
   property bool ready: true
   property string rootPath: "/tmp/uber-notebook-dev"
   property var notebooks: []
+  // Store.readClipboard(done, primary), when a test sets one (null: Qt's paste).
+  property var readClipboard: null
   property var data: ({})
   property var order: []
 
@@ -20,6 +22,7 @@ QtObject {
   Component.onCompleted: seed()
 
   function reset() {
+    readClipboard = null
     data = ({})
     order = []
     seed()
@@ -135,6 +138,7 @@ QtObject {
   function assetUrl(id, src) { return "" }
   function copyText(text) { console.log("copy:", text.slice(0, 200)) }
   function openUrl(url) { console.log("open:", url) }
+  function openLocal(path) { console.log("open:", path) }
   function openFolder() { console.log("open folder") }
   function exportNotebook(id) { exported(rootPath + "/export") }
   function quickNote(text) { console.log("quick note:", text) }
