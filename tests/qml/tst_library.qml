@@ -87,7 +87,7 @@ Item {
 
     function test_1_everything_from_the_sidebar() {
       fresh()
-      click(named(view, "libraryRow"))
+      click(named(view, "libraryTile"))
       tryVerify(function() { return view.libraryShown && lib() !== null }, 1000)
       tryVerify(function() { return titles().indexOf("Spec.pdf") >= 0 }, 1000)
       var t = titles()

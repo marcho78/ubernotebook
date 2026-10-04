@@ -5,6 +5,7 @@ import "../Agent.js" as Agent
 import "../Audio.js" as Audio
 import "../Backups.js" as Backups
 import "../Colors.js" as Colors
+import "../Sidebar.js" as Sidebar
 
 // Uber Notebook's settings, in sections (the list at the left): General,
 // Appearance, Writing, Audio, Profiles, Backups and About. They apply as
@@ -39,7 +40,7 @@ Popup {
   readonly property var icons: theme ? theme.icons : ({})
   readonly property var sections: [
     { id: "general", label: "General", icon: icons.cog || "", note: "Shortcuts, the window, and scrolling." },
-    { id: "appearance", label: "Appearance", icon: icons.palette || "", note: "Colors of your own over the Omarchy theme's, and motion." },
+    { id: "appearance", label: "Appearance", icon: icons.palette || "", note: "Colors of your own over the Omarchy theme's, what the sidebar shows, and motion." },
     { id: "writing", label: "Writing", icon: icons.pen || "", note: "Checklists, exports, and a Markdown copy of your notes." },
     { id: "ai", label: "AI", icon: icons.agent || "", note: "Your agent, and the model and effort it works with." },
     { id: "audio", label: "Audio", icon: icons.mic || "", note: "The microphone, dictation, and meetings." },
@@ -49,10 +50,21 @@ Popup {
   ]
   readonly property var current: sections.filter(function(x) { return x.id === panel.section })[0] || sections[0]
 
-  // Settings open at a section.
-  function openAt(id) {
+  // Settings open at a section (and at a part of it: its objectName).
+  property string openPart: ""
+  function openAt(id, part) {
     if (sections.some(function(x) { return x.id === id })) section = id
+    openPart = part || ""
     open()
+  }
+  function findPart(item, name) {
+    if (!item) return null
+    if (item.objectName === name && item.visible) return item
+    for (var i = 0; i < item.children.length; i++) {
+      var found = findPart(item.children[i], name)
+      if (found) return found
+    }
+    return null
   }
 
   anchors.centerIn: Overlay.overlay
@@ -78,6 +90,9 @@ Popup {
     if (backups) backups.refresh()
     if (section === "ai") loadAgents()
     flick.contentY = 0
+    var part = openPart ? findPart(body, openPart) : null
+    if (part) flick.contentY = Math.max(0, Math.min(part.mapToItem(body, 0, 0).y - 8, flick.contentHeight - flick.height))
+    openPart = ""
     // (The keys come here, so Esc closes it, whatever had them before.)
     contentItem.forceActiveFocus()
   }
@@ -305,6 +320,51 @@ Popup {
       width: childrenRect.width
       height: childrenRect.height
     }
+  }
+
+  // One of several, on or off: a box, ticked, and its name.
+  component Pick: Rectangle {
+    id: pick
+    property string text: ""
+    property bool checked: false
+    signal toggled(bool on)
+    implicitWidth: pickRow.implicitWidth + 16
+    implicitHeight: 30
+    radius: 7
+    color: pickHover.hovered ? panel.theme.hover : "transparent"
+    Row {
+      id: pickRow
+      x: 8
+      anchors.verticalCenter: parent.verticalCenter
+      spacing: 8
+      Rectangle {
+        anchors.verticalCenter: parent.verticalCenter
+        width: 16
+        height: 16
+        radius: 4
+        color: pick.checked ? panel.theme.accent : "transparent"
+        border.width: pick.checked ? 0 : 1.5
+        border.color: Qt.alpha(panel.theme.text, 0.35)
+        Icon {
+          anchors.centerIn: parent
+          visible: pick.checked
+          theme: panel.theme
+          text: panel.theme.icons.check
+          size: 12
+          color: panel.theme.onAccent
+        }
+      }
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: pick.text
+        font.family: panel.theme.uiFont
+        font.pixelSize: 13
+        color: pick.checked ? panel.theme.text : panel.theme.muted
+      }
+    }
+    HoverHandler { id: pickHover; cursorShape: Qt.PointingHandCursor }
+    TapHandler { onTapped: pick.toggled(!pick.checked) }
   }
 
   // Chips, one of them chosen: [{ label, value }].
@@ -771,6 +831,45 @@ Popup {
               theme: panel.theme
               text: "Reset all"
               onClicked: { panel.set("colorSidebar", ""); panel.set("colorPage", ""); panel.set("colorCards", ""); panel.set("colorText", "") }
+            }
+          }
+        }
+
+        Group {
+          objectName: "sidebarChoices"
+          visible: panel.section === "appearance"
+          title: "Sidebar"
+          note: "What Pages' sidebar shows. Pages and Settings are always there. A right-click in the sidebar hides what it's on, and a click on a section's name folds it."
+          Repeater {
+            model: [{ place: "top", label: "At the top" }, { place: "sections", label: "Sections" }, { place: "foot", label: "At the foot" }]
+            delegate: Line {
+              id: placeLine
+              required property var modelData
+              label: modelData.label
+              Row {
+                spacing: 2
+                Repeater {
+                  model: Sidebar.itemsAt(placeLine.modelData.place)
+                  delegate: Pick {
+                    required property var modelData
+                    objectName: "sidebarItem_" + modelData.id
+                    text: modelData.label
+                    checked: (panel.s.sidebarHidden || []).indexOf(modelData.id) < 0
+                    onToggled: function(on) { panel.set("sidebarHidden", Sidebar.setIn(panel.s.sidebarHidden || [], modelData.id, !on)) }
+                  }
+                }
+              }
+            }
+          }
+          Line {
+            visible: (panel.s.sidebarHidden || []).length > 0
+            label: "Everything back"
+            note: "All of it in the sidebar again."
+            TextButton {
+              objectName: "sidebarShowAll"
+              theme: panel.theme
+              text: "Show all"
+              onClicked: panel.set("sidebarHidden", [])
             }
           }
         }

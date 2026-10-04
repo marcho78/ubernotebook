@@ -108,7 +108,7 @@ Item {
       // Saved: the page knows its tags, and the sidebar lists them.
       view.commit()
       compare(Workspace.pageTags(ws.readPageNow(view.page.id)).map(function(t) { return t.name }), ["errand", "home"])
-      tryVerify(function() { return all(root, function(it) { return it.objectName === "tagRow" }, []).length === 2 }, 1000, "the sidebar's tags")
+      tryVerify(function() { return all(root, function(it) { return it.objectName === "tagChip" }, []).length === 2 }, 1000, "the sidebar's tags")
     }
 
     function test_2_the_hash_menu() {
@@ -224,7 +224,7 @@ Item {
     }
     function sidebarRow(name) {
       var r = null
-      tryVerify(function() { r = all(root, function(it) { return it.objectName === "tagRow" && it.modelData && it.modelData.name === name }, [])[0] || null; return r !== null }, 1000, "#" + name + " in the sidebar")
+      tryVerify(function() { r = all(root, function(it) { return it.objectName === "tagChip" && it.modelData && it.modelData.name === name }, [])[0] || null; return r !== null }, 1000, "#" + name + " in the sidebar")
       return r
     }
 
@@ -241,9 +241,9 @@ Item {
       // The page's text is drawn in it at once.
       tryVerify(function() { return e.items[uid].edit.text.toLowerCase().indexOf(blue.toLowerCase()) >= 0 }, 1000, "the tags on the open page, in their color")
       var acme = sidebarRow("work/acme")
-      compare(acme.modelData.depth, 1, "under #work in the sidebar")
+      compare(acme.modelData.depth, 1, "inside #work: after it in the sidebar")
       compare(String(acme.look.color), String(Qt.color(Docs.colorEntry("blue").text[th.dark ? 1 : 0])))
-      // The sidebar's ⋯: its color, there. (The rows are drawn again as colors change.)
+      // The sidebar's ⋯: its color, there. (The chips are drawn again as colors change.)
       wait(50)
       acme = sidebarRow("work/acme")
       mouseMove(acme, 20, acme.height / 2)
@@ -271,7 +271,8 @@ Item {
       mouseClick(sort)
       compare(service.settings.tagSort, "color")
       tryVerify(function() {
-        var rows = all(root, function(it) { return it.objectName === "tagRow" }, []).sort(function(a, b) { return a.y - b.y })
+        // (Chips, in rows: along each, then down.)
+        var rows = all(root, function(it) { return it.objectName === "tagChip" }, []).sort(function(a, b) { return a.y - b.y || a.x - b.x })
         return rows.map(function(r) { return r.modelData.name }).join() === "work,work/acme,home"
       }, 1000, "blue before red")
       mouseClick(sort)

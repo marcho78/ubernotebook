@@ -50,40 +50,39 @@ Column {
     TapHandler { onTapped: sf.notesRequested() }
   }
 
-  // On X.
+  // On X: there to see, quietly (brighter under the pointer).
   Rectangle {
     id: xLine
     objectName: "footerX"
     width: parent.width
-    height: 28
+    height: 24
     radius: 6
     color: xHover.hovered ? sf.theme.hover : "transparent"
     Row {
       x: 12
       anchors.verticalCenter: parent.verticalCenter
-      spacing: 7
+      spacing: 6
       XLogo {
         anchors.verticalCenter: parent.verticalCenter
-        size: 11
-        color: xHover.hovered ? sf.theme.text : sf.theme.muted
+        size: 10
+        color: xHover.hovered ? sf.theme.text : sf.theme.faint
       }
       Text {
         anchors.verticalCenter: parent.verticalCenter
         textFormat: Text.PlainText
         text: "Follow me on X"
         font.family: sf.theme.uiFont
-        font.pixelSize: 12
-        color: sf.theme.muted
+        font.pixelSize: 11
+        color: xHover.hovered ? sf.theme.muted : sf.theme.faint
       }
       Text {
         anchors.verticalCenter: parent.verticalCenter
         textFormat: Text.PlainText
         text: "@" + sf.handle
         font.family: sf.theme.uiFont
-        font.pixelSize: 12
-        font.weight: Font.DemiBold
+        font.pixelSize: 11
         font.underline: xHover.hovered
-        color: sf.theme.text
+        color: xHover.hovered ? sf.theme.text : sf.theme.muted
       }
     }
     HoverHandler { id: xHover; cursorShape: Qt.PointingHandCursor }

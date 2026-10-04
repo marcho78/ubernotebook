@@ -120,9 +120,9 @@ Item {
       verify(root.lastToast.indexOf("is a template") >= 0, root.lastToast)
       // In Templates, at the sidebar's foot: a card, in place of a page.
       wait(200)
-      click(named(win(), "templatesRow"))
+      click(named(win(), "templatesButton"))
       tryVerify(function() { return view.templatesShown && view.page === null }, 1000)
-      verify(named(win(), "templatesRow").checked, "the sidebar says where you are")
+      verify(named(win(), "templatesButton").checked, "the sidebar says where you are")
       var card = null
       tryVerify(function() { card = find(view.templatesView, function(it) { return it.objectName === "templateCard" && it.yours }); return card !== null }, 1000)
       compare(card.title, "Standup " + today("ddd d MMM"), "named as a page from it will be")
@@ -210,7 +210,7 @@ Item {
       ws.saveAsTemplate(p.id, function(id) { made = id })
       tryVerify(function() { return made !== "" }, 2000)
       // From Templates: a click on its card.
-      click(named(win(), "templatesRow"))
+      click(named(win(), "templatesButton"))
       var use = null
       tryVerify(function() { use = find(view.templatesView, function(it) { return it.objectName === "templateCard" && it.yours }); return use !== null }, 1000)
       wait(200)

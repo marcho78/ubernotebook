@@ -144,6 +144,20 @@ function validValue(key, value, fallback, schema) {
     var list = cleanProfiles(value, schema)
     return list === null ? { ok: false } : { ok: true, value: list }
   }
+  // A list of names ("projects", "tags"): an array, or the same with commas
+  // between them (as `set` gives it); lowercase names only, each once.
+  if (type === "list") {
+    var items = typeof value === "string" ? value.split(",") : value
+    if (!Array.isArray(items)) return { ok: false }
+    var names = []
+    for (var n = 0; n < items.length && names.length < 40; n++) {
+      var item = String(items[n] === undefined || items[n] === null ? "" : items[n]).trim()
+      if (!item) continue
+      if (!/^[a-z][a-z0-9-]{0,23}$/.test(item)) return { ok: false }
+      if (names.indexOf(item) < 0) names.push(item)
+    }
+    return { ok: true, value: names }
+  }
   if (type === "id") {
     return typeof value === "string" && /^[a-z0-9-]{0,80}$/.test(value) ? { ok: true, value: value } : { ok: false }
   }

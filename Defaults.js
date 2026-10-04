@@ -102,7 +102,12 @@ var DEFAULTS = {
   grokModel: "",
   grokEffort: "",
   codexModel: "",
-  codexEffort: ""
+  codexEffort: "",
+  // Pages' sidebar: what's left out of it (search, calendar, library, people,
+  // today, favorites, projects, tags, import, templates, archive, trash),
+  // and the sections folded (favorites, projects, pages, tags).
+  sidebarHidden: [],
+  sidebarFolded: []
 }
 
 var SCHEMA = {
@@ -157,7 +162,9 @@ var SCHEMA = {
     grokModel: "string",
     grokEffort: "string",
     codexModel: "string",
-    codexEffort: "string"
+    codexEffort: "string",
+    sidebarHidden: "list",
+    sidebarFolded: "list"
   },
   choices: {
     pen: ["sans", "serif", "hand", "print", "typewriter", "mono", "duo"],

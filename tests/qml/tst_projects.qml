@@ -187,7 +187,7 @@ Item {
       tryVerify(function() { return !ws.index.pages[p.id].archived }, 1000)
       view.archivePage(p.id, true)
       // The Archive, at the sidebar's foot: open one, bring it back.
-      mouseClick(named("archiveRow"))
+      mouseClick(named("archiveButton"))
       var rows = []
       tryVerify(function() { rows = find(root.Window.window.contentItem, function(it) { return it.objectName === "archivedRow" }, []); return rows.length === 1 }, 1000)
       wait(200)

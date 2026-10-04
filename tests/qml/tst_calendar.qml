@@ -111,7 +111,7 @@ Item {
       ws.loadCalendar()
       tryVerify(function() { return ws.calendar.events.length === 1 }, 1000)
       // From the sidebar.
-      click(named(win(), "calendarRow"))
+      click(named(win(), "calendarTile"))
       tryVerify(function() { return view.calendarShown }, 1000)
       tryVerify(function() { return entry("Dentist") !== null }, 1000, "on its day")
       // Today, in the sidebar (it's later today).

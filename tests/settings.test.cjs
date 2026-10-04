@@ -160,4 +160,15 @@ check("the app launcher entry, with its icon", () => {
   }
 });
 
+check("a list of names (what the sidebar leaves out, and folds)", () => {
+  const m = (v) => plain(Settings.merge(defaults, { sidebarHidden: v }, schema)).sidebarHidden;
+  assert.deepEqual(m(["projects", "tags"]), ["projects", "tags"]);
+  assert.deepEqual(m("projects, tags,projects"), ["projects", "tags"], "with commas, as `set` gives it; each once");
+  assert.deepEqual(m(""), [], "none");
+  assert.deepEqual(m(["Projects"]), [], "lowercase names only: not taken");
+  assert.deepEqual(m(["ok", "rm -rf"]), [], "anything else in it: not taken");
+  assert.deepEqual(m(42), []);
+  assert.deepEqual(plain(Settings.overrides(defaults, Settings.merge(defaults, { sidebarHidden: [] }, schema))), {}, "the default isn't kept");
+});
+
 console.log(`settings: ${passed} checks passed`);

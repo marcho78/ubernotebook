@@ -89,10 +89,10 @@ The first version.
   by dragging, a text color and a background for a cell, a row or a column
   (Pages' colors, recent ones, or the color picker), and spreadsheet cells
   pasted into a cell filling the table;
-  tags (`#errand` in any line, the "#" menu, a color for each, a Tags list
-  in the sidebar with a ⋯ and right-click menu to color, rename or remove
-  one, sorted by name or by color, nested tags under the tag they're in and
-  in its color unless they have their own, Ctrl+P with "#"): a tag shows
+  tags (`#errand` in any line, the "#" menu, a color for each, the
+  sidebar's Tags as chips with a ⋯ and right-click menu to color, rename or
+  remove one, sorted by name or by color, nested tags after the tag they're
+  in and in its color unless they have their own, Ctrl+P with "#"): a tag shows
   every block with it, page by page, to-dos ticked there, and renames or
   comes off every page in one go (Obsidian's `#tags` come in as tags, and go
   out as `#tags` in Markdown);
@@ -280,9 +280,20 @@ The first version.
   the top of a template of yours), found by its name or what it's for, a
   click a new page from it; written as Markdown in `starter/`
   (`dev/starter` builds them in). The Library has someone, or a link, once
-  for each page they're on; a contact card says a birthday as People does;
-  the sidebar's page tree keeps room for its pages however many projects and
-  tags there are.
+  for each page they're on; a contact card says a birthday as People does.
+- **Pages' sidebar, yours to arrange**: the top stays put (the switch back
+  to notebooks, the profile, search with a new-page button beside it, and
+  Calendar, Library and People side by side); the middle scrolls as one
+  (Today, Favorites, Projects, Tags and Pages, none of them cut short); the
+  foot is a row of small buttons (Import, Templates, Archive, Trash and
+  Settings, each with how many are in it) over a quieter *Follow me on X*.
+  A click on a section's name folds it, and it stays folded. The tags are
+  chips in their colors, with *Show all* past four rows. Anything but Pages
+  and Settings can be left out: a right-click on it, *Hide* (Undo brings it
+  back), or Settings → Appearance → Sidebar; without Projects, the projects
+  are in Pages, where they are. A title typed redraws its own row, not the
+  whole tree. The `sidebarHidden` and `sidebarFolded` settings, for agents
+  and scripts too.
 - **Commands for AI agents and scripts**, over the Omarchy shell's IPC (no
   MCP server): `omarchy-shell uber-notebook help`, `list`, `find`, `read`, `add`,
   `addTo`, `append` and `trash`, answered in JSON, with pages in and out as

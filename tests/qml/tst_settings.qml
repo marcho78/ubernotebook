@@ -410,6 +410,37 @@ Item {
       service.setSettings({ codexModel: "", codexEffort: "" })
     }
 
+    function test_11_what_the_sidebar_shows() {
+      fresh()
+      // From the sidebar: a right-click, Choose what's in the sidebar.
+      mouseClick(named(win(), "libraryTile"), 20, 20, Qt.RightButton)
+      var choose = null
+      tryVerify(function() { choose = named(win(), "sidebarChoose"); return choose !== null }, 1000, "its menu")
+      wait(150)
+      mouseClick(choose)
+      tryVerify(function() { return app.settingsPopup.opened }, 1000)
+      tryCompare(named(win(), "settingsTitle"), "text", "Appearance", 1000)
+      var group = named(win(), "sidebarChoices")
+      var f = panel()
+      verify(group !== null)
+      tryVerify(function() { var y = group.mapToItem(f.contentItem, 0, 0).y; return y >= f.contentY && y < f.contentY + f.height }, 1000, "in view")
+      // Left out, and back.
+      var tags = reach(named(win(), "sidebarItem_tags"))
+      verify(tags.checked, "shown to begin with")
+      compare(named(win(), "sidebarShowAll"), null, "nothing to show again")
+      click(tags)
+      compare(service.settings.sidebarHidden, ["tags"])
+      verify(!named(win(), "sidebarItem_tags").checked)
+      click(reach(named(win(), "sidebarItem_trash")))
+      compare(service.settings.sidebarHidden, ["tags", "trash"])
+      tryVerify(function() { return app.docView.visible && named(app.docView, "trashButton") === null }, 1000, "out of the sidebar")
+      click(reach(named(win(), "sidebarItem_tags")))
+      compare(service.settings.sidebarHidden, ["trash"])
+      click(reach(named(win(), "sidebarShowAll")))
+      compare(service.settings.sidebarHidden, [])
+      closeAll()
+    }
+
     function test_9_for_agents() {
       fresh()
       var r = JSON.parse(api.backup(""))

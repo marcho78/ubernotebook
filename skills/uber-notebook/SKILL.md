@@ -91,7 +91,7 @@ except `read`, which prints the page as Markdown.
 | `omarchy-shell uber-notebook addToNotebook <id> <file.md>` | a new page at the end of a notebook (headings, lists, to-dos, quotes, paragraphs) |
 | `omarchy-shell uber-notebook open <id>` | shows the page in Uber Notebook's window |
 | `omarchy-shell uber-notebook preferences` | every setting: `[{key, value, kind, choices, range}]` |
-| `omarchy-shell uber-notebook set <key> <value>` | changes a setting (checked as Settings does): `set scrollSpeed faster`, `set paper grid`, `set colorPage "#1e1e2e"`. Only when the user asks |
+| `omarchy-shell uber-notebook set <key> <value>` | changes a setting (checked as Settings does): `set scrollSpeed faster`, `set paper grid`, `set colorPage "#1e1e2e"`; a list as names with commas: `set sidebarHidden "calendar,trash"` (what Pages' sidebar leaves out: `search`, `calendar`, `library`, `people`, `today`, `favorites`, `projects`, `tags`, `import`, `templates`, `archive`, `trash`; `""` puts everything back), `set sidebarFolded "projects,tags"` (its sections folded). Only when the user asks |
 | `omarchy-shell uber-notebook profiles` | the user's profiles (notes kept apart): `[{id, name, folder, open, demo}]`; every other command works on the open one |
 | `omarchy-shell uber-notebook profile "<name or id>"` | opens another profile. Only when the user asks (say which one you're in when it matters) |
 | `omarchy-shell uber-notebook addProfile "<name>" "<folder>" true\|false` | a new profile; `""` folder for `~/Documents/Uber Notebook <name>` (an empty folder starts fresh; one with Uber Notebook's notes opens them); `true` opens it. It starts empty, with the templates |

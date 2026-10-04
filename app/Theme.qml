@@ -125,6 +125,8 @@ QtObject {
     // Files, links, boards, buttons, synced blocks.
     attach: "\u{f0066}", library: "\u{f0331}", person: "\u{f0004}", contacts: "\u{f06cb}", mail: "\u{f01ee}", phone: "\u{f03f2}", web: "\u{f059f}", place: "\u{f034e}", cake: "\u{f00eb}", pdf: "\u{f0226}", video: "\u{f0567}", board: "\u{f0564}", button: "\u{f0a1e}", synced: "\u{f04e6}",
     fileDoc: "\u{f0219}", fileZip: "\u{f05c4}", fileSheet: "\u{f021b}", fileSlides: "\u{f0227}", fileCode: "\u{f022e}", fileMusic: "\u{f0223}", fileImage: "\u{f021f}",
-    openExternal: "\u{f03cc}", refresh: "\u{f0450}", unsync: "\u{f04e7}", edit: "\u{f03eb}"
+    openExternal: "\u{f03cc}", refresh: "\u{f0450}", unsync: "\u{f04e7}", edit: "\u{f03eb}",
+    // What's in the sidebar.
+    eye: "\u{f0208}", eyeOff: "\u{f0209}", tune: "\u{f062e}"
   })
 }

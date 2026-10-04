@@ -719,14 +719,16 @@ function rows(index, open) {
 // of Projects (a project inside a page or another project too), what's on
 // now first (as projectList), with the pages in it under it; Pages has the
 // rest. So a page is in one of them, once. A project's row has isProject,
-// status, due, progress and overdue.
-function sidebarRows(index, open, now) {
+// status, due, progress and overdue. `together` (the sidebar without
+// Projects): every page in Pages, the projects too, where they are.
+function sidebarRows(index, open, now, together) {
   function shown(id) { var e = index.pages[id]; return !!e && !e.trashed && !e.archived && !e.template && !e.synced }
-  function kidsOf(e) { return e.children.filter(function(c) { return shown(c) && !index.pages[c].project }) }
+  function apart(e) { return !together && !!e.project }
+  function kidsOf(e) { return e.children.filter(function(c) { return shown(c) && !apart(index.pages[c]) }) }
   function walk(ids, depth, out) {
     ids.forEach(function(id) {
       var e = index.pages[id]
-      if (!shown(id) || e.project) return
+      if (!shown(id) || apart(e)) return
       var kids = kidsOf(e)
       out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
       if (open && open[id]) walk(kids, depth + 1, out)
@@ -735,7 +737,7 @@ function sidebarRows(index, open, now) {
   var pages = []
   walk(index.top, 0, pages)
   var projects = []
-  projectList(index, now).forEach(function(p) {
+  if (!together) projectList(index, now).forEach(function(p) {
     var e = index.pages[p.id]
     var kids = kidsOf(e)
     projects.push({ id: p.id, depth: 0, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[p.id]),

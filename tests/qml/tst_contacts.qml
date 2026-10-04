@@ -100,7 +100,7 @@ Item {
 
     function test_1_people_imported_found_changed() {
       fresh()
-      click(named(win(), "peopleRow"))
+      click(named(win(), "peopleTile"))
       tryVerify(function() { return view.peopleShown }, 1000)
       verify(named(pv(), "peopleEmpty") !== null, "how to start")
       // Import (a .vcf picked).

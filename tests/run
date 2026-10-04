@@ -32,6 +32,7 @@ node tests/sketch.test.cjs
 node tests/mirror.test.cjs
 node tests/tags.test.cjs
 node tests/drag.test.cjs
+node tests/sidebar.test.cjs
 node tests/audio.test.cjs
 node tests/meeting.test.cjs
 node tests/usertemplates.test.cjs

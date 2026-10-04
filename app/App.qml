@@ -162,6 +162,7 @@ FocusScope {
     focus: visible
     onNotebooksRequested: root.showSpace("notebooks")
     onSettingsRequested: settingsPanel.open()
+    onSidebarChoicesRequested: settingsPanel.openAt("appearance", "sidebarChoices")
     onReleaseNotesRequested: releaseNotes.show()
     onToast: function(text) { root.toast(text) }
     onToastUndo: function(text, undo) { root.toastWithUndo(text, undo) }

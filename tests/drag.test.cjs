@@ -73,4 +73,16 @@ check("projects in the sidebar: apart from the pages, each once", () => {
   assert.deepEqual(u.projects.map((r) => name(r.id)), ["c", "a", "a3"], "not the archive's or the trash's");
 });
 
+check("without Projects in the sidebar: the projects in Pages, where they are", () => {
+  const ix = tree();
+  const now = new Date(2026, 9, 2);
+  ix.pages[ids.a2].project = { status: "paused", due: "" };
+  ix.pages[ids.c].project = { status: "active", due: "" };
+  const open = { [ids.a]: true, [ids.a2]: true };
+  const t = plain(W.sidebarRows(ix, open, now, true));
+  assert.deepEqual(t.projects, [], "no Projects");
+  assert.deepEqual(t.pages.map((r) => name(r.id) + ":" + r.depth), ["a:0", "a1:1", "a2:1", "a21:2", "a3:1", "b:0", "c:0"], "each page once, in its place");
+  assert.equal(t.pages.find((r) => r.id === ids.a2).isProject, undefined, "a page's row, as the others");
+});
+
 console.log(`drag: ${passed} checks passed`);
