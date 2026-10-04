@@ -18,8 +18,10 @@ description: >
 
 Uber Notebook runs inside the Omarchy shell. Work with it only through
 `omarchy-shell uber-notebook <command>`: the app does every write, so a page shows up
-in its window as you add it, and its links and reminders work. Never edit the
-files in ~/Documents/Uber Notebook yourself.
+in its window as you add it, and its links and reminders work. Read and change
+notes only with those commands: don't open the folders the notes are kept in
+(each profile has its own), or Uber Notebook's own files and code. This skill
+says everything its commands and its Markdown can do; `help` lists the commands.
 
 Every command prints JSON (`{"ok": false, "error": "..."}` when it can't),
 except `read`, which prints the page as Markdown.
@@ -131,6 +133,33 @@ quotes, `> [!NOTE]` callouts, **bold**, *italic*, ~~struck~~, `code`, links, and
 - `[@Fri 2 Oct](uber-notebook://date/2026-10-02)`: a date
 - `[⏰ Fri 2 Oct 9:30](uber-notebook://remind/2026-10-02T09:30)`: a reminder, in the
   user's local time. Omarchy shows a notification then; clicking it opens the page.
+
+## Making a page look good
+
+When the user asks for a page to look better (clearer, more beautiful, more
+organized), use what Uber Notebook shows well. All of it goes in the Markdown
+you `replace`, `insertAfter` or `append`, or is one command:
+
+- Structure: `#`, `##`, `###` headings, short paragraphs, bulleted and
+  numbered lists, `- [ ]` to-dos, `---` a divider between parts.
+- Callouts: a quote that starts `> [!KIND]`, the kind giving its icon and
+  color: `NOTE`/`INFO` and `ABSTRACT`/`SUMMARY` blue, `TIP`/`HINT` and
+  `SUCCESS` green, `IMPORTANT` purple, `WARNING` and `QUESTION` yellow,
+  `CAUTION`/`DANGER` and `BUG` red, `TODO`, `EXAMPLE` and `QUOTE` gray. The
+  callout's text follows on the same line or in the quote's next lines.
+- Toggles (a line whose content folds away): `<details><summary>Line</summary>`,
+  the content, `</details>`.
+- In a line: **bold**, *italic*, ~~struck~~, `==highlighted==`, `code`,
+  `<u>underlined</u>`, `<span style="color: #d44c47">colored words</span>` and
+  `<span style="background-color: #fbecdd">a colored background</span>`.
+- Tables (`| a | b |`), mind maps (```` ```mindmap ````), boards, galleries
+  and bookmarks: see their sections below.
+- After writing: `color <page id> <block id> <color>` colors a block (`blue`
+  for its text, `blue_background` behind it); `icon <page id> <emoji>` and
+  `cover <page id> gradient:0` (0 to 11) give the page an icon and a cover.
+
+There is no Markdown for columns. Keep it restrained: a few headings, one or
+two callouts, color where it means something, not on every block.
 
 ## Boards, bookmarks, links, galleries, people, agendas and events in Markdown
 
@@ -415,3 +444,5 @@ writing goes (`replace` that block). Read what you need with `blocks` or
   you make, so the user can put it back; still, change only what was asked.
 - If a command says the pages aren't loaded yet, or omarchy-shell isn't
   running, wait a moment and try once more. Don't fall back to editing files.
+- Don't read Uber Notebook's code or its notes' files to learn what it can
+  do: this skill and `help` say it all, and the commands are quicker.

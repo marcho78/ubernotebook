@@ -313,9 +313,21 @@ The first version.
   over selected words or the page's menu hand what you'd like (with the page,
   the blocks or words you picked) to Omarchy's default coding agent, whichever
   you chose with `omarchy default agent`; its changes show up on the page as
-  it works, each one a step you can undo. The agent runs in its own terminal
-  (Omarchy's agent window), so what it says, its questions and its summary of
-  what it changed, comes back there rather than in Uber Notebook.
+  it works, each one a step you can undo. Claude Code, Grok and Codex work
+  right in Uber Notebook, without a terminal: a panel on the page shows each
+  step they take and their answer (as it's written, for Claude Code and
+  Grok), with Stop; if one can't run there, the panel says why and offers a
+  terminal instead (a meeting's Summarize goes the same way). Each starts
+  with the permission mode Omarchy gives it. Their model and effort are
+  chosen in the box or in Settings → AI, from each agent's own list of
+  models and the efforts each takes. Agents are told to read and change
+  notes only through the commands, and the skill now says how to make a page
+  look good (callouts and their colors, toggles, dividers, highlights,
+  colored words, block colors, an icon and a cover), so they don't go
+  looking through Uber Notebook's code: the same request took Grok 78 tool
+  calls before, 7 after. The other agents run in their
+  own terminal (Omarchy's agent window), so what they say comes back there
+  rather than in Uber Notebook.
 - **Drawing**: a pen, a highlighter and an eraser over the writing, with its
   own undo.
 - **Find** on a page (Ctrl+F), and **search** across every notebook from the

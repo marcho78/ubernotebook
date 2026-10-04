@@ -72,6 +72,31 @@ Item {
     Run {}
   }
 
+  Component {
+    id: streamComponent
+    Stream {}
+  }
+
+  // Runs argv, handing on each line it prints as it prints it: onLine(text),
+  // then done(code, errors) once (code -1: stopped). { stop() } to end it
+  // (options: cwd, timeoutMs).
+  function stream(argv, onLine, done, options) {
+    var o = options || {}
+    var runner = streamComponent.createObject(store, { workingDirectory: o.cwd || "", timeoutMs: o.timeoutMs || 30 * 60 * 1000 })
+    var over = false
+    runner.line.connect(function(text) { if (!over && onLine) onLine(text) })
+    runner.finished.connect(function(code, errors) {
+      over = true
+      try { if (done) done(code, errors) } finally { runner.destroy() }
+    })
+    if (!runner.start(argv)) {
+      over = true
+      runner.destroy()
+      if (done) done(127, "couldn't start it")
+    }
+    return { stop: function() { if (!over) runner.stop() } }
+  }
+
   // Runs argv; done(ok, output) once, then the runner goes away.
   function exec(argv, done, options) {
     var o = options || {}
@@ -145,6 +170,15 @@ Item {
       var name = ok ? String(output || "").trim().split("\n")[0] : ""
       done(/^[a-z][a-z0-9-]{0,30}$/.test(name) ? name : "")
     }, { timeoutMs: 3000, maxBytes: 4096 })
+  }
+
+  // The models an agent can work with, and the efforts each takes
+  // (Agent.models): Grok's and Codex's from the lists they keep, Claude
+  // Code's from its own names for them. done([...]).
+  function agentModels(agent, done) {
+    var codexHome = Quickshell.env("CODEX_HOME") || home + "/.codex"
+    var file = agent === "grok" ? home + "/.grok/models_cache.json" : agent === "codex" ? codexHome + "/models_cache.json" : ""
+    done(Agent.models(agent, file ? readNow(file, 4 * 1024 * 1024) || "" : ""))
   }
 
   // Omarchy launches it, in its own terminal, starting with the prompt;

@@ -94,7 +94,15 @@ var DEFAULTS = {
   backupKeep: 10,
   // Whether Uber Notebook asks GitHub, once a day, if there's a newer version
   // (Updates.qml); off, only when you ask.
-  checkUpdates: true
+  checkUpdates: true,
+  // The model and effort Claude Code, Grok and Codex work with when they
+  // work in Uber Notebook (Agent.js): "" for as each is set up.
+  claudeModel: "",
+  claudeEffort: "",
+  grokModel: "",
+  grokEffort: "",
+  codexModel: "",
+  codexEffort: ""
 }
 
 var SCHEMA = {
@@ -143,7 +151,13 @@ var SCHEMA = {
     backupFolder: "folder",
     backupEvery: "string",
     backupKeep: "int",
-    checkUpdates: "bool"
+    checkUpdates: "bool",
+    claudeModel: "string",
+    claudeEffort: "string",
+    grokModel: "string",
+    grokEffort: "string",
+    codexModel: "string",
+    codexEffort: "string"
   },
   choices: {
     pen: ["sans", "serif", "hand", "print", "typewriter", "mono", "duo"],

@@ -555,15 +555,18 @@ They apply as you change them and are saved on Uber Notebook's entry in
 in `Defaults.js`. Settings (the ⚙ in the sidebar or on the shelf, or
 **Ctrl+,**) has a section for each part of Uber Notebook: General (shortcuts, the
 window, scrolling), Appearance (colors, motion and sound), Writing
-(checklists, exports, the Markdown copy), Audio (the microphone, dictation,
-meetings), Profiles, Backups and About (the version, updates, release notes,
-contact).
+(checklists, exports, the Markdown copy), AI (your agent, and the model and
+effort Claude Code, Grok and Codex work with), Audio (the microphone,
+dictation, meetings), Profiles, Backups and About (the version, updates,
+release notes, contact).
 
 | Setting | Default | Values |
 |---|---|---|
 | `colorSidebar`, `colorPage`, `colorCards`, `colorText` | `""` | Settings → **Appearance**: your own colors (`#rrggbb`) for the sidebar, the page (behind your pages, the calendar, People and the Library, and the notebooks' desk), the sections and cards (the sidebar's sections become cards in it; cards and menus take it), and all the text (the dimmer text follows it). `""` follows the Omarchy theme, as it changes. Each is picked with the color picker, shown as you pick, and has *Reset*; Settings warns when the text won't read well on a color |
 | `peopleLayout` | `list` | how People shows everyone: `list` (beside the one picked) or `cards` |
 | `peopleGroup` | `letter` | as cards, how People groups everyone: `letter` (A to Z) or `company` |
+| `claudeModel`, `grokModel`, `codexModel` | `""` | the model Claude Code, Grok and Codex work with in Uber Notebook (`sonnet`, `grok-4.7-build-fast`, `gpt-5.5`...); `""` is as each is set up |
+| `claudeEffort`, `grokEffort`, `codexEffort` | `""` | their effort: `low`, `medium`, `high`, `xhigh`, `max` (as the model takes them); `""` is as each is set up |
 | `calendarView` | `month` | the view the calendar opens in: `month`, `week`, `agenda` or `compact` |
 | `shortcut` | `SUPER + N` | any modifiers and a key, or empty |
 | `quickShortcut` | `SUPER + ALT + N` | any modifiers and a key, or empty |
@@ -751,9 +754,23 @@ about this page* in the page's ⋯ menu opens a box for what you'd like (or a
 suggestion: to-dos, a summary, carrying on writing, linking related pages).
 It goes to Omarchy's default coding agent, whichever you chose with
 `omarchy default agent` (Claude Code, Codex, OpenCode, Gemini, Crush, Cursor,
-Pi...), which opens in its own terminal and does it with the commands above,
-so what it changes shows up on the page as it goes, each change a step you can
-undo. The box says which agent it is; click it to choose another of the agents
+Pi...), which does it with the commands above, so what it changes shows up on
+the page as it goes, each change a step you can undo. **Claude Code, Grok and
+Codex work right in Uber Notebook:** no terminal opens; a panel at the bottom right of the page
+shows each step it takes (reading the page, writing on it...) and its answer
+as it's written, with **Stop** (what it already changed stays, to undo like
+anything else). If it can't run there (not installed, not logged in), the
+panel says why and *Open in a terminal instead* starts it the usual way. The
+other agents open in their own terminal (Omarchy's agent window). A meeting's
+*Summarize* goes the same way. Each starts with the permission mode Omarchy
+starts it with in a terminal, and it uses your own login (subscription or key).
+**Model and effort**: the box's *model · effort* buttons (or Settings → **AI**)
+choose what Claude Code, Grok and Codex work with, from each agent's own list
+(Grok's and Codex's models as they keep them, with the efforts each model
+takes; Claude Code's Fable, Opus and Sonnet, low to max); *Default* is as the
+agent is set up. A faster model, or less effort, answers sooner: the same
+page made "more visually beautiful" took Grok 4.6 at high effort three and a
+half minutes, Grok 4.7 Fast at low effort twenty seconds. The box says which agent it is; click it to choose another of the agents
 installed here (Omarchy's list of them). That makes it Omarchy's default agent
 too, and opens nothing. The agent gets the page's id, the
 ids of the blocks you picked (or the empty line you're on, where its writing
@@ -944,7 +961,19 @@ as you can use, and they can add, append, change blocks and put pages in the
 trash, never delete a page for good or change a locked one.
 
 **Your agent.** Uber Notebook starts an agent only when you ask (Ask agent), and
-only Omarchy's default one, by running `/usr/bin/omarchy-agent-prompt` with
+only Omarchy's default one. Claude Code, Grok and Codex it runs itself,
+without a terminal, through `/usr/bin/bash` with nothing on their input, in a
+folder of Uber Notebook's own under `$XDG_RUNTIME_DIR`, each with the
+permission mode Omarchy starts it with: `claude -p --output-format stream-json
+--permission-mode auto` (and `omarchy-shell uber-notebook` commands allowed),
+`grok --single=<prompt> --output-format streaming-messages-json
+--permission-mode bypassPermissions`, and `codex exec --json --approve-for-me
+--skip-git-repo-check`, with the model and effort you chose (`--model` and
+`--effort`, `-m` and `--reasoning-effort`, `-m` and `-c
+model_reasoning_effort`; only a model's name ever goes there). The models to
+choose from are read from `~/.grok/models_cache.json` and
+`$CODEX_HOME/models_cache.json` (or `~/.codex`). What they print (a line of JSON a step) is read and
+shown in the panel, and Stop ends them and anything they started. Any other agent it starts by running `/usr/bin/omarchy-agent-prompt` with
 the prompt as one argument; it reads which agent that is with
 `/usr/bin/omarchy-default-agent`, and *Change* runs `/usr/bin/omarchy-menu
 summon setup.default.agent`. The agent runs as Omarchy runs it, with its

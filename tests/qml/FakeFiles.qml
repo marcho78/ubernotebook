@@ -1,5 +1,6 @@
 import QtQuick
 import "../../Library.js" as Library
+import "../../Agent.js" as Agent
 
 // Files in memory, with the calls Workspace.qml makes of Store.qml: for
 // tests and the dev harness, so the real workspace runs without a disk.
@@ -57,6 +58,8 @@ QtObject {
     agentList = [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
     launched = []
     picked = 0
+    streamed = []
+    streamNow = null
     http = ({})
     gitCheckout = false
     installed = []
@@ -303,6 +306,24 @@ QtObject {
   function setDefaultAgent(name, done) { agent = name; done(true) }
   function defaultAgent(done) { done(agent) }
   function launchAgent(prompt) { launched = launched.concat([String(prompt)]) }
+  // The models an agent can work with: from the lists in `disk`, as Store.qml reads them.
+  function agentModels(agent, done) {
+    var file = agent === "grok" ? home + "/.grok/models_cache.json" : agent === "codex" ? home + "/.codex/models_cache.json" : ""
+    done(Agent.models(agent, file ? readNow(file) || "" : ""))
+  }
+  // An agent working without a terminal (Store.qml's stream): each run
+  // ({ argv, cwd }), and the one going now, for a test to feed its lines
+  // (streamFeed) and end it (streamEnd); stop() ends it as stopped (-1).
+  property var streamed: []
+  property var streamNow: null
+  function stream(argv, onLine, done, options) {
+    var s = { argv: argv, cwd: (options || {}).cwd || "", onLine: onLine, done: done }
+    streamed = streamed.concat([s])
+    streamNow = s
+    return { stop: function() { if (!s.done) return; var d = s.done; s.done = null; Qt.callLater(function() { d(-1, "") }) } }
+  }
+  function streamFeed(line) { if (streamNow && streamNow.done) streamNow.onLine(String(line)) }
+  function streamEnd(code, errors) { var s = streamNow; if (s && s.done) { var d = s.done; s.done = null; d(code, errors || "") } }
   function pickAgent() { picked++ }
   function notify(title, text, pageId, day) { notified = notified.concat([{ title: title, text: text, page: pageId, day: day || "" }]) }
 }

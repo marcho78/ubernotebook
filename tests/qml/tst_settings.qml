@@ -376,6 +376,40 @@ Item {
       tryVerify(function() { return named(win(), "firstRun") === null }, 1000)
     }
 
+    // Settings → AI: your agent (Omarchy's default), and the model and
+    // effort for each that works here.
+    function test_10_ai() {
+      fresh()
+      files.agentList = [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }, { name: "grok", label: "Grok" }]
+      files.agent = "gemini"
+      files.disk["/tmp/.codex/models_cache.json"] = '{"models":[{"slug":"gpt-6-astra","display_name":"GPT-6-Astra","visibility":"list","priority":2,"default_reasoning_level":"medium","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"high"},{"effort":"xhigh"},{"effort":"max"}]},{"slug":"gpt-5.5","display_name":"GPT-5.5","visibility":"list","priority":13,"default_reasoning_level":"medium","supported_reasoning_levels":[{"effort":"low"},{"effort":"medium"},{"effort":"high"},{"effort":"xhigh"}]}]}'
+      files.disk["/tmp/.grok/models_cache.json"] = '{"models":{"grok-4.7":{"info":{"id":"grok-4.7","name":"Grok 4.7","description":"Latest","hidden":false,"reasoning_effort":"high","reasoning_efforts":[{"id":"xhigh","value":"xhigh"},{"id":"high","value":"high"},{"id":"medium","value":"medium"},{"id":"low","value":"low"}]}},"grok-4.5":{"info":{"id":"grok-4.5","name":"Grok 4.5","hidden":false,"reasoning_effort":"high","reasoning_efforts":[{"id":"high","value":"high"},{"id":"medium","value":"medium"},{"id":"low","value":"low"}]}}}}'
+      app.openSettings("ai")
+      tryVerify(function() { return panel() !== null && named(win(), "aiAgent_codex") !== null }, 1000)
+      click(named(win(), "aiAgent_codex"))
+      compare(files.agent, "codex", "Omarchy's default, from here")
+      // A model and effort for each that works here; not for Gemini.
+      verify(named(win(), "aiChoice_claude") !== null)
+      verify(named(win(), "aiChoice_grok") !== null)
+      compare(named(win(), "aiChoice_gemini"), null, "it opens in a terminal")
+      click(reach(named(win(), "aiChoice_codexModel")))
+      var pick = null
+      tryVerify(function() { pick = named(win(), "aiChoice_codexModel_gpt-5.5"); return pick !== null }, 1000)
+      wait(100)
+      mouseClick(pick)
+      compare(service.settings.codexModel, "gpt-5.5")
+      click(reach(named(win(), "aiChoice_codexEffort")))
+      tryVerify(function() { pick = named(win(), "aiChoice_codexEffort_high"); return pick !== null }, 1000)
+      compare(named(win(), "aiChoice_codexEffort_max"), null, "GPT-5.5 doesn't take max")
+      wait(100)
+      mouseClick(pick)
+      compare(service.settings.codexEffort, "high")
+      tryVerify(function() { return named(win(), "aiChoice_codex").note === "GPT-5.5 \u00b7 High" }, 1000, "the model it works with (no description of its own)")
+      verify(named(win(), "aiChoice_claude").note === "As Claude Code is set up", named(win(), "aiChoice_claude").note)
+      closeAll()
+      service.setSettings({ codexModel: "", codexEffort: "" })
+    }
+
     function test_9_for_agents() {
       fresh()
       var r = JSON.parse(api.backup(""))

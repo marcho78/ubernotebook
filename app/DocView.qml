@@ -86,6 +86,7 @@ FocusScope {
   readonly property real pageW: format.width === "full" ? Math.max(360, main.width - 2 * 96) : Math.max(320, Math.min(720, main.width - 2 * 84))
   readonly property alias editor: editor
   readonly property alias agentBox: agentPop
+  readonly property alias agentPanel: workPanel
   readonly property alias historyPanel: historyPanel
   readonly property alias tagView: tagView
   readonly property alias calendarView: calendarView
@@ -1298,18 +1299,54 @@ FocusScope {
     agentPop.start(ctx)
   }
 
-  // What you asked, handed to your agent with where you are.
+  // What you asked, handed to your agent with where you are: Claude Code,
+  // Grok and Codex work here, in a panel on the page; the others in a terminal.
   function askAgent(request) {
+    askAgentWith(agentPop.agent, request, agentPop.ask, request)
+  }
+  // `label`: what the panel says you asked (the request itself, or a
+  // shorter name for a long one).
+  function askAgentWith(agent, request, ctx, label) {
     if (!page || !workspace) return
-    var ctx = agentPop.ask
+    var here = Agent.runsHere(agent) && typeof workspace.files.stream === "function"
+    if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
     commit()
-    workspace.files.launchAgent(Agent.prompt({
+    var prompt = Agent.prompt({
       request: request, page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
       scope: ctx.scope, blocks: ctx.blocks, words: ctx.words, line: ctx.line,
-      skill: service && service.skillPath ? service.skillPath : ""
-    }))
-    toast("Asked " + (Agent.name(agentPop.agent) || "your agent") + ": it's working in a terminal, and what it changes shows up here")
+      skill: service && service.skillPath ? service.skillPath : "", here: here
+    })
+    if (here) { runHere(agent, label || request, prompt); return }
+    workspace.files.launchAgent(prompt)
+    toast("Asked " + (Agent.name(agent) || "your agent") + ": it's working in a terminal, and what it changes shows up here")
   }
+
+  // ---- your agent, working here (Claude Code, Grok, Codex: no terminal) ----
+
+  // While it works: { stop() }; and what it was asked, for a terminal instead.
+  property var agentRun: null
+  property string agentRunPrompt: ""
+  function runHere(agent, request, prompt) {
+    var files = workspace.files
+    var dir = files.runtimeDir + "/uber-notebook-agent"
+    // The model and effort you chose for it (Settings → AI, or the box).
+    var choice = { model: settings[agent + "Model"] || "", effort: settings[agent + "Effort"] || "" }
+    var choiceText = ""
+    if (typeof files.agentModels === "function") files.agentModels(agent, function(list) { choiceText = Agent.choiceLabel(list, choice.model, choice.effort) })
+    agentRunPrompt = prompt
+    agentPanel.begin(Agent.name(agent), request, choiceText)
+    agentRun = { stop: function() { view.agentRun = null; agentPanel.end(-1, "") } }
+    files.mkdirs([dir], function() {
+      if (!view.agentRun) return
+      view.agentRun = files.stream(Agent.command(agent, prompt, choice), function(line) {
+        Agent.fromLine(agent, line).forEach(function(ev) { agentPanel.take(ev) })
+      }, function(code, errors) {
+        view.agentRun = null
+        agentPanel.end(code, Agent.failureText(agent, code, errors))
+      }, { cwd: dir })
+    })
+  }
+  function stopAgent() { if (agentRun) agentRun.stop() }
 
   // ---- commands (an agent, a script) -----------------------------------------------------------
 
@@ -1794,17 +1831,15 @@ FocusScope {
     })
   }
 
-  // The agent: the meeting summarized, under it.
+  // The agent: the meeting summarized, under it (Claude Code, Grok and Codex
+  // here, in the panel; the others in a terminal).
   function summarizeMeeting(uid) {
     if (!page || !workspace) return
-    commit()
-    workspace.files.launchAgent(Agent.prompt({
-      request: "Summarize this meeting (the meeting block: who said what). Right after the meeting block, add a short summary of what it was about, the decisions made, and the action items as to-dos (who does what, by when, when it was said). Keep the meeting block as it is.",
-      page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
-      scope: "blocks", blocks: [uid], words: "", line: "",
-      skill: service && service.skillPath ? service.skillPath : ""
-    }))
-    toast("Asked your agent: it's working in a terminal, and the summary shows up here")
+    workspace.files.defaultAgent(function(agent) {
+      view.askAgentWith(agent,
+        "Summarize this meeting (the meeting block: who said what). Right after the meeting block, add a short summary of what it was about, the decisions made, and the action items as to-dos (who does what, by when, when it was said). Keep the meeting block as it is.",
+        { scope: "blocks", blocks: [uid], words: "", line: "" }, "Summarize this meeting")
+    })
   }
 
   // A meeting's buttons.
@@ -3119,8 +3154,27 @@ FocusScope {
     id: agentPop
     theme: view.theme
     files: view.workspace ? view.workspace.files : null
+    service: view.service
     parent: view
     onSent: function(request) { view.askAgent(request) }
+  }
+
+  // Your agent at work, without a terminal: a panel at the bottom right.
+  AgentPanel {
+    id: workPanel
+    theme: view.theme
+    z: 40
+    anchors.right: parent.right
+    anchors.bottom: parent.bottom
+    anchors.margins: 20
+    width: Math.min(420, view.width - 40)
+    maxHeight: Math.max(220, view.height * 0.62)
+    onStopRequested: view.stopAgent()
+    onTerminalRequested: {
+      if (!view.workspace || !view.agentRunPrompt) return
+      view.workspace.files.launchAgent(view.agentRunPrompt)
+      view.toast("Opened in a terminal: what it changes shows up here")
+    }
   }
 
   // ---- a mind map's colors ----------------------------------------------------------------

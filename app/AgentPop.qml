@@ -21,6 +21,20 @@ Pop {
   property bool known: false
   // What it's asked about: { scope, blocks, words, line } (Agent.prompt).
   property var ask: ({ scope: "page", blocks: [], words: "", line: "" })
+  // The service: the model and effort each agent works with here (settings).
+  property var service: null
+  readonly property var settings: service && service.settings ? service.settings : ({})
+  // The models the agent can work with, when it works here.
+  property var models: []
+  function loadModels() {
+    models = []
+    if (files && typeof files.agentModels === "function" && Agent.runsHere(agent)) files.agentModels(agent, function(list) { pop.models = list })
+  }
+  function pickChoice(model, effort) {
+    if (!service) return
+    service.setSetting(agent + "Model", model)
+    service.setSetting(agent + "Effort", effort)
+  }
 
   signal sent(string request)
 
@@ -37,7 +51,7 @@ Pop {
     known = false
     agent = ""
     if (files) {
-      files.defaultAgent(function(name) { pop.agent = name; pop.known = true })
+      files.defaultAgent(function(name) { pop.agent = name; pop.known = true; pop.loadModels() })
       files.listAgents(function(list) { pop.agents = list })
     }
     open()
@@ -53,7 +67,7 @@ Pop {
   function choose(name) {
     chooser.close()
     files.setDefaultAgent(name, function(ok) {
-      if (ok) { pop.agent = name; pop.known = true }
+      if (ok) { pop.agent = name; pop.known = true; pop.loadModels() }
     })
     field.focusField()
   }
@@ -240,6 +254,18 @@ Pop {
             }
           }
         }
+        // The model and effort it works with (when it works here).
+        AgentChoice {
+          anchors.verticalCenter: parent.verticalCenter
+          visible: pop.known && Agent.runsHere(pop.agent) && pop.service !== null
+          theme: pop.theme
+          namePrefix: "askChoice"
+          agentLabel: Agent.name(pop.agent)
+          models: pop.models
+          model: pop.settings[pop.agent + "Model"] || ""
+          effort: pop.settings[pop.agent + "Effort"] || ""
+          onPicked: function(m, e) { pop.pickChoice(m, e) }
+        }
       }
       IconButton {
         anchors.right: parent.right
@@ -258,7 +284,9 @@ Pop {
       width: parent.width
       wrapMode: Text.Wrap
       textFormat: Text.PlainText
-      text: "It opens in a terminal and works through Uber Notebook's commands: what it changes shows up here, each change a step you can undo."
+      text: Agent.runsHere(pop.agent)
+        ? Agent.name(pop.agent) + " works here, in a panel on the page, through Uber Notebook's commands: what it changes shows up as it goes, each change a step you can undo."
+        : "It opens in a terminal and works through Uber Notebook's commands: what it changes shows up here, each change a step you can undo."
       font.family: pop.theme.uiFont
       font.pixelSize: 11
       color: pop.theme.faint

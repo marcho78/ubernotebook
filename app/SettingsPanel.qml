@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import "../Agent.js" as Agent
 import "../Audio.js" as Audio
 import "../Backups.js" as Backups
 import "../Colors.js" as Colors
@@ -40,6 +41,7 @@ Popup {
     { id: "general", label: "General", icon: icons.cog || "", note: "Shortcuts, the window, and scrolling." },
     { id: "appearance", label: "Appearance", icon: icons.palette || "", note: "Colors of your own over the Omarchy theme's, and motion." },
     { id: "writing", label: "Writing", icon: icons.pen || "", note: "Checklists, exports, and a Markdown copy of your notes." },
+    { id: "ai", label: "AI", icon: icons.agent || "", note: "Your agent, and the model and effort it works with." },
     { id: "audio", label: "Audio", icon: icons.mic || "", note: "The microphone, dictation, and meetings." },
     { id: "profiles", label: "Profiles", icon: icons.people || "", note: "Notes kept apart, each profile in a folder of its own." },
     { id: "backups", label: "Backups", icon: icons.archive || "", note: "Your profiles in one file each, to keep safe or move, and put back." },
@@ -74,11 +76,12 @@ Popup {
     restoring = null
     restored = []
     if (backups) backups.refresh()
+    if (section === "ai") loadAgents()
     flick.contentY = 0
     // (The keys come here, so Esc closes it, whatever had them before.)
     contentItem.forceActiveFocus()
   }
-  onSectionChanged: { flick.contentY = 0; if (section === "backups" && backups) backups.refresh() }
+  onSectionChanged: { flick.contentY = 0; if (section === "backups" && backups) backups.refresh(); if (section === "ai") loadAgents() }
 
   function set(key, value) { if (service) service.setSetting(key, value) }
 
@@ -183,6 +186,29 @@ Popup {
     var today = new Date()
     var same = d.toDateString() === today.toDateString()
     return (same ? "Today" : Qt.formatDate(d, d.getFullYear() === today.getFullYear() ? "d MMM" : "d MMM yyyy")) + ", " + Qt.formatTime(d, "HH:mm")
+  }
+
+  // ---- your agent ----
+
+  // The agents installed here (Omarchy's list: [{ name, label }]), the one
+  // that's Omarchy's default, and the models Claude Code, Grok and Codex can
+  // work with ({ claude: [...], grok: [...], codex: [...] }).
+  property var agents: []
+  property string agentName: ""
+  property var modelLists: ({})
+  readonly property var store: service && service.store ? service.store : null
+  readonly property var hereAgents: agents.filter(function(a) { return Agent.runsHere(a.name) })
+  function loadAgents() {
+    if (!store || typeof store.listAgents !== "function") return
+    store.listAgents(function(list) { panel.agents = list })
+    store.defaultAgent(function(name) { panel.agentName = name })
+    var lists = {}
+    Agent.HERE.forEach(function(a) { store.agentModels(a, function(m) { lists[a] = m }) })
+    modelLists = lists
+  }
+  function chooseAgent(name) {
+    if (!store) return
+    store.setDefaultAgent(name, function(ok) { if (ok) panel.agentName = name })
   }
 
   // ---- updates ----
@@ -816,6 +842,62 @@ Popup {
                 input.onActiveFocusChanged: if (!input.activeFocus) panel.set("mirrorFolder", text)
               }
               IconButton { theme: panel.theme; icon: panel.theme.icons.folder; tip: "Open the copy"; onClicked: panel.service.openMirror() }
+            }
+          }
+        }
+
+        // ======== AI ========
+
+        Group {
+          visible: panel.section === "ai"
+          title: "Your agent"
+          note: "Claude Code, Grok and Codex work right here, in a panel on the page. The others open in a terminal. It's Omarchy's default agent too."
+          Line {
+            label: "Agent"
+            note: panel.agentName ? Agent.name(panel.agentName) + (Agent.runsHere(panel.agentName) ? ": works here" : ": opens in a terminal") : "None chosen yet"
+            Flow {
+              width: Math.min(360, panel.width * 0.42)
+              spacing: 6
+              Repeater {
+                model: panel.agents
+                delegate: Chip {
+                  required property var modelData
+                  objectName: "aiAgent_" + modelData.name
+                  theme: panel.theme
+                  text: modelData.label
+                  checked: panel.agentName === modelData.name
+                  onClicked: panel.chooseAgent(modelData.name)
+                }
+              }
+            }
+          }
+        }
+
+        Group {
+          visible: panel.section === "ai"
+          title: "Model and effort"
+          note: panel.hereAgents.length ? "Default is as each agent is set up. A faster model, or less effort, answers sooner; more effort thinks longer." : "Install Claude Code, Grok or Codex to choose here (omarchy default agent claude)."
+          Repeater {
+            model: panel.hereAgents
+            delegate: Line {
+              id: aiLine
+              required property var modelData
+              readonly property string key: modelData.name
+              objectName: "aiChoice_" + key
+              label: modelData.label
+              // What it works with: as it's set up, or the chosen model's description.
+              readonly property var chosen: (panel.modelLists[key] || []).filter(function(m) { return m.id === (panel.s[aiLine.key + "Model"] || "") })[0] || null
+              note: !(panel.s[key + "Model"] || "") ? "As " + Agent.name(key) + " is set up" + ((panel.s[key + "Effort"] || "") ? ", " + Agent.effortLabel(panel.s[key + "Effort"]).toLowerCase() + " effort" : "")
+                : chosen && chosen.description ? chosen.description : Agent.choiceLabel(panel.modelLists[key] || [], panel.s[key + "Model"] || "", panel.s[key + "Effort"] || "")
+              AgentChoice {
+                theme: panel.theme
+                namePrefix: "aiChoice_" + aiLine.key
+                agentLabel: Agent.name(aiLine.key)
+                models: panel.modelLists[aiLine.key] || []
+                model: panel.s[aiLine.key + "Model"] || ""
+                effort: panel.s[aiLine.key + "Effort"] || ""
+                onPicked: function(m, e) { panel.set(aiLine.key + "Model", m); panel.set(aiLine.key + "Effort", e) }
+              }
             }
           }
         }

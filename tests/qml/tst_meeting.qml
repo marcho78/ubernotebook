@@ -163,11 +163,22 @@ Item {
       field.text = "Sam"
       keyClick(Qt.Key_Return)
       tryVerify(function() { return meetingAt(0).names.Remote === "Sam" }, 1000)
-      // Summarized by the agent.
+      // Summarized by the agent: Claude Code (FakeFiles' default) here, in the panel.
+      click(named(mv, "meetingSummarize"))
+      tryVerify(function() { return files.streamed.length === 1 }, 1000)
+      compare(files.launched.length, 0, "no terminal")
+      var asked = files.streamed[0].argv[files.streamed[0].argv.length - 1]
+      verify(asked.indexOf("Summarize this meeting") >= 0)
+      verify(asked.indexOf(uid) >= 0, "the meeting block, for the agent")
+      compare(view.agentPanel.request, "Summarize this meeting", "the panel says it short")
+      view.stopAgent()
+      tryCompare(view.agentPanel, "status", "stopped", 1000)
+      view.agentPanel.close()
+      // An agent that works in a terminal: there, as before.
+      files.agent = "gemini"
       click(named(mv, "meetingSummarize"))
       tryVerify(function() { return files.launched.length === 1 }, 1000)
       verify(files.launched[0].indexOf("Summarize this meeting") >= 0)
-      verify(files.launched[0].indexOf(uid) >= 0, "the meeting block, for the agent")
       // Its colors.
       mouseMove(mv, 120, 20)
       var colors = null
