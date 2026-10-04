@@ -1,9 +1,12 @@
 import QtQuick
+import QtQuick.Controls
 
 // Pictures shown large, here in Uber Notebook (a picture on a page, a gallery's):
 // its caption under it, how many there are, ← and → (or the arrows at its
-// sides) for the others, Esc or a click around it to close, and Open in
-// its app at the corner.
+// sides) for the others, Esc or a click around it to close; at the corner,
+// Copy (Ctrl+C), Save a copy (Ctrl+S) and Open in its app. A click is the
+// one thing's it's on (a button, or around the picture), not the page's
+// under it too.
 Rectangle {
   id: pv
 
@@ -15,6 +18,9 @@ Rectangle {
   property var urlOf: function(src) { return src }
   readonly property var shown: pictures[index] || null
   signal openRequested(string src)
+  // Onto the clipboard; a copy saved where you say (named for its caption).
+  signal copyRequested(string src)
+  signal saveRequested(string src, string caption)
 
   objectName: "pictureViewer"
   visible: false
@@ -30,7 +36,9 @@ Rectangle {
   function step(by) { if (pictures.length > 1) index = (index + by + pictures.length) % pictures.length }
 
   Keys.onPressed: function(e) {
-    if (e.key === Qt.Key_Escape || e.key === Qt.Key_Space) close()
+    if (e.matches(StandardKey.Copy)) { if (shown) copyRequested(shown.src) }
+    else if (e.matches(StandardKey.Save)) { if (shown) saveRequested(shown.src, shown.caption || "") }
+    else if (e.key === Qt.Key_Escape || e.key === Qt.Key_Space) close()
     else if (e.key === Qt.Key_Left || e.key === Qt.Key_Up) step(-1)
     else if (e.key === Qt.Key_Right || e.key === Qt.Key_Down) step(1)
     else if (e.key === Qt.Key_Home) index = 0
@@ -38,7 +46,10 @@ Rectangle {
     e.accepted = true
   }
   // (A click around the picture closes it; on it, nothing.)
-  TapHandler { onTapped: function(point) { if (!picture.contains(picture.mapFromItem(pv, point.position.x, point.position.y))) pv.close() } }
+  TapHandler {
+    gesturePolicy: TapHandler.ReleaseWithinBounds
+    onTapped: function(point) { if (!picture.contains(picture.mapFromItem(pv, point.position.x, point.position.y))) pv.close() }
+  }
   WheelHandler { onWheel: function(e) { pv.step(e.angleDelta.y > 0 ? -1 : 1) } }
 
   Image {
@@ -86,7 +97,7 @@ Rectangle {
     y: 14
     spacing: 4
     Repeater {
-      model: [["open", "openExternal", "Open in its app"], ["close", "close", "Close  Esc"]]
+      model: [["copy", "copy", "Copy  Ctrl+C"], ["save", "download", "Save a copy  Ctrl+S"], ["open", "openExternal", "Open in its app"], ["close", "close", "Close  Esc"]]
       delegate: Rectangle {
         required property var modelData
         objectName: "pictureViewer_" + modelData[0]
@@ -103,7 +114,19 @@ Rectangle {
           color: "#f2f2f2"
         }
         HoverHandler { id: btnHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: { if (parent.modelData[0] === "open" && pv.shown) pv.openRequested(pv.shown.src); else pv.close() } }
+        TapHandler {
+          gesturePolicy: TapHandler.ReleaseWithinBounds
+          onTapped: {
+            var what = parent.modelData[0]
+            if (what === "close" || !pv.shown) pv.close()
+            else if (what === "copy") pv.copyRequested(pv.shown.src)
+            else if (what === "save") pv.saveRequested(pv.shown.src, pv.shown.caption || "")
+            else pv.openRequested(pv.shown.src)
+          }
+        }
+        ToolTip.visible: btnHover.hovered
+        ToolTip.delay: 600
+        ToolTip.text: modelData[2]
       }
     }
   }
@@ -128,7 +151,7 @@ Rectangle {
         color: "#f2f2f2"
       }
       HoverHandler { id: sideHover; cursorShape: Qt.PointingHandCursor }
-      TapHandler { onTapped: pv.step(parent.modelData) }
+      TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pv.step(parent.modelData) }
     }
   }
 }

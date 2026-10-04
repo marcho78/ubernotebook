@@ -3,10 +3,13 @@ import QtQuick.Effects
 
 // Your agent at work, in a panel on the page (Claude Code, Grok or Codex,
 // without a terminal): what you asked, each step as it takes it (reading the page,
-// writing on it...), its answer as it's written, and how it ended. Stop ends
-// it: what it already changed stays, each change a step you can undo. When
-// it couldn't work here, it says why, and Open in a terminal starts it the
-// usual way.
+// writing on it...), its answer as it's written, and how it ended. Then a
+// reply, at its foot, goes on with it in the same conversation (what you said
+// before, and it, above). Stop ends a turn: what it already changed stays,
+// each change a step you can undo. When it couldn't work here, it says why,
+// and Open in a terminal starts it the usual way. Closing it puts it away:
+// the conversation's kept with its page, to go back to (show); New chat
+// starts another.
 Item {
   id: panel
 
@@ -29,20 +32,88 @@ Item {
   property real startedAt: 0
   property real now: 0
   property real maxHeight: 520
+  // What was said before, in this conversation: [{ request, steps, answer,
+  // status, failure }], oldest first.
+  property var history: []
+  // A reply can go on with it (the view says).
+  property bool canReply: false
+  // What goes with your next message, said over the reply box ("2 blocks
+  // you picked go with it").
+  property string contextNote: ""
+  // Gone back to (show): it says nothing of how long it took, then.
+  property bool revived: false
   readonly property bool working: status === "working"
   readonly property int elapsed: Math.max(0, Math.round((now - startedAt) / 1000))
 
   signal stopRequested()
   signal terminalRequested()
+  // What you said back, to go on with it.
+  signal replied(string text)
+  // Another conversation, instead of this one.
+  signal newChatRequested()
+  // Closed (not for a terminal instead).
+  signal dismissed()
 
   objectName: "agentPanel"
   visible: false
   width: 400
-  height: Math.min(head.height + body.implicitHeight + 1, maxHeight)
+  height: Math.min(head.height + body.implicitHeight + 1 + replyBar.height, maxHeight)
 
   function begin(label, req, choice) {
     agentLabel = label
     choiceText = choice || ""
+    history = []
+    replyField.text = ""
+    contextNote = ""
+    start(req)
+    flick.contentY = 0
+  }
+  // A conversation gone back to: what was said (`turns`, oldest first: {
+  // request, steps, answer, status, failure }), the last one as it ended,
+  // and the reply box ready.
+  function show(label, choice, turns) {
+    var list = turns || []
+    if (!list.length) return
+    agentLabel = label
+    choiceText = choice || ""
+    replyField.text = ""
+    history = list.slice(0, -1)
+    var last = list[list.length - 1]
+    request = last.request
+    steps = last.steps || []
+    answer = last.answer || ""
+    failure = last.failure || ""
+    status = last.status || "done"
+    live = ""
+    denied = []
+    seconds = 0
+    revived = true
+    visible = true
+    Qt.callLater(scrollDown)
+  }
+  // What was said, as it's kept: what went before, and this one as it is.
+  function transcript() {
+    return history.concat([{ request: request, steps: steps, answer: live !== "" ? live : answer, status: status, failure: failure }])
+  }
+  // (Only focused, nothing selected: a call that comes late can't take what
+  // you've begun typing.)
+  function focusReply() { if (replyBar.shown && !working && !replyField.input.activeFocus) replyField.input.forceActiveFocus() }
+  // At work on this turn again (its conversation was lost, and it's asked
+  // anew, told what was said).
+  function again() {
+    if (status === "working") return
+    status = "working"
+    failure = ""
+    live = ""
+  }
+  // A reply: what was said so far goes above, and it's at work again.
+  function next(req) {
+    history = history.concat([{ request: request, steps: steps, answer: answer, status: status, failure: failure }])
+    start(req)
+    Qt.callLater(scrollDown)
+  }
+  function start(req) {
+    revived = false
     request = req
     status = "working"
     steps = []
@@ -54,7 +125,24 @@ Item {
     startedAt = Date.now()
     now = startedAt
     visible = true
-    flick.contentY = 0
+  }
+  function sendReply() {
+    var t = replyField.text.trim()
+    if (!t || working) return
+    // (Sent from its box: back in it when it's done, unless you're writing
+    // somewhere else by then.)
+    talking = replyField.input.activeFocus
+    replyField.text = ""
+    contextNote = ""
+    replied(t)
+  }
+  property bool talking: false
+  onWorkingChanged: {
+    if (working || !talking) return
+    talking = false
+    var w = panel.Window.window
+    var elsewhere = w && w.activeFocusItem && !panel.contains(panel.mapFromItem(w.activeFocusItem, 0, 0)) && typeof w.activeFocusItem.cursorPosition === "number"
+    if (!elsewhere) focusReply()
   }
 
   // What the agent said (Agent.fromClaude): a step, more of its answer, its
@@ -89,7 +177,11 @@ Item {
     Qt.callLater(scrollDown)
   }
 
-  function close() { if (!working) visible = false }
+  function close() {
+    if (working || !visible) return
+    visible = false
+    dismissed()
+  }
   function scrollDown() { flick.contentY = Math.max(0, flick.contentHeight - flick.height) }
 
   Timer { interval: 1000; repeat: true; running: panel.working; onTriggered: panel.now = Date.now() }
@@ -153,6 +245,7 @@ Item {
       elide: Text.ElideRight
       textFormat: Text.PlainText
       text: panel.working ? "working" + (panel.elapsed > 1 ? " · " + panel.elapsed + "s" : "…")
+        : panel.revived ? ""
         : panel.status === "done" ? "done in " + panel.seconds + "s"
         : panel.status === "stopped" ? "stopped"
         : panel.status === "failed" ? "didn't finish" : ""
@@ -173,13 +266,23 @@ Item {
         onClicked: panel.stopRequested()
       }
       IconButton {
+        objectName: "agentPanelNew"
+        visible: !panel.working
+        theme: panel.theme
+        icon: panel.theme.icons.edit
+        size: 30
+        iconSize: 15
+        tip: "New chat"
+        onClicked: panel.newChatRequested()
+      }
+      IconButton {
         objectName: "agentPanelClose"
         visible: !panel.working
         theme: panel.theme
         icon: panel.theme.icons.close
         size: 30
         iconSize: 14
-        tip: "Close"
+        tip: "Close  (Ctrl+J brings it back)"
         onClicked: panel.close()
       }
     }
@@ -191,7 +294,7 @@ Item {
     id: flick
     y: head.height
     width: parent.width
-    height: parent.height - y
+    height: parent.height - y - replyBar.height
     contentHeight: body.implicitHeight
     clip: true
     boundsBehavior: Flickable.StopAtBounds
@@ -204,7 +307,66 @@ Item {
       bottomPadding: 14
       spacing: 6
 
+      // What was said before: each time, what you said, how many steps, its
+      // answer.
+      Repeater {
+        model: panel.history
+        delegate: Column {
+          id: turn
+          required property var modelData
+          objectName: "agentPanelTurn"
+          readonly property string request: modelData.request
+          readonly property string answer: modelData.answer
+          width: parent.width
+          spacing: 6
+          Text {
+            width: parent.width
+            maximumLineCount: 2
+            elide: Text.ElideRight
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: "\u201c" + turn.modelData.request + "\u201d"
+            font.family: panel.theme.uiFont
+            font.pixelSize: 12
+            color: panel.theme.muted
+          }
+          Text {
+            visible: turn.modelData.steps.length > 0
+            textFormat: Text.PlainText
+            text: turn.modelData.steps.length + (turn.modelData.steps.length === 1 ? " step" : " steps")
+            font.family: panel.theme.uiFont
+            font.pixelSize: 11
+            color: panel.theme.faint
+          }
+          Text {
+            visible: text !== ""
+            width: parent.width
+            wrapMode: Text.Wrap
+            textFormat: Text.MarkdownText
+            text: turn.modelData.answer
+            font.family: panel.theme.uiFont
+            font.pixelSize: 13
+            lineHeight: 1.2
+            color: panel.theme.text
+          }
+          Text {
+            visible: text !== ""
+            width: parent.width
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: turn.modelData.status === "failed" ? turn.modelData.failure : turn.modelData.status === "stopped" ? "Stopped." : ""
+            font.family: panel.theme.uiFont
+            font.pixelSize: 12
+            color: turn.modelData.status === "failed" ? panel.theme.urgent : panel.theme.muted
+          }
+          Item { width: 1; height: 4 }
+          Rectangle { width: parent.width; height: 1; color: panel.theme.line; opacity: 0.6 }
+          Item { width: 1; height: 4 }
+        }
+      }
+
       Text {
+        objectName: "agentPanelRequest"
         width: parent.width
         maximumLineCount: 2
         elide: Text.ElideRight
@@ -315,6 +477,63 @@ Item {
         font.pixelSize: 12
         color: panel.theme.muted
       }
+    }
+  }
+
+  // A reply, once it's done (or stopped, or couldn't finish): it goes on in
+  // the same conversation. There all along (waiting while it works). Not
+  // focused by itself: you may be writing on the page when it's done.
+  Item {
+    id: replyBar
+    readonly property bool shown: panel.canReply && panel.status !== ""
+    readonly property real noteHeight: panel.contextNote !== "" ? 20 : 0
+    anchors.bottom: parent.bottom
+    width: parent.width
+    height: shown ? 52 + noteHeight : 0
+    visible: shown
+    Rectangle { width: parent.width; height: 1; color: panel.theme.line; opacity: 0.7 }
+    Text {
+      objectName: "agentPanelContext"
+      visible: panel.contextNote !== ""
+      x: 16
+      y: 8
+      width: parent.width - 32
+      elide: Text.ElideRight
+      textFormat: Text.PlainText
+      text: panel.contextNote
+      font.family: panel.theme.uiFont
+      font.pixelSize: 11
+      color: panel.theme.faint
+    }
+    Field {
+      id: replyField
+      objectName: "agentPanelReply"
+      theme: panel.theme
+      x: 12
+      y: 9 + replyBar.noteHeight
+      width: parent.width - 24 - sendButton.width - 6
+      height: 34
+      fontSize: 13
+      maximumLength: 4000
+      enabled: !panel.working
+      opacity: enabled ? 1 : 0.55
+      placeholder: panel.working ? panel.agentLabel + " is working\u2026" : "Reply to " + panel.agentLabel + "\u2026"
+      onAccepted: panel.sendReply()
+      onEscaped: text = ""
+    }
+    IconButton {
+      id: sendButton
+      objectName: "agentPanelSend"
+      anchors.right: parent.right
+      anchors.rightMargin: 12
+      y: 10 + replyBar.noteHeight
+      theme: panel.theme
+      icon: panel.theme.icons.send
+      size: 32
+      iconSize: 16
+      tip: "Send  Enter"
+      active: !panel.working && replyField.text.trim() !== ""
+      onClicked: panel.sendReply()
     }
   }
 }

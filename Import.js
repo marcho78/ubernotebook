@@ -22,6 +22,8 @@
 .import "Tags.js" as Tags
 .import "Board.js" as Board
 .import "Bookmark.js" as Bookmark
+.import "Equations.js" as Equations
+.import "Notes.js" as Notes
 
 var MONO = "'iA Writer Mono S'"
 var HIGHLIGHT = "#fbf3db"
@@ -35,7 +37,9 @@ function context(ctx) {
     // A person in People by id, name, email or number (their id, or "").
     contact: typeof c.contact === "function" ? c.contact : function(q) { return "" },
     // An event on the calendar by id (true if it's there).
-    event: typeof c.event === "function" ? c.event : function(id) { return false }
+    event: typeof c.event === "function" ? c.event : function(id) { return false },
+    // Footnotes' words by their labels ([^1]: …, at the end).
+    notes: c.notes && typeof c.notes === "object" ? c.notes : {}
   }
 }
 
@@ -90,6 +94,15 @@ function inlineRuns(text, ctx, refs) {
       }
       textAtom(fence); i += n; continue
     }
+    // An equation in the line: $…$ (or $$…$$), its LaTeX as written.
+    if (ch === "$") {
+      var eq = Equations.spanAt(src, i)
+      if (eq && Equations.clean(eq.tex)) {
+        push({ t: "link", href: Equations.href(eq.tex), runs: [{ text: Equations.clean(eq.tex), style: {}, href: "" }] })
+        i = eq.end
+        continue
+      }
+    }
     // A hard line break (two spaces before it) or a soft one.
     if (ch === "\n") {
       var before = atoms[atoms.length - 1]
@@ -104,6 +117,25 @@ function inlineRuns(text, ctx, refs) {
       if (auto) { push({ t: "link", href: auto[1], runs: [{ text: auto[1], style: {}, href: "" }] }); i += auto[0].length; continue }
       var tag = /^<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^<>]*?)?)\s*(\/?)>/.exec(src.slice(i))
       if (tag) { push({ t: "tag", close: tag[1] === "/", name: tag[2].toLowerCase(), attrs: tag[3] || "" }); i += tag[0].length; continue }
+    }
+    // A footnote: [^label] (its words written at the end), or ^[its words].
+    if (ch === "[" && src.charAt(i + 1) === "^") {
+      var fn = /^\[\^([^\]\s]+)\]/.exec(src.slice(i))
+      if (fn && Object.prototype.hasOwnProperty.call(ctx.notes, fn[1]) && Notes.fromMarkdown(ctx.notes[fn[1]])) {
+        var words = Notes.fromMarkdown(ctx.notes[fn[1]])
+        push({ t: "link", href: Notes.href(words), runs: [{ text: words, style: {}, href: "" }] })
+        i += fn[0].length
+        continue
+      }
+    }
+    if (ch === "^" && src.charAt(i + 1) === "[") {
+      var fe = src.indexOf("]", i + 2)
+      if (fe > i + 2 && Notes.fromMarkdown(src.slice(i + 2, fe))) {
+        var said = Notes.fromMarkdown(src.slice(i + 2, fe))
+        push({ t: "link", href: Notes.href(said), runs: [{ text: said, style: {}, href: "" }] })
+        i = fe + 1
+        continue
+      }
     }
     // [[Page]], [[Page|shown as]] (Obsidian, and others).
     if (ch === "[" && src.charAt(i + 1) === "[") {
@@ -410,7 +442,7 @@ function readBlocks(lines, ctx, refs) {
     return { type: "p", html: html, indent: 0 }
   }
   function startsBlock(line) {
-    return heading(line) || fenceStart(line) || isRule(line) || /^ {0,3}>/.test(line) || listMarker(line) || /^ {0,3}<(details|aside)\b/i.test(line)
+    return heading(line) || fenceStart(line) || isRule(line) || /^ {0,3}>/.test(line) || listMarker(line) || /^ {0,3}<(details|aside)\b/i.test(line) || /^ {0,3}\$\$/.test(line)
   }
   while (i < lines.length) {
     var line = lines[i]
@@ -433,6 +465,33 @@ function readBlocks(lines, ctx, refs) {
       if (map) emit({ type: "mindmap", outline: map, indent: 0 })
       else emit({ type: "code", html: Html.fromPlainText(code.join("\n")), lang: langName(f.lang), indent: 0 })
       continue
+    }
+
+    // An equation on its own: "$$" lines around it, or "$$ … $$" on one line.
+    var dd = /^ {0,3}\$\$(.*)$/.exec(line)
+    if (dd) {
+      var one = /^(.*)\$\$\s*$/.exec(dd[1])
+      var eqLines = null
+      var eqEnd = i + 1
+      if (one && one[1].trim()) eqLines = [one[1]]
+      else if (!one) {
+        var body = dd[1].trim() ? [dd[1]] : []
+        for (var j = i + 1; j < lines.length; j++) {
+          var closing = /^(.*?)\$\$\s*$/.exec(lines[j])
+          if (closing) {
+            if (closing[1].trim()) body.push(closing[1])
+            eqLines = body
+            eqEnd = j + 1
+            break
+          }
+          body.push(lines[j])
+        }
+      }
+      if (eqLines && Equations.clean(eqLines.join("\n"))) {
+        emit({ type: "code", html: Html.fromPlainText(Equations.clean(eqLines.join("\n"))), lang: Equations.LANG, indent: 0 })
+        i = eqEnd
+        continue
+      }
     }
 
     var h = heading(line)
@@ -570,7 +629,7 @@ var LANGS = { js: "JavaScript", javascript: "JavaScript", ts: "TypeScript", type
   java: "Java", json: "JSON", kotlin: "Kotlin", kt: "Kotlin", lua: "Lua", make: "Makefile", makefile: "Makefile", md: "Markdown", markdown: "Markdown",
   nix: "Nix", php: "PHP", qml: "QML", rb: "Ruby", ruby: "Ruby", rs: "Rust", rust: "Rust", sql: "SQL", swift: "Swift", toml: "TOML", yaml: "YAML", yml: "YAML",
   zig: "Zig", dockerfile: "Dockerfile", docker: "Dockerfile", xml: "XML", svg: "XML", diff: "Diff", patch: "Diff", ini: "INI",
-  scss: "SCSS", jsx: "JavaScript", tsx: "TypeScript", text: "", plaintext: "", "plain text": "" }
+  scss: "SCSS", jsx: "JavaScript", tsx: "TypeScript", text: "", plaintext: "", "plain text": "", math: "Math", katex: "Math", mermaid: "Mermaid" }
 
 // A code block that's one of Pages' own blocks (what agents write, and get
 // back from `read`): ```board ("## Column", "- card"), ```contact (a name,
@@ -670,7 +729,10 @@ function fromMarkdown(text, ctx, options) {
       lines = lines.slice(end + 1)
     }
   }
-  var r = collectRefs(lines)
+  // Footnotes' words, taken out of the lines (read where they're used).
+  var defs = Notes.definitions(lines)
+  c.notes = defs.notes
+  var r = collectRefs(defs.lines)
   var blocks = readBlocks(r.lines, c, r.refs)
   if (o.titleFromHeading && !title) {
     var firstText = -1

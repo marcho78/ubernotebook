@@ -289,6 +289,28 @@ QtObject {
   function assetName(path) { return Library.assetName(path, new Date()) }
   function pasteInto(dest, done) { done("") }
   function copyText(text) { copied = String(text) }
+  // A picture onto the clipboard (Store.qml: wl-copy): which one.
+  property string copiedPicture: ""
+  function copyPicture(path, done) {
+    var ok = disk[path] !== undefined
+    if (ok) copiedPicture = path
+    if (done) done(ok)
+  }
+  // A picture made (a diagram's, grabbed): the last one, and in the disk.
+  property var lastGrab: null
+  function saveGrab(result, path) {
+    if (!result) return false
+    lastGrab = result
+    disk[path] = "PNG"
+    return true
+  }
+  function tempPath(name) { return "/tmp/uber-notebook-" + name }
+  // A copy of a file where you said (Store.qml: cp).
+  function copyFileTo(from, to, done) {
+    if (disk[from] === undefined) { if (done) done(false, "cp: cannot stat '" + from + "': No such file or directory"); return }
+    disk[to] = disk[from]
+    if (done) done(true, "")
+  }
   property var opened: []
   function openUrl(url) { opened = opened.concat([String(url)]) }
   // A file in its app: opened, unless its name matches `noApp` (no app for

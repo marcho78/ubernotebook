@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Shapes
 import "../Html.js" as Html
 import "../Blocks.js" as Blocks
@@ -823,7 +824,8 @@ Item {
     }
   }
 
-  // A picked picture or divider: how it sits, or out it goes.
+  // A picked picture or divider: how it sits, or out it goes (a picture:
+  // large, copied, a copy saved). Its buttons are there while it shows.
   Rectangle {
     id: blockBar
     visible: block.selected && !block.isText && block.editor.selectedList.length === 1 && !block.editor.readOnly
@@ -842,8 +844,9 @@ Item {
       anchors.centerIn: parent
       spacing: 2
       Repeater {
-        model: block.type === "image"
-          ? [["left", "\u{f0262}", "Left"], ["center", "\u{f0260}", "Centered"], ["right", "\u{f0263}", "Right"], ["open", "\u{f05da}", "Open it"], ["remove", "\u{f0a7a}", "Remove"]]
+        model: !blockBar.visible ? [] : block.type === "image"
+          ? [["left", "\u{f0262}", "Left"], ["center", "\u{f0260}", "Centered"], ["right", "\u{f0263}", "Right"], ["open", "\u{f05da}", "Open it"],
+            ["copy", "\u{f018f}", "Copy"], ["save", "\u{f01da}", "Save a copy\u2026"], ["remove", "\u{f0a7a}", "Remove"]]
           : block.type === "calendar"
           ? [["earlier", "\u{f0141}", "The month before"], ["now", "\u{f00f6}", "This month"], ["later", "\u{f0142}", "The month after"], ["remove", "\u{f0a7a}", "Remove"]]
           : [["line", "\u{f0374}", "A line"], ["dots", "\u{f01d8}", "Dots"], ["wave", "\u{f095b}", "A wave"], ["remove", "\u{f0a7a}", "Remove"]]
@@ -863,11 +866,18 @@ Item {
             color: modelData[0] === "remove" ? "#ff8a80" : "#f2f2f2"
           }
           HoverHandler { id: optHover; cursorShape: Qt.PointingHandCursor }
+          ToolTip.visible: optHover.hovered
+          ToolTip.delay: 600
+          ToolTip.text: modelData[2]
+          // (The click is the button's alone: what's picked stays picked.)
           TapHandler {
+            gesturePolicy: TapHandler.ReleaseWithinBounds
             onTapped: {
               var what = modelData[0]
               if (what === "remove") block.editor.removeBlocks([block.uid])
               else if (what === "open") block.editor.openPicture(block.src)
+              else if (what === "copy") block.editor.copyPicture(block.src)
+              else if (what === "save") block.editor.savePicture(block.src)
               else if (block.type === "calendar") block.editor.shiftMonth(block.uid, what === "earlier" ? -1 : what === "later" ? 1 : 0)
               else if (block.type === "image") block.editor.setImageAlign(block.uid, what)
               else block.editor.setDivider(block.uid, what)

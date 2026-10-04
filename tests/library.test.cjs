@@ -120,6 +120,21 @@ check("files and pictures", () => {
   assert.equal(Library.isImagePath("/x/y.pdf"), false);
 });
 
+check("a picture out: its kind on the clipboard, a name for its copy", () => {
+  assert.equal(Library.pictureType("/n/Pages/assets/20261004-101010-abcd.png"), "image/png");
+  assert.equal(Library.pictureType("/n/a.JPG"), "image/jpeg");
+  assert.equal(Library.pictureType("/n/a.jpeg"), "image/jpeg");
+  assert.equal(Library.pictureType("/n/a.webp"), "image/webp");
+  assert.equal(Library.pictureType("/n/a.svg"), "image/svg+xml");
+  assert.equal(Library.pictureType("/n/a.pdf"), "");
+  assert.equal(Library.pictureType("/n/constructor"), "", "not a picture's ending");
+  assert.equal(Library.saveName("Trip to Lisbon", "assets/20261004-101010-abcd.png"), "Trip to Lisbon.png");
+  assert.equal(Library.saveName("Q3: plan / budget?", "assets/x.JPG"), "Q3 plan budget.jpg", "what a file's name can't have, out");
+  assert.equal(Library.saveName("  ", "assets/x.webp"), "Picture.webp");
+  assert.equal(Library.saveName("...hidden", "assets/x.png"), "hidden.png", "not a hidden file");
+  assert.ok(Library.saveName("x".repeat(300), "assets/x.png").length <= 84);
+});
+
 check("covers", () => {
   const choices = plain(Defaults.SCHEMA).choices;
   assert.deepEqual(choices.cover, plain(Covers.COLORS.map((c) => c.id)));

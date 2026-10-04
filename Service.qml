@@ -495,6 +495,13 @@ Item {
     else done("")
   }
 
+  // Where a copy of something goes (a picture saved out), named `name` to
+  // start with: done(path), or done("").
+  function pickSavePath(name, done) {
+    if (ui && typeof ui.pickSavePath === "function") ui.pickSavePath(name, done)
+    else done("")
+  }
+
   function osd(icon, message) {
     Quickshell.execDetached(["/usr/bin/omarchy-shell", "-q", "osd", "show",
       JSON.stringify({ icon: icon, message: String(message).slice(0, 120), duration: 1400 })])

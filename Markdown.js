@@ -26,6 +26,8 @@
 .import "Board.js" as Board
 .import "Contacts.js" as Contacts
 .import "Email.js" as Email
+.import "Equations.js" as Equations
+.import "Notes.js" as Notes
 
 // Characters that would otherwise be read as Markdown.
 function escapeText(text) {
@@ -51,7 +53,9 @@ function sameFlags(a, b) {
 // One block's text as Markdown. Neighbouring runs with the same Markdown are
 // joined first, and spaces are kept outside the markers (Markdown doesn't see
 // "** bold**" as bold).
-function inline(inner) {
+// `notes` (a page's, in order): footnotes as [^1], their words in it;
+// without it, as ^[their words].
+function inline(inner, notes) {
   var runs = Html.parse(inner)
   var groups = []
   runs.forEach(function(run) {
@@ -63,8 +67,29 @@ function inline(inner) {
     else groups.push({ text: run.text, flags: f, href: run.href || "" })
   })
   var out = ""
+  var lastHref = ""
   groups.forEach(function(g) {
+    var seen = lastHref
+    lastHref = g.href || ""
     if (g.br) { out += "\\\n"; return }
+    // A footnote: [^n] (or ^[its words]).
+    if (Notes.isLink(g.href)) {
+      if (seen === g.href) return
+      var words = Notes.textOf(g.href)
+      if (notes) {
+        var n = notes.indexOf(words)
+        if (n < 0) { notes.push(words); n = notes.length - 1 }
+        out += "[^" + (n + 1) + "]"
+      } else out += "^[" + words.replace(/\]/g, ")") + "]"
+      return
+    }
+    // An equation in the line: $its LaTeX$ (once, however it's formatted).
+    if (Equations.isLink(g.href)) {
+      if (seen === g.href) return
+      var tex = Equations.texOf(g.href)
+      out += tex.indexOf("$") >= 0 || /\\$/.test(tex) ? "$$" + tex + "$$" : "$" + tex + "$"
+      return
+    }
     var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(g.text.replace(/\u00a0/g, " "))
     var lead = m[1]
     var core = m[2]
@@ -79,6 +104,8 @@ function inline(inner) {
       body = fence + (core.charAt(0) === "`" ? " " : "") + core + (core.charAt(core.length - 1) === "`" ? " " : "") + fence
     } else {
       body = escapeText(core)
+      // Dollars that would be read back as an equation stay dollars.
+      if (body.indexOf("$") >= 0 && Equations.inlineSpans(body).length) body = body.replace(/\$/g, "\\$")
     }
     if (f.underline) body = "<u>" + body + "</u>"
     if (f.mark) body = "==" + body + "=="
@@ -212,6 +239,8 @@ function fromDocPage(page, lookup, options) {
   var info = typeof lookup === "function" ? lookup : function() { return null }
   var opts = options || {}
   var blocks = page.blocks || {}
+  // Its footnotes, in order ([^1], [^2]...), written at its end.
+  var notes = []
 
   function indent(text, prefix) {
     return text.split("\n").map(function(l) { return l ? prefix + l : l }).join("\n")
@@ -290,7 +319,7 @@ function fromDocPage(page, lookup, options) {
   }
 
   function one(b, n) {
-    var text = Blocks.isText(b.type) ? inline(b.html || "") : ""
+    var text = Blocks.isText(b.type) ? inline(b.html || "", notes) : ""
     var kids = b.content ? list(b.content) : ""
     // Markdown has no columns: one after the other.
     if (b.type === "columns" || b.type === "column") return kids
@@ -301,6 +330,7 @@ function fromDocPage(page, lookup, options) {
     else if (b.type === "check") line = (b.checked ? "- [x] " : "- [ ] ") + text
     else if (b.type === "quote") return quoted(text + (kids ? "\n\n" + kids : ""))
     else if (b.type === "callout") return quoted((b.icon ? b.icon + " " : "") + text + (kids ? "\n\n" + kids : ""))
+    else if (b.type === "code" && Equations.isLang(b.lang)) line = Equations.fence(Html.plainText(b.html || ""))
     else if (b.type === "code") line = "```" + (b.lang ? b.lang.toLowerCase().replace(/\s+/g, "") : "") + "\n" + plainLines(b.html || "").join("\n") + "\n```"
     else if (b.type === "divider") line = "---"
     else if (b.type === "image") line = b.src ? "![](" + (opts.assetPrefix || "") + b.src + ")" : ""
@@ -354,5 +384,7 @@ function fromDocPage(page, lookup, options) {
   var head = title || page.icon ? "# " + (page.icon ? page.icon + " " : "") + escapeText(title || "Untitled") + "\n\n" : ""
   // A project's status and due date as front matter (Obsidian reads it as properties).
   var front = page.project ? "---\nstatus: " + page.project.status + (page.project.due ? "\ndue: " + page.project.due : "") + "\n---\n\n" : ""
-  return front + (head + list(page.content || [])).replace(/\n{3,}/g, "\n\n").trim() + "\n"
+  var body = list(page.content || [])
+  var foot = notes.map(function(t, i) { return "[^" + (i + 1) + "]: " + escapeText(t) }).join("\n")
+  return front + (head + body + (foot ? "\n\n" + foot : "")).replace(/\n{3,}/g, "\n\n").trim() + "\n"
 }

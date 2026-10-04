@@ -1,9 +1,13 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Shapes
 import "../Html.js" as Html
 import "../Blocks.js" as Blocks
 import "../Docs.js" as Docs
 import "../Workspace.js" as Workspace
+import "../Equations.js" as Equations
+import "../Diagram.js" as Diagram
+import "../Notes.js" as Notes
 
 // One block of a page in Pages, the way Notion draws it: text in its kind's
 // size with space around it, a list's bullet or number, a to-do's box, a
@@ -114,7 +118,7 @@ Item {
   readonly property real picRatio: ratio > 0 ? ratio : (picture.implicitHeight > 0 ? picture.implicitWidth / picture.implicitHeight : 1.5)
   readonly property real picH: picW / picRatio
   readonly property var tocList: { var s = editor.structure; return type === "toc" ? editor.headings() : [] }
-  readonly property real contentH: isText ? Math.max(lineHeight, textEdit.contentHeight) + (type === "code" ? codePad + 14 : 0) + emptyRow
+  readonly property real contentH: isText ? (drawnView ? drawnH : Math.max(lineHeight, textEdit.contentHeight) + (type === "code" ? codePad + 14 : 0) + emptyRow + (drawnCode ? drawnH : 0))
     : type === "divider" ? 1
     : type === "image" ? picH
     : type === "page" || type === "link" ? st.lineHeight + 4
@@ -147,7 +151,54 @@ Item {
   // ---- loading the text -------------------------------------------------------------------
 
   function measure(inner) {
-    maxPx = Html.maxSize(inner || "")
+    var px = Html.maxSize(inner || "")
+    // An equation in it taller than its lines: its lines as tall as it needs.
+    if (editor.doc && String(inner || "").indexOf(Equations.PREFIX) >= 0) {
+      var need = editor.mathHeight(inner, st.size)
+      if (need > st.lineHeight) px = Math.max(px, Math.ceil(need * st.size / st.lineHeight))
+    }
+    maxPx = px
+  }
+
+  // ---- a code block that's drawn: an equation (Math), a diagram (Mermaid) -----------------
+
+  // Shown as its drawing; clicked (or the cursor brought into it), its
+  // source in the code box, and the drawing under it as it's written.
+  readonly property bool mathCode: type === "code" && editor.doc && Equations.isLang(lang)
+  readonly property bool diagramCode: type === "code" && editor.doc && Diagram.isLang(lang)
+  readonly property bool drawnCode: mathCode || diagramCode
+  property string drawnSource: ""
+  readonly property bool drawnView: drawnCode && !textEdit.focus && drawnSource.trim() !== ""
+  readonly property var mathDrawing: { var r = editor.mathRevision; return mathCode && drawnSource.trim() !== "" ? editor.mathOf(drawnSource, true) : null }
+  readonly property var mathSized: mathDrawing && mathDrawing.svg ? Equations.sized(mathDrawing.svg, Math.round(st.size * 1.25), String(inkColor)) : null
+  readonly property string mathError: mathDrawing ? (mathDrawing.error || Equations.errorOf(mathDrawing.svg)) : ""
+  readonly property var diagram: diagramLoader.item
+  // What's wrong with it (said under it while it's written; for a diagram
+  // that can't be drawn, said in its place).
+  readonly property string drawnProblem: mathCode ? mathError : diagram ? diagram.problem : ""
+  readonly property real drawnW: width - bx - boxRight
+  readonly property real drawnH: !drawnCode || drawnSource.trim() === "" ? 0
+    : (mathCode ? (mathSized ? Math.min(mathSized.height * Math.min(1, drawnW / Math.max(1, mathSized.width)), 2000) : lineHeight)
+      : diagram && diagram.drawable ? diagram.implicitHeight : 0) + 20
+    + (drawnProblem !== "" && (!drawnView || (diagramCode && !(diagram && diagram.drawable))) ? 22 : 0)
+  Timer { id: drawnTimer; interval: 250; onTriggered: block.drawnSource = block.sourceNow() }
+  function sourceNow() { return textEdit.getText(0, textEdit.length).replace(/\u2028/g, "\n") }
+  // An equation's or a footnote's image at a point in its text: { at
+  // (where it is in the text), note (a footnote) }, or null.
+  function tokenAt(x, y) {
+    var html = editor.htmls[uid] || ""
+    if (!editor.doc || (html.indexOf(Equations.PREFIX) < 0 && html.indexOf(Notes.PREFIX) < 0)) return null
+    var p = textEdit.positionAt(x, y)
+    for (var k = Math.max(0, p - 1); k <= Math.min(textEdit.length - 1, p); k++) {
+      var f = textEdit.getFormattedText(k, k + 1)
+      var note = f.indexOf(Notes.MARK) >= 0
+      if (!note && f.indexOf(Equations.MARK) < 0) continue
+      var r0 = textEdit.positionToRectangle(k)
+      var r1 = textEdit.positionToRectangle(k + 1)
+      var x1 = r1.y === r0.y ? r1.x : textEdit.width
+      if (x >= r0.x - 2 && x <= x1 + 2) return { at: k, note: note }
+    }
+    return null
   }
 
   // "/mindmap": you write the new map's topic first.
@@ -166,11 +217,12 @@ Item {
   // pointer zone would keep it from knowing).
   property bool pictureHovered: false
   // (A picture's own handles, at its sides, need the pointer over it.)
-  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio" || type === "meeting" || type === "agenda" || type === "event" || type === "image" || Blocks.hasData(type)
+  // (An equation's or a diagram's drawing too: its button to see it large shows under the pointer.)
+  readonly property bool ownHover: type === "table" || type === "sketch" || type === "audio" || type === "meeting" || type === "agenda" || type === "event" || type === "image" || Blocks.hasData(type) || drawnCode
   readonly property bool contentHovered: (tableLoader.item !== null && tableLoader.item.pointerIn) || (sketchLoader.item !== null && sketchLoader.item.pointerIn)
     || (audioLoader.item !== null && audioLoader.item.pointerIn) || (meetingLoader.item !== null && meetingLoader.item.pointerIn)
     || (calLoader.item !== null && calLoader.item.pointerIn) || (dataLoader.item !== null && dataLoader.item.pointerIn)
-    || (type === "image" && pictureHovered)
+    || (type === "image" && pictureHovered) || (drawnCode && (drawnHover.hovered || hover.hovered || codeHover.hovered))
   // An audio note: recorded into, played, written out.
   readonly property var audioView: audioLoader.item
   // A meeting: started, stopped, written out.
@@ -188,6 +240,7 @@ Item {
     measure(editor.htmls[uid] || "")
     textEdit.text = Html.wrapBlock(editor.displayOf(uid, type, lang), lineHeight, editor.linkColor, editor.tagStyle)
     shownCode = type === "code"
+    if (drawnCode) drawnSource = Html.plainText(editor.htmls[uid] || "")
     loading = false
     dirty = false
     if (had) textEdit.cursorPosition = Math.min(pos, textEdit.length)
@@ -265,11 +318,11 @@ Item {
 
   // A code block's box, its language and a copy button.
   Rectangle {
-    visible: block.type === "code"
+    visible: block.type === "code" && !block.drawnView
     x: block.bx
     y: block.st.above + block.boxTop
     width: block.width - block.bx - block.boxRight
-    height: block.contentH
+    height: block.contentH - (block.drawnCode ? block.drawnH : 0)
     radius: 5
     color: Qt.alpha(block.editor.ink, block.editor.dark ? 0.08 : 0.055)
 
@@ -446,7 +499,7 @@ Item {
 
   TextEdit {
     id: textEdit
-    visible: block.isText
+    visible: block.isText && !block.drawnView
     enabled: block.isText
     x: block.textX
     y: block.textTop + block.textShift
@@ -474,6 +527,7 @@ Item {
       if (block.loading) return
       block.dirty = true
       block.editor.edited(block)
+      if (block.drawnCode) drawnTimer.restart()
     }
     onCursorRectangleChanged: if (activeFocus) block.editor.cursorMovedIn(block)
     onSelectionStartChanged: if (activeFocus) block.editor.selectionChangedIn(block)
@@ -500,7 +554,14 @@ Item {
       acceptedModifiers: Qt.NoModifier
       onTapped: function(eventPoint) {
         var link = textEdit.linkAt(eventPoint.position.x, eventPoint.position.y)
-        if (Html.pageOf(link) || Html.isTag(link) || Html.contactOf(link)) block.editor.openLink(link, textEdit, eventPoint.position.x, eventPoint.position.y)
+        if (Html.pageOf(link) || Html.isTag(link) || Html.contactOf(link)) {
+          block.editor.openLink(link, textEdit, eventPoint.position.x, eventPoint.position.y)
+          return
+        }
+        // An equation or a footnote in the line: changed in a small box.
+        var t = block.tokenAt(eventPoint.position.x, eventPoint.position.y)
+        if (t && t.note) block.editor.editNote(block, t.at, eventPoint.position.x, eventPoint.position.y)
+        else if (t) block.editor.editInlineMath(block, t.at, eventPoint.position.x, eventPoint.position.y)
       }
     }
   }
@@ -508,7 +569,8 @@ Item {
   // What an empty block is for: its kind, or "/" on the line you're on.
   Text {
     textFormat: Text.PlainText
-    readonly property string words: block.hint !== "" ? block.hint : Docs.placeholder(block.type, textEdit.activeFocus)
+    readonly property string words: block.hint !== "" ? block.hint : block.mathCode ? "An equation in LaTeX, like E = mc^2"
+      : block.diagramCode ? "A diagram in Mermaid: flowchart TD, then A --> B on the next line" : Docs.placeholder(block.type, textEdit.activeFocus)
     visible: block.isText && words !== "" && textEdit.length === 0 && textEdit.preeditText === ""
     x: textEdit.x
     y: block.firstBaseline - baselineOffset
@@ -532,6 +594,169 @@ Item {
     color: Qt.alpha(block.editor.ink, 0.35)
     HoverHandler { cursorShape: Qt.PointingHandCursor }
     TapHandler { onTapped: block.editor.addChild(block.uid) }
+  }
+
+  // ---- an equation or a diagram, drawn ------------------------------------------------------------
+
+  // Its colors, for its drawing seen large or made a picture: its words',
+  // and its background ("" for the page's).
+  function drawingLook() { return { ink: String(block.inkColor), back: block.colors.background || "" } }
+
+  // On its own when it's not being written; under its source while it is.
+  Item {
+    id: drawnBox
+    objectName: "drawnBlock"
+    visible: block.drawnCode && block.drawnSource.trim() !== ""
+    x: block.bx
+    y: block.st.above + block.boxTop + block.contentH - block.drawnH
+    width: block.width - block.bx - block.boxRight
+    height: block.drawnH
+    Image {
+      id: mathImage
+      objectName: "mathImage"
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 10
+      visible: block.mathSized !== null
+      readonly property real fit: block.mathSized ? Math.min(1, parent.width / Math.max(1, block.mathSized.width)) : 1
+      width: block.mathSized ? block.mathSized.width * fit : 0
+      height: block.mathSized ? block.mathSized.height * fit : 0
+      sourceSize.width: Math.ceil(width * 2)
+      sourceSize.height: Math.ceil(height * 2)
+      smooth: true
+      source: block.mathSized ? "data:image/svg+xml;utf8," + encodeURIComponent(block.mathSized.svg) : ""
+    }
+    Text {
+      visible: block.mathCode && block.mathSized === null
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 10
+      textFormat: Text.PlainText
+      text: "Drawing\u2026"
+      font.family: block.editor.uiFamily
+      font.pixelSize: 12
+      color: Qt.alpha(block.editor.ink, 0.45)
+    }
+    Loader {
+      id: diagramLoader
+      active: block.diagramCode
+      anchors.horizontalCenter: parent.horizontalCenter
+      y: 10
+      sourceComponent: DiagramView {
+        objectName: "diagramView"
+        source: block.drawnSource
+        ink: block.inkColor
+        paper: block.editor.paper
+        family: block.editor.uiFamily
+        iconFamily: block.editor.theme ? block.editor.theme.iconFont : "monospace"
+        maxWidth: block.drawnW
+      }
+    }
+    // What's wrong with it, if anything: while it's written (and a diagram
+    // that can't be drawn, in its place).
+    Text {
+      objectName: "drawnProblem"
+      visible: block.drawnProblem !== "" && (!block.drawnView || (block.diagramCode && !(block.diagram && block.diagram.drawable)))
+      width: parent.width
+      horizontalAlignment: Text.AlignHCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 4
+      elide: Text.ElideRight
+      textFormat: Text.PlainText
+      text: block.drawnProblem
+      font.family: block.editor.uiFamily
+      font.pixelSize: 12
+      color: block.diagramCode && block.diagram && !block.diagram.graph.errors.length ? Qt.alpha(block.editor.ink, 0.55) : block.editor.dark ? "#ff8a80" : "#c62828"
+    }
+    HoverHandler { id: drawnHover; cursorShape: block.drawnView && !block.editor.readOnly ? Qt.PointingHandCursor : Qt.ArrowCursor }
+    TapHandler {
+      enabled: block.drawnView && !block.editor.readOnly
+      onTapped: function(point) {
+        // (Not a click on its button, which opens it large.)
+        if (openLarge.visible && openLarge.contains(openLarge.mapFromItem(drawnBox, point.position.x, point.position.y))) return
+        block.editor.focusBlock(block.uid, -1)
+      }
+    }
+    // Under the pointer: copied as a picture (to paste anywhere), or saved
+    // as one where you say.
+    Row {
+      id: drawnTools
+      objectName: "drawnTools"
+      visible: (block.mathSized !== null || (block.diagram !== null && block.diagram.drawable)) && drawnHover.hovered
+      anchors.right: openLarge.left
+      anchors.rightMargin: 4
+      y: 6
+      z: 2
+      spacing: 4
+      Repeater {
+        model: drawnTools.visible ? [["copy", "copy", "Copy as a picture"], ["save", "download", "Save as a picture\u2026"]] : []
+        delegate: Rectangle {
+          required property var modelData
+          objectName: "drawnTool_" + modelData[0]
+          width: 26
+          height: 26
+          radius: 6
+          color: toolHover.hovered ? Qt.alpha(block.editor.ink, 0.12) : Qt.alpha(block.editor.ink, 0.06)
+          Text {
+            anchors.centerIn: parent
+            textFormat: Text.PlainText
+            text: block.editor.theme ? block.editor.theme.icons[modelData[1]] : ""
+            font.family: block.editor.theme ? block.editor.theme.iconFont : ""
+            font.pixelSize: 14
+            color: Qt.alpha(block.editor.ink, 0.75)
+          }
+          HoverHandler { id: toolHover; cursorShape: Qt.PointingHandCursor }
+          TapHandler {
+            gesturePolicy: TapHandler.ReleaseWithinBounds
+            onTapped: {
+              if (modelData[0] === "copy") block.editor.copyDrawing(block.mathCode ? "math" : "diagram", block.drawnSource, block.drawingLook())
+              else block.editor.saveDrawing(block.mathCode ? "math" : "diagram", block.drawnSource, block.drawingLook())
+            }
+          }
+          ToolTip.visible: toolHover.hovered
+          ToolTip.delay: 600
+          ToolTip.text: modelData[2]
+        }
+      }
+    }
+    // Large, to zoom in on (over everything); drawn smaller than it is
+    // here, it says how much smaller, and stays in view.
+    Rectangle {
+      id: openLarge
+      objectName: "openLarge"
+      readonly property bool shrunk: block.diagram !== null && block.diagram.shrunk
+      visible: (block.mathSized !== null || (block.diagram !== null && block.diagram.drawable)) && (drawnHover.hovered || shrunk)
+      anchors.right: parent.right
+      anchors.rightMargin: 4
+      y: 6
+      z: 2
+      width: largeRow.implicitWidth + 14
+      height: 26
+      radius: 6
+      color: largeHover.hovered ? Qt.alpha(block.editor.ink, 0.12) : Qt.alpha(block.editor.ink, 0.06)
+      Row {
+        id: largeRow
+        anchors.centerIn: parent
+        spacing: 5
+        Text {
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: block.editor.theme ? block.editor.theme.icons.expand : ""
+          font.family: block.editor.theme ? block.editor.theme.iconFont : ""
+          font.pixelSize: 14
+          color: Qt.alpha(block.editor.ink, 0.75)
+        }
+        Text {
+          visible: openLarge.shrunk
+          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          text: Math.round(block.diagram ? block.diagram.fit * 100 : 100) + "%"
+          font.family: block.editor.uiFamily
+          font.pixelSize: 12
+          color: Qt.alpha(block.editor.ink, 0.7)
+        }
+      }
+      HoverHandler { id: largeHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler { onTapped: block.editor.openDrawing(block.mathCode ? "math" : "diagram", block.drawnSource, block.drawingLook()) }
+    }
   }
 
   // ---- a mind map ------------------------------------------------------------------------------
@@ -1225,8 +1450,10 @@ Item {
     }
   }
 
-  // A picked picture: how it sits, or out it goes.
+  // A picked picture: how it sits, large, copied, a copy saved, or out it
+  // goes. Its buttons are there while it shows.
   Rectangle {
+    id: pictureBar
     visible: block.type === "image" && block.selected && block.editor.selectedList.length === 1 && !block.editor.readOnly
     z: 10
     width: picRow.implicitWidth + 12
@@ -1240,9 +1467,11 @@ Item {
       anchors.centerIn: parent
       spacing: 2
       Repeater {
-        model: [["left", "\u{f0262}"], ["center", "\u{f0260}"], ["right", "\u{f0263}"], ["open", "\u{f05da}"], ["remove", "\u{f0a7a}"]]
+        model: pictureBar.visible ? [["left", "\u{f0262}", "Left"], ["center", "\u{f0260}", "Centered"], ["right", "\u{f0263}", "Right"], ["open", "\u{f05da}", "See it large"],
+          ["copy", "\u{f018f}", "Copy"], ["save", "\u{f01da}", "Save a copy\u2026"], ["remove", "\u{f0a7a}", "Remove"]] : []
         delegate: Rectangle {
           required property var modelData
+          objectName: "pictureBar_" + modelData[0]
           width: 28
           height: 28
           radius: 14
@@ -1256,14 +1485,21 @@ Item {
             color: modelData[0] === "remove" ? "#ff8a80" : "#f2f2f2"
           }
           HoverHandler { id: optHover; cursorShape: Qt.PointingHandCursor }
+          // (The click is the button's alone: the picture stays picked.)
           TapHandler {
+            gesturePolicy: TapHandler.ReleaseWithinBounds
             onTapped: {
               var what = modelData[0]
               if (what === "remove") block.editor.removeBlocks([block.uid])
               else if (what === "open") block.editor.openPicture(block.src)
+              else if (what === "copy") block.editor.copyPicture(block.src)
+              else if (what === "save") block.editor.savePicture(block.src)
               else block.editor.setImageAlign(block.uid, what)
             }
           }
+          ToolTip.visible: optHover.hovered
+          ToolTip.delay: 600
+          ToolTip.text: modelData[2]
         }
       }
     }

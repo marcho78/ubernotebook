@@ -82,13 +82,15 @@ function readableOn(back, ink, dark, light) {
 }
 
 // A color as a line on `paper`: as it is, or darker (lighter, on a dark
-// page) until it shows.
-function visibleOn(color, paper) {
+// page) until it shows (`least`: how well it has to read, 1.8 by default;
+// 3 for words).
+function visibleOn(color, paper, least) {
   var c = normalize(color)
-  if (!c || contrast(c, paper) >= 1.8) return c
+  var need = least || 1.8
+  if (!c || contrast(c, paper) >= need) return c
   var hsv = toHsv(c)
   var dark = luminance(paper) < 0.5
-  for (var i = 0; i < 12 && contrast(c, paper) < 1.8; i++) {
+  for (var i = 0; i < 12 && contrast(c, paper) < need; i++) {
     if (dark) { hsv.v = Math.min(1, hsv.v + 0.08); hsv.s = Math.max(0, hsv.s - 0.04) }
     else hsv.v = Math.max(0, hsv.v - 0.08)
     c = fromHsv(hsv.h, hsv.s, hsv.v)

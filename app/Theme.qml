@@ -99,7 +99,7 @@ QtObject {
     alignLeft: "\u{f0262}", alignCenter: "\u{f0260}", alignRight: "\u{f0263}", alignJustify: "\u{f0261}",
     indent: "\u{f0276}", outdent: "\u{f0275}", clear: "\u{f0265}",
     paper: "\u{f09ee}", grid: "\u{f02c1}", dots: "\u{f15fc}", trash: "\u{f0a7a}", tag: "\u{f04fc}",
-    bookmark: "\u{f00c0}", export: "\u{f0b93}", copy: "\u{f018f}", folder: "\u{f0256}", check: "\u{f012c}",
+    bookmark: "\u{f00c0}", export: "\u{f0b93}", copy: "\u{f018f}", download: "\u{f01da}", folder: "\u{f0256}", check: "\u{f012c}",
     zoomIn: "\u{f06ed}", zoomOut: "\u{f06ec}", pen: "\u{f03eb}", calendar: "\u{f00f6}", history: "\u{f02da}",
     volume: "\u{f057e}", keyboard: "\u{f097b}", info: "\u{f02fd}", sticky: "\u{f1782}", drag: "\u{f01dd}",
     open: "\u{f05da}", up: "\u{f005d}", eraser: "\u{f01fe}",
@@ -116,7 +116,7 @@ QtObject {
     duplicate: "\u{f0191}", toPage: "\u{f0ab9}", agent: "\u{f06a9}", mindmap: "\u{f0645}",
     table: "\u{f04eb}", rowAbove: "\u{f04f4}", rowBelow: "\u{f04f3}", rowRemove: "\u{f04f5}",
     colLeft: "\u{f04ed}", colRight: "\u{f04ec}", colRemove: "\u{f04ee}", header: "\u{f121d}",
-    arrowUp: "\u{f005d}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}",
+    arrowUp: "\u{f005d}", send: "\u{f048a}", arrowDown: "\u{f0045}", arrowLeft: "\u{f004d}", arrowRight: "\u{f0054}",
     sketch: "\u{f0f49}", eraser: "\u{f01fe}",
     archive: "\u{f120e}", unarchive: "\u{f125c}", briefcase: "\u{f0814}",
     // Audio notes and dictation.
@@ -127,6 +127,10 @@ QtObject {
     fileDoc: "\u{f0219}", fileZip: "\u{f05c4}", fileSheet: "\u{f021b}", fileSlides: "\u{f0227}", fileCode: "\u{f022e}", fileMusic: "\u{f0223}", fileImage: "\u{f021f}",
     openExternal: "\u{f03cc}", refresh: "\u{f0450}", unsync: "\u{f04e7}", edit: "\u{f03eb}",
     // What's in the sidebar.
-    eye: "\u{f0208}", eyeOff: "\u{f0209}", tune: "\u{f062e}"
+    eye: "\u{f0208}", eyeOff: "\u{f0209}", tune: "\u{f062e}",
+    // Equations, diagrams, footnotes.
+    equation: "\u{f0871}", inlineEquation: "\u{f0784}", diagram: "\u{f199c}", decision: "\u{f0641}",
+    network: "\u{f0317}", system: "\u{f048d}", footnote: "\u{f0283}",
+    expand: "\u{f004c}", fitScreen: "\u{f18f5}"
   })
 }

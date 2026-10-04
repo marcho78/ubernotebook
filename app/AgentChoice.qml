@@ -20,6 +20,8 @@ Row {
 
   readonly property var efforts: Agent.efforts(models, model)
   readonly property var current: models.filter(function(m) { return m.id === ac.model })[0] || null
+  // A menu of them all the way open (its opening done): for a click on it.
+  readonly property bool menuOpened: modelMenu.opened || effortMenu.opened
 
   spacing: 6
 

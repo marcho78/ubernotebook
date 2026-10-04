@@ -12,6 +12,7 @@ import "Email.js" as Email
 import "Files.js" as Files
 import "Bookmark.js" as Bookmark
 import "Starter.js" as Starter
+import "Agent.js" as Agent
 
 // Pages on disk: the workspace in the Pages folder of your notebooks folder
 // (~/Documents/Uber Notebook/Pages), a JSON file per page, named by its UUID, and
@@ -123,6 +124,7 @@ Item {
           ws.scheduleReminders()
           ws.loadCalendar()
           ws.loadContacts()
+          ws.loadChats()
         })
       }, { okCodes: [0, 1] })
     })
@@ -557,6 +559,43 @@ Item {
     else to(files.rootPath + "/Exports")
   }
 
+  // ---- conversations with your agent ----------------------------------------------------------
+
+  // Pages/chats.json: each page's conversation with your agent (Agent.js
+  // cleanChats), so it can be gone back to, after the panel's closed or
+  // Uber Notebook's started again.
+  property var chats: ({})
+  property int chatsRevision: 0
+  function chatsPath() { return folder + "/chats.json" }
+
+  function loadChats() {
+    if (!folder) return
+    files.readFiles([chatsPath()], function(got) {
+      var raw = got[ws.chatsPath()]
+      ws.chats = Agent.cleanChats(raw ? files.parseJson(raw) : null)
+      ws.chatsRevision++
+    })
+  }
+  function writeChats() {
+    if (!folder) return
+    var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
+    withFolder(function() { files.writeFile(ws.chatsPath(), text) })
+  }
+  // The page's conversation, or null.
+  function chatFor(id) { return id && chats[id] ? chats[id] : null }
+  // Kept (as it is now), or (null) gone.
+  function setChat(id, chat) {
+    if (!id) return
+    var next = {}
+    Object.keys(chats).forEach(function(k) { next[k] = chats[k] })
+    var c = chat ? Agent.cleanChat(chat) : null
+    if (c) next[id] = c
+    else delete next[id]
+    chats = Agent.cleanChats({ chats: next })
+    chatsRevision++
+    writeChats()
+  }
+
   // ---- people -------------------------------------------------------------------------------
 
   // Pages/contacts.json: the people (Contacts.js), and the steps Undo takes back.
@@ -696,6 +735,14 @@ Item {
       // Its history goes with it (if it has one).
       ws.listVersions(pid, function(list) { if (list.length) files.trash(Workspace.historyDir(files.rootPath, pid), "history-" + pid) })
     })
+    // And its conversations with your agent.
+    if (all.some(function(pid) { return chats[pid] })) {
+      var kept = {}
+      Object.keys(chats).forEach(function(k) { if (all.indexOf(k) < 0) kept[k] = chats[k] })
+      chats = kept
+      chatsRevision++
+      writeChats()
+    }
     touched()
   }
 
@@ -1071,6 +1118,11 @@ Item {
   function assetUrl(src) {
     if (!Blocks.cleanAsset(src) || !folder) return ""
     return "file://" + encodeURI(folder + "/" + src)
+  }
+  // Its file, a full path ("" for none).
+  function assetPath(src) {
+    if (!Blocks.cleanAsset(src) || !folder) return ""
+    return folder + "/" + src
   }
 
   // Copies a picture into Pages/assets: done("assets/<name>") or done("").

@@ -18,6 +18,7 @@ import "../Board.js" as Board
 import "../Files.js" as Files
 import "../Contacts.js" as Contacts
 import "../Email.js" as Email
+import "../Library.js" as Library
 
 // Pages: the other way to write in Uber Notebook, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -342,6 +343,67 @@ FocusScope {
     var list = editor.serialize().filter(function(b) { return b.type === "image" && b.src }).map(function(b) { return { src: b.src, caption: "" } })
     var at = list.map(function(x) { return x.src }).indexOf(src)
     showPictures(at >= 0 ? list : [{ src: src, caption: "" }], Math.max(0, at))
+  }
+
+  // ---- a picture, out of Uber Notebook ----
+
+  // Onto the clipboard, to paste anywhere.
+  function copyPicture(src) {
+    var path = workspace ? workspace.assetPath(src) : ""
+    if (!path) return
+    workspace.files.copyPicture(path, function(ok) { view.toast(ok ? "Copied: paste it anywhere" : "The picture couldn't be copied") })
+  }
+  // A copy saved where you say, named for its caption (or the page).
+  function savePicture(src, caption) {
+    var path = workspace ? workspace.assetPath(src) : ""
+    if (!path) return
+    if (!service || typeof service.pickSavePath !== "function") { toast("A copy can't be saved from here"); return }
+    service.pickSavePath(Library.saveName(caption || (page ? page.title : ""), src), function(to) {
+      if (!to) return
+      workspace.files.copyFileTo(path, to, function(ok, why) {
+        view.toast(ok ? "Saved to " + view.tilde(to) : "The picture couldn't be saved" + (why ? ": " + why : ""))
+      })
+    })
+  }
+  // A diagram or an equation as a picture (a PNG, twice its size, on its
+  // block's colors): onto the clipboard, to paste anywhere.
+  function copyDrawing(kind, source, look) {
+    var files = workspace ? workspace.files : null
+    if (!files) return
+    editor.drawingImage(kind, source, look, function(result) {
+      var tmp = files.tempPath("drawing-" + Date.now() + ".png")
+      if (!result || !files.saveGrab(result, tmp)) { view.drawingSaid("It couldn't be made a picture"); return }
+      files.copyPicture(tmp, function(ok) {
+        view.drawingSaid(ok ? "Copied as a picture: paste it anywhere" : "The picture couldn't be copied")
+        files.exec(["/usr/bin/rm", "-f", "--", tmp], null)
+      })
+    })
+  }
+  // Saved where you say, named for its page.
+  function saveDrawing(kind, source, look) {
+    var files = workspace ? workspace.files : null
+    if (!files) return
+    if (!service || typeof service.pickSavePath !== "function") { drawingSaid("A picture can't be saved from here"); return }
+    var what = kind === "math" ? "equation" : "diagram"
+    service.pickSavePath(Library.saveName(page && page.title ? page.title + " " + what : what.charAt(0).toUpperCase() + what.slice(1), "x.png"), function(to) {
+      if (!to) return
+      editor.drawingImage(kind, source, look, function(result) {
+        var ok = !!result && files.saveGrab(result, to)
+        view.drawingSaid(ok ? "Saved to " + view.tilde(to) : "The picture couldn't be saved")
+      })
+    })
+  }
+  // Said here, and in the view over everything when it's open (over the
+  // toasts, which it would hide).
+  function drawingSaid(text) {
+    toast(text)
+    var v = editor.drawingViewer
+    if (v && v.opened) v.say(text)
+  }
+  // A path with your home as ~.
+  function tilde(path) {
+    var home = workspace && workspace.files ? workspace.files.home : ""
+    return home && path.indexOf(home + "/") === 0 ? "~" + path.slice(home.length) : path
   }
 
   // ---- files that open here, or in their app ----
@@ -1281,8 +1343,31 @@ FocusScope {
   // Ask agent: about the page, the blocks picked, the words selected, or the
   // empty line you're on ("line"). "auto" (Ctrl+J) works out which from
   // where you are. The page is written first, so the agent reads it as it is.
+  // The box can ask for a new page instead; with no page open (the calendar,
+  // People...), a new page is what it asks for. A page with a conversation
+  // (kept from before, its panel closed or not) goes back to it instead, what
+  // you picked going with your next message; New chat, in its panel, opens
+  // the box.
   function openAgent(scope, uids) {
-    if (!page) return
+    if (!workspace || !workspace.ready) return
+    // (One at a time: while it works, its panel.)
+    if (agentRun) { agentPanel.visible = true; if (agentTalk && page && agentTalk.owner !== page.id) toast(Agent.name(agentTalk.agent) + " is still working on what you asked before"); return }
+    if (page && workspace.chatFor(page.id)) { openChat(page.id, agentContext(scope, uids)); return }
+    openAgentBox(scope, uids)
+  }
+  // The box, to ask anew.
+  function openAgentBox(scope, uids) {
+    if (!workspace || !workspace.ready) return
+    if (!page) {
+      agentPop.start({ scope: "new", blocks: [], words: "", line: "" }, null)
+      return
+    }
+    var ctx = agentContext(scope, uids)
+    commit()
+    agentPop.start(ctx, { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title, locked: locked })
+  }
+  // What it's asked about, from where you are: { scope, blocks, words, line }.
+  function agentContext(scope, uids) {
     var ctx = { scope: "page", blocks: [], words: "", line: "" }
     var list = uids || []
     if (scope === "blocks" && list.length) {
@@ -1297,14 +1382,14 @@ FocusScope {
       else if (scope === "auto" && item && item.isText && !locked && item.edit.length === 0 && Html.plainText(editor.htmls[editor.focusUid] || "") === "")
         ctx = { scope: "line", blocks: [], words: "", line: editor.focusUid }
     }
-    commit()
-    agentPop.start(ctx)
+    return ctx
   }
 
   // What you asked, handed to your agent with where you are: Claude Code,
   // Grok and Codex work here, in a panel on the page; the others in a terminal.
   function askAgent(request) {
-    askAgentWith(agentPop.agent, request, agentPop.ask, request)
+    if (agentPop.mode === "new") askAgentForPage(agentPop.agent, request, agentPop.place === "inside" && agentPop.onPage ? agentPop.onPage.id : "")
+    else askAgentWith(agentPop.agent, request, agentPop.ask, request)
   }
   // `label`: what the panel says you asked (the request itself, or a
   // shorter name for a long one).
@@ -1312,15 +1397,93 @@ FocusScope {
     if (!page || !workspace) return
     var here = Agent.runsHere(agent) && typeof workspace.files.stream === "function"
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
+    // (A page made for the last one: kept if it's this one, now asked about.)
+    settleAgentPage(agentPage !== null && agentPage.id === page.id)
     commit()
     var prompt = Agent.prompt({
       request: request, page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
       scope: ctx.scope, blocks: ctx.blocks, words: ctx.words, line: ctx.line,
       skill: service && service.skillPath ? service.skillPath : "", here: here
     })
-    if (here) { runHere(agent, label || request, prompt); return }
+    if (here) { runHere(agent, label || request, prompt, { picked: pickedKey(ctx) }); return }
     workspace.files.launchAgent(prompt)
     toast("Asked " + (Agent.name(agent) || "your agent") + ": it's working in a terminal, and what it changes shows up here")
+  }
+
+  // A new page for what you asked: made here first (at the top of Pages, as
+  // Ctrl+N makes one, or inside a page) and opened, then your agent writes
+  // it there, so it's where you chose, not somewhere else.
+  function askAgentForPage(agent, request, parentId) {
+    if (!workspace || !workspace.ready) return
+    var here = Agent.runsHere(agent) && typeof workspace.files.stream === "function"
+    if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
+    // (The one made last time: kept if it's where this one goes; gone if
+    // it's still empty, and then you were where you were before it.)
+    var prev = agentPage
+    var onPrev = prev !== null && page !== null && page.id === prev.id
+    settleAgentPage(prev !== null && parentId === prev.id, true)
+    commit()
+    var from = page ? page.id : onPrev ? prev.from : ""
+    var parent = parentId && workspace.index.pages[parentId] ? parentId : ""
+    var child = workspace.createPage({ parent: parent })
+    if (!child) return
+    if (parent) {
+      if (page && page.id === parent) {
+        editor.placeBlock(editor.uidAt(editor.model.count - 1), { type: "page", id: child.id })
+        markDirty()
+        commit()
+      } else {
+        workspace.editPage(parent, function(p) { return Workspace.appendPageBlock(p, child.id) })
+      }
+    }
+    open(child.id, false)
+    var prompt = Agent.prompt({
+      request: request, scope: "new", page: { id: child.id, title: "" },
+      into: parent ? { id: parent, title: workspace.index.pages[parent].title } : null,
+      skill: service && service.skillPath ? service.skillPath : "", here: here
+    })
+    if (here) {
+      agentPage = { id: child.id, from: from }
+      runHere(agent, request, prompt, { owner: child.id })
+      return
+    }
+    workspace.files.launchAgent(prompt)
+    toast("Asked " + (Agent.name(agent) || "your agent") + ": it's writing the new page in a terminal, and it shows up here as it goes")
+  }
+
+  // The page made for what you asked last, while its panel's up: { id,
+  // from (the page you were on) }. Settled when the panel's closed or you
+  // ask again: still empty (it couldn't, or was stopped), it goes, and
+  // you're back where you were (`stay`: the one asking goes on from there
+  // itself); `keep` (a terminal's to write it, or it's what you're asking
+  // about now), it stays.
+  property var agentPage: null
+  function settleAgentPage(keep, stay) {
+    var made = agentPage
+    agentPage = null
+    if (!made || keep || !workspace || !workspace.index.pages[made.id]) return
+    if (page && page.id === made.id) commit()
+    var p = workspace.readPageNow(made.id)
+    if (!p || p.title || p.icon || p.cover || !Blocks.isBlank(Workspace.flatten(p))) return
+    var e = workspace.index.pages[made.id]
+    var wasOpen = page !== null && page.id === made.id
+    if (page && e.parent === page.id) {
+      editor.removeBlocks([made.id])
+      markDirty()
+      commit()
+    } else {
+      workspace.trashPage(made.id, false)
+    }
+    workspace.deleteForever(made.id)
+    if (wasOpen) {
+      pageDirty = false
+      page = null
+      if (!stay) {
+        if (made.from && workspace.index.pages[made.from] && !Workspace.inTrash(workspace.index, made.from)) open(made.from)
+        else activate()
+      }
+    }
+    toast("Nothing was written on the new page, so it's gone")
   }
 
   // ---- your agent, working here (Claude Code, Grok, Codex: no terminal) ----
@@ -1328,27 +1491,163 @@ FocusScope {
   // While it works: { stop() }; and what it was asked, for a terminal instead.
   property var agentRun: null
   property string agentRunPrompt: ""
-  function runHere(agent, request, prompt) {
+  // The page's conversation with your agent, kept (Workspace's chats), or null.
+  readonly property var pageChat: { var r = workspace ? workspace.chatsRevision : 0; return page && workspace ? workspace.chatFor(page.id) : null }
+  // The conversation in the panel: { agent, id (its session: one made for
+  // Claude Code or Grok; Codex's, once its first line says), owner (the page
+  // it's kept with: where it started), page (the page it last heard about),
+  // picked (the blocks or words it last heard about, pickedKey's) }. It's
+  // kept with its page as it goes (Workspace's chats): closed, it's gone
+  // back to from that page (openChat); a reply goes on with it.
+  property var agentTalk: null
+  // What you picked when you went back to it (Ctrl+J with words selected,
+  // /agent on an empty line...): it goes with your next message.
+  property var agentPending: null
+  // A new conversation (`o.picked`: what it's told is picked; `o.owner`: the
+  // page it's kept with, the one open by default), or (`o.reply`) the next
+  // turn of this one; `o.fresh`: in a new session, told what was said (one
+  // that never said its session, or lost it).
+  function runHere(agent, request, prompt, o) {
+    var opts = o || {}
     var files = workspace.files
     var dir = files.runtimeDir + "/uber-notebook-agent"
     // The model and effort you chose for it (Settings → AI, or the box).
     var choice = { model: settings[agent + "Model"] || "", effort: settings[agent + "Effort"] || "" }
     var choiceText = ""
     if (typeof files.agentModels === "function") files.agentModels(agent, function(list) { choiceText = Agent.choiceLabel(list, choice.model, choice.effort) })
-    agentRunPrompt = prompt
-    agentPanel.begin(Agent.name(agent), request, choiceText)
-    agentRun = { stop: function() { view.agentRun = null; agentPanel.end(-1, "") } }
-    files.mkdirs([dir], function() {
-      if (!view.agentRun) return
-      view.agentRun = files.stream(Agent.command(agent, prompt, choice), function(line) {
-        Agent.fromLine(agent, line).forEach(function(ev) { agentPanel.take(ev) })
+    var owner = opts.owner || (page ? page.id : "")
+    if (!opts.reply) agentTalk = { agent: agent, id: "", owner: owner, page: owner, picked: opts.picked || "" }
+    var talk = agentTalk
+    if (!opts.reply || opts.fresh) talk.id = Agent.newSessionId(agent)
+    if (opts.reply) agentPanel.next(request)
+    else agentPanel.begin(Agent.name(agent), request, choiceText)
+    agentPanel.canReply = true
+    // (For a terminal instead: the whole of it, for a reply.)
+    agentRunPrompt = opts.reply && !opts.fresh ? recapPrompt(request) : prompt
+    saveChat()
+    var retried = false
+    function go(text, session) {
+      var lost = false
+      view.agentRun = files.stream(Agent.command(agent, text, choice, session), function(line) {
+        Agent.fromLine(agent, line).forEach(function(ev) {
+          // (Codex names its conversation as it starts.)
+          if (ev.kind === "start" && ev.session && !talk.id) { talk.id = ev.session; view.saveChat() }
+          if (ev.kind === "failed" && session.resume && Agent.lostSession(ev.text)) { lost = true; return }
+          agentPanel.take(ev)
+        })
       }, function(code, errors) {
+        // (The conversation it was in is gone, cleared out or on another
+        // computer: a new one, told what was said.)
+        if (session.resume && !retried && (lost || (code !== 0 && Agent.lostSession(errors)))) {
+          retried = true
+          talk.id = Agent.newSessionId(agent)
+          agentPanel.again()
+          go(view.recapPrompt(request), { id: talk.id, resume: false })
+          return
+        }
         view.agentRun = null
         agentPanel.end(code, Agent.failureText(agent, code, errors))
+        view.saveChat()
       }, { cwd: dir })
+    }
+    agentRun = { stop: function() { view.agentRun = null; agentPanel.end(-1, ""); view.saveChat() } }
+    files.mkdirs([dir], function() {
+      if (!view.agentRun) return
+      go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh })
     })
   }
   function stopAgent() { if (agentRun) agentRun.stop() }
+
+  // The conversation, kept with its page as it is now.
+  function saveChat() {
+    var talk = agentTalk
+    if (!talk || !talk.owner || !workspace || !workspace.index.pages[talk.owner]) return
+    workspace.setChat(talk.owner, { agent: talk.agent, session: talk.id, page: talk.page, picked: talk.picked,
+      updated: new Date().toISOString(), turns: agentPanel.transcript() })
+  }
+
+  // Back to the page's conversation (`ctx`: what you picked, to go with your
+  // next message), in its panel, the reply box ready.
+  function openChat(owner, ctx) {
+    var chat = workspace ? workspace.chatFor(owner) : null
+    if (!chat) return false
+    if (!agentTalk || agentTalk.owner !== owner || !agentPanel.visible) {
+      agentTalk = { agent: chat.agent, id: chat.session, owner: owner, page: chat.page || owner, picked: chat.picked || "" }
+      var choice = { model: settings[chat.agent + "Model"] || "", effort: settings[chat.agent + "Effort"] || "" }
+      agentPanel.show(Agent.name(chat.agent), "", chat.turns)
+      var files = workspace.files
+      if (typeof files.agentModels === "function") files.agentModels(chat.agent, function(list) { agentPanel.choiceText = Agent.choiceLabel(list, choice.model, choice.effort) })
+    }
+    agentPanel.canReply = true
+    agentPending = ctx && (ctx.scope === "blocks" || ctx.scope === "words" || ctx.scope === "line") ? ctx : null
+    agentPanel.contextNote = agentPending === null ? ""
+      : agentPending.scope === "blocks" ? (agentPending.blocks.length === 1 ? "The block you picked goes with it" : "The " + agentPending.blocks.length + " blocks you picked go with it")
+      : agentPending.scope === "words" ? "The words you selected go with it"
+      : "What it writes goes on the empty line you're on"
+    Qt.callLater(function() { agentPanel.focusReply() })
+    return true
+  }
+  // Another conversation: the box, to ask anew (the one before stays kept
+  // till the new one starts).
+  function newChat() {
+    if (agentRun) return
+    agentTalk = null
+    agentPending = null
+    agentPanel.visible = false
+    settleAgentPage(false)
+    openAgentBox("auto")
+  }
+  // A conversation started anew, told what was said (`turns`: its panel's,
+  // the ones before this request).
+  function recapPrompt(request, turns) {
+    var talk = agentTalk
+    var here = page ? { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title }
+      : talk && workspace.index.pages[talk.owner] ? { id: talk.owner, title: workspace.index.pages[talk.owner].title } : { id: "", title: "" }
+    return Agent.prompt({ request: request, page: here, scope: "page", earlier: turns || agentPanel.history,
+      skill: service && service.skillPath ? service.skillPath : "", here: true })
+  }
+
+  // What you say back, in the same conversation: where you are now when
+  // that's changed since it last heard (another page; blocks or words you
+  // picked, or what you picked when you went back to it), then your words.
+  // One that never said which conversation it was (Codex, stopped before
+  // its first line): a new session, told what was said.
+  function replyToAgent(text) {
+    var t = String(text || "").trim()
+    var talk = agentTalk
+    if (!t || agentRun || !talk || !workspace) return
+    commit()
+    var pending = agentPending
+    agentPending = null
+    agentPanel.contextNote = ""
+    if (!Agent.isSessionId(talk.id)) {
+      runHere(talk.agent, t, recapPrompt(t, agentPanel.transcript()), { reply: true, fresh: true })
+      return
+    }
+    var ctx = pending || pickedNow()
+    var key = pickedKey(ctx)
+    var here = page ? { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title } : null
+    var prompt = Agent.reply({ reply: t, page: here, moved: here !== null && here.id !== talk.page,
+      scope: pending || key !== talk.picked ? ctx.scope : "", blocks: ctx.blocks, words: ctx.words, line: ctx.line })
+    if (here) talk.page = here.id
+    talk.picked = key
+    runHere(talk.agent, t, prompt, { reply: true })
+  }
+  // What's picked on the page now: blocks, or words in one ({ scope: "" }
+  // for neither).
+  function pickedNow() {
+    if (editor.selectedList.length > 0) return { scope: "blocks", blocks: editor.selectedList.slice(), words: "" }
+    var item = editor.focusUid ? editor.items[editor.focusUid] : null
+    var words = item && item.isText ? String(item.edit.selectedText || "").replace(/[\u2028\u2029]/g, "\n") : ""
+    if (words.trim()) return { scope: "words", blocks: [editor.focusUid], words: words }
+    return { scope: "", blocks: [], words: "" }
+  }
+  function pickedKey(ctx) {
+    if (!ctx) return ""
+    if (ctx.scope === "blocks") return "blocks:" + (ctx.blocks || []).join(",")
+    if (ctx.scope === "words") return "words:" + (ctx.blocks || [])[0] + ":" + ctx.words
+    return ""
+  }
 
   // ---- commands (an agent, a script) -----------------------------------------------------------
 
@@ -2288,9 +2587,12 @@ FocusScope {
           onClicked: view.toggleFavorite(view.page.id)
         }
         IconButton {
+          objectName: "agentButton"
           visible: view.page !== null
           theme: view.theme; icon: view.theme.icons.agent; size: 30; iconSize: 16
-          tip: "Ask your agent  Ctrl+J"
+          // (A conversation here: a mark under it, and it goes back to it.)
+          swatch: view.pageChat !== null ? view.theme.accent : "transparent"
+          tip: view.pageChat !== null ? Agent.chatTip(view.pageChat) + "  Ctrl+J" : "Ask your agent  Ctrl+J"
           onClicked: view.openAgent("auto")
         }
         IconButton {
@@ -2844,6 +3146,10 @@ FocusScope {
           onTextCopied: function(text) { view.workspace.files.copyText(text); view.toast("Copied") }
           onLinkOpened: function(url) { view.workspace.files.openUrl(url) }
           onPictureOpened: function(src) { view.showPagePicture(src) }
+          onPictureCopyRequested: function(src) { view.copyPicture(src) }
+          onDrawingCopyRequested: function(kind, source, look) { view.copyDrawing(kind, source, look) }
+          onDrawingSaveRequested: function(kind, source, look) { view.saveDrawing(kind, source, look) }
+          onPictureSaveRequested: function(src) { view.savePicture(src, "") }
           onPastePicture: function(afterUid) { view.workspace.pastePicture(function(src) { if (src) editor.insertPicture(afterUid, src, 0) }) }
           onLinkRequested: linkPop.openAt(bubble)
           onMindMapColorsRequested: function(uid, anchor) { view.openIdeaColors(uid, anchor) }
@@ -3104,7 +3410,9 @@ FocusScope {
   Connections {
     target: editor
     function onSlashChanged() {
-      if (editor.slash === null) { if (slashMenu.opened) slashMenu.close(); return }
+      // (Closed even while it's still opening: `opened` isn't true till then,
+      // and a quick pick would leave it up, empty.)
+      if (editor.slash === null) { slashMenu.close(); return }
       var r = editor.slashRect()
       slashMenu.parent = editor
       slashMenu.x = r.x - 8
@@ -3123,7 +3431,7 @@ FocusScope {
   Connections {
     target: editor
     function onMentionChanged() {
-      if (editor.mention === null) { if (mentionMenu.opened) mentionMenu.close(); return }
+      if (editor.mention === null) { mentionMenu.close(); return }
       var r = editor.mentionRect()
       mentionMenu.parent = editor
       mentionMenu.x = r.x - 8
@@ -3172,7 +3480,17 @@ FocusScope {
     width: Math.min(420, view.width - 40)
     maxHeight: Math.max(220, view.height * 0.62)
     onStopRequested: view.stopAgent()
+    onReplied: function(text) { view.replyToAgent(text) }
+    onNewChatRequested: view.newChat()
+    // (Closed: put away, kept with its page, to go back to. A new page it
+    // left empty goes, unless it finished: it may be waiting for your
+    // answer, there.)
+    onDismissed: { view.agentTalk = null; view.agentPending = null; view.settleAgentPage(status === "done") }
     onTerminalRequested: {
+      // (The page made for it stays: the terminal's to write it. The
+      // conversation goes on there, not here.)
+      view.agentTalk = null
+      view.settleAgentPage(true)
       if (!view.workspace || !view.agentRunPrompt) return
       view.workspace.files.launchAgent(view.agentRunPrompt)
       view.toast("Opened in a terminal: what it changes shows up here")
@@ -3815,6 +4133,8 @@ FocusScope {
     theme: view.theme
     urlOf: function(src) { return view.workspace ? view.workspace.assetUrl(src) : src }
     onOpenRequested: function(src) { view.openAsset(src, src) }
+    onCopyRequested: function(src) { view.copyPicture(src) }
+    onSaveRequested: function(src, caption) { view.savePicture(src, caption) }
     onVisibleChanged: if (!visible) view.forceActiveFocus()
   }
 

@@ -147,6 +147,7 @@ FocusScope {
     onSoundRequested: function(name) { root.play(name) }
     onToast: function(text) { root.toast(text) }
     onPictureFileRequested: function(afterUid) { root.pickPicture(afterUid) }
+    onPictureSaveRequested: function(path, name) { root.savePictureCopy(path, name) }
   }
 
   // ---- Pages ------------------------------------------------------------------------------
@@ -381,6 +382,18 @@ FocusScope {
   function pickPicture(afterUid) {
     if (!service) return
     service.pickPicture(function(path) { if (path) view.addPicture(path, afterUid) })
+  }
+
+  // A copy of a notebook's picture, saved where you say.
+  function savePictureCopy(path, name) {
+    if (!service || !path) return
+    service.pickSavePath(name, function(to) {
+      if (!to) return
+      root.store.copyFileTo(path, to, function(ok, why) {
+        var home = root.store.home
+        root.toast(ok ? "Saved to " + (home && to.indexOf(home + "/") === 0 ? "~" + to.slice(home.length) : to) : "The picture couldn't be saved" + (why ? ": " + why : ""))
+      })
+    })
   }
 
   // ---- sounds ------------------------------------------------------------------------------

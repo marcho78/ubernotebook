@@ -226,6 +226,9 @@ def("markdown|md|mdx", { mode: "markdown" })
 def("yaml|yml", { mode: "yaml" })
 def("toml|ini|conf|cfg|properties", { mode: "toml" })
 def("diff|patch", { mode: "diff" })
+// Equations and diagrams (drawn under what's written: Equations.js, Diagram.js).
+def("math|latex|tex|katex", { mode: "tex" })
+def("mermaid", { mode: "mermaid" })
 
 function langOf(name) {
   var k = String(name || "").trim().toLowerCase()
@@ -662,6 +665,41 @@ function diff(src) {
   return out.list
 }
 
+// LaTeX: \commands, % comments, numbers, & and \\ (between a table's cells and rows).
+function tex(src) {
+  var out = emitter()
+  var re = /(%[^\n]*)|(\\[A-Za-z]+\*?|\\.)|([0-9]+(?:\.[0-9]+)?)|(&)/g
+  var last = 0
+  var m
+  while ((m = re.exec(src)) !== null) {
+    if (m.index > last) out.add(src.slice(last, m.index), "")
+    out.add(m[0], m[1] ? "comment" : m[2] ? (m[2] === "\\\\" ? "meta" : "keyword") : m[3] ? "number" : "meta")
+    last = re.lastIndex
+  }
+  if (last < src.length) out.add(src.slice(last), "")
+  return out.list
+}
+
+// Mermaid: its words (flowchart, subgraph, end...), its links (-->, -.->,
+// ==>...) and their |text|, quoted words, %% comments.
+var MERMAID_WORDS = wordSet("graph flowchart subgraph end direction classDef class style linkStyle click TD TB BT RL LR " +
+  "sequenceDiagram classDiagram stateDiagram erDiagram gantt pie mindmap timeline journey gitGraph participant actor loop alt else opt")
+function mermaid(src) {
+  var out = emitter()
+  var re = /(%%[^\n]*)|("[^"\n]*")|(\|[^|\n]*\|)|(<?(?:-->|---|-\.+->|-\.+-|==>|===|--o|--x|~~~)+[>ox]?)|([A-Za-z][A-Za-z-]*)/g
+  var last = 0
+  var m
+  while ((m = re.exec(src)) !== null) {
+    var kind = m[1] ? "comment" : m[2] || m[3] ? "string" : m[4] ? "meta" : MERMAID_WORDS[m[5]] ? "keyword" : ""
+    if (!kind) continue
+    if (m.index > last) out.add(src.slice(last, m.index), "")
+    out.add(m[0], kind)
+    last = re.lastIndex
+  }
+  if (last < src.length) out.add(src.slice(last), "")
+  return out.list
+}
+
 // The text as [{ text, kind }]: every character in one of them, in order,
 // and kind "" for plain text. A language it doesn't know is all plain.
 function tokens(text, name) {
@@ -676,6 +714,8 @@ function tokens(text, name) {
   if (d.mode === "toml") return toml(src)
   if (d.mode === "markdown") return markdown(src)
   if (d.mode === "diff") return diff(src)
+  if (d.mode === "tex") return tex(src)
+  if (d.mode === "mermaid") return mermaid(src)
   return code(src, d)
 }
 

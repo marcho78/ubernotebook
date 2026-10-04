@@ -9,6 +9,7 @@
 // Shared by the pages view (app/Doc*.qml) and tests/workspace.test.cjs, so
 // keep it plain JavaScript with no QML or Node APIs.
 .pragma library
+.import "Diagram.js" as Diagram
 
 // ---- type ------------------------------------------------------------------------
 
@@ -178,11 +179,19 @@ var COMMANDS = [
   { id: "synced", group: "Advanced", label: "Synced block", hint: "The same blocks in many places: changed in one, changed in all", icon: "synced", action: "synced", keys: "synced sync shared reuse mirror transclude copy same" },
   { id: "mindmap", group: "Advanced", label: "Mind map", hint: "Ideas branching out from one topic", icon: "mindmap", type: "mindmap", props: { outline: "Central topic\n  Main idea\n  Main idea\n  Main idea" }, keys: "mindmap brainstorm map tree ideas diagram" },
   { id: "toc", group: "Advanced", label: "Table of contents", hint: "The headings on this page", icon: "toc", type: "toc", keys: "contents outline index" },
+  { id: "equation", group: "Advanced", label: "Equation", hint: "Math in LaTeX, drawn on a line of its own", icon: "equation", type: "code", props: { lang: "Math" }, keys: "equation math latex tex formula mathjax katex block display" },
+  // Diagrams: written in Mermaid (a code block in Mermaid), drawn; each starts with a small one to change.
+  { id: "diagram", group: "Advanced", label: "Diagram", hint: "Boxes and arrows, written in Mermaid and drawn", icon: "diagram", type: "code", props: { lang: "Mermaid" }, text: Diagram.STARTERS.diagram, keys: "diagram flowchart flow chart mermaid graph boxes arrows" },
+  { id: "decision", group: "Advanced", label: "Decision tree", hint: "Questions, yes or no, and where each answer goes", icon: "decision", type: "code", props: { lang: "Mermaid" }, text: Diagram.STARTERS.decision, keys: "decision tree flowchart troubleshooting runbook yes no mermaid" },
+  { id: "network", group: "Advanced", label: "Network diagram", hint: "Devices, and how they're connected", icon: "network", type: "code", props: { lang: "Mermaid" }, text: Diagram.STARTERS.network, keys: "network topology lan wan router switch firewall server diagram mermaid infrastructure" },
+  { id: "system", group: "Advanced", label: "System diagram", hint: "Services, databases, and what talks to what", icon: "system", type: "code", props: { lang: "Mermaid" }, text: Diagram.STARTERS.system, keys: "system architecture design services api database queue diagram mermaid infrastructure" },
   { id: "cols2", group: "Layout", label: "2 columns", hint: "Two columns side by side", icon: "columns", action: "columns", count: 2, keys: "columns side layout split" },
   { id: "cols3", group: "Layout", label: "3 columns", hint: "Three columns side by side", icon: "columns", action: "columns", count: 3, keys: "columns side layout split" },
   { id: "cols4", group: "Layout", label: "4 columns", hint: "Four columns side by side", icon: "columns", action: "columns", count: 4, keys: "columns side layout split" },
   { id: "cols5", group: "Layout", label: "5 columns", hint: "Five columns side by side", icon: "columns", action: "columns", count: 5, keys: "columns side layout split" },
-  { id: "date", group: "Inline", label: "Today", hint: "Today's date", icon: "calendar", action: "date", keys: "date now time" }
+  { id: "date", group: "Inline", label: "Today", hint: "Today's date", icon: "calendar", action: "date", keys: "date now time" },
+  { id: "inlinemath", group: "Inline", label: "Inline equation", hint: "Math in the line, in LaTeX (or type $$x^2$$)", icon: "inlineEquation", action: "inlineMath", keys: "equation math latex tex formula inline" },
+  { id: "footnote", group: "Inline", label: "Footnote", hint: "A numbered note, listed at the end of the page", icon: "footnote", action: "footnote", keys: "footnote note reference citation cite source endnote" }
 ]
 
 // Colors in the "/" menu: "/red", "/red background".
@@ -243,7 +252,7 @@ function kindLabel(type, toggle) {
 }
 
 // Languages a code block can say it's in.
-var LANGUAGES = ["Plain text", "Bash", "C", "C++", "C#", "CSS", "Diff", "Dockerfile", "Go", "HTML", "INI", "Java", "JavaScript", "JSON", "Kotlin", "Lua", "Makefile", "Markdown", "Nix", "PHP", "Python", "QML", "Ruby", "Rust", "SQL", "Swift", "TOML", "TypeScript", "XML", "YAML", "Zig"]
+var LANGUAGES = ["Plain text", "Bash", "C", "C++", "C#", "CSS", "Diff", "Dockerfile", "Go", "HTML", "INI", "Java", "JavaScript", "JSON", "Kotlin", "Lua", "Makefile", "Markdown", "Math", "Mermaid", "Nix", "PHP", "Python", "QML", "Ruby", "Rust", "SQL", "Swift", "TOML", "TypeScript", "XML", "YAML", "Zig"]
 
 // ---- what an empty block says -------------------------------------------------------
 

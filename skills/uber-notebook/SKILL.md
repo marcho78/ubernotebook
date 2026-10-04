@@ -133,6 +133,10 @@ quotes, `> [!NOTE]` callouts, **bold**, *italic*, ~~struck~~, `code`, links, and
 - `[@Fri 2 Oct](uber-notebook://date/2026-10-02)`: a date
 - `[⏰ Fri 2 Oct 9:30](uber-notebook://remind/2026-10-02T09:30)`: a reminder, in the
   user's local time. Omarchy shows a notification then; clicking it opens the page.
+- `$E = mc^2$`: an equation in the line (LaTeX); `$$` lines around one, an
+  equation of its own (see Equations below)
+- `[^1]` with `[^1]: its words` at the end of the file, or `^[its words]`: a
+  footnote (see Footnotes below)
 
 ## Making a page look good
 
@@ -152,7 +156,8 @@ you `replace`, `insertAfter` or `append`, or is one command:
 - In a line: **bold**, *italic*, ~~struck~~, `==highlighted==`, `code`,
   `<u>underlined</u>`, `<span style="color: #d44c47">colored words</span>` and
   `<span style="background-color: #fbecdd">a colored background</span>`.
-- Tables (`| a | b |`), mind maps (```` ```mindmap ````), boards, galleries
+- Tables (`| a | b |`), mind maps (```` ```mindmap ````), diagrams
+  (```` ```mermaid ````), equations (`$$`), footnotes, boards, galleries
   and bookmarks: see their sections below.
 - After writing: `color <page id> <block id> <color>` colors a block (`blue`
   for its text, `blue_background` behind it); `icon <page id> <emoji>` and
@@ -248,6 +253,87 @@ Mermaid's `mindmap` syntax (in a `mermaid` block) is read too. `read` and
 `blocks` give a map back the same way (`blocks`: its `text`); to change one,
 `replace` its block with a new `mindmap` block.
 
+## Equations
+
+Equations are LaTeX, drawn by MathJax: `$…$` in a line of text, and `$$`
+lines around an equation of its own (or a ```` ```math ```` block). The
+common packages work (AMS environments like `aligned`, `cases`, `pmatrix`;
+`\mathbb`, `\boldsymbol`, `\cancel`, `\color`, `\newcommand`).
+
+```markdown
+The energy is $E = mc^2$, and the roots are
+
+$$
+x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+$$
+```
+
+An equation of its own is a code block in `Math` (`blocks` gives its LaTeX
+as its `text`); one in a line comes back from `read` and `blocks` as `$…$`.
+A `$` with a space after it, or a digit after the closing one, isn't an
+equation, so "$5 and $10" stays money.
+
+## Diagrams
+
+Decision trees, network diagrams, system diagrams and flowcharts are
+Mermaid flowcharts in a `mermaid` block, drawn in the page (a code block in
+`Mermaid`; `blocks` gives what's written as its `text`). Start with
+`flowchart TD` (top down) or `flowchart LR` (left to right).
+
+````markdown
+```mermaid
+flowchart LR
+  user([fa:fa-user User]) -->|HTTPS| lb[Load balancer]
+  subgraph App [Application]
+    lb --> api[fa:fa-server API]
+  end
+  api -->|SQL| db[(fa:fa-database Postgres)]
+  api -.->|jobs| q[[fa:fa-layer-group Queue]]
+```
+````
+
+- Shapes: `[box]`, `(rounded)`, `([pill])`, `[[subroutine]]`, `[(database)]`,
+  `((circle))`, `{question}` (a decision), `{{hexagon}}`, `[/slanted/]`, `>flag]`.
+- Links: `-->`, `---` (no arrow), `-.->` (dotted), `==>` (thick), `<-->`,
+  with words `-->|yes|` or `-- yes -->`; `A & B --> C`; `--->` is a rank longer.
+- Groups: `subgraph id [Name]` … `end` (inside each other too).
+- Icons, at the start of a box's words: `fa:fa-server`, `fa:fa-database`,
+  `fa:fa-cloud`, `fa:fa-globe`, `fa:fa-user`, `fa:fa-users`, `fa:fa-laptop`,
+  `fa:fa-desktop`, `fa:fa-mobile`, `fa:fa-network-wired` (a switch),
+  `fa:fa-router`, `fa:fa-fire` (a firewall), `fa:fa-wifi`, `fa:fa-shield`,
+  `fa:fa-lock`, `fa:fa-key`, `fa:fa-hdd`, `fa:fa-docker`, `fa:fa-kubernetes`,
+  `fa:fa-layer-group` (a queue), `fa:fa-cogs`, `fa:fa-envelope`, `fa:fa-code`.
+- A decision tree: questions in `{…}`, the answers on the links (`-->|Yes|`),
+  top down.
+- Colors, when the user asks for them (a diagram is drawn in the page's ink
+  otherwise): `style id fill:#dbeafe,stroke:#2563eb,color:#1e3a8a` for one
+  box (or a group, by its id); `classDef name fill:…,stroke:…,color:…` with
+  `class a,b name` (or `a:::name`) for several, `classDef default …` for
+  every box; `linkStyle 0,2 stroke:#dc2626,stroke-width:2px` for lines
+  (numbered from 0 in the order they're written) or `linkStyle default …`.
+  `stroke-width`, `stroke-dasharray: 5 5` and `font-weight:bold` work too.
+  Give a `color` with each `fill`; words and lines are kept readable on a
+  light or a dark page.
+
+Only flowcharts are drawn: a `sequenceDiagram`, `classDiagram` and the like
+stays as it's written, with a line saying so. Keep a diagram to a few dozen
+boxes (one wider than the page is drawn smaller to fit it, and the user can
+open it large and zoom in). To change one, `replace` its block with a new
+`mermaid` block. There's no command that makes a diagram (or an equation) a
+picture: when the user wants one, tell them to point at it and click *Save
+as a picture…* (a PNG) or *Copy as a picture*, or open it large and press
+Ctrl+S or Ctrl+C.
+
+## Footnotes
+
+A footnote is `[^1]` where it belongs, with `[^1]: its words` at the end of
+the file, or `^[its words]` right there. Uber Notebook numbers them down the
+page (the same words twice are one footnote) and lists them at its end.
+A footnote's words are plain text: Markdown's marks in them (`*italics*`,
+`**bold**`) are dropped, and a link becomes its words with its address after.
+`read` gives them back as `[^1]` with their words at the end; `blocks`, a
+block at a time, as `^[its words]`.
+
 ## Tables
 
 A Markdown table is a table in Uber Notebook, its first row the header row. A
@@ -324,6 +410,14 @@ grid of them (a folder works: "make a gallery of ~/Pictures/Lisbon"), and
 and height. In `blocks` a gallery has `images` (`[{src, caption}]`),
 `columns` and `height`. Pictures are copied in: the originals stay where
 they are.
+
+To give the user a picture from their notes ("save that picture to my
+Downloads", "put it on my clipboard"): `library pictures "<words>"` gives its
+`file` (a full path; a block's `src` is in `Pages/` in the `folder` that
+`status` gives). Copy that file where they say, keeping its ending, or put
+it on the clipboard with `wl-copy --type image/png < "<file>"` (`image/jpeg`
+for a .jpg). They can also do it themselves: a click on a picture shows its
+bar, with *Copy* and *Save a copy…*.
 
 ## Templates
 
@@ -430,6 +524,19 @@ names the page and what they picked: blocks by id, the words they selected
 (in a block, by its id), or an empty line by its block id, which is where your
 writing goes (`replace` that block). Read what you need with `blocks` or
 `read`, make the change, and say what you did.
+
+Or they asked for a new page: Uber Notebook has made it (empty, and open in
+front of them) and the prompt gives its id. Write it there: `rename` it to say
+what it is, an `icon` if one fits, and `append` what goes on it. Don't `add`
+another page, and don't append to an existing one instead (the "look before
+you write" rule doesn't apply: they chose a new page).
+
+They can reply in the panel, and their reply comes to you in the same
+conversation (now, or later: each page keeps its conversation, even after
+Uber Notebook starts again): just their words, or first where they are now
+when that's changed ("I'm on another page now: … (page id …)", the blocks or words
+they've picked since). If you need something from them to do it well (which
+city, which pages), ask in your answer and stop: they'll reply.
 
 ## Rules
 

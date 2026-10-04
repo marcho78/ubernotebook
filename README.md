@@ -40,9 +40,18 @@ pages, fold toggles, color anything.
   contents; ⋮⋮ to drag a block (and what's inside it) anywhere, or turn it
   into another kind, color it, move it to another page; a toolbar over
   selected words; Markdown as you type; code in its language's colors;
+  equations in LaTeX (on a line of their own, or in a line), diagrams
+  written in Mermaid (decision trees, network and system diagrams) drawn
+  in the page in their own colors (and opened large, to zoom in on),
+  footnotes; pictures, diagrams and equations copied or saved as a picture;
   `:rocket:` emoji. A sidebar with the tree of pages and your favorites,
   covers, icons, templates, three fonts, full width, locked pages, search and
   a trash. No databases: just writing, as flexible as it gets.
+* **Your AI agent, on the page.** Ctrl+J asks Claude Code, Grok or Codex
+  (or Omarchy's other agents, in a terminal) about the page, the blocks or
+  words you picked, or for a new page; it writes through Uber Notebook's own
+  commands, each change a step you can undo. Reply to go on with it, and
+  come back to the conversation later: each page keeps its own.
 * **Seven pens.** Clean, Book, Handwriting, Print, Typewriter, Mono and
   Writer: a notebook has one, and any words can have another.
 * **Everything a notebook needs.** Headings, bulleted, numbered and
@@ -328,13 +337,17 @@ takes them along.
 | A link to a page, as a block | `/link`, then pick the page. Under the pointer, *Change* beside it picks another page (one step **Ctrl+Z** takes back); a link whose page is gone says so, and *Link to a page* fixes it |
 | A link to a page in a line | **[[** and part of its name (or a new name, for a new page); click the link to go there |
 | An emoji | **:** and part of its name: `:rocket`, `:tada`, `:+1` (pick one, or type the whole name and a closing `:`) |
-| Ask your agent | The AI button at the top of the page, **Ctrl+J**, `/agent`, or *Ask agent* in a block's ⋮⋮ menu, on the toolbar over selected words, or in the page's ⋯ menu: Omarchy's default coding agent (Claude Code, Codex, OpenCode...) does it, and its changes show up on the page (see [For AI agents and scripts](#for-ai-agents-and-scripts)) |
+| Ask your agent | The AI button at the top of the page, **Ctrl+J**, `/agent`, or *Ask agent* in a block's ⋮⋮ menu, on the toolbar over selected words, or in the page's ⋯ menu: Omarchy's default coding agent (Claude Code, Codex, OpenCode...) does it, and its changes show up on the page (see [For AI agents and scripts](#for-ai-agents-and-scripts)). *New page* at the top of the box asks for a new page instead (**Ctrl+J** with no page open, from the calendar or People, asks for one too): it's made at the top of Pages or inside the page you're on, opened, and written there as you watch. Claude Code, Grok and Codex work in a panel on the page, where you can reply: a back and forth, in the same conversation, kept with the page (closed, **Ctrl+J** brings it back, after a restart too; *New chat* starts another) |
 | Start a page from a template | On a new, empty page: pick one under *Start with a template* (a daily, weekly or monthly planner, a journal, a habit tracker, meeting or lecture notes, a project plan, a to-do list, a reading log, a recipe, a packing list). Each is laid out as a page: sections side by side, a callout for the one thing that matters, the day hour by hour, habits to tick, the month's calendar, and on every empty line, faintly, what goes there. **Ctrl+Z** takes it back off |
 | A mind map | `/mindmap`, or *Turn into mind map* in a nested list's ⋮⋮ menu (the top item is the topic, the items inside it the ideas). Click an idea to write on it: **Enter** adds the next idea, **Tab** one branching from it, **Shift+Tab** moves it out a level, **↑ ↓** move between ideas, **Backspace** on an empty idea takes it away, **Ctrl+Backspace** an idea and its branch, **Esc** stops. The color button over the idea you're writing on gives it a text color and a background (a main idea's color is its whole branch's): one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, a color picker (saturation and brightness, hue, a hex to type or paste, and how well the idea's text reads on it) that shows the color on the map as you pick it; **Enter** or *Apply* keeps it, **Esc** or *Cancel* puts back what was there. Text on a background with no text color of its own is made readable. The circle at an idea's end folds its branch. The block's own ⋮⋮ *Color* puts a background behind the whole map, or sets the text color of ideas with none of their own. *Turn into list* (⋮⋮) makes it a nested list again |
+| An equation | `/equation`: a code block in *Math*, where you write LaTeX (`\frac{a}{b}`, `\sqrt{x}`, `\sum_{k=1}^n`, `\begin{aligned}`…); under it, the equation as it's written, drawn by MathJax (in Uber Notebook: nothing to install), and what's wrong with it, if anything. Elsewhere on the page it's just the equation, centered; a click (or the cursor brought into it) shows its LaTeX again, and its expand button (point at it) opens it large, to zoom in on, as a diagram does; *Copy as a picture* and *Save as a picture…* beside it (a PNG). In a line of text: type `$$x^2$$`, or `/inline equation` (a small box, the equation drawn as you write it): it sits on the line with the words, and a click changes it or takes it out. They come in from Markdown (`$…$` in a line, `$$` around one of its own, a ```` ```math ```` block: notes from Notion and Obsidian keep theirs) and go back out the same way; search finds their LaTeX |
+| A diagram | `/diagram`, `/decision tree`, `/network diagram` or `/system diagram`: a code block in *Mermaid* with a small one to change, drawn under what you write as you write it, and on its own elsewhere on the page (a click shows what's written again). It reads Mermaid's flowcharts, as AI agents, Notion, Obsidian and GitHub write them: `flowchart TD` (top down) or `LR`; boxes `[ ]`, rounded `( )`, pills `([ ])`, databases `[( )]`, circles `(( ))`, questions `{ }`, hexagons `{{ }}`; links `-->`, `---`, `-.->` (dotted), `==>` (thick), with words (`-->|yes|`); groups (`subgraph Name … end`, inside each other too); icons at the start of a box's words (`fa:fa-server Web`: servers, databases, clouds, routers, switches, firewalls, laptops, phones, users, queues…). It's laid out for you (lines kept apart, groups round what's in them) in the page's colors, smaller when it's wider than the page (it says how much). Colors are Mermaid's: `style` for a box or a group, `classDef` with `class` (or `:::`) for several, `linkStyle` for lines (a fill, an outline, the words' color, a thicker or dashed line, bold), kept readable on a light or a dark page. The expand button at its top right (there when it's smaller, or when you point at it) opens it large, over everything: zoom with **Ctrl+scroll** or a pinch (round the pointer), **+** and **-**, or the buttons; move round it by dragging or scrolling (**Shift+scroll** sideways, or the arrows); **0** shows all of it, **1** its real size, **Esc** closes it. It's drawn again at each size, so it stays sharp. As a picture: point at it for *Copy as a picture* (to paste in any app) and *Save as a picture…* (a PNG, twice its size, on its block's colors; named for the page), or **Ctrl+C** and **Ctrl+S** when it's large. A mistake says which line; Mermaid's other diagrams (sequence, class…) stay as they're written, with a line saying so |
+| A footnote | `/footnote` after a word: its words in a small box, then its number, raised, right after the word. They're numbered down the page (the same words twice are one footnote) and listed at its end; a click on one (there or in the list) changes its words or takes it out. Markdown's `[^1]` (with `[^1]: its words` at the end) and `^[its words]` come in as footnotes, and go out as `[^1]` with their words at the end |
 | A table | `/table` (or paste cells from a spreadsheet, or a Markdown table). Click a cell to write in it: **Tab** and **Shift+Tab** go to the next and previous cell (**Tab** in the last one makes a new row), **Enter** goes down a row (past the last, a new one), **Shift+Enter** is a new line in the cell, the arrows cross into the next cell at a cell's ends and leave the table at its top and bottom, **Esc** picks the whole table. **Ctrl+B**, **Ctrl+I**, **Ctrl+U**, **Ctrl+Shift+X** and **Ctrl+E** format what's selected in a cell (the toolbar over selected words is for text blocks). Point at a cell: the handle on its row's left and on its column's top open their menus (insert above or below, left or right; move; delete; *Header row* on or off), the **+** bars along the bottom and the right add a row or a column, and the lines between columns drag to make them wider. Colors: the color button on the cell you're in, or *Color* in a row's or a column's menu, gives a text color and a background: one of Pages' colors (which follow your light or dark theme), one you picked recently, or **Custom…**, the color picker (shown in the table as you pick, with how well the text reads; **Enter** keeps it, **Esc** puts back what was there). Cells pasted from a spreadsheet into a cell fill the table from there, and it grows to take them |
 | A board | `/board`: cards in columns (To do, Doing, Done to start). A click on a card writes in it (Enter keeps it, Esc puts it back); *New* under a column adds one; a card drags to another place or column. Each card and each column has its own colors, its text's and its box's background (Pages' or your own): point at it and click its palette; the color menu says what it's coloring. A card's ⋯ (or a right-click on it): *Rename*, *Open as page* (it becomes a page inside this one, in the tree, and opens; after, *Open page*), *Delete*. A column's name is shaded under the pointer and a click renames it (or its ⋯, *Rename*); its ⋯ (or a right-click on it) also has moving it left or right, deleting it; **+** adds a column and puts you in its name. Drag a column's right edge to make it wider or narrower, and the board's bottom edge to make it taller or shorter (then it scrolls inside); a double-click on either edge puts it back as it fits. The palette at the board's corner colors the whole board. Each change is a step to undo; as Markdown, a column a bold line and its cards a list |
 | A picture | `/image`: one picture, from the picture picker (a click on it), or *The file dialog…* there |
-| Size a picture | Point at it: a handle at each corner, dragged any way (it keeps its shape), and one on each side; how wide it is shows as you drag, one step **Ctrl+Z** takes back; a double-click on a side's handle makes it the page's width. Click it for left, centered or right. A double-click on a picture shows it large, here in Uber Notebook: **←** **→** for the page's other pictures, **Esc** to close, ↗ to open it in its app |
+| Size a picture | Point at it: a handle at each corner, dragged any way (it keeps its shape), and one on each side; how wide it is shows as you drag, one step **Ctrl+Z** takes back; a double-click on a side's handle makes it the page's width. Click it for left, centered or right. A double-click on a picture shows it large, here in Uber Notebook: **←** **→** for the page's other pictures, **Esc** to close, at its corner Copy, Save a copy and ↗ to open it in its app |
+| Copy or save a picture | Click it: *Copy* on its bar puts it on the clipboard, to paste in any app (a JPEG, WebP or BMP goes as a PNG, which more apps take, when ffmpeg is installed); *Save a copy…* asks where (Pictures to start with, then wherever the last one went), named for the page (or its caption, in a gallery). Shown large, the same two at its corner, or **Ctrl+C** and **Ctrl+S**. A picture in a notebook has them too. Handy for a picture an AI agent made |
 | A gallery | `/gallery`: pictures side by side, 2, 3 or 4 to a row (the numbers at its corner, under the pointer). Pick several at once in Uber Notebook's picture picker (your pictures shown as pictures, Pictures' newest first, its folders first: a click chooses one, another lets it go, **Shift**+click a run of them, **Ctrl+A** all of them, then *Add 3 pictures*; Pictures, Downloads, Desktop and Home at its top; *The file dialog…* for the desktop's), or drop them on it; *Add pictures* under it for more. Under the pointer, a picture moves earlier or later, gets a caption, or goes; drag the gallery's bottom edge to make them taller or shorter (a double-click puts them back as they were). A click on one shows it large, the gallery's others a key away. Its colors (the palette at its corner): the captions', and behind it. Each picture is in the Library; Markdown has them as pictures, captions and all |
 | A file, a PDF | `/file` or `/pdf` (or drop a file on the page): it's copied into `Pages/assets`, shown with what it is, its name and how big, and *Open* opens it in its app. A PDF shows its pages here too, one under another, with the page you're on, in a frame whose bottom edge drags; *Hide pages* folds them away. Colors, Pages' or your own |
 | A video | `/video` (or drop one on the page): copied into `Pages/assets`, a still from it until it plays; play and pause, where it is (click or drag the bar), the time, the sound on or off; *Open* in your video player |
@@ -755,6 +768,15 @@ them), and `replace` won't take a block with a page inside it.
 in a block's ⋮⋮ menu, *Ask* on the toolbar over selected words, or *Ask agent
 about this page* in the page's ⋯ menu opens a box for what you'd like (or a
 suggestion: to-dos, a summary, carrying on writing, linking related pages).
+**A new page instead**: *New page* at the top of the box (or **Ctrl+J** with
+no page open, from the calendar, People or the Library) asks for one, at the
+top of Pages (as **Ctrl+N** makes one) or inside the page you're on (*Goes*).
+Uber Notebook makes the page first and opens it, so it's where you chose, and
+the agent titles it and writes it there as you watch. If it can't (it
+fails, or you stop it, and the page is still empty when its panel's closed),
+the page goes and you're back where you were; one it's asked you something
+about stays, to answer on; *Open in a terminal instead* keeps it, for the
+terminal to write.
 It goes to Omarchy's default coding agent, whichever you chose with
 `omarchy default agent` (Claude Code, Codex, OpenCode, Gemini, Crush, Cursor,
 Pi...), which does it with the commands above, so what it changes shows up on
@@ -762,8 +784,19 @@ the page as it goes, each change a step you can undo. **Claude Code, Grok and
 Codex work right in Uber Notebook:** no terminal opens; a panel at the bottom right of the page
 shows each step it takes (reading the page, writing on it...) and its answer
 as it's written, with **Stop** (what it already changed stays, to undo like
-anything else). If it can't run there (not installed, not logged in), the
-panel says why and *Open in a terminal instead* starts it the usual way. The
+anything else). **Reply** at the panel's foot goes on with it, in the same
+conversation: it asks which city, you say Lisbon, and it writes the page; or
+"make it shorter", "do the same here" (on another page, or with other blocks
+picked, it's told where you are now). What was said before stays above.
+**It's kept with its page**: closing the panel puts it away, and on that
+page the AI button has a mark under it; **Ctrl+J** (or the AI button, `/agent`,
+*Ask* on selected words) goes back to it, the reply box ready, with what you
+picked going with your next message. That's so after Uber Notebook starts
+again too (`Pages/chats.json`; the agent goes on in its own conversation, or,
+if that's gone, in a new one it's told what was said). **New chat**, at the
+panel's top, opens the box to ask anew (the one before is kept till you do). If
+it can't run there (not installed, not logged in), the panel says why and
+*Open in a terminal instead* starts it the usual way. The
 other agents open in their own terminal (Omarchy's agent window). A meeting's
 *Summarize* goes the same way. Each starts with the permission mode Omarchy
 starts it with in a terminal, and it uses your own login (subscription or key).
@@ -971,7 +1004,9 @@ permission mode Omarchy starts it with: `claude -p --output-format stream-json
 --permission-mode auto` (and `omarchy-shell uber-notebook` commands allowed),
 `grok --single=<prompt> --output-format streaming-messages-json
 --permission-mode bypassPermissions`, and `codex exec --json --approve-for-me
---skip-git-repo-check`, with the model and effort you chose (`--model` and
+--skip-git-repo-check`; a reply goes on with the same conversation
+(`--session-id` then `--resume` for Claude Code and Grok, `codex exec resume`
+with the id Codex gives), all with the model and effort you chose (`--model` and
 `--effort`, `-m` and `--reasoning-effort`, `-m` and `-c
 model_reasoning_effort`; only a model's name ever goes there). The models to
 choose from are read from `~/.grok/models_cache.json` and
@@ -1063,3 +1098,6 @@ its settings go with its `shell.json` entry. Your notebooks stay in `~/Documents
 MIT. See [LICENSE](LICENSE). The fonts in `fonts/` keep their own licenses,
 which come with them: Caveat, Patrick Hand and Lora under the SIL Open Font
 License, Special Elite and Permanent Marker under the Apache License 2.0.
+Equations are drawn by [MathJax](https://www.mathjax.org/) (`vendor/mathjax/`),
+Copyright (c) 2017-2022 The MathJax Consortium, under the Apache License 2.0
+(its `LICENSE`, and what's changed in it for Qt, are beside it).

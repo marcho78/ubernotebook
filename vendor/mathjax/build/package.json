@@ -1,0 +1,11 @@
+{
+  "name": "uber-notebook-mathjax",
+  "private": true,
+  "description": "Builds ../tex-svg.mjs: MathJax's TeX input and SVG output, for Qt's JavaScript engine",
+  "type": "module",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": {
+    "mathjax-full": "3.2.2",
+    "esbuild": "0.28.2"
+  }
+}

@@ -480,8 +480,10 @@ function normalizeLinks(inner) {
 //   uber-notebook://date/2026-10-05, uber-notebook://date/2026-10-05T09:30
 //   uber-notebook://remind/2026-10-05T09:30
 //   uber-notebook://tag/idea (its name, encoded: Tags.js)
+//   uber-notebook://math/<LaTeX> (an equation in a line, encoded: Equations.js)
+//   uber-notebook://note/<words> (a footnote, encoded: Notes.js)
 // (Notes written before Uber Notebook was renamed say omanote://: they work the same.)
-var INTERNAL = /^(?:uber-notebook|omanote):\/\/(page\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(date|remind)\/\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?|tag\/[A-Za-z0-9%_-]{1,400}|contact\/[A-Za-z0-9_-]{1,40})$/
+var INTERNAL = /^(?:uber-notebook|omanote):\/\/(page\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(date|remind)\/\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?|tag\/[A-Za-z0-9%_-]{1,400}|contact\/[A-Za-z0-9_-]{1,40}|math\/[A-Za-z0-9%_.!~*'()-]{1,12000}|note\/[A-Za-z0-9%_.!~*'()-]{1,6000})$/
 
 function isTag(url) { return /^(?:uber-notebook|omanote):\/\/tag\//.test(String(url || "")) }
 

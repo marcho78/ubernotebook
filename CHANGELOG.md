@@ -281,6 +281,47 @@ The first version.
   click a new page from it; written as Markdown in `starter/`
   (`dev/starter` builds them in). The Library has someone, or a link, once
   for each page they're on; a contact card says a birthday as People does.
+- **Equations**: `/equation` (a code block in Math: LaTeX, drawn by MathJax
+  in a worker thread, with nothing to install; the drawing under it as
+  it's written, what's wrong said; elsewhere just the equation, a click
+  away from its LaTeX) and equations in a line (`$$x^2$$` typed, or
+  `/inline equation`), on the line's baseline, a click to change one.
+  Markdown's `$…$`, `$$ … $$` and ```` ```math ```` come in and go out as
+  equations (notes imported from Notion and Obsidian keep theirs; a
+  backslash in LaTeX was lost on import before), "$5 and $10" stays money,
+  search finds their LaTeX, and agents read and write them.
+- **Diagrams**: `/diagram`, `/decision tree`, `/network diagram` and
+  `/system diagram`, written as Mermaid flowcharts (the shapes, links with
+  words, dotted and thick ones, groups, icons such as servers, databases,
+  routers, firewalls and users) and drawn in the page in its colors, laid
+  out so lines are kept apart and groups go round what's in them; the
+  drawing under what's written as it's written, a mistake said by its
+  line; ```` ```mermaid ```` from Markdown and agents is drawn the same way.
+  Colors as Mermaid gives them (`style`, `classDef` with `class` or `:::`,
+  `linkStyle`: fills, outlines, the words' color, thicker or dashed lines,
+  bold), kept readable on a light or a dark page. LaTeX and Mermaid are
+  colored as they're written.
+- **Pictures, out of Uber Notebook**: Copy (onto the clipboard, to paste in
+  any app; a JPEG, WebP or BMP as a PNG when ffmpeg is installed) and Save a
+  copy… (where you say, named for its page or caption) on a picked
+  picture's bar, in Pages and in notebooks, and where it's shown large
+  (Ctrl+C, Ctrl+S). Shown large, its arrows go to the next picture without
+  closing it, and a click there is no longer also the page's under it.
+  Agents find a picture's file with `library pictures`.
+- **Diagrams and equations, large**: one wider than the page is drawn
+  smaller, saying how much; its expand button (there, or when you point at
+  one) opens it over everything, to zoom in on: Ctrl+scroll or a pinch
+  (round the pointer), + and -, or the buttons; dragged or scrolled to move
+  round it (Shift+scroll sideways); 0 shows all of it, 1 its real size, Esc
+  closes it. It's drawn again at each size, so it stays sharp, and nothing
+  on the page under it is clicked or scrolled through it. Either one as a
+  picture: Copy as a picture (to paste in any app) or Save as a picture…
+  (a PNG, twice its size, on its block's colors), from under the pointer
+  or large (Ctrl+C, Ctrl+S).
+- **Footnotes**: `/footnote` after a word, numbered down the page and listed
+  at its end, a click (there or in the list) to change one or take it out;
+  Markdown's `[^1]` and `^[…]` come in as footnotes and go out as `[^1]`
+  with their words at the end.
 - **Pages' sidebar, yours to arrange**: the top stays put (the switch back
   to notebooks, the profile, search with a new-page button beside it, and
   Calendar, Library and People side by side); the middle scrolls as one
@@ -328,7 +369,13 @@ The first version.
   right in Uber Notebook, without a terminal: a panel on the page shows each
   step they take and their answer (as it's written, for Claude Code and
   Grok), with Stop; if one can't run there, the panel says why and offers a
-  terminal instead (a meeting's Summarize goes the same way). Each starts
+  terminal instead (a meeting's Summarize goes the same way). A reply at
+  the panel's foot goes on in the same conversation (it remembers what you
+  asked and what it did; told where you are if you've moved or picked
+  something since), what was said before above. Each page keeps its
+  conversation (Pages/chats.json): closed, the AI button marks it, and
+  Ctrl+J goes back to it, after a restart too (in a new session told what
+  was said, if the agent's own is gone); New chat starts another. Each starts
   with the permission mode Omarchy gives it. Their model and effort are
   chosen in the box or in Settings → AI, from each agent's own list of
   models and the efforts each takes. Agents are told to read and change
@@ -338,7 +385,14 @@ The first version.
   looking through Uber Notebook's code: the same request took Grok 78 tool
   calls before, 7 after. The other agents run in their
   own terminal (Omarchy's agent window), so what they say comes back there
-  rather than in Uber Notebook.
+  rather than in Uber Notebook. **A new page** instead of this one: the
+  switch at the top of the box (or Ctrl+J with no page open, from the
+  calendar, People...); Uber Notebook makes the page first, at the top of
+  Pages or inside the page you're on, opens it, and the agent titles it and
+  writes it there as you watch; if it couldn't (it failed, or you stopped
+  it) and the page is still empty when its panel's closed, the page goes and
+  you're back where you were (one it's asked you something about stays, to
+  answer on).
 - **Drawing**: a pen, a highlighter and an eraser over the writing, with its
   own undo.
 - **Find** on a page (Ctrl+F), and **search** across every notebook from the

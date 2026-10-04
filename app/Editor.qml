@@ -15,6 +15,8 @@ import "../Dates.js" as Dates
 import "../Emoji.js" as Emoji
 import "../Highlight.js" as Highlight
 import "../Import.js" as Import
+import "../Equations.js" as Equations
+import "../Notes.js" as Notes
 
 // A page's writing: its blocks, one after another, and everything you can do
 // to them. Each text block is its own rich-text editor (Block.qml in a
@@ -109,6 +111,9 @@ FocusScope {
   signal cursorAt(real y, real height)
   signal linkOpened(string url)
   signal pictureOpened(string src)
+  // A picture onto the clipboard; a copy of it saved where you say.
+  signal pictureCopyRequested(string src)
+  signal pictureSaveRequested(string src)
   // A picture on the clipboard, to go after this block.
   signal pastePicture(string afterUid)
   // Ctrl+K: put a link here (Qt would delete to the end of the line).
@@ -183,8 +188,11 @@ FocusScope {
   onPenChanged: restyle()
   onSpacingChanged: restyle()
 
-  function display(inner) {
+  // `em`: the text's size (px), which equations in it are drawn at.
+  function display(inner, em) {
     var out = dark ? Html.mapColors(inner, toDark) : inner
+    if (doc && out.indexOf(Equations.PREFIX) >= 0) out = mathImages(out, em || Docs.typeStyle("p", smallText).size)
+    if (doc && out.indexOf(Notes.PREFIX) >= 0) out = Notes.toImages(out, noteNumber, em || Docs.typeStyle("p", smallText).size, String(accent))
     // Links to pages say what the pages are called now.
     if (doc && /(?:uber-notebook|omanote):\/\/page\//.test(out)) out = Html.refreshPageLinks(out, function(id) {
       var info = root.pageInfo(id)
@@ -197,7 +205,332 @@ FocusScope {
   function pageLinkText(info) {
     return (info && info.icon ? info.icon + " " : "") + (info && info.title ? info.title : "Untitled")
   }
-  function canonical(inner) { return dark ? Html.mapColors(inner, toLight) : inner }
+  function canonical(inner) {
+    var t = doc ? Notes.toLinks(Equations.toLinks(inner)) : inner
+    return dark ? Html.mapColors(t, toLight) : t
+  }
+
+  // ---- equations (Equations.js): drawn by MathJax in a worker thread ----------------------
+
+  // Counts drawings as they come in, so what shows an equation looks again.
+  property int mathRevision: 0
+  property var mathAsked: ({})
+  property var mathQueue: []
+  Loader {
+    id: mathWorker
+    active: false
+    sourceComponent: WorkerScript {
+      source: "MathWorker.mjs"
+      onReadyChanged: if (ready) root.sendMath()
+      onMessage: function(m) { root.mathDrawn(m) }
+    }
+  }
+
+  // An equation as it's drawn ({ svg, error }), or null while it's being
+  // drawn (mathRevision changes when it is).
+  function mathOf(tex, display) {
+    var t = Equations.clean(tex)
+    if (!t) return null
+    var key = Equations.key(t, display === true)
+    var hit = Equations.cached(key)
+    if (hit) return hit
+    if (!mathAsked[key]) {
+      mathAsked[key] = true
+      mathQueue.push({ key: key, tex: t, display: display === true })
+      mathWorker.active = true
+      sendMath()
+    }
+    return null
+  }
+  function sendMath() {
+    var w = mathWorker.item
+    if (!w || !w.ready) return
+    while (mathQueue.length) w.sendMessage(mathQueue.shift())
+  }
+  function mathDrawn(m) {
+    Equations.remember(m.key, { svg: m.svg || "", error: m.error || Equations.errorOf(m.svg || "") })
+    delete mathAsked[m.key]
+    mathRevision++
+    // Text with that equation in it, shown again with its drawing.
+    if (m.key.indexOf("I:") !== 0) return
+    var href = Equations.href(m.key.slice(2))
+    for (var uid in items) {
+      var item = items[uid]
+      if (item && item.isText && (htmls[uid] || "").indexOf(href) >= 0) {
+        syncBlock(uid)
+        item.reload()
+      }
+    }
+  }
+
+  // A block's equations as their images, for text `em` px tall (their
+  // baselines on the text's: bodyFont's x-height).
+  function mathImages(inner, em) {
+    var color = String(ink)
+    var size = em * Equations.INLINE_SCALE
+    var middle = em * bodyFont.xHeight / 100 / 2
+    return Equations.toImages(inner, function(tex) {
+      var d = root.mathOf(tex, false)
+      return d && d.svg ? Equations.sized(d.svg, size, color, middle) : null
+    }, size, color)
+  }
+  FontMetrics { id: bodyFont; font.family: root.family; font.pixelSize: 100 }
+  // How tall a block's lines need to be (px) for the equations in its
+  // text (`em` px text) to fit: what shows of each above its baseline in
+  // the top four fifths of a line (where Qt puts the baseline), and what
+  // goes below it in the last fifth. (Their images' room is see-through.)
+  function mathHeight(inner, em) {
+    var need = 0
+    var size = em * Equations.INLINE_SCALE
+    Equations.inText(inner).forEach(function(tex) {
+      var d = Equations.cached(Equations.key(tex, false))
+      var b = d && d.svg ? Equations.measure(d.svg) : null
+      need = Math.max(need, b ? Math.max((b.h - b.depth) * size / 0.8, b.depth * size / 0.2) + 2 : size * 1.4)
+    })
+    return need
+  }
+
+  // An equation in a line, clicked: changed (or taken out) in a small box.
+  function editInlineMath(item, at, anchorX, anchorY) {
+    if (readOnly || !item || !item.edit) return
+    var src = /src="([^"]*)"/.exec(item.edit.getFormattedText(at, at + 1))
+    var tex = src ? Equations.texOfImage(Html.decodeEntities(src[1])) : ""
+    var pop = mathPopLoader.item
+    if (!tex || !pop) return
+    pop.item = item
+    pop.at = at
+    pop.taken = 1
+    pop.parent = item.edit
+    pop.x = Math.max(0, Math.min(anchorX - 20, item.edit.width - pop.width))
+    pop.y = anchorY + 8
+    pop.start(tex)
+  }
+  // "/inline equation": the same box, for a new one where the cursor is.
+  function newInlineMath(item, at) {
+    var pop = mathPopLoader.item
+    if (readOnly || !item || !item.edit || !pop) return
+    var r = item.edit.positionToRectangle(at)
+    pop.item = item
+    pop.at = at
+    pop.taken = 0
+    pop.parent = item.edit
+    pop.x = Math.max(0, Math.min(r.x - 20, item.edit.width - pop.width))
+    pop.y = r.y + r.height + 8
+    pop.start("")
+  }
+  // (Pages only: a notebook's pages have no equations.)
+  Loader {
+    id: mathPopLoader
+    active: root.doc && root.theme !== null
+    sourceComponent: MathPop {
+      // Where it is in the block's text, and how much of it it is (1: the
+      // image of one being changed; 0: a new one goes in there).
+      property var item: null
+      property int at: -1
+      property int taken: 1
+      theme: root.theme
+      editor: root
+      onAccepted: function(tex) {
+        if (!item) return
+        root.closeBurst()
+        root.beginOp()
+        root.replaceRange(item, at, at + taken, Equations.link(tex))
+        root.endOp()
+        root.focusBlock(item.uid, at + 1)
+      }
+      onRemoved: {
+        if (!item) return
+        if (taken > 0) {
+          root.closeBurst()
+          root.beginOp()
+          root.replaceRange(item, at, at + taken, "")
+          root.endOp()
+        }
+        root.focusBlock(item.uid, at)
+      }
+    }
+  }
+  readonly property var mathBox: mathPopLoader.item
+
+  // ---- footnotes (Notes.js) ---------------------------------------------------------------
+
+  // The page's footnotes in order (their words): their numbers, and the list
+  // at its end.
+  property var pageNotes: []
+  function notesNow() {
+    var inners = []
+    for (var i = 0; i < blocksModel.count; i++) {
+      var r = blocksModel.get(i)
+      if (Blocks.isText(r.type)) inners.push(htmls[r.uid] || "")
+    }
+    return Notes.order(inners)
+  }
+  function noteNumber(words) {
+    var i = pageNotes.indexOf(Notes.clean(words))
+    return i >= 0 ? i + 1 : pageNotes.length + 1
+  }
+  // Numbered again (a footnote added, taken out, moved): the text with
+  // footnotes in it shown again with their numbers now.
+  function renumberNotes() {
+    var now = notesNow()
+    if (JSON.stringify(now) === JSON.stringify(pageNotes)) return
+    pageNotes = now
+    for (var uid in items) {
+      var it = items[uid]
+      if (it && it.isText && (htmls[uid] || "").indexOf(Notes.PREFIX) >= 0) {
+        syncBlock(uid)
+        it.reload()
+      }
+    }
+  }
+  Timer { id: notesTimer; interval: 400; onTriggered: root.renumberNotes() }
+  onChanged: if (doc) notesTimer.restart()
+
+  // A footnote clicked: its words changed (or it's taken out) in a small box.
+  function editNote(item, at, anchorX, anchorY) {
+    if (readOnly || !item || !item.edit) return
+    var src = /src="([^"]*)"/.exec(item.edit.getFormattedText(at, at + 1))
+    var words = src ? Notes.textOfImage(Html.decodeEntities(src[1])) : ""
+    var pop = notePopLoader.item
+    if (!words || !pop) return
+    pop.item = item
+    pop.at = at
+    pop.taken = 1
+    pop.parent = item.edit
+    pop.x = Math.max(0, Math.min(anchorX - 20, item.edit.width - pop.width))
+    pop.y = anchorY + 8
+    pop.start(words, noteNumber(words))
+  }
+  // "/footnote": a new one where the cursor is.
+  function newNote(item, at) {
+    var pop = notePopLoader.item
+    if (readOnly || !item || !item.edit || !pop) return
+    var r = item.edit.positionToRectangle(at)
+    pop.item = item
+    pop.at = at
+    pop.taken = 0
+    pop.parent = item.edit
+    pop.x = Math.max(0, Math.min(r.x - 20, item.edit.width - pop.width))
+    pop.y = r.y + r.height + 8
+    pop.start("", 0)
+  }
+  // A footnote in the list at the page's end, clicked: the first place it's
+  // used, its box open there.
+  function editNoteAt(words) {
+    for (var i = 0; i < blocksModel.count; i++) {
+      var uid = uidAt(i)
+      var at = Notes.positionIn(htmls[uid] || "", words, 0)
+      var item = items[uid]
+      if (at < 0 || !item) continue
+      var r = item.edit.positionToRectangle(at)
+      editNote(item, at, r.x, r.y + r.height)
+      return
+    }
+  }
+  Loader {
+    id: notePopLoader
+    active: root.doc && root.theme !== null
+    sourceComponent: NotePop {
+      property var item: null
+      property int at: -1
+      property int taken: 1
+      theme: root.theme
+      onAccepted: function(words) {
+        if (!item) return
+        // A new one goes right after the word before it ("claim /footnote":
+        // the space goes), as Markdown writes it: claim[^1].
+        var from = taken === 0 && at > 0 && item.edit.getText(at - 1, at) === " " ? at - 1 : at
+        root.closeBurst()
+        root.beginOp()
+        root.replaceRange(item, from, at + taken, Notes.link(words))
+        root.endOp()
+        root.renumberNotes()
+        root.focusBlock(item.uid, from + 1)
+      }
+      onRemoved: {
+        if (!item) return
+        if (taken > 0) {
+          root.closeBurst()
+          root.beginOp()
+          root.replaceRange(item, at, at + taken, "")
+          root.endOp()
+          root.renumberNotes()
+        }
+        root.focusBlock(item.uid, at)
+      }
+    }
+  }
+  readonly property var noteBox: notePopLoader.item
+
+  // ---- a diagram or an equation, large (DrawingViewer.qml) --------------------------------
+
+  // `kind`: "diagram" or "math"; `source`: what's written.
+  // `look`: its block's colors, { ink, back } (the page's without).
+  function openDrawing(kind, source, look) {
+    var v = viewerLoader.item
+    if (v) v.show(kind, source, look)
+  }
+  Loader {
+    id: viewerLoader
+    active: root.doc && root.theme !== null
+    sourceComponent: DrawingViewer {
+      theme: root.theme
+      editor: root
+      onClosed: root.forceActiveFocus()
+    }
+  }
+  readonly property var drawingViewer: viewerLoader.item
+
+  // A diagram or an equation as a picture: copied, or saved where you say
+  // (the view does it: DocView's copyDrawing and saveDrawing).
+  signal drawingCopyRequested(string kind, string source, var look)
+  signal drawingSaveRequested(string kind, string source, var look)
+  function copyDrawing(kind, source, look) { if (String(source || "").trim()) drawingCopyRequested(kind, source, look || null) }
+  function saveDrawing(kind, source, look) { if (String(source || "").trim()) drawingSaveRequested(kind, source, look || null) }
+
+  // Drawn as a picture (DrawingImage, beside the window): done(the grab),
+  // or done(null). One at a time; an equation still being drawn is waited
+  // for (a second at most).
+  property var imageDone: null
+  property int imageTries: 0
+  function drawingImage(kind, source, look, done) {
+    if (imageLoader.active) { done(null); return }
+    imageDone = done
+    imageTries = 0
+    imageLoader.want = { kind: kind, source: String(source || ""), ink: look && look.ink ? look.ink : String(ink), back: look && look.back ? look.back : String(paper) }
+    imageLoader.active = true
+  }
+  Loader {
+    id: imageLoader
+    property var want: null
+    active: false
+    sourceComponent: DrawingImage {
+      // (In the window, out of the page's way.)
+      parent: root.Window.window ? root.Window.window.contentItem : root
+      editor: root
+      kind: imageLoader.want ? imageLoader.want.kind : ""
+      source: imageLoader.want ? imageLoader.want.source : ""
+      ink: imageLoader.want ? imageLoader.want.ink : root.ink
+      paper: imageLoader.want ? imageLoader.want.back : root.paper
+    }
+    onLoaded: imageTimer.restart()
+  }
+  Timer {
+    id: imageTimer
+    interval: 30
+    onTriggered: {
+      var item = imageLoader.item
+      if (item && !item.ready && root.imageTries++ < 30) { restart(); return }
+      var done = root.imageDone
+      function finish(result) {
+        root.imageDone = null
+        Qt.callLater(function() { imageLoader.active = false })
+        if (done) done(result)
+      }
+      if (item) item.take(finish)
+      else finish(null)
+    }
+  }
 
   function row(b) {
     return {
@@ -292,7 +625,7 @@ FocusScope {
   function displayOf(uid, type, lang) {
     var inner = htmls[uid] || ""
     if (doc && type === "code" && Highlight.knows(lang)) return Highlight.html(Html.plainText(inner), lang, dark)
-    return display(inner)
+    return display(inner, Docs.typeStyle(type, smallText).size)
   }
 
   // A block that became code, or stopped being code: its text as it was
@@ -351,6 +684,7 @@ FocusScope {
     var map = {}
     for (var i = 0; i < list.length; i++) map[list[i].uid] = doc && list[i].type === "code" ? codeText(list[i].html || "") : list[i].html || ""
     htmls = map
+    pageNotes = doc ? Notes.order(list.filter(function(b) { return Blocks.isText(b.type) }).map(function(b) { return map[b.uid] })) : []
     blocksModel.clear()
     for (var j = 0; j < list.length; j++) blocksModel.append(row(list[j]))
     refreshNumbers()
@@ -477,7 +811,8 @@ FocusScope {
   // Pages: every block's place, from the top, the blocks in columns side by
   // side. Heights come from the blocks, so this runs again whenever one
   // changes height (a line wraps, a picture loads).
-  property real docHeight: 0
+  property real blocksBottom: 0
+  readonly property real docHeight: blocksBottom + (doc && pageNotes.length > 0 ? notesList.implicitHeight + 40 : 0)
   // The gaps between columns: { columns, left, right (the columns' uids), top, height }.
   property var columnGaps: []
 
@@ -522,7 +857,7 @@ FocusScope {
         i++
       }
     }
-    docHeight = y
+    blocksBottom = y
     columnGaps = gaps
   }
 
@@ -1802,12 +2137,17 @@ FocusScope {
       else if (command.action === "template") templateRequested(s.uid)
       else if (command.action === "event") eventRequested(s.uid)
       else if (command.action === "synced") dataAction(s.uid, "syncedPick", null)
+      else if (command.action === "inlineMath") newInlineMath(item, s.at)
+      else if (command.action === "footnote") newNote(item, s.at)
       return
     }
     var props = command.props || {}
+    // (What it starts with written in it: a diagram's.)
+    var starts = command.text ? Html.fromPlainText(command.text) : ""
     if (Blocks.isText(command.type) && empty) {
       convert(s.uid, command.type, false)
       for (var key in props) blocksModel.setProperty(index, key, props[key])
+      if (starts) setHtml(s.uid, starts)
       endOp()
       focusBlock(s.uid, 0)
       return
@@ -1816,7 +2156,7 @@ FocusScope {
     for (var k in props) p[k] = props[k]
     var at = empty && !Blocks.isText(command.type) ? index : subtreeEnd(index) + 1
     if (empty && !Blocks.isText(command.type)) removeAt(index)
-    var made = insertBlock(at, p, "")
+    var made = insertBlock(at, p, starts)
     if (!Blocks.isText(command.type) && indexOf(made) === blocksModel.count - 1) insertBlock(blocksModel.count, { type: "p", indent: 0 }, "")
     endOp()
     // A new mind map: you write its topic first.
@@ -2042,6 +2382,17 @@ FocusScope {
     if (e.selectionStart !== e.selectionEnd || typeOf(item.uid) === "code") return
     var pos = e.cursorPosition
     var before = e.getText(Math.max(0, pos - 200), pos)
+    // "$$x^2$$" typed: an equation in the line.
+    var mm = /\$\$([^$\u2028]*[^$\s\u2028][^$\u2028]*)\$\$$/.exec(before)
+    if (mm) {
+      var from = pos - mm[0].length
+      closeBurst()
+      beginOp()
+      replaceRange(item, from, pos, Equations.link(mm[1]))
+      endOp()
+      focusBlock(item.uid, from + 1)
+      return
+    }
     var rules = [
       { re: /\*\*([^*\s](?:[^*\u2028]*[^*\s])?)\*\*$/, mark: 2, kind: "bold" },
       { re: /~~([^~\s](?:[^~\u2028]*[^~\s])?)~~$/, mark: 2, kind: "strike" },
@@ -2144,6 +2495,12 @@ FocusScope {
 
   function openPicture(src) {
     if (src) pictureOpened(src)
+  }
+  function copyPicture(src) {
+    if (src) pictureCopyRequested(src)
+  }
+  function savePicture(src) {
+    if (src) pictureSaveRequested(src)
   }
 
   // ---- moving around ---------------------------------------------------------------------
@@ -3096,7 +3453,7 @@ FocusScope {
     var edit = item.edit
     item.loading = true
     edit.remove(s, e)
-    if (inner) edit.insert(s, spaced(Html.decorateLinks(display(inner), linkColor, tagStyle)))
+    if (inner) edit.insert(s, spaced(Html.decorateLinks(display(inner, item.st ? item.st.size : undefined), linkColor, tagStyle)))
     item.loading = false
     item.dirty = true
     syncBlock(item.uid)
@@ -3748,6 +4105,51 @@ FocusScope {
     visible: root.doc
     width: root.contentWidth
     height: root.docHeight
+
+    // The page's footnotes, numbered, after its last block (a click: the
+    // first place it's used, its words there to change).
+    Column {
+      id: notesList
+      objectName: "pageNotes"
+      visible: root.doc && root.pageNotes.length > 0
+      x: root.docGutter
+      y: root.blocksBottom + 28
+      width: Math.max(100, root.contentWidth - root.docGutter * 2)
+      spacing: 4
+      Rectangle { width: Math.min(140, parent.width); height: 1; color: Qt.alpha(root.ink, 0.22) }
+      Item { width: 1; height: 6 }
+      Repeater {
+        model: root.pageNotes
+        delegate: Row {
+          id: noteRow
+          required property string modelData
+          required property int index
+          objectName: "pageNote"
+          readonly property string words: modelData
+          width: notesList.width
+          spacing: 8
+          Text {
+            textFormat: Text.PlainText
+            text: (noteRow.index + 1) + "."
+            font.family: root.uiFamily
+            font.pixelSize: 13
+            font.weight: Font.DemiBold
+            color: root.accent
+          }
+          Text {
+            width: parent.width - 30
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: noteRow.modelData
+            font.family: root.family
+            font.pixelSize: 14
+            color: Qt.alpha(root.ink, 0.8)
+            HoverHandler { cursorShape: root.readOnly ? Qt.ArrowCursor : Qt.PointingHandCursor }
+            TapHandler { enabled: !root.readOnly; onTapped: root.editNoteAt(noteRow.modelData) }
+          }
+        }
+      }
+    }
 
     Repeater {
       model: root.doc ? blocksModel : null

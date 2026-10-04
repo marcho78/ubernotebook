@@ -707,6 +707,11 @@ Item {
     if (!Library.isId(id) || !Blocks.cleanAsset(src)) return ""
     return "file://" + encodeURI(rootPath + "/" + id + "/" + src)
   }
+  // Its file, a full path ("" for none).
+  function assetPath(id, src) {
+    if (!Library.isId(id) || !Blocks.cleanAsset(src)) return ""
+    return rootPath + "/" + id + "/" + src
+  }
 
   // Copies a picture into the notebook: done("assets/<name>") or done("").
   function importPicture(id, path, done) {
@@ -758,6 +763,29 @@ Item {
     var value = String(text || "")
     if (!value || value.length > 1000000) return
     Quickshell.execDetached(["/usr/bin/wl-copy", "--", value])
+  }
+
+  // A picture onto the clipboard, to paste anywhere: as it is (a PNG, a GIF,
+  // an SVG), or a JPEG, WebP or BMP as a PNG (what more apps take), made by
+  // ffmpeg when it's here. wl-copy stays on to hand it over, so its output
+  // goes nowhere (not to the runner, which would wait for it). done(ok).
+  readonly property string copyPictureScript: "set -o pipefail; case \"$1\" in image/jpeg|image/webp|image/bmp) [ -x /usr/bin/ffmpeg ] && /usr/bin/ffmpeg -nostdin -v error -i \"$2\" -frames:v 1 -c:v png -f image2pipe - | /usr/bin/wl-copy --type image/png >/dev/null 2>&1 && exit 0 ;; esac; /usr/bin/wl-copy --type \"$1\" < \"$2\" >/dev/null 2>&1"
+  function copyPicture(path, done) {
+    var type = Library.pictureType(path)
+    if (!type || String(path || "").charAt(0) !== "/") { if (done) done(false); return }
+    exec(["/usr/bin/bash", "-c", copyPictureScript, "uber-notebook-copy-picture", type, path], function(ok) { if (done) done(ok) }, { timeoutMs: 20000 })
+  }
+
+  // A picture made here (a diagram or an equation, grabbed) written to
+  // `path` (a PNG, or as its ending says): true when it is.
+  function saveGrab(result, path) { return !!result && result.saveToFile(path) }
+  // A file for a moment (a picture on its way to the clipboard), where only
+  // you can read it.
+  function tempPath(name) { return runtimeDir + "/uber-notebook-" + name }
+
+  // A copy of a file at `to` (a picture saved where you said): done(ok, why).
+  function copyFileTo(from, to, done) {
+    exec(["/usr/bin/cp", "--", from, to], function(ok, output) { if (done) done(ok, String(output || "").trim()) }, { timeoutMs: 30000 })
   }
 
   function openUrl(url) {

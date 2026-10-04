@@ -38,6 +38,10 @@ QtObject {
   function pickFolder(title, done) { pickedFolder = title; done(nextFolder) }
   function shortcutNote(event) { return event === "toggle" ? "Super + N" : "Super + Alt + N" }
   function pickPicture(done) { done("") }
+  // Where a copy goes: the name it started with, and the path "chosen".
+  property string saveName: ""
+  property string nextSave: ""
+  function pickSavePath(name, done) { saveName = name; done(nextSave) }
   // The file a pick gets ("" as if it was called off), and what was asked for.
   property string nextFile: ""
   property string pickedKind: ""

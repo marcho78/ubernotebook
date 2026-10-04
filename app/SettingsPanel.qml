@@ -299,7 +299,9 @@ Popup {
     property color noteColor: panel.theme.muted
     default property alias control: slot.data
     width: parent ? parent.width : 400
-    height: Math.max(52, texts.implicitHeight + 22)
+    // As tall as its words, or its control (chips that wrap to more rows),
+    // whichever's taller: nothing over the line above or below.
+    height: Math.max(52, texts.implicitHeight + 22, slot.height + 16)
     Rectangle { visible: !line.Positioner.isFirstItem; x: 16; width: parent.width - 32; height: 1; color: panel.theme.line; opacity: 0.7 }
     Column {
       id: texts

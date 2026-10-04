@@ -43,7 +43,24 @@ check("the box: the agents' names, what it's about, suggestions", () => {
   assert.equal(Agent.scopeLabel("blocks", 1), "This block");
   assert.equal(Agent.scopeLabel("blocks", 3), "3 blocks");
   assert.equal(Agent.scopeLabel("page"), "This page");
+  assert.equal(Agent.scopeLabel("new"), "New page");
+  assert.ok(plain(Agent.suggestions("new")).length >= 1, "a new page's own, about no page");
+  assert.ok(!plain(Agent.suggestions("new")).some((s) => /this page/i.test(s)));
   for (const scope of ["page", "blocks", "words", "line"]) assert.ok(plain(Agent.suggestions(scope)).length >= 3, scope);
+});
+
+check("a new page: made for it, open, and written there", () => {
+  const top = Agent.prompt(Object.assign({}, base, { scope: "new", page: { id: "n1", title: "" }, request: "A packing list for Lisbon" }));
+  assert.ok(top.includes("a new, empty page for this (page id n1), at the top of Pages"), top);
+  assert.ok(top.includes("give it a title that says what it is (rename)"));
+  assert.ok(top.includes("what goes on it (append)"));
+  assert.ok(top.includes("Don't make another page for it."));
+  assert.ok(!top.includes("The page I'm on"), "it's not about the page you were on");
+  assert.ok(top.includes("What I'd like: A packing list for Lisbon"));
+  const inside = Agent.prompt(Object.assign({}, base, { scope: "new", page: { id: "n2", title: "" }, into: { id: "p1", title: "Lisbon" } }));
+  assert.ok(inside.includes("(page id n2), inside \u201cLisbon\u201d (page id p1)"), inside);
+  const here = Agent.prompt(Object.assign({}, base, { scope: "new", page: { id: "n3", title: "" }, here: true }));
+  assert.ok(here.includes("small panel on the page"), "in the panel, as any request");
 });
 
 check("/agent is in the slash menu", () => {
@@ -96,7 +113,7 @@ const lines = [
 check("what Claude Code says, as the panel shows it", () => {
   const got = lines.map((l) => plain(Agent.fromClaude(l)));
   assert.deepEqual(got[0], [], "hooks: nothing to show");
-  assert.deepEqual(got[1], [{ kind: "start", model: "claude-opus-5-5" }]);
+  assert.deepEqual(got[1], [{ kind: "start", model: "claude-opus-5-5", session: "" }]);
   assert.deepEqual(got[3], [], "a tool's input, being written: nothing yet");
   assert.deepEqual(got[4], []);
   assert.deepEqual(got[5], [{ kind: "step", text: "Reading the page" }], "a command on your notes, said simply");
@@ -195,7 +212,7 @@ check("Grok and Codex work here too: their commands, as Omarchy starts them", ()
 // Grok's lines (streaming-messages-json) are Claude Code's, with its own tools' names.
 check("what Grok says, as the panel shows it", () => {
   const f = (o) => plain(Agent.fromLine("grok", JSON.stringify(o)));
-  assert.deepEqual(f({ type: "system", subtype: "init", model: "grok-4.6", permissionMode: "default" }), [{ kind: "start", model: "grok-4.6" }]);
+  assert.deepEqual(f({ type: "system", subtype: "init", model: "grok-4.6", permissionMode: "default" }), [{ kind: "start", model: "grok-4.6", session: "" }]);
   assert.deepEqual(f({ type: "assistant", message: { content: [{ type: "text", text: "I'll read `ideas.md`." }, { type: "tool_use", name: "read_file", input: { target_file: "ideas.md" } }] } }),
     [{ kind: "answer", text: "I'll read `ideas.md`." }, { kind: "step", text: "Reading ideas.md" }]);
   assert.deepEqual(f({ type: "assistant", message: { content: [{ type: "tool_use", name: "run_terminal_command", input: { command: "omarchy-shell uber-notebook insertAfter p1 b1 /run/user/1000/x.md" } }] } }),
@@ -208,7 +225,7 @@ check("what Grok says, as the panel shows it", () => {
 // Codex's lines (exec --json), as codex-cli 0.160 prints them.
 check("what Codex says, as the panel shows it", () => {
   const f = (o) => plain(Agent.fromLine("codex", JSON.stringify(o)));
-  assert.deepEqual(f({ type: "thread.started", thread_id: "01a1" }), [{ kind: "start", model: "" }]);
+  assert.deepEqual(f({ type: "thread.started", thread_id: "01a1" }), [{ kind: "start", model: "", session: "" }], "not an id: none");
   assert.deepEqual(f({ type: "turn.started" }), []);
   assert.deepEqual(f({ type: "item.completed", item: { id: "item_0", type: "agent_message", text: "I'll read ideas.md without changing it.\n" } }),
     [{ kind: "answer", text: "I'll read ideas.md without changing it." }]);
@@ -224,6 +241,123 @@ check("what Codex says, as the panel shows it", () => {
   assert.deepEqual(f({ type: "turn.completed", usage: { input_tokens: 40524 } }), [{ kind: "done", text: "", seconds: 0, denied: [] }]);
   assert.deepEqual(f({ type: "turn.failed", error: { message: "You've hit your usage limit." } }), [{ kind: "failed", text: "You've hit your usage limit." }]);
   assert.deepEqual(plain(Agent.fromLine("codex", "Reading additional input from stdin...")), [], "not JSON: nothing");
+});
+
+check("a conversation: started with its id, gone on with in the same one", () => {
+  const id = "13ffd9f2-02b8-4c3b-aff2-d13aee8e4464";
+  const tail = (argv) => plain(argv).slice(4);
+  // Claude Code: --session-id to start, --resume to go on; the prompt last.
+  const c1 = tail(Agent.command("claude", "Hi", {}, { id: id, resume: false }));
+  assert.deepEqual(c1.slice(c1.indexOf("--session-id"), c1.indexOf("--session-id") + 2), ["--session-id", id]);
+  const c2 = tail(Agent.command("claude", "And then?", { model: "opus" }, { id: id, resume: true }));
+  assert.deepEqual(c2.slice(c2.indexOf("--resume"), c2.indexOf("--resume") + 2), ["--resume", id]);
+  assert.equal(c2.indexOf("--session-id"), -1);
+  assert.deepEqual(c2.slice(-2), ["--", "And then?"]);
+  assert.ok(c2.indexOf("--model") > 0);
+  // Grok: the same, as --flag=value.
+  const g1 = tail(Agent.command("grok", "Hi", {}, { id: id, resume: false }));
+  assert.ok(g1.indexOf("--session-id=" + id) > 0);
+  const g2 = tail(Agent.command("grok", "And then?", {}, { id: id, resume: true }));
+  assert.ok(g2.indexOf("--resume=" + id) > 0);
+  assert.equal(g2[g2.length - 1], "--single=And then?");
+  // Codex: its own id, from its first line; exec's options, then resume.
+  const x1 = tail(Agent.command("codex", "Hi", {}, { id: "", resume: false }));
+  assert.deepEqual(x1, ["codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "--", "Hi"]);
+  const t = "01a105cd-1057-70a1-8862-616924424b31";
+  const x2 = tail(Agent.command("codex", "-and then?", { effort: "low" }, { id: t, resume: true }));
+  assert.deepEqual(x2, ["codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "model_reasoning_effort=\"low\"", "resume", "--", t, "-and then?"]);
+  // Not an id: not on the command line (a new conversation, as before).
+  const bad = tail(Agent.command("claude", "Hi", {}, { id: "--dangerous", resume: true }));
+  assert.equal(bad.indexOf("--resume"), -1);
+  assert.equal(bad.indexOf("--dangerous"), -1);
+  assert.deepEqual(tail(Agent.command("claude", "Hi", {})), tail(Agent.command("claude", "Hi", {}, null)), "none: as before");
+});
+
+check("a conversation's id: a new one for Claude Code and Grok, Codex's from its first line", () => {
+  let n = 0;
+  const seq = () => ((n++ * 7) % 16) / 16;
+  const made = Agent.newSessionId("claude", seq);
+  assert.ok(Agent.isSessionId(made), made);
+  assert.equal(made.charAt(14), "4", "a version 4 UUID");
+  assert.ok("89ab".indexOf(made.charAt(19)) >= 0);
+  assert.ok(Agent.isSessionId(Agent.newSessionId("grok")));
+  assert.notEqual(Agent.newSessionId("grok"), Agent.newSessionId("grok"));
+  assert.equal(Agent.newSessionId("codex"), "", "Codex names its own");
+  assert.equal(Agent.isSessionId("13FFD9F2-02B8-4C3B-AFF2-D13AEE8E4464"), true);
+  assert.equal(Agent.isSessionId("t1"), false);
+  assert.equal(Agent.isSessionId("13ffd9f2-02b8-4c3b-aff2-d13aee8e4464 --x"), false);
+  // Its id, as each says it.
+  const t = "01a105cd-1057-70a1-8862-616924424b31";
+  assert.deepEqual(plain(Agent.fromLine("codex", JSON.stringify({ type: "thread.started", thread_id: t }))), [{ kind: "start", model: "", session: t }]);
+  const u = "96265d42-9b62-4091-a10d-7004d41b5418";
+  assert.deepEqual(plain(Agent.fromLine("grok", JSON.stringify({ type: "system", subtype: "init", session_id: u, model: "grok-4.6" }))), [{ kind: "start", model: "grok-4.6", session: u }]);
+  assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "system", subtype: "init", session_id: u, model: "claude-opus-5-5" }))), [{ kind: "start", model: "claude-opus-5-5", session: u }]);
+});
+
+check("a reply: your words, after where you are when that's changed", () => {
+  assert.equal(Agent.reply({ reply: "Make it shorter", page: { id: "p1", title: "Trip" } }), "Make it shorter", "nothing changed: just your words");
+  const moved = Agent.reply({ reply: "Do the same here", page: { id: "p2", title: "Packing" }, moved: true });
+  assert.equal(moved, "I'm on another page now: \u201cPacking\u201d (page id p2).\n\nDo the same here");
+  const picked = Agent.reply({ reply: "Turn these into to-dos", page: { id: "p2", title: "Packing" }, scope: "blocks", blocks: ["b1", "b2"] });
+  assert.ok(picked.indexOf("The blocks I've picked: b1, b2") === 0, picked);
+  const words = Agent.reply({ reply: "Say it better", page: { id: "p2" }, moved: true, scope: "words", blocks: ["b3"], words: "the old\nwords" });
+  assert.ok(words.indexOf("I'm on another page now: \u201cUntitled\u201d") === 0, words);
+  assert.ok(words.indexOf("In block b3, I've selected these words:\n\n> the old\n> words\n\nSay it better") > 0, words);
+  assert.ok(Agent.reply({ reply: "x".repeat(5000) }).length <= 4001, "kept short");
+});
+
+check("a lost conversation: as each agent says it, then asked anew, told what was said", () => {
+  assert.equal(Agent.lostSession("No conversation found with session ID: 5e13e2b0-d539-4306-8c80-6631d886e14a"), true);
+  assert.equal(Agent.lostSession("Error: thread/resume: thread/resume failed: no rollout found for thread id 5e13 (code -32600)"), true);
+  assert.equal(Agent.lostSession('Session "5e13" not found locally, restoring conversation from remote...\nError: Failed to restore session from remote: fetching session record: session get failed: 404 Not Found'), true);
+  assert.equal(Agent.lostSession("Credit balance is too low"), false);
+  assert.equal(Agent.lostSession(""), false);
+  // Claude Code's last line, when it is: its errors say why.
+  assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "result", subtype: "error_during_execution", is_error: true, result: "", errors: ["No conversation found with session ID: x"] }))),
+    [{ kind: "failed", text: "No conversation found with session ID: x" }]);
+  // What was said: its last turns, each kept short; what's asked "now".
+  const turns = Array.from({ length: 10 }, (_, i) => ({ request: "Question " + i, answer: i === 9 ? "x".repeat(900) : "Answer " + i }));
+  const p = Agent.prompt({ request: "And then?", page: { id: "p1", title: "Trip" }, scope: "page", earlier: turns, here: true, skill: "/s/SKILL.md" });
+  assert.ok(p.indexOf("We've talked about this before") > 0, p);
+  assert.ok(p.indexOf("Question 1\n") < 0 && p.indexOf("Question 0") < 0, "only the last ones");
+  assert.ok(p.indexOf("- I said: Question 2") > 0 && p.indexOf("- I said: Question 9") > 0);
+  assert.ok(p.indexOf("  You said: Answer 8") > 0);
+  assert.ok(p.indexOf("x".repeat(601)) < 0, "kept short");
+  assert.ok(p.indexOf("What I'd like now: And then?") > 0);
+  assert.equal(Agent.prompt({ request: "Hi", page: { id: "p1" }, scope: "page", skill: "s" }).indexOf("talked about this before"), -1, "none: as before");
+});
+
+check("conversations kept with their pages: checked, kept short, the last talked in", () => {
+  const sid = "13ffd9f2-02b8-4c3b-aff2-d13aee8e4464";
+  const turn = (i, extra) => Object.assign({ request: "Q" + i, steps: ["Reading the page"], answer: "A" + i, status: "done", failure: "" }, extra || {});
+  const raw = { version: 1, chats: {
+    p1: { agent: "claude", session: sid, page: "p1", picked: "", updated: "2026-10-04T08:00:00.000Z", turns: [turn(1), turn(2, { status: "working" }), { request: "  " }] },
+    p2: { agent: "gemini", session: sid, turns: [turn(1)] },
+    "../x": { agent: "claude", turns: [turn(1)] },
+    p3: { agent: "codex", session: "nope", turns: [] },
+    p4: { agent: "grok", session: "--resume", page: "p4", updated: "2026-10-04T09:00:00.000Z", turns: Array.from({ length: 50 }, (_, i) => turn(i, { status: i === 49 ? "failed" : "done", failure: "why " + i })) }
+  } };
+  const c = plain(Agent.cleanChats(raw));
+  assert.deepEqual(Object.keys(c), ["p4", "p1"], "the last talked in first; an agent that doesn't work here, a bad id, nothing said: left out");
+  assert.equal(c.p1.session, sid);
+  assert.equal(c.p1.turns.length, 2, "an empty one left out");
+  assert.equal(c.p1.turns[1].status, "stopped", "working when it was kept: stopped");
+  assert.equal(c.p4.session, "", "not an id");
+  assert.equal(c.p4.turns.length, Agent.MAX_CHAT_TURNS);
+  assert.equal(c.p4.turns[c.p4.turns.length - 1].failure, "why 49");
+  assert.equal(c.p4.turns[0].failure, "", "a failure only for one that failed");
+  assert.equal(Agent.chatTip(c.p1), "Your conversation with Claude Code (2 messages)");
+  assert.equal(Agent.chatTip(null), "");
+  assert.deepEqual(plain(Agent.cleanChats(null)), {});
+  assert.deepEqual(plain(Agent.cleanChats({ chats: [1, 2] })), {});
+  const many = { chats: {} };
+  for (let i = 0; i < Agent.MAX_CHATS + 5; i++) many.chats["p" + i] = { agent: "claude", updated: "2026-10-04T08:00:00.000Z", turns: [turn(i)] };
+  assert.equal(Object.keys(Agent.cleanChats(many)).length, Agent.MAX_CHATS, "the last ones");
+});
+
+check("a reply on an empty line: its writing goes there", () => {
+  assert.equal(Agent.reply({ reply: "A packing list", page: { id: "p1" }, scope: "line", line: "b9" }),
+    "I'm on an empty line, block b9: put what you write there, in its place.\n\nA packing list");
 });
 
 console.log(`agent: ${passed} checks passed`);

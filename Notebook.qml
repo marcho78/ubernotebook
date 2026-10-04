@@ -208,6 +208,17 @@ Item {
       onRejected: root.exportPicked("")
     }
 
+    // (Saving over a file that's there asks first: Qt's dialog does.)
+    FileDialog {
+      id: savePicker
+      title: "Save a copy"
+      options: FileDialog.DontUseNativeDialog
+      fileMode: FileDialog.SaveFile
+      currentFolder: "file://" + Quickshell.env("HOME") + "/Pictures"
+      onAccepted: root.savePicked(decodeURIComponent(String(selectedFile).replace(/^file:\/\//, "")))
+      onRejected: root.savePicked("")
+    }
+
     FileDialog {
       id: filePicker
       options: FileDialog.DontUseNativeDialog
@@ -348,6 +359,27 @@ Item {
   function folderPicked(path) {
     var done = root.folderDone
     root.folderDone = null
+    if (done) done(path)
+  }
+
+  // Where a copy goes (a picture saved out): done(path), or done(""). It
+  // opens where the last one went (your Pictures folder, the first time),
+  // its name filled in.
+  property var saveDone: null
+  property string saveFolder: ""
+  function pickSavePath(name, done) {
+    saveDone = done
+    var folder = saveFolder || Quickshell.env("HOME") + "/Pictures"
+    var file = String(name || "Picture.png")
+    savePicker.defaultSuffix = (/\.([A-Za-z0-9]{1,5})$/.exec(file) || [])[1] || ""
+    savePicker.currentFolder = "file://" + encodeURI(folder)
+    savePicker.selectedFile = "file://" + encodeURI(folder) + "/" + encodeURIComponent(file)
+    savePicker.open()
+  }
+  function savePicked(path) {
+    var done = root.saveDone
+    root.saveDone = null
+    if (path) saveFolder = path.replace(/\/[^\/]*$/, "") || saveFolder
     if (done) done(path)
   }
 

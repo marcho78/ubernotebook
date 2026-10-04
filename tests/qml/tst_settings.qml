@@ -394,14 +394,13 @@ Item {
       compare(named(win(), "aiChoice_gemini"), null, "it opens in a terminal")
       click(reach(named(win(), "aiChoice_codexModel")))
       var pick = null
-      tryVerify(function() { pick = named(win(), "aiChoice_codexModel_gpt-5.5"); return pick !== null }, 1000)
-      wait(100)
+      // (Its menu all the way open before a click on it.)
+      tryVerify(function() { pick = named(win(), "aiChoice_codexModel_gpt-5.5"); return pick !== null && named(win(), "aiChoice_codexModel").parent.menuOpened }, 1000)
       mouseClick(pick)
       compare(service.settings.codexModel, "gpt-5.5")
       click(reach(named(win(), "aiChoice_codexEffort")))
-      tryVerify(function() { pick = named(win(), "aiChoice_codexEffort_high"); return pick !== null }, 1000)
+      tryVerify(function() { pick = named(win(), "aiChoice_codexEffort_high"); return pick !== null && named(win(), "aiChoice_codexModel").parent.menuOpened }, 1000)
       compare(named(win(), "aiChoice_codexEffort_max"), null, "GPT-5.5 doesn't take max")
-      wait(100)
       mouseClick(pick)
       compare(service.settings.codexEffort, "high")
       tryVerify(function() { return named(win(), "aiChoice_codex").note === "GPT-5.5 \u00b7 High" }, 1000, "the model it works with (no description of its own)")
@@ -472,6 +471,30 @@ Item {
       tryCompare(files, "installed", ["marcho78.uber-notebook"], 1000)
       updates.managed = false
       verify(JSON.parse(api.help()).commands.some(function(c) { return c.use.indexOf("restoreBackup") === 0 }))
+    }
+
+    // Many agents (a dozen installed): their chips wrap, and their line grows
+    // to hold them, nothing over the line above or the words below.
+    function test_12_many_agents_fit() {
+      fresh()
+      files.agentList = ["claude", "codex", "copilot", "crush", "cursor-agent", "gemini", "grok", "hermes", "muse", "omp", "opencode", "pi"].map(function(n) { return { name: n, label: n.charAt(0).toUpperCase() + n.slice(1) } })
+      files.agent = "claude"
+      app.openSettings("ai")
+      var first = null, last = null
+      tryVerify(function() { first = named(win(), "aiAgent_claude"); last = named(win(), "aiAgent_pi"); return panel() !== null && first !== null && last !== null }, 1000)
+      wait(100)
+      var flow = first.parent
+      var line = flow.parent.parent
+      verify(last.mapToItem(flow, 0, 0).y > first.mapToItem(flow, 0, 0).y, "wrapped to more rows")
+      var top = first.mapToItem(line, 0, 0).y
+      var bottom = last.mapToItem(line, 0, last.height).y
+      verify(top >= 4, "inside its line at the top: " + top)
+      verify(bottom <= line.height - 4, "inside its line at the bottom: " + bottom + " of " + line.height)
+      // The words under the card start below the chips.
+      var below = find(win(), function(it) { return typeof it.text === "string" && it.text.indexOf("Claude Code, Grok and Codex work right here") === 0 })
+      verify(below !== null)
+      verify(below.mapToItem(null, 0, 0).y > last.mapToItem(null, 0, last.height).y, "the note under them, not over them")
+      closeAll()
     }
   }
 }

@@ -35,6 +35,8 @@ Item {
   signal soundRequested(string name)
   signal toast(string text)
   signal pictureFileRequested(string afterUid)
+  // A picture's copy to save where you say (its file, and a name for it).
+  signal pictureSaveRequested(string path, string name)
 
   readonly property alias editor: sheet.editor
   readonly property alias pageSheet: sheet
@@ -617,6 +619,8 @@ Item {
             editor.onChanged: view.markDirty()
             editor.onLinkOpened: function(url) { view.store.openUrl(url) }
             editor.onPictureOpened: function(src) { view.store.openUrl(view.store.assetUrl(view.nb.id, src)) }
+            editor.onPictureCopyRequested: function(src) { view.copyPicture(src) }
+            editor.onPictureSaveRequested: function(src) { view.pictureSaveRequested(view.store.assetPath(view.nb.id, src), Library.saveName(view.nb.title, src)) }
             editor.onPastePicture: function(afterUid) { view.pastePicture(afterUid) }
             editor.onLinkRequested: linkPop.openAt(formatBar)
           }
@@ -1032,6 +1036,13 @@ Item {
     store.pastePicture(nb.id, function(src) {
       if (src) sheet.editor.insertPicture(afterUid, src, 0)
     })
+  }
+
+  // A picture onto the clipboard, to paste anywhere.
+  function copyPicture(src) {
+    var path = nb ? store.assetPath(nb.id, src) : ""
+    if (!path) return
+    store.copyPicture(path, function(ok) { view.toast(ok ? "Copied: paste it anywhere" : "The picture couldn't be copied") })
   }
 
   // ---- keys that belong to the notebook -----------------------------------------------------

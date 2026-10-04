@@ -386,6 +386,24 @@ function isImagePath(path) {
   return /^\/[^\u0000-\u001f\u007f]{1,4000}\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(path || ""))
 }
 
+// A picture's kind as the clipboard names it ("image/png"), from its
+// name; "" for one that isn't a picture.
+function pictureType(path) {
+  var m = /\.([A-Za-z0-9]{1,5})$/.exec(String(path || ""))
+  var types = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml" }
+  return m && Object.prototype.hasOwnProperty.call(types, m[1].toLowerCase()) ? types[m[1].toLowerCase()] : ""
+}
+
+// A name to save a copy of a picture as: `title` (its caption, its page's
+// title) made a file's name, with the picture's own ending ("Trip to
+// Lisbon.png"); "Picture.png" with none.
+function saveName(title, src) {
+  var m = /\.([A-Za-z0-9]{1,5})$/.exec(String(src || ""))
+  var ext = m ? m[1].toLowerCase() : "png"
+  var base = String(title || "").replace(/[\/\\:*?"<>|\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().replace(/^\.+/, "").slice(0, 80).trim()
+  return (base || "Picture") + "." + ext
+}
+
 function stringify(value) {
   return JSON.stringify(value, null, 1) + "\n"
 }
