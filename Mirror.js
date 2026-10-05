@@ -83,7 +83,8 @@ function claim(paths, manifest, existing) {
     if (manifest[p] !== undefined || !existing[p]) continue
     var stem = p.replace(/\.md$/, "")
     var next = p
-    for (var n = 2; existing[next] || (taken[next] && next !== p) || next === p; n++) next = stem + " (" + n + ").md"
+    // (A name it already has, from before, is still its: kept, not passed over.)
+    for (var n = 2; (existing[next] && manifest[next] === undefined) || (taken[next] && next !== p) || next === p; n++) next = stem + " (" + n + ").md"
     delete taken[p]
     taken[next] = true
     paths[key] = next

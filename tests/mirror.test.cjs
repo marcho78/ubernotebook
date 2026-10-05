@@ -90,4 +90,15 @@ check("fingerprints: SHA-256 of the bytes it writes; one from before is never a 
   assert.deepEqual([plain(cached.write), asked], [[], 1]);
 });
 
+check("a page whose file you took: its copy beside it, at the same name sync after sync", () => {
+  const existing = { "Pages/A.md": true };
+  const first = plain(M.claim({ a: "Pages/A.md" }, {}, existing));
+  assert.deepEqual(first, { a: "Pages/A (2).md" });
+  // Written there: the copy's now. The next time, it stays there (not "(3)").
+  const again = plain(M.claim({ a: "Pages/A.md" }, { "Pages/A (2).md": M.hash("x") }, { "Pages/A.md": true, "Pages/A (2).md": true }));
+  assert.deepEqual(again, { a: "Pages/A (2).md" });
+  // A "(2)" that's yours too: the next free one.
+  assert.deepEqual(plain(M.claim({ a: "Pages/A.md" }, {}, { "Pages/A.md": true, "Pages/A (2).md": true })), { a: "Pages/A (3).md" });
+});
+
 console.log(`mirror: ${passed} checks passed`);
