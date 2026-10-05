@@ -48,7 +48,17 @@ ShellRoot {
               var parsed = lines.map(function(l) { return store.parseJson(l) })
               var good = parsed.length === 3 && parsed.every(function(o, i) { return o && o.n === i && o.t === root.text.slice(0, o.t.length) && root.bad(o.t) === 0 })
               say("an agent's lines, through ascii-lines: every character as it is", good, parsed.length + " lines, replacements " + parsed.map(function(o) { return o ? root.bad(o.t) : -1 }).join(","))
-              store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+              // Pasted: the clipboard read (a stand-in for wl-paste, never
+              // your own clipboard), every character as it is.
+              store.exec(["/usr/bin/bash", "-c", "printf '%s' \"$2\" > \"$1/wl-paste\" && /usr/bin/chmod +x \"$1/wl-paste\"", "x", d,
+                "#!/usr/bin/bash\ncase \" $* \" in *--list-types*) printf 'text/plain;charset=utf-8\\n' ;; *) /usr/bin/cat \"${0%/*}/plain.txt\" ;; esac\n"], function() {
+                store.pasteProgram = d + "/wl-paste"
+                store.readClipboard(function(c) {
+                  var t = c ? c.text : ""
+                  say("pasted: every character as it is", t === root.text, "replacements " + root.bad(t) + " length " + t.length)
+                  store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                })
+              })
             })
             stream.start(["/usr/bin/bash", "-c", "h=$1; shift; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" ascii-lines", "uber-notebook-agent", store.filesHelper, "/usr/bin/cat", "--", d + "/lines.jsonl"])
           }, { maxBytes: 4 * 1024 * 1024 })

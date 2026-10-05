@@ -1751,7 +1751,7 @@ FocusScope {
         view.agentScopeEnd()
         agentPanel.end(code, Agent.failureText(agent, code, errors))
         view.saveChat()
-      }, { cwd: dir, input: first !== "", env: Agent.env(agent) })
+      }, { cwd: dir, input: first !== "", env: Agent.env(agent), maxLine: Agent.streamLimits(where).maxLine, maxBytes: Agent.streamLimits(where).maxBytes })
       view.agentRun = run
       if (first && run && run.send) run.send(first)
     }

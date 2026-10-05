@@ -208,6 +208,17 @@ function cleanChoice(v) {
 // each, and you're asked in the panel; MCP tools, yours, as well).
 var CLAUDE_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
 
+// What it may print: a line at most LINE_MAX bytes, OUTPUT_MAX in all, as
+// it prints them (through the files helper, counted there before they're
+// made ASCII); what reaches the panel then takes up to six times the room.
+var LINE_MAX = 4 * 1024 * 1024
+var OUTPUT_MAX = 64 * 1024 * 1024
+function streamLimits(where) {
+  var w = where || {}
+  var helper = /^\/[^\u0000-\u001f]{1,4000}$/.test(String(w.helper || ""))
+  return helper ? { maxLine: 6 * LINE_MAX + 1024, maxBytes: 6 * OUTPUT_MAX + 1024 * 1024 } : { maxLine: LINE_MAX, maxBytes: OUTPUT_MAX }
+}
+
 function command(agent, prompt, choice, session, where) {
   var w = where || {}
   var exe = String(w.exe || "")
@@ -219,7 +230,7 @@ function command(agent, prompt, choice, session, where) {
   // its way here, the input of a tool it asks to use included.)
   var helper = /^\/[^\u0000-\u001f]{1,4000}$/.test(String(w.helper || "")) ? String(w.helper) : ""
   function filtered(input) {
-    return helper ? ["/usr/bin/bash", "-c", "h=$1; shift; set -o pipefail; \"$@\"" + input + " | /usr/bin/python3 -I -S \"$h\" ascii-lines", "uber-notebook-agent", helper]
+    return helper ? ["/usr/bin/bash", "-c", "h=$1; n=$2; t=$3; shift 3; set -o pipefail; \"$@\"" + input + " | /usr/bin/python3 -I -S \"$h\" ascii-lines \"$n\" \"$t\"", "uber-notebook-agent", helper, String(LINE_MAX), String(OUTPUT_MAX)]
       : ["/usr/bin/bash", "-c", "exec \"$@\"" + input, "uber-notebook-agent"]
   }
   var head = filtered(" < /dev/null")

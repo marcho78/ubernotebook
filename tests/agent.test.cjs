@@ -83,7 +83,10 @@ check("Claude Code works here: its command, and the prompt says so", () => {
   assert.equal(argv[4], "/usr/bin/claude", "by its full path");
   // With the files helper: what it prints, through its ascii-lines (no character cut in two on its way).
   const filt = plain(Agent.command("claude", "x", undefined, undefined, Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" })));
-  assert.deepEqual(filt.slice(0, 6), ["/usr/bin/bash", "-c", "h=$1; shift; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" ascii-lines", "uber-notebook-agent", "/plugin/bin/uber-notebook-files", "/usr/bin/claude"]);
+  assert.deepEqual(filt.slice(0, 8), ["/usr/bin/bash", "-c", "h=$1; n=$2; t=$3; shift 3; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" ascii-lines \"$n\" \"$t\"", "uber-notebook-agent", "/plugin/bin/uber-notebook-files", String(4 * 1024 * 1024), String(64 * 1024 * 1024), "/usr/bin/claude"]);
+  // Its limits counted as it prints (the helper's), the panel's room for what's escaped.
+  assert.deepEqual(plain(Agent.streamLimits(Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" }))), { maxLine: 6 * 4194304 + 1024, maxBytes: 6 * 67108864 + 1048576 });
+  assert.deepEqual(plain(Agent.streamLimits(W("claude"))), { maxLine: 4194304, maxBytes: 67108864 });
   const codexF = plain(Agent.command("codex", "-x", undefined, undefined, Object.assign(W("codex"), { helper: "/plugin/bin/uber-notebook-files" })));
   assert.ok(codexF[2].indexOf("\"$@\" < /dev/null | /usr/bin/python3") > 0, "Codex: nothing on its input, its output filtered");
   assert.equal(codexF[codexF.length - 1], "-x", "its prompt still last");

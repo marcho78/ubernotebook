@@ -76,10 +76,13 @@
 #       What's on its input (at most <max bytes>), as one JSON string, ASCII
 #       only (a program's words, through Quickshell without a character cut
 #       in two). Past <max bytes>: an error, nothing printed.
-#   ascii-lines
+#   ascii-lines [<max line> <max total>]
 #       Each line on its input (JSON, as agents print) again, ASCII only, as
-#       it comes; a line that isn't JSON as a JSON string; one past 16 MB
-#       left out.
+#       it comes; a line that isn't JSON as a JSON string. Counted as it
+#       comes, before it's escaped (escaping makes text up to six times
+#       longer): a line past <max line> bytes (4 MB) left out and said on its
+#       errors; past <max total> bytes (64 MB) in all, it stops, said, and
+#       ends 3.
 #   copy-picture <picture> <folder> <name> <max bytes> [<within>]
 #       A picture copied into <folder> (a folder of yours, not a link) as
 #       <name>, a new file (never over one that's there): only a plain file
@@ -1083,16 +1086,27 @@ def cmd_to_json(max_bytes):
     print(json.dumps(data.decode("utf-8", "replace")))
 
 
-def cmd_ascii_lines():
-    most = 16 * 1024 * 1024
+def cmd_ascii_lines(max_line=4 * 1024 * 1024, max_total=64 * 1024 * 1024):
+    most = int(max_line)
+    total_most = int(max_total)
     out = sys.stdout.buffer
     part = b""
     skipping = False
+    seen = 0
     src = sys.stdin.buffer.raw if hasattr(sys.stdin.buffer, "raw") else sys.stdin.buffer
+
+    def left_out():
+        sys.stderr.write("left out a line longer than %d MB\n" % max(1, most // (1024 * 1024)))
+        sys.stderr.flush()
     while True:
         chunk = src.read(65536)
         if not chunk:
             break
+        seen += len(chunk)
+        if seen > total_most:
+            sys.stderr.write("printed more than %d MB\n" % max(1, total_most // (1024 * 1024)))
+            sys.stderr.flush()
+            return 3
         part += chunk
         while True:
             nl = part.find(b"\n")
@@ -1101,6 +1115,9 @@ def cmd_ascii_lines():
             line, part = part[:nl], part[nl + 1:]
             if skipping:
                 skipping = False
+                continue
+            if len(line) > most:
+                left_out()
                 continue
             text = line.decode("utf-8", "replace")
             try:
@@ -1111,6 +1128,8 @@ def cmd_ascii_lines():
             out.flush()
         if len(part) > most:
             part = b""
+            if not skipping:
+                left_out()
             skipping = True
     if part and not skipping:
         text = part.decode("utf-8", "replace")
@@ -1644,8 +1663,8 @@ def main(argv):
             cmd_read_glob(argv[2], argv[3], argv[4], argv[5])
         elif len(argv) == 3 and argv[1] == "to-json":
             cmd_to_json(argv[2])
-        elif len(argv) == 2 and argv[1] == "ascii-lines":
-            cmd_ascii_lines()
+        elif len(argv) in (2, 4) and argv[1] == "ascii-lines":
+            return cmd_ascii_lines(*argv[2:]) or 0
         elif len(argv) == 5 and argv[1] == "export-html":
             cmd_export_html(argv[2], argv[3], argv[4])
         elif len(argv) == 3 and argv[1] == "serve":

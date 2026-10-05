@@ -509,6 +509,32 @@ try {
     assert.ok(!fs.existsSync(plan), "the plan, taken away once read");
     assert.deepEqual(fs.readdirSync(path.join(m, "Pages")).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
+  check("an agent's lines made ASCII: counted as it prints them, before they're escaped", () => {
+    const run = (input, line, total) => spawnSync("/usr/bin/python3", ["-I", "-S", helper, "ascii-lines", String(line), String(total)], { input, encoding: "utf8", timeout: 10000 });
+    const lines = (r) => r.stdout.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    // CJK and control characters escape to several times their bytes: still
+    // within a line's room, as they were printed.
+    const cjk = JSON.stringify({ t: "\u4e2d".repeat(290) });
+    const ctl = JSON.stringify({ t: "\u0001".repeat(140) });
+    const a = run(cjk + "\n" + ctl + "\n", 1000, 100000);
+    assert.equal(a.status, 0, a.stderr);
+    assert.deepEqual(lines(a).map((o) => o.t.length), [290, 140]);
+    assert.ok(a.stdout.split("\n")[0].length > 1000, "longer once escaped, and still let through");
+    // Plain ASCII: no more room than before.
+    const b = run("x".repeat(999) + "\n" + "y".repeat(1001) + "\n" + JSON.stringify({ ok: 1 }) + "\n", 1000, 100000);
+    assert.equal(b.status, 0);
+    assert.deepEqual(lines(b), ["x".repeat(999), { ok: 1 }], "the line past its room left out");
+    assert.match(b.stderr, /left out a line longer than/);
+    // A line too long that hasn't ended yet: left out up to its end, said once.
+    const c = run("z".repeat(70000) + "\nafter\n", 1000, 1000000);
+    assert.deepEqual(lines(c), ["after"]);
+    assert.equal(c.stderr.split("left out").length - 1, 1);
+    // Past all it may print: it stops, says so, ends 3.
+    const d = run(("w".repeat(500) + "\n").repeat(200), 1000, 70000);
+    assert.equal(d.status, 3);
+    assert.match(d.stderr, /printed more than/);
+    assert.ok(lines(d).length < 140, String(lines(d).length));
+  });
   check("an agent's folder: its sandbox profile put without following a link; its files read only from it", () => {
     const f = folder("agent-conv");
     const out = folder("agent-outside");

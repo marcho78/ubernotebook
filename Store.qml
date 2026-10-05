@@ -1112,21 +1112,24 @@ Item {
   // picture: pastePicture). Read by wl-paste, so the editor gets HTML to
   // clean before Qt reads it (Editor.qml: withClipboard).
   readonly property real clipboardMax: 4 * 1024 * 1024
+  // (What reads the clipboard: wl-paste; a stand-in in tests.)
+  property string pasteProgram: "/usr/bin/wl-paste"
   function readClipboard(done, primary) {
     var which = primary === true ? ["--primary"] : []
-    exec(["/usr/bin/wl-paste"].concat(which, ["--list-types"]), function(ok, output) {
+    exec([store.pasteProgram].concat(which, ["--list-types"]), function(ok, output) {
       var types = ok ? String(output || "").split("\n").map(function(t) { return t.trim() }) : []
       var html = types.indexOf("text/html") >= 0 ? "text/html" : ""
       var text = ["text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING", "TEXT"].filter(function(t) { return types.indexOf(t) >= 0 })[0] || ""
       if (!html && !text) { done(null); return }
       function readText(htmlText) {
         if (!text) { done({ html: htmlText, text: "" }); return }
-        store.exec(["/usr/bin/wl-paste"].concat(which, ["--no-newline", "--type", text]), function(ok2, out2) {
+        // (Through execText: long text in any script arrives whole.)
+        store.execText([store.pasteProgram].concat(which, ["--no-newline", "--type", text]), function(ok2, out2) {
           done({ html: htmlText, text: ok2 ? String(out2 || "") : "" })
         }, { timeoutMs: 5000, maxBytes: store.clipboardMax })
       }
       if (!html) { readText(""); return }
-      store.exec(["/usr/bin/wl-paste"].concat(which, ["--no-newline", "--type", html]), function(ok1, out1) {
+      store.execText([store.pasteProgram].concat(which, ["--no-newline", "--type", html]), function(ok1, out1) {
         // (HTML that isn't UTF-8, or too much of it: its text instead.)
         var h = ok1 ? String(out1 || "") : ""
         readText(h.indexOf("\u0000") >= 0 ? "" : h)
