@@ -527,7 +527,8 @@ QtObject {
   property var streamed: []
   property var streamNow: null
   function stream(argv, onLine, done, options) {
-    var s = { argv: argv, cwd: (options || {}).cwd || "", input: (options || {}).input === true, env: (options || {}).env || {}, onLine: onLine, done: done, sent: [], closed: false }
+    var s = { argv: argv, cwd: (options || {}).cwd || "", input: (options || {}).input === true, env: (options || {}).env || {}, onLine: onLine, done: done, sent: [], closed: false,
+      maxLine: (options || {}).maxLine || 0, maxBytes: (options || {}).maxBytes || 0 }
     streamed = streamed.concat([s])
     streamNow = s
     return {
