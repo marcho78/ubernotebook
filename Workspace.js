@@ -692,13 +692,29 @@ function isInside(pages, id, of) {
 // A page and every page inside it.
 function withDescendants(index, id) {
   var out = []
-  function walk(pid) {
-    if (!index.pages[pid] || out.indexOf(pid) >= 0) return
+  var seen = Object.create(null)
+  walkTree([id], 0, function(pid) {
+    if (!index.pages[pid] || seen[pid]) return null
+    seen[pid] = true
     out.push(pid)
-    index.pages[pid].children.forEach(walk)
-  }
-  walk(id)
+    return index.pages[pid].children
+  })
   return out
+}
+
+// Pages' tree, in order, a page before the pages in it, without calling
+// itself (a tree thousands of pages deep is accepted, and mustn't run the
+// shell out of stack): each(id, depth) returns the ids in it to go through
+// next, or null.
+function walkTree(ids, depth, each) {
+  var stack = [{ ids: ids || [], i: 0, depth: depth }]
+  while (stack.length) {
+    var f = stack[stack.length - 1]
+    if (f.i >= f.ids.length) { stack.pop(); continue }
+    var id = f.ids[f.i++]
+    var kids = each(id, f.depth)
+    if (kids && kids.length) stack.push({ ids: kids, i: 0, depth: f.depth + 1 })
+  }
 }
 
 // Is it in the trash (or inside a page that is)?
@@ -726,17 +742,14 @@ function trashed(index) {
 // with the children of the pages in `open` shown.
 function rows(index, open) {
   var out = []
-  function walk(ids, depth) {
-    ids.forEach(function(id) {
-      var e = index.pages[id]
-      // (The trash's and the archive's aren't in the tree.)
-      if (!e || e.trashed || e.archived || e.template || e.synced) return
-      var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived && !index.pages[c].template && !index.pages[c].synced })
-      out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
-      if (open && open[id]) walk(kids, depth + 1)
-    })
-  }
-  walk(index.top, 0)
+  walkTree(index.top, 0, function(id, depth) {
+    var e = index.pages[id]
+    // (The trash's and the archive's aren't in the tree.)
+    if (!e || e.trashed || e.archived || e.template || e.synced) return null
+    var kids = e.children.filter(function(c) { return index.pages[c] && !index.pages[c].trashed && !index.pages[c].archived && !index.pages[c].template && !index.pages[c].synced })
+    out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
+    return open && open[id] ? kids : null
+  })
   return out
 }
 
@@ -751,12 +764,12 @@ function sidebarRows(index, open, now, together) {
   function apart(e) { return !together && !!e.project }
   function kidsOf(e) { return e.children.filter(function(c) { return shown(c) && !apart(index.pages[c]) }) }
   function walk(ids, depth, out) {
-    ids.forEach(function(id) {
+    walkTree(ids, depth, function(id, d) {
       var e = index.pages[id]
-      if (!shown(id) || apart(e)) return
+      if (!shown(id) || apart(e)) return null
       var kids = kidsOf(e)
-      out.push({ id: id, depth: depth, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
-      if (open && open[id]) walk(kids, depth + 1, out)
+      out.push({ id: id, depth: d, title: e.title, icon: e.icon, hasChildren: kids.length > 0, open: !!(open && open[id]) })
+      return open && open[id] ? kids : null
     })
   }
   var pages = []

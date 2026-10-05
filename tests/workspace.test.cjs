@@ -397,4 +397,29 @@ check("the page tree, however deep or looped it says it is, read in time in step
   assert.equal(Object.keys(b.pages).length, n, "and every page kept");
 });
 
+check("a tree thousands of pages deep: gone through without running out of stack, in the same order", () => {
+  const id = (i) => "00000000-0000-4000-8000-" + String(i).padStart(12, "0");
+  const n = 20000;
+  const pages = {};
+  for (let i = 0; i < n; i++) pages[id(i)] = { title: "P" + i, parent: i ? id(i - 1) : "", children: i < n - 1 ? [id(i + 1)] : [] };
+  const ix = W.cleanIndex({ top: [id(0)], pages });
+  assert.equal(W.withDescendants(ix, id(0)).length, n);
+  const open = {};
+  for (let i = 0; i < n; i++) open[id(i)] = true;
+  const r = W.rows(ix, open);
+  assert.deepEqual([r.length, r[n - 1].depth], [n, n - 1]);
+  assert.equal(W.sidebarRows(ix, open, new Date(), true).pages.length, n);
+  assert.equal(W.path(ix, id(n - 1)).length, n, "its path, from the top");
+  // In the same order as before: a page, then the pages in it, in turn.
+  const t = { top: [id(1), id(2)], pages: {} };
+  const kids = { 1: [3, 4], 2: [5], 3: [6], 4: [], 5: [7, 8], 6: [], 7: [], 8: [] };
+  Object.keys(kids).forEach((k) => { t.pages[id(+k)] = { title: "T" + k, parent: "", children: kids[k].map(id) }; });
+  Object.keys(kids).forEach((k) => kids[k].forEach((c) => { t.pages[id(c)].parent = id(+k); }));
+  const tx = W.cleanIndex(t);
+  assert.deepEqual(JSON.parse(JSON.stringify(W.withDescendants(tx, id(1)).map((x) => +x.slice(-3)))), [1, 3, 6, 4]);
+  const all = {};
+  Object.keys(kids).forEach((k) => { all[id(+k)] = true; });
+  assert.deepEqual(JSON.parse(JSON.stringify(W.rows(tx, all).map((x) => [+x.id.slice(-3), x.depth]))), [[1, 0], [3, 1], [6, 2], [4, 1], [2, 0], [5, 1], [7, 2], [8, 2]]);
+});
+
 console.log(`workspace: ${passed} checks passed`);
