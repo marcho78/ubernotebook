@@ -27,6 +27,9 @@ Item {
     function exec(argv, done, options) { files.exec(argv, done, options) }
     function mkdirs(paths, done) { files.mkdirs(paths, done) }
     function writeFile(path, text, done) { writes = writes.concat([path]); files.writeFile(path, text, done) }
+    readonly property string runtimeDir: "/tmp"
+    function helper(args, done, options) { files.helper(args, done, options) }
+    function parseJson(text) { return files.parseJson(text) }
   }
 
   UberNotebook.Mirror {

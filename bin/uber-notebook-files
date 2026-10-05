@@ -63,6 +63,20 @@
 #       folder), the picture must be in it, every step opened without
 #       following a link. Prints JSON: { ok, name, width, height } or
 #       { ok: false, error }.
+#   mirror-apply <copy folder> <plan file>
+#       The Markdown copy's changes (Mirror.qml writes the plan, a file of
+#       its own, JSON: { ops: [{ op: "write", path, expect, text } or
+#       { op: "remove", path, expect }] }; it's read, then taken away), each
+#       made only to a file that's still as the copy wrote it: `expect` is
+#       its fingerprint ("s256:<hex>" of its bytes; "absent": none may be
+#       there). The file there is moved aside first (one rename: what was
+#       there then is what's checked), then put back if it's changed (it's
+#       yours now), or replaced (never over a file that's appeared since) or
+#       taken away. A fingerprint from before ("<hex>:<length>") is no
+#       proof: such a file is the copy's only if it's exactly what it would
+#       write. Every path below the folder, walked without following a
+#       link; folders it empties go. Prints JSON: { ok, written: { path:
+#       fingerprint }, removed: [path], kept: [path], failed: { path: why } }.
 #   export-html <assets folder> <work folder> <max bytes>
 #       A page made a document (Export.js wrote <work folder>/page.src.html,
 #       a folder of Uber Notebook's own) with its pictures put in, as
@@ -751,6 +765,169 @@ def cmd_copy_picture(source, folder, name, max_bytes, within=None):
     print(json.dumps({"ok": True, "name": name, "width": size[0] if size else 0, "height": size[1] if size else 0}))
 
 
+# ---- the Markdown copy --------------------------------------------------------------------------
+
+def fingerprint_of(fd):
+    h = hashlib.sha256()
+    while True:
+        chunk = os.read(fd, CHUNK)
+        if not chunk:
+            return "s256:" + h.hexdigest()
+        h.update(chunk)
+
+
+def mirror_path(path):
+    parts = parts_of(path) if isinstance(path, str) else None
+    if not parts or len(parts) < 2 or parts[0] not in ("Pages", "Notebooks", "sketches") or not re.search(r"\.(md|svg)$", parts[-1]):
+        return None
+    return parts
+
+
+def held_fingerprint(dfd, name):
+    """The fingerprint of the plain file `name` in dfd (not through a link),
+    or None (not one)."""
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        return fingerprint_of(fd)
+    finally:
+        os.close(fd)
+
+
+def put_back(dfd, aside, name):
+    """What was moved aside back where it was (never over what's appeared
+    there since: then it stays aside, beside it, kept)."""
+    try:
+        if stat.S_ISDIR(os.lstat(aside, dir_fd=dfd).st_mode):
+            # (A folder can't be linked: renamed back, if nothing's there.)
+            try:
+                os.lstat(name, dir_fd=dfd)
+            except FileNotFoundError:
+                os.rename(aside, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+                return
+            raise FileExistsError(name)
+        os.link(aside, name, src_dir_fd=dfd, dst_dir_fd=dfd, follow_symlinks=False)
+        os.unlink(aside, dir_fd=dfd)
+    except OSError:
+        try:
+            os.rename(aside, name + " (kept)", src_dir_fd=dfd, dst_dir_fd=dfd)
+        except OSError:
+            pass
+
+
+def mirror_op(root_fd, op):
+    parts = mirror_path(op.get("path"))
+    if parts is None:
+        raise Refused("not a file of the copy's")
+    expect = str(op.get("expect", ""))
+    kind = op.get("op")
+    if kind == "write":
+        data = str(op.get("text", "")).encode("utf-8", "surrogatepass")
+        mine = "s256:" + hashlib.sha256(data).hexdigest()
+        dfd = folder_for(root_fd, parts[:-1])
+    elif kind == "remove":
+        mine = None
+        try:
+            dfd = walk(root_fd, parts[:-1])
+        except FileNotFoundError:
+            return ("removed", None)
+    else:
+        raise Refused("no such change")
+    name = parts[-1]
+    tag = os.urandom(6).hex()
+    try:
+        tmp = None
+        if kind == "write":
+            tmp = ".uber-notebook-new-%s" % tag
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+            try:
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+            finally:
+                os.close(fd)
+        try:
+            aside = ".uber-notebook-aside-%s" % tag
+            try:
+                os.rename(name, aside, src_dir_fd=dfd, dst_dir_fd=dfd)
+            except FileNotFoundError:
+                aside = None
+            if aside is not None:
+                there = held_fingerprint(dfd, aside)
+                ours = there is not None and ((expect.startswith("s256:") and there == expect) or (mine is not None and there == mine))
+                if not ours or (kind == "write" and expect == "absent"):
+                    put_back(dfd, aside, name)
+                    return ("kept", None)
+                os.unlink(aside, dir_fd=dfd)
+            if kind == "remove":
+                return ("removed", None)
+            try:
+                os.link(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd, follow_symlinks=False)
+            except FileExistsError:
+                return ("kept", None)
+            return ("written", mine)
+        finally:
+            if tmp is not None:
+                try:
+                    os.unlink(tmp, dir_fd=dfd)
+                except OSError:
+                    pass
+    finally:
+        os.close(dfd)
+
+
+def empty_folders_gone(root_fd, folders):
+    """Folders of the copy's left empty, taken away (deepest first)."""
+    for parts in sorted(folders, key=len, reverse=True):
+        for k in range(len(parts), 0, -1):
+            try:
+                pfd = walk(root_fd, parts[:k - 1])
+            except OSError:
+                break
+            try:
+                os.rmdir(parts[k - 1], dir_fd=pfd)
+            except OSError:
+                break
+            finally:
+                os.close(pfd)
+
+
+def cmd_mirror_apply(folder, plan_file):
+    with open_regular(plan_file) as f:
+        raw = f.read(512 * 1024 * 1024 + 1)
+    os.unlink(plan_file)
+    if len(raw) > 512 * 1024 * 1024:
+        raise Refused("the plan is too big")
+    plan = json.loads(raw.decode("utf-8", "surrogatepass"))
+    root_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    out = {"ok": True, "written": {}, "removed": [], "kept": [], "failed": {}}
+    emptied = []
+    try:
+        if os.fstat(root_fd).st_uid != os.getuid():
+            raise Refused("that folder isn't yours")
+        for op in plan.get("ops", [])[:200000]:
+            path = op.get("path") if isinstance(op, dict) else None
+            try:
+                what, fp = mirror_op(root_fd, op)
+                if what == "written":
+                    out["written"][path] = fp
+                elif what == "removed":
+                    out["removed"].append(path)
+                    emptied.append(mirror_path(path)[:-1])
+                else:
+                    out["kept"].append(path)
+            except (OSError, Refused, ValueError, TypeError) as e:
+                out["failed"][str(path)] = (getattr(e, "strerror", None) or str(e))[:200]
+        empty_folders_gone(root_fd, emptied)
+    finally:
+        os.close(root_fd)
+    print(json.dumps(out, ensure_ascii=False))
+
+
 # ---- a text file -------------------------------------------------------------------------------
 
 def cmd_read(max_bytes, path):
@@ -1172,6 +1349,8 @@ def main(argv):
             cmd_inspect(argv[2])
         elif len(argv) in (6, 7) and argv[1] == "copy-picture":
             cmd_copy_picture(*argv[2:])
+        elif len(argv) == 4 and argv[1] == "mirror-apply":
+            cmd_mirror_apply(argv[2], argv[3])
         elif len(argv) == 5 and argv[1] == "export-html":
             cmd_export_html(argv[2], argv[3], argv[4])
         elif len(argv) == 3 and argv[1] == "serve":

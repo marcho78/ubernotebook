@@ -71,4 +71,23 @@ check("folders it may use", () => {
   assert.ok(M.folderProblem("relative/path", root, "/home/u", []));
 });
 
+check("fingerprints: SHA-256 of the bytes it writes; one from before is never a match", () => {
+  const crypto = require("node:crypto");
+  for (const t of ["", "# A\n", "\u00e9t\u00e9 \u2713 \u{1f600}\n", "x".repeat(100000)]) {
+    assert.equal(M.hash(t), "s256:" + crypto.createHash("sha256").update(Buffer.from(t, "utf8")).digest("hex"), JSON.stringify(t.slice(0, 10)));
+  }
+  assert.ok(M.isHash(M.hash("a")));
+  assert.ok(!M.isHash("57c663da:17"), "the short one from before");
+  // The pair Codex found colliding under the old fingerprint: apart now.
+  assert.notEqual(M.hash("note r&BZFY4*]Iqg"), M.hash("note 8st(xi`)#Y5;"));
+  // A file listed with an old fingerprint is written again (the files helper
+  // then takes it as the copy's only if it's exactly what it would write).
+  const todo = M.plan({ "Pages/A.md": "0000abcd:4" }, { "Pages/A.md": "# A\n" }, { "Pages/A.md": true });
+  assert.deepEqual(plain(todo.write), ["Pages/A.md"]);
+  // With the fingerprints Mirror.qml keeps: the same.
+  let asked = 0;
+  const cached = M.plan({ "Pages/A.md": M.hash("# A\n") }, { "Pages/A.md": "# A\n" }, { "Pages/A.md": true }, (p, t) => { asked++; return M.hash(t); });
+  assert.deepEqual([plain(cached.write), asked], [[], 1]);
+});
+
 console.log(`mirror: ${passed} checks passed`);

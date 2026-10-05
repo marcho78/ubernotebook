@@ -1,5 +1,6 @@
 import QtQuick
 import "../../Library.js" as Library
+import "../../Mirror.js" as Mirror
 import "../../Agent.js" as Agent
 
 // Files in memory, with the calls Workspace.qml makes of Store.qml: for
@@ -182,6 +183,30 @@ QtObject {
   function exec(argv, done, options) {
     ran = ran.concat([argv.slice()])
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-export-tools") { done(true, exportTools); return }
+    // The Markdown copy's changes (bin/uber-notebook-files mirror-apply):
+    // each made only to a file still as it wrote it (its fingerprint), else
+    // kept; the plan taken away.
+    if (argv[3] === filesHelper && argv[4] === "mirror-apply") {
+      var mdir = argv[5]
+      var mplan = JSON.parse(disk[argv[6]])
+      delete disk[argv[6]]
+      var res = { ok: true, written: {}, removed: [], kept: [], failed: {} }
+      mplan.ops.forEach(function(op) {
+        if (!Mirror.isMirrorPath(op.path)) { res.failed[op.path] = "not a file of the copy's"; return }
+        var full = mdir + "/" + op.path
+        var mine = op.op === "write" ? Mirror.hash(op.text) : null
+        if (disk[full] !== undefined) {
+          var there = Mirror.hash(disk[full])
+          var ours = (Mirror.isHash(op.expect) && there === op.expect) || (mine !== null && there === mine)
+          if (!ours || (op.op === "write" && op.expect === "absent")) { res.kept.push(op.path); return }
+        }
+        if (op.op === "remove") { delete disk[full]; res.removed.push(op.path); return }
+        disk[full] = String(op.text)
+        res.written[op.path] = mine
+      })
+      done(true, JSON.stringify(res))
+      return
+    }
     if (argv[3] === filesHelper && argv[4] === "export-html") {
       if (failExportHtml) { done(false, JSON.stringify({ ok: false, error: failExportHtml })); return }
       disk[argv[6] + "/page.html"] = disk[argv[6] + "/page.src.html"]

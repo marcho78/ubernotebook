@@ -43,7 +43,6 @@ Item {
   property var notebookCache: ({})
 
   readonly property string listScript: "cd \"$1\" 2>/dev/null || exit 0; for d in Pages Notebooks sketches; do [ -d \"$d\" ] && /usr/bin/find \"$d\" -maxdepth 16 -type f \\( -name '*.md' -o -name '*.svg' \\) -print; done; exit 0"
-  readonly property string rmdirScript: "cd \"$1\" || exit 0; shift; for d in \"$@\"; do /usr/bin/rmdir -p --ignore-fail-on-non-empty -- \"$d\" 2>/dev/null; done; exit 0"
 
   Timer {
     id: timer
@@ -212,56 +211,44 @@ Item {
     return { desired: desired, notebookDirs: dirs }
   }
 
-  // A file of the copy's that isn't as it wrote it (edited in Obsidian, say)
-  // is yours now: never written over or taken away, and no longer the copy's
-  // (its page goes to "Name (2).md" next time). Each one it would change is
-  // read first. done(write, remove) with those left out.
-  function keepEdited(dir, todo, existing, done) {
-    var man = manifest || {}
-    var check = todo.write.filter(function(p) { return man[p] !== undefined && existing[p] }).concat(todo.remove.filter(function(p) { return existing[p] }))
-    if (check.length === 0) { done(todo.write, todo.remove, {}); return }
-    store.readFiles(check.map(function(p) { return dir + "/" + p }), function(got) {
-      var edited = {}
-      check.forEach(function(p) {
-        var text = got[dir + "/" + p]
-        // (One it couldn't read: left as it is.)
-        if (text === undefined || Mirror.hash(text) !== man[p]) edited[p] = true
-      })
-      done(todo.write.filter(function(p) { return !edited[p] }), todo.remove.filter(function(p) { return !edited[p] }), edited)
-    }, 64 * 1024 * 1024)
+  // Each file's fingerprint (Mirror.hash), worked out again only when its
+  // text changed: { path: { text, hash } }.
+  property var hashes: ({})
+  function hashOf(path, text) {
+    var h = hashes[path]
+    if (h && h.text === text) return h.hash
+    var v = Mirror.hash(text)
+    hashes[path] = { text: text, hash: v }
+    return v
   }
 
+  // What changed, made by the files helper (mirror-apply): each file written
+  // or taken away only if it's still as the copy wrote it (its fingerprint,
+  // checked on its bytes as it's moved aside). One that isn't (edited in
+  // Obsidian, say) is yours now: never written over or taken away, and no
+  // longer the copy's (its page goes to "Name (2).md" the next time, which
+  // is at once).
   function write(dir, gen, existing, pages, notebooks) {
     var built = build(existing, pages, notebooks)
-    var planned = Mirror.plan(manifest || {}, built.desired, existing)
-    keepEdited(dir, planned, existing, function(toWrite, toRemove, edited) {
-      if (gen !== mirror.generation) return finish(gen)
-      if (Object.keys(edited).length === 0) { writeNow(dir, gen, built, { write: toWrite, remove: toRemove }, edited, existing); return }
-      // (They're yours now: the copy is planned again without them, so their
-      // pages' copies go beside them.)
-      var man = {}
-      for (var k in (mirror.manifest || {})) if (!edited[k]) man[k] = mirror.manifest[k]
-      mirror.manifest = man
-      var again = build(existing, pages, notebooks)
-      writeNow(dir, gen, again, Mirror.plan(man, again.desired, existing), edited, existing)
-    })
+    apply(dir, gen, built, Mirror.plan(manifest || {}, built.desired, existing, mirror.hashOf), existing)
   }
 
-  function writeNow(dir, gen, built, todo, edited, existing) {
+  function apply(dir, gen, built, todo, existing) {
     var desired = built.desired
+    var man = manifest || {}
+    // (What it wrote before and is still as it would write: still its own.
+    // An old fingerprint, from before, is no proof of that.)
     var next = {}
-    for (var p in desired) if (!edited[p] && (manifest || {})[p] === Mirror.hash(desired[p]) && existing[p]) next[p] = (manifest || {})[p]
-    var dirs = {}
-    todo.write.forEach(function(path) { dirs[dir + "/" + path.slice(0, path.lastIndexOf("/"))] = true })
-    var pending = 1
-    function one() {
-      if (--pending > 0) return
+    for (var p in desired) if (Mirror.isHash(man[p]) && man[p] === hashOf(p, desired[p]) && existing[p]) next[p] = man[p]
+    var ops = todo.write.map(function(path) { return { op: "write", path: path, expect: existing[path] ? (man[path] || "") : "absent", text: desired[path] } })
+      .concat(todo.remove.map(function(path) { return { op: "remove", path: path, expect: man[path] || "" } }))
+    function after(kept) {
       // Pictures: Pages' into assets/, each notebook's into its folder.
       var copies = [[workspace.folder + "/assets", dir + "/assets"]]
       built.notebookDirs.forEach(function(d) { copies.push([mirror.notesRoot + "/" + d.id + "/assets", dir + "/" + d.dir + "/assets"]) })
       copyAll(copies, function() {
         if (gen !== mirror.generation) return finish(gen)
-        var changed = canon(next) !== canon(mirror.manifest || {}) || todo.write.length > 0 || todo.remove.length > 0
+        var changed = canon(next) !== canon(mirror.manifest || {}) || ops.length > 0
         mirror.manifest = next
         var done = function() {
           mirror.files = Object.keys(next).length
@@ -269,29 +256,32 @@ Item {
           mirror.status = "Up to date"
           mirror.synced()
           finish(gen)
+          // (Yours now: their pages' copies go beside them.)
+          if (kept.length) mirror.schedule()
         }
         if (changed) store.writeFile(dir + "/" + Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Uber Notebook", files: next }, null, 1) + "\n", function() { done() })
         else done()
       })
     }
-    store.mkdirs(Object.keys(dirs).length ? Object.keys(dirs) : [dir], function(ok) {
-      if (!ok) { mirror.status = "Couldn't make " + dir; return finish(gen) }
-      todo.write.forEach(function(path) {
-        pending++
-        store.writeFile(dir + "/" + path, desired[path], function(written) {
-          if (written) next[path] = Mirror.hash(desired[path])
-          one()
-        })
+    if (!ops.length) { after([]); return }
+    var plan = store.runtimeDir + "/uber-notebook-mirror-plan-" + Workspace.uuid4().slice(0, 8) + ".json"
+    store.mkdirs([dir], function(made) {
+      if (!made) { mirror.status = "Couldn't make " + dir; return finish(gen) }
+      store.writeFile(plan, JSON.stringify({ ops: ops }), function(wrote) {
+        if (!wrote) { mirror.status = "Couldn't copy: its plan couldn't be written"; return finish(gen) }
+        store.helper(["mirror-apply", dir, plan], function(ok, out) {
+          var r = store.parseJson(String(out || "").trim().split("\n").pop())
+          if (!ok || !r || r.ok !== true) {
+            store.exec(["/usr/bin/rm", "-f", "--", plan], null)
+            mirror.status = "Couldn't copy: " + (r && r.error ? r.error : String(out || "").split("\n")[0] || "the files helper didn't answer")
+            return finish(gen)
+          }
+          for (var w in r.written) if (Mirror.isHash(r.written[w])) next[w] = r.written[w]
+          // (One it couldn't change: as it was, its own if it was.)
+          for (var f in (r.failed || {})) if (Mirror.isHash(man[f]) && existing[f]) next[f] = man[f]
+          after(r.kept || [])
+        }, { timeoutMs: 120000, maxBytes: 8 * 1024 * 1024 })
       })
-      if (todo.remove.length) {
-        pending++
-        store.exec(["/usr/bin/rm", "-f", "--"].concat(todo.remove.map(function(path) { return dir + "/" + path })), function() {
-          var gone = {}
-          todo.remove.forEach(function(path) { gone[path.slice(0, path.lastIndexOf("/"))] = true })
-          store.exec(["/usr/bin/bash", "-c", rmdirScript, "uber-notebook-mirror-rmdir", dir].concat(Object.keys(gone)), function() { one() })
-        })
-      }
-      one()
     })
   }
 

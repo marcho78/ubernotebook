@@ -398,6 +398,63 @@ try {
     const fine = run(zip(path.join(tmp, "fine.zip"), [{ name: "a/b/x.md", data: "x" }, { name: "c/" }]), 5);
     assert.deepEqual([fine.r.ok, fine.r.files, fine.made], [true, 1, 4]);
   });
+  check("the Markdown copy's changes: made only to files still as it wrote them; yours kept", () => {
+    const crypto = require("node:crypto");
+    const fp = (t) => "s256:" + crypto.createHash("sha256").update(Buffer.from(t, "utf8")).digest("hex");
+    const m = folder("mirror");
+    const outside = folder("mirror-outside");
+    const put = (rel, text) => { fs.mkdirSync(path.dirname(path.join(m, rel)), { recursive: true }); fs.writeFileSync(path.join(m, rel), text); };
+    put("Pages/A.md", "A1");            // the copy's: written over
+    put("Pages/B.md", "B, as you edited it");  // yours now: kept
+    put("Pages/C.md", "C1");            // the copy's: taken away
+    put("Pages/D.md", "D, edited");     // yours: kept, not taken away
+    put("Pages/Legacy.md", "L");        // an old fingerprint, exactly what it'd write: the copy's
+    put("Pages/Legacy2.md", "old L2");  // an old fingerprint, not what it'd write: kept
+    fs.mkdirSync(path.join(m, "Pages", "Dir.md"));  // a folder where a file was
+    fs.writeFileSync(path.join(outside, "secret.md"), "SECRET");
+    fs.symlinkSync(path.join(outside, "secret.md"), path.join(m, "Pages", "Link.md"));
+    put("Pages/Taken.md", "someone's");  // a file where it means to write a new one
+    put("Pages/sub/Deep.md", "deep");    // the copy's, alone in its folder
+    const plan = path.join(tmp, "mirror-plan.json");
+    fs.writeFileSync(plan, JSON.stringify({ ops: [
+      { op: "write", path: "Pages/A.md", expect: fp("A1"), text: "A2 ✓" },
+      { op: "write", path: "Pages/B.md", expect: fp("B1"), text: "B2" },
+      { op: "remove", path: "Pages/C.md", expect: fp("C1") },
+      { op: "remove", path: "Pages/D.md", expect: fp("D1") },
+      { op: "write", path: "Pages/Legacy.md", expect: "0000abcd:1", text: "L" },
+      { op: "write", path: "Pages/Legacy2.md", expect: "0000abcd:6", text: "new L2" },
+      { op: "write", path: "Pages/Dir.md", expect: fp("x"), text: "y" },
+      { op: "write", path: "Pages/Link.md", expect: fp("SECRET"), text: "OVER" },
+      { op: "write", path: "Pages/New.md", expect: "absent", text: "new" },
+      { op: "write", path: "Pages/Taken.md", expect: "absent", text: "mine" },
+      { op: "remove", path: "Pages/sub/Deep.md", expect: fp("deep") },
+      { op: "write", path: "../escape.md", expect: "absent", text: "x" },
+      { op: "write", path: "Other/x.md", expect: "absent", text: "x" }
+    ] }));
+    const r = helperRun(["mirror-apply", m, plan]);
+    const out = JSON.parse(r.out);
+    const read = (rel) => fs.readFileSync(path.join(m, rel), "utf8");
+    assert.equal(out.ok, true, r.err);
+    assert.deepEqual(Object.keys(out.written).sort(), ["Pages/A.md", "Pages/Legacy.md", "Pages/New.md"]);
+    assert.equal(out.written["Pages/A.md"], fp("A2 ✓"), "its fingerprint, of the bytes written");
+    assert.equal(read("Pages/A.md"), "A2 ✓");
+    assert.equal(read("Pages/New.md"), "new");
+    assert.deepEqual(out.removed.sort(), ["Pages/C.md", "Pages/sub/Deep.md"]);
+    assert.ok(!fs.existsSync(path.join(m, "Pages", "C.md")));
+    assert.ok(!fs.existsSync(path.join(m, "Pages", "sub")), "a folder it emptied, gone");
+    assert.deepEqual(out.kept.sort(), ["Pages/B.md", "Pages/D.md", "Pages/Dir.md", "Pages/Legacy2.md", "Pages/Link.md", "Pages/Taken.md"]);
+    assert.equal(read("Pages/B.md"), "B, as you edited it");
+    assert.equal(read("Pages/D.md"), "D, edited");
+    assert.equal(read("Pages/Legacy2.md"), "old L2", "an old fingerprint is no proof");
+    assert.ok(fs.statSync(path.join(m, "Pages", "Dir.md")).isDirectory(), "a folder, put back");
+    assert.ok(fs.lstatSync(path.join(m, "Pages", "Link.md")).isSymbolicLink(), "a link, put back, not followed");
+    assert.equal(fs.readFileSync(path.join(outside, "secret.md"), "utf8"), "SECRET");
+    assert.equal(read("Pages/Taken.md"), "someone's");
+    assert.deepEqual(Object.keys(out.failed).sort(), ["../escape.md", "Other/x.md"]);
+    assert.ok(!fs.existsSync(path.join(tmp, "escape.md")));
+    assert.ok(!fs.existsSync(plan), "the plan, taken away once read");
+    assert.deepEqual(fs.readdirSync(path.join(m, "Pages")).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
