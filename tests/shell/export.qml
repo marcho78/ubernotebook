@@ -26,6 +26,7 @@ ShellRoot {
     function readPages(ids, done) { done([]) }
     function contactById(id) { return null }
     function readPageNow(id) { return null }
+    function readSyncedOf(pages, done) { done() }
   }
 
   UNA.Exporter {
