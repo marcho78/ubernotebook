@@ -45,6 +45,11 @@ The first version.
   to ask whatever your settings say; each takes its request and your
   answers on its input. Each conversation has a folder of its own.
 
+- **Uber Notebook's name and icon** at the top of Pages' sidebar and the
+  shelf (a click: Settings → About).
+- **Claude, Grok and Codex side by side**, first, as tiles in the agent box
+  and Settings → AI, each with who makes it and whether it's installed:
+  they work right here; the other agents, under them, open in a terminal.
 - **The skill for any AI**: Settings → AI → *Use with any AI* copies
   Uber Notebook's skill, saves a copy where you say, or shows its file, and
   `omarchy-shell uber-notebook skill` prints it, for an AI that can run

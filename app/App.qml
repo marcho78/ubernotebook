@@ -122,6 +122,7 @@ FocusScope {
     onDeleteRequested: function(notebook) { root.askDelete(notebook) }
     onMoveRequested: function(notebook) { root.askMove(notebook) }
     onSettingsRequested: settingsPanel.open()
+    onAboutRequested: settingsPanel.openAt("about")
     onReleaseNotesRequested: releaseNotes.show()
     onResultOpened: function(notebookId, pageId, query) {
       var meta = null
@@ -164,6 +165,7 @@ FocusScope {
     focus: visible
     onNotebooksRequested: root.showSpace("notebooks")
     onSettingsRequested: settingsPanel.open()
+    onAboutRequested: settingsPanel.openAt("about")
     onSidebarChoicesRequested: settingsPanel.openAt("appearance", "sidebarChoices")
     onReleaseNotesRequested: releaseNotes.show()
     onToast: function(text) { root.toast(text) }

@@ -669,15 +669,16 @@ Rectangle {
     width: parent.width - 16
     spacing: 6
 
+    // Uber Notebook: its icon and name (a click: Settings → About), and the
+    // sidebar hidden.
     Item {
       width: parent.width
-      height: 40
-      SpaceSwitch {
+      height: 32
+      AppName {
         theme: bar.theme
-        space: "pages"
-        anchors.verticalCenter: parent.verticalCenter
         x: 4
-        onPicked: function(space) { if (space === "notebooks") bar.view.notebooksRequested() }
+        anchors.verticalCenter: parent.verticalCenter
+        onClicked: bar.view.aboutRequested()
       }
       IconButton {
         anchors.right: parent.right
@@ -688,6 +689,17 @@ Rectangle {
         iconSize: 15
         tip: "Hide the sidebar  Ctrl+\\"
         onClicked: bar.view.sidebarShown = false
+      }
+    }
+    Item {
+      width: parent.width
+      height: 36
+      SpaceSwitch {
+        theme: bar.theme
+        space: "pages"
+        anchors.verticalCenter: parent.verticalCenter
+        x: 4
+        onPicked: function(space) { if (space === "notebooks") bar.view.notebooksRequested() }
       }
     }
     // The profile open, and the others.

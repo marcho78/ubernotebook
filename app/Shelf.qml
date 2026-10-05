@@ -22,6 +22,8 @@ Item {
   // Into Pages: a page, with a page in it for each of its pages (App.qml).
   signal moveRequested(var notebook)
   signal settingsRequested()
+  // Uber Notebook's name clicked: Settings → About.
+  signal aboutRequested()
   // What's new in a newer version (the corner says there's one).
   signal releaseNotesRequested()
   signal resultOpened(string notebookId, string pageId, string query)
@@ -67,13 +69,19 @@ Item {
     id: header
     anchors.left: parent.left
     anchors.right: parent.right
-    height: 86
+    height: 112
 
     Column {
       anchors.left: parent.left
       anchors.leftMargin: 34
       anchors.verticalCenter: parent.verticalCenter
       spacing: 0
+      // Uber Notebook: its icon and name (a click: Settings → About).
+      AppName {
+        theme: shelf.theme
+        bottomPadding: 6
+        onClicked: shelf.aboutRequested()
+      }
       Text {
         textFormat: Text.PlainText
         text: "Notebooks"

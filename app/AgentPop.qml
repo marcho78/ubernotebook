@@ -319,27 +319,49 @@ Pop {
             theme: pop.theme
             focus: false
             y: agentButton.height + 6
-            width: 240
+            width: 380
             contentItem: Column {
               spacing: 2
               Text {
                 textFormat: Text.PlainText
                 leftPadding: 10
                 topPadding: 2
-                bottomPadding: 4
+                bottomPadding: 6
                 text: "Your agent (Omarchy's default too)"
                 font.family: pop.theme.uiFont
                 font.pixelSize: 11
                 font.weight: Font.DemiBold
                 color: pop.theme.muted
               }
+              // Claude, Grok and Codex first, side by side: they work here.
+              AgentTiles {
+                id: chooserTiles
+                theme: pop.theme
+                agents: pop.agents
+                agent: pop.agent
+                namePrefix: "chooseAgent_"
+                width: parent.width
+                onPicked: function(name) { pop.choose(name) }
+              }
+              Text {
+                visible: chooserTiles.others().length > 0
+                textFormat: Text.PlainText
+                leftPadding: 10
+                topPadding: 10
+                bottomPadding: 2
+                text: "In a terminal"
+                font.family: pop.theme.uiFont
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+                color: pop.theme.muted
+              }
               Repeater {
-                model: pop.agents
+                model: chooserTiles.others()
                 delegate: MenuRow {
                   required property var modelData
                   width: parent.width
                   theme: pop.theme
-                  icon: pop.theme.icons.agent
+                  icon: pop.theme.icons.terminal
                   text: modelData.label
                   checked: modelData.name === pop.agent
                   onClicked: pop.choose(modelData.name)

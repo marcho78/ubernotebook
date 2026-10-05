@@ -614,6 +614,18 @@ Item {
       // Your agent, and the others installed: choose one, and nothing opens.
       compare(view.agentBox.agents.map(function(a) { return a.name }).join(","), "claude,codex,gemini")
       clickText("Claude")
+      // Claude, Grok and Codex side by side, first (they work here); Grok
+      // not installed: said, and not picked by a click; the others under them.
+      var w = root.Window.window.contentItem
+      var tc = null, tg = null, tx = null
+      tryVerify(function() { tc = named(w, "chooseAgent_claude"); tg = named(w, "chooseAgent_grok"); tx = named(w, "chooseAgent_codex"); return tc && tg && tx && tg.mapToItem(null, 0, 0).x > tc.mapToItem(null, 0, 0).x }, 1000, "the three tiles")
+      verify(tc.mapToItem(null, 0, 0).x < tg.mapToItem(null, 0, 0).x && tg.mapToItem(null, 0, 0).x < tx.mapToItem(null, 0, 0).x, "Claude, Grok, Codex")
+      compare(named(tg, "agentTileStatus").text, "Not installed")
+      compare(named(tc, "agentTileStatus").text, "Works here")
+      verify(tc.checked, "yours, picked")
+      mouseClick(tg)
+      compare(files.agent, "claude", "one not installed isn't chosen")
+      verify(findText(w, "In a terminal") !== null)
       clickText("Gemini")
       compare(files.agent, "gemini", "Omarchy's default, from now on")
       compare(view.agentBox.agent, "gemini")

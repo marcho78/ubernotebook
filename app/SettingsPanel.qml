@@ -953,22 +953,47 @@ Popup {
         Group {
           visible: panel.section === "ai"
           title: "Your agent"
-          note: "Claude Code, Grok and Codex work right here, in a panel on the page. The others open in a terminal. It's Omarchy's default agent too."
+          note: "Claude, Grok and Codex work right here, in a panel on the page. The others open in a terminal. It's Omarchy's default agent too."
           Line {
             label: "Agent"
             note: panel.agentName ? Agent.name(panel.agentName) + (Agent.runsHere(panel.agentName) ? ": works here" : ": opens in a terminal") : "None chosen yet"
-            Flow {
-              width: Math.min(360, panel.width * 0.42)
+            // Claude, Grok and Codex first, side by side (they work here);
+            // then the others, which open in a terminal.
+            Column {
+              width: Math.min(380, panel.width * 0.46)
               spacing: 6
-              Repeater {
-                model: panel.agents
-                delegate: Chip {
-                  required property var modelData
-                  objectName: "aiAgent_" + modelData.name
-                  theme: panel.theme
-                  text: modelData.label
-                  checked: panel.agentName === modelData.name
-                  onClicked: panel.chooseAgent(modelData.name)
+              AgentTiles {
+                id: settingsTiles
+                theme: panel.theme
+                agents: panel.agents
+                agent: panel.agentName
+                namePrefix: "aiAgent_"
+                width: parent.width
+                onPicked: function(name) { panel.chooseAgent(name) }
+              }
+              Text {
+                visible: settingsTiles.others().length > 0
+                textFormat: Text.PlainText
+                topPadding: 4
+                text: "In a terminal"
+                font.family: panel.theme.uiFont
+                font.pixelSize: 11
+                font.weight: Font.DemiBold
+                color: panel.theme.muted
+              }
+              Flow {
+                width: parent.width
+                spacing: 6
+                Repeater {
+                  model: settingsTiles.others()
+                  delegate: Chip {
+                    required property var modelData
+                    objectName: "aiAgent_" + modelData.name
+                    theme: panel.theme
+                    text: modelData.label
+                    checked: panel.agentName === modelData.name
+                    onClicked: panel.chooseAgent(modelData.name)
+                  }
                 }
               }
             }

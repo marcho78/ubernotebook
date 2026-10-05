@@ -36,6 +36,8 @@ FocusScope {
 
   signal notebooksRequested()
   signal settingsRequested()
+  // Uber Notebook's name clicked: Settings → About.
+  signal aboutRequested()
   // Settings, at what's in the sidebar.
   signal sidebarChoicesRequested()
   // What's new in a newer version (the sidebar's foot says there's one).

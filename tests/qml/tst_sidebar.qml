@@ -269,6 +269,20 @@ Item {
       var before = Object.keys(ws.index.pages).length
       mouseClick(named("newPageButton"))
       tryVerify(function() { return Object.keys(ws.index.pages).length === before + 1 }, 2000, "a new page")
+      // Uber Notebook's name, at the top: a click, Settings → About (and
+      // nothing under it clicked too).
+      var name = named("appName")
+      verify(name !== null && name.visible)
+      verify(find(name, function(it) { return it.text === "Uber Notebook" }, []).length === 1)
+      verify(find(name, function(it) { return it.status === Image.Ready }, []).length === 1, "its icon")
+      var asked = 0
+      function about() { asked++ }
+      view.aboutRequested.connect(about)
+      var pages = Object.keys(ws.index.pages).length
+      mouseClick(name)
+      view.aboutRequested.disconnect(about)
+      compare(asked, 1)
+      compare(Object.keys(ws.index.pages).length, pages)
     }
   }
 }

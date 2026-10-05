@@ -531,15 +531,23 @@ Item {
       var first = null, last = null
       tryVerify(function() { first = named(win(), "aiAgent_claude"); last = named(win(), "aiAgent_pi"); return panel() !== null && first !== null && last !== null }, 1000)
       wait(100)
-      var flow = first.parent
-      var line = flow.parent.parent
-      verify(last.mapToItem(flow, 0, 0).y > first.mapToItem(flow, 0, 0).y, "wrapped to more rows")
+      // Claude, Grok and Codex side by side, first; the others after them,
+      // wrapped to more rows.
+      var grok = named(win(), "aiAgent_grok"), codex = named(win(), "aiAgent_codex"), copilot = named(win(), "aiAgent_copilot")
+      var y0 = first.mapToItem(null, 0, 0).y
+      verify(grok.mapToItem(null, 0, 0).y === y0 && codex.mapToItem(null, 0, 0).y === y0, "the three in a row")
+      verify(first.mapToItem(null, 0, 0).x < grok.mapToItem(null, 0, 0).x && grok.mapToItem(null, 0, 0).x < codex.mapToItem(null, 0, 0).x, "Claude, Grok, Codex")
+      verify(copilot.mapToItem(null, 0, 0).y > y0 + first.height, "the others under them")
+      verify(last.mapToItem(null, 0, 0).y > copilot.mapToItem(null, 0, 0).y, "wrapped to more rows")
+      var line = first
+      while (line && line.label !== "Agent") line = line.parent
+      verify(line !== null)
       var top = first.mapToItem(line, 0, 0).y
       var bottom = last.mapToItem(line, 0, last.height).y
       verify(top >= 4, "inside its line at the top: " + top)
       verify(bottom <= line.height - 4, "inside its line at the bottom: " + bottom + " of " + line.height)
       // The words under the card start below the chips.
-      var below = find(win(), function(it) { return typeof it.text === "string" && it.text.indexOf("Claude Code, Grok and Codex work right here") === 0 })
+      var below = find(win(), function(it) { return typeof it.text === "string" && it.text.indexOf("Claude, Grok and Codex work right here") === 0 })
       verify(below !== null)
       verify(below.mapToItem(null, 0, 0).y > last.mapToItem(null, 0, last.height).y, "the note under them, not over them")
       closeAll()
