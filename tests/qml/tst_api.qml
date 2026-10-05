@@ -1129,6 +1129,31 @@ Item {
       }
     }
 
+    // A file still being copied in when another profile's notes are opened:
+    // it isn't put on a page of theirs (their pages may have the same ids).
+    function test_29_a_copy_finished_after_another_profile_opened() {
+      fresh()
+      api.ui = null
+      var home = named("Getting started")
+      var pic = file("p.png", "PNG")
+      files.holdReads = true
+      try {
+        compare(json(api.attach(home, pic)).ok, true)
+        ws.generation++
+        files.answerReads()
+        verify(Workspace.flatten(fileOf(home)).every(function(b) { return b.type !== "image" }), "not on the page")
+        // As it was, it is.
+        ws.generation--
+        compare(json(api.attach(home, pic)).ok, true)
+        files.answerReads()
+        verify(Workspace.flatten(fileOf(home)).some(function(b) { return b.type === "image" }), "on the page")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        api.ui = ui
+      }
+    }
+
     function test_8_without_the_window() {
       fresh()
       api.ui = null

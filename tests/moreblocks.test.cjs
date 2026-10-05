@@ -204,7 +204,8 @@ check("a page read only from a name on the internet: http or https (https only f
   assert.equal(t("http://news.example.org/x", true), null, "an agent's: https only");
   assert.equal(t("https://example.com:8443/").port, 8443);
   for (const u of ["https://127.0.0.1/", "https://192.168.1.1/admin", "http://router/", "https://box.local/", "https://nas.lan/", "https://x.internal/",
-    "https://user@example.com/", "https://example.com:0/", "https://example.com:70000/", "ftp://example.com/", "file:///etc/passwd", "https://[::1]/"]) {
+    "https://user@example.com/", "https://example.com:0/", "https://example.com:70000/", "ftp://example.com/", "file:///etc/passwd", "https://[::1]/",
+    "https://example.com./", "https://example.com.:443/x", "https://a..example.com/", "https://.example.com/"]) {
     assert.equal(t(u), null, u);
   }
   assert.equal(BM.imageTarget("http://example.com/a.png"), null, "a picture: https only");

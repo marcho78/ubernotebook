@@ -57,6 +57,9 @@ Item {
     else { timer.stop(); status = ""; problem = "" }
   }
   onFolderChanged: { manifest = null; manifestFor = ""; schedule() }
+  // (Another profile's notes: nothing read from these is kept for them;
+  // their pages may have the same ids.)
+  onNotesRootChanged: { pageCache = ({}); notebookCache = ({}); schedule() }
 
   Connections {
     target: mirror.workspace
@@ -88,7 +91,10 @@ Item {
     status = "Copying\u2026"
     var gen = ++generation
     var dir = folder
-    function stale() { return gen !== mirror.generation || dir !== mirror.folder || !mirror.on }
+    // (Where it copies from, as it was when it started: a copy that's begun
+    // and another profile's open meanwhile, it stops.)
+    var from = { root: notesRoot, pages: workspace.folder }
+    function stale() { return gen !== mirror.generation || mirror.movedOn(dir, from) }
     loadManifest(dir, function() {
       if (stale()) return finish(gen)
       store.exec(["/usr/bin/bash", "-c", listScript, "uber-notebook-mirror-list", dir], function(ok, output) {
@@ -99,12 +105,14 @@ Item {
           if (stale()) return finish(gen)
           readNotebooks(function(notebooks) {
             if (stale()) return finish(gen)
-            write(dir, gen, existing, pages, notebooks)
+            write(dir, gen, existing, pages, notebooks, from)
           })
         })
       }, { timeoutMs: 20000, maxBytes: 8 * 1024 * 1024 })
     })
   }
+
+  function movedOn(dir, from) { return dir !== folder || !on || from.root !== notesRoot || !workspace || from.pages !== workspace.folder }
 
   function finish(gen) {
     if (gen !== generation) return
@@ -130,10 +138,12 @@ Item {
   // read, read again. done({ id: page }).
   function readPages(done) {
     var ix = workspace.index
+    var root = notesRoot
     // (Not the templates: they're no one's notes.)
     var ids = Object.keys(ix.pages).filter(function(id) { return !Workspace.inTrash(ix, id) && !Workspace.inTemplates(ix, id) })
     var need = ids.filter(function(id) { var c = pageCache[id]; return !c || c.modified !== ix.pages[id].modified || workspace.written[id] })
     workspace.readPages(need, function(list) {
+      if (root !== mirror.notesRoot) { done({}); return }
       var cache = {}
       ids.forEach(function(id) { if (mirror.pageCache[id]) cache[id] = mirror.pageCache[id] })
       list.forEach(function(p) { cache[p.id] = { modified: ix.pages[p.id] ? ix.pages[p.id].modified : p.modified, page: p } })
@@ -148,9 +158,11 @@ Item {
   // were last read, read again. done([{ id, title, pages }]).
   function readNotebooks(done) {
     var list = store.notebookList()
+    var root = notesRoot
     var cache = {}
     var i = 0
     function next() {
+      if (root !== mirror.notesRoot) { done([]); return }
       if (i >= list.length) {
         mirror.notebookCache = cache
         done(list.map(function(nb) { return { id: nb.id, title: nb.title, pages: cache[nb.id] ? cache[nb.id].pages : [] } }))
@@ -228,8 +240,9 @@ Item {
   // Obsidian, say) is yours now: never written over or taken away, and no
   // longer the copy's (its page goes to "Name (2).md" the next time, which
   // is at once).
-  function write(dir, gen, existing, pages, notebooks) {
+  function write(dir, gen, existing, pages, notebooks, from) {
     var built = build(existing, pages, notebooks)
+    built.from = from || { root: notesRoot, pages: workspace.folder }
     apply(dir, gen, built, Mirror.plan(manifest || {}, built.desired, existing, mirror.hashOf), existing)
   }
 
@@ -244,8 +257,9 @@ Item {
       .concat(todo.remove.map(function(path) { return { op: "remove", path: path, expect: man[path] || "" } }))
     function after(kept) {
       // Pictures: Pages' into assets/, each notebook's into its folder.
-      var copies = [[workspace.folder + "/assets", dir + "/assets"]]
-      built.notebookDirs.forEach(function(d) { copies.push([mirror.notesRoot + "/" + d.id + "/assets", dir + "/" + d.dir + "/assets"]) })
+      if (mirror.movedOn(dir, built.from)) return finish(gen)
+      var copies = [[built.from.pages + "/assets", dir + "/assets"]]
+      built.notebookDirs.forEach(function(d) { copies.push([built.from.root + "/" + d.id + "/assets", dir + "/" + d.dir + "/assets"]) })
       copyAll(copies, function() {
         if (gen !== mirror.generation) return finish(gen)
         var changed = canon(next) !== canon(mirror.manifest || {}) || ops.length > 0
@@ -259,7 +273,9 @@ Item {
           // (Yours now: their pages' copies go beside them.)
           if (kept.length) mirror.schedule()
         }
-        if (changed) store.writeFile(dir + "/" + Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Uber Notebook", files: next }, null, 1) + "\n", function() { done() })
+        // (Through the files helper: a link put where it goes is replaced,
+        // never written through.)
+        if (changed) store.putFile(dir, Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Uber Notebook", files: next }, null, 1) + "\n", function() { done() })
         else done()
       })
     }

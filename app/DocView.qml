@@ -247,14 +247,22 @@ FocusScope {
     var pageId = page ? page.id : ""
     service.pickFile("email", function(path) { if (path) view.addEmailTo(pageId, uid, path) })
   }
+  // fn, for when a file's copied in: nothing, if another profile's notes
+  // are open by then (it went into the folder that was; their pages may
+  // have the same ids).
+  function inThisFolder(fn) {
+    var gen = workspace ? workspace.generation : -1
+    var folder = workspace ? workspace.folder : ""
+    return function() { if (view.workspace && gen === view.workspace.generation && folder === view.workspace.folder) return fn.apply(null, arguments) }
+  }
   function addEmailTo(pageId, uid, path) {
-    workspace.importEmail(path, function(s, why) {
+    workspace.importEmail(path, inThisFolder(function(s, why) {
       if (!s) { view.toast(why || "That email couldn't be read"); return }
       if (!view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) { view.toast("Its page isn't open any more: the email's in Pages/assets"); return }
       var d = editor.dataOf(uid)
       for (var k in s) d[k] = s[k]
       editor.setData(uid, d)
-    })
+    }))
   }
   // An email's attachment: a calendar file's events, to put on your calendar;
   // a contact card's people, into People; anything else written out (once;
@@ -311,7 +319,7 @@ FocusScope {
     var got = []
     var left = list.length
     list.forEach(function(path, i) {
-      view.workspace.importPicture(path, function(src) {
+      view.workspace.importPicture(path, view.inThisFolder(function(src) {
         got[i] = src
         if (--left > 0) return
         var srcs = got.filter(function(s) { return !!s })
@@ -320,7 +328,7 @@ FocusScope {
         var d = editor.dataOf(uid)
         d.images = (d.images || []).concat(srcs.map(function(s) { return { src: s, caption: "" } }))
         editor.setData(uid, d)
-      })
+      }))
     })
   }
   // The gallery under a point of the page's drop area, or "".
@@ -492,7 +500,7 @@ FocusScope {
     })
   }
   function addFileTo(pageId, uid, path) {
-    workspace.importFile(path, function(f) {
+    workspace.importFile(path, inThisFolder(function(f) {
       if (!f) { view.toast("The file couldn't be copied in"); return }
       if (!view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) { view.toast("Its page isn't open any more: the file's in Pages/assets"); return }
       var d = editor.dataOf(uid)
@@ -502,15 +510,18 @@ FocusScope {
       d.kind = f.kind
       d.poster = f.poster || ""
       editor.setData(uid, d)
-    })
+    }))
   }
 
   // A bookmark's page read: its title, a line, its picture.
   function fetchBookmark(uid, url) {
     var pageId = page ? page.id : ""
     setDataWork(uid, true)
+    var gen = workspace.generation
     workspace.fetchBookmark(url, function(data, why) {
       view.setDataWork(uid, false)
+      // (Another profile's notes open by then: not for them.)
+      if (!view.workspace || gen !== view.workspace.generation) return
       if (why) view.toast(why)
       if (!data || !view.page || view.page.id !== pageId || editor.indexOf(uid) < 0) return
       var d = editor.dataOf(uid)
@@ -3351,7 +3362,7 @@ FocusScope {
           }
           onImageRequested: function(uid) {
             var place = function(path) {
-              if (path) view.workspace.importPicture(path, function(src) { if (src) editor.placeBlock(uid, { type: "image", src: src, width: 1, align: "center" }) })
+              if (path) view.workspace.importPicture(path, view.inThisFolder(function(src) { if (src) editor.placeBlock(uid, { type: "image", src: src, width: 1, align: "center" }) }))
             }
             // A picture, shown as pictures (the desktop's file dialog a click away).
             picturePicker.choose(false, function(paths) { place(paths[0]) }, function() { view.pictureRequested(place) })
@@ -3522,7 +3533,7 @@ FocusScope {
             }
             // Notes dropped on a page come in as pages inside it; pictures, on it.
             if (Import.kindOf(path) !== "") notes.push(path)
-            else if (i < 12 && Files.kindOf(path) === "image") view.workspace.importPicture(path, function(src) { if (src) editor.insertPicture(after, src, 0) })
+            else if (i < 12 && Files.kindOf(path) === "image") view.workspace.importPicture(path, view.inThisFolder(function(src) { if (src) editor.insertPicture(after, src, 0) }))
             else if (i < 12 && view.page && !view.locked) {
               // Any other file: a file block (a video's, a video block).
               var made = editor.placeBlock(after || editor.uidAt(editor.model.count - 1), { type: Files.kindOf(path) === "video" ? "video" : "file" })
@@ -4100,7 +4111,7 @@ FocusScope {
     }
     onPicked: function(cover) { view.setCover(cover) }
     onUploadRequested: view.pictureRequested(function(path) {
-      if (path) view.workspace.importPicture(path, function(src) { if (src) view.setCover(src) })
+      if (path) view.workspace.importPicture(path, view.inThisFolder(function(src) { if (src) view.setCover(src) }))
     })
   }
 

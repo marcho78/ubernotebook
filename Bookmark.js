@@ -47,7 +47,10 @@ function pageTarget(url, httpsOnly) {
   if (!m) return null
   var scheme = m[1].toLowerCase()
   if (httpsOnly && scheme !== "https") return null
-  var host = m[2].toLowerCase().replace(/\.$/, "")
+  // (A name ending in "." is the same site, but curl wouldn't take the
+  // address it's pinned to for it, and would look it up again itself.)
+  if (/\.$|^\.|\.\./.test(m[2])) return null
+  var host = m[2].toLowerCase()
   if (/^[0-9.]+$/.test(host) || !/\.[a-z][a-z0-9-]*$/.test(host)) return null
   if (/(^|\.)(localhost|local|localdomain|internal|intranet|lan|home|corp|private|arpa|test|invalid|example)$/.test(host)) return null
   var port = m[3] ? Number(m[3]) : scheme === "https" ? 443 : 80

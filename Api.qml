@@ -1159,6 +1159,15 @@ QtObject {
     return v !== name ? { background: name } : { color: name }
   }
 
+  // fn, for when a file's copied in (or a site read): nothing, if another
+  // profile's notes are open by then (it went into the folder that was;
+  // their pages may have the same ids).
+  function inThisFolder(fn) {
+    var gen = workspace.generation
+    var folder = workspace.folder
+    return function() { if (api.workspace && gen === api.workspace.generation && folder === api.workspace.folder) return fn.apply(null, arguments) }
+  }
+
   // Blocks put at the end of a page now, or later (after a file is copied in):
   // the window adds them itself when the page is open there.
   function appendNow(id, list) {
@@ -1196,9 +1205,9 @@ QtObject {
     var name = p.slice(p.lastIndexOf("/") + 1)
     var kind = files.isImagePath(p) ? "picture" : /\.eml$/i.test(name) ? "email" : Files.kindOf(name) === "video" ? "video" : "file"
     // (The panel's agent's picture only from its own folder, through no link.)
-    if (kind === "picture") workspace.importPicture(p, function(src) { if (src) api.appendNow(id, [{ type: "image", src: src, width: 1, align: "center", indent: 0 }]) }, caller ? caller.dir : "")
-    else if (kind === "email") workspace.importEmail(p, function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) })
-    else workspace.importFile(p, function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) })
+    if (kind === "picture") workspace.importPicture(p, inThisFolder(function(src) { if (src) api.appendNow(id, [{ type: "image", src: src, width: 1, align: "center", indent: 0 }]) }), caller ? caller.dir : "")
+    else if (kind === "email") workspace.importEmail(p, inThisFolder(function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) }))
+    else workspace.importFile(p, inThisFolder(function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) }))
     return answer({ ok: true, id: id, file: name, kind: kind, note: "it's being copied in, and shows at the end of the page in a moment (blocks <id> lists it there; if it doesn't, the file couldn't be read)" })
   }
 
@@ -1282,9 +1291,9 @@ QtObject {
     if (cols !== 2 && cols !== 4) cols = 3
     var within = caller ? caller.dir : ""
     picturesOf(pictures, function(paths) {
-      api.importPictures(paths, function(srcs) {
+      api.importPictures(paths, api.inThisFolder(function(srcs) {
         if (srcs.length) api.appendNow(id, [{ type: "gallery", indent: 0, data: Blocks.cleanData("gallery", { images: srcs.map(function(s) { return { src: s, caption: "" } }), columns: cols }) }])
-      }, within)
+      }), within)
     })
     return answer({ ok: true, id: id, columns: cols, note: "the pictures are being copied in: the gallery shows at the end of the page in a moment (blocks <id> lists it)" })
   }
@@ -1393,7 +1402,7 @@ QtObject {
       }, true)
       return e2 ? fail(e2) : answer({ ok: true, id: id, block: block, url: u, note: agentLink(id, u) })
     }
-    workspace.fetchBookmark(u, function(data) {
+    workspace.fetchBookmark(u, inThisFolder(function(data) {
       api.editPageNow(id, function(p) {
         var x = blockOf(p, block)
         if (!x || x.type !== "bookmark") return false
@@ -1402,7 +1411,7 @@ QtObject {
         for (var k in got) d[k] = got[k]
         x.data = Blocks.cleanData("bookmark", d)
       }, true)
-    })
+    }))
     return answer({ ok: true, id: id, block: block, url: u, note: "its page is being read; the card shows it in a moment" })
   }
 
@@ -1468,7 +1477,7 @@ QtObject {
       if (!appendNow(id, [{ type: "bookmark", indent: 0, data: { url: u, site: Bookmark.domain(u) } }])) return fail("couldn't add it to that page")
       return answer({ ok: true, id: id, url: u, note: agentLink(id, u) })
     }
-    workspace.fetchBookmark(u, function(data) { api.appendNow(id, [{ type: "bookmark", indent: 0, data: data || { url: u } }]) })
+    workspace.fetchBookmark(u, inThisFolder(function(data) { api.appendNow(id, [{ type: "bookmark", indent: 0, data: data || { url: u } }]) }))
     return answer({ ok: true, id: id, url: u, note: "its page is being read; the card shows at the end of the page in a moment" })
   }
 

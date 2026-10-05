@@ -27,6 +27,9 @@ Item {
     function exec(argv, done, options) { files.exec(argv, done, options) }
     function mkdirs(paths, done) { files.mkdirs(paths, done) }
     function writeFile(path, text, done) { writes = writes.concat([path]); files.writeFile(path, text, done) }
+    // (Through the files helper: a link there replaced, never written through.)
+    property var puts: []
+    function putFile(folder, path, text, done) { writes = writes.concat([folder + "/" + path]); puts = puts.concat([folder + "/" + path]); files.putFile(folder, path, text, done) }
     readonly property string runtimeDir: "/tmp"
     function helper(args, done, options) { files.helper(args, done, options) }
     function parseJson(text) { return files.parseJson(text) }
@@ -61,6 +64,7 @@ Item {
       tryCompare(ws, "ready", true, 2000)
       ws.ensureStarted()
       shim.writes = []
+      shim.puts = []
     }
     function copied() { return Object.keys(files.disk).filter(function(p) { return p.indexOf("/tmp/copy/") === 0 }).map(function(p) { return p.slice(10) }).sort() }
     function text(path) { return files.disk["/tmp/copy/" + path] }
@@ -75,6 +79,7 @@ Item {
       fresh()
       mirror.on = true
       tryVerify(function() { return mirror.status === "Up to date" }, 2000, "it copies once it's on")
+      compare(shim.puts, ["/tmp/copy/" + Mirror.MANIFEST], "what it wrote, kept through the files helper")
       var list = copied()
       verify(list.indexOf("Pages/Getting started.md") >= 0, list.join(", "))
       verify(list.indexOf("Pages/Getting started/A page inside a page.md") >= 0, "a page's pages in its folder")
@@ -200,6 +205,38 @@ Item {
       tryVerify(function() { return mirror.status === "Up to date" }, 2000, "a good folder: it copies")
       mirror.on = false
       compare(mirror.status, "")
+    }
+
+    // Another profile opened: what it read of these notes isn't kept for
+    // those (their pages may have the same ids), and a copy that had begun
+    // stops, writing nothing.
+    function test_6_another_profile_meanwhile() {
+      fresh()
+      mirror.on = true
+      tryVerify(function() { return mirror.status === "Up to date" }, 2000)
+      verify(Object.keys(mirror.pageCache).length > 0 && Object.keys(mirror.notebookCache).length > 0)
+      try {
+        mirror.notesRoot = "/tmp/other-notes"
+        compare(Object.keys(mirror.pageCache).length, 0, "its pages: not kept for another's")
+        compare(Object.keys(mirror.notebookCache).length, 0, "nor its notebooks")
+      } finally {
+        mirror.notesRoot = Qt.binding(function() { return files.rootPath })
+      }
+      fresh()
+      files.holdReads = true
+      try {
+        mirror.on = true
+        tryVerify(function() { return mirror.busy }, 2000, "a copy begun")
+        mirror.notesRoot = "/tmp/other-notes"
+        tryVerify(function() { files.answerReads(); return !mirror.busy }, 3000, "and over")
+        compare(copied(), [], "nothing of these notes written for another profile")
+        mirror.on = false
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        mirror.on = false
+        mirror.notesRoot = Qt.binding(function() { return files.rootPath })
+      }
     }
   }
 }

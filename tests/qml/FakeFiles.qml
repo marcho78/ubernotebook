@@ -118,7 +118,7 @@ QtObject {
   property var failReads: ({})
   // As Store's while its files helper serves your notes (servesAll): a page
   // isn't read there and then (readNow), only in the background; with
-  // holdReads, a read waits for answerReads().
+  // holdReads, a read (or a picture copied in) waits for answerReads().
   property bool servesAll: false
   property bool holdReads: false
   function servesNotes(path) { return servesAll }
@@ -455,6 +455,11 @@ QtObject {
   // what it was asked, `within` too, for tests.
   property var picturesIn: []
   function copyPictureIn(from, folder, name, done, within) {
+    // (holdReads: copied when answerReads() is.)
+    if (holdReads) { heldReads.push(function() { files.copyPictureInNow(from, folder, name, done, within) }); return }
+    copyPictureInNow(from, folder, name, done, within)
+  }
+  function copyPictureInNow(from, folder, name, done, within) {
     picturesIn = picturesIn.concat([{ from: from, to: folder + "/" + name, within: within || "" }])
     var ok = disk[from] !== undefined && disk[folder + "/" + name] === undefined
     if (ok) disk[folder + "/" + name] = disk[from]
