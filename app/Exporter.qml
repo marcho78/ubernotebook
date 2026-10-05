@@ -41,8 +41,10 @@ Item {
     + "&& [ $(( 0$(/usr/bin/stat -c %a -- \"$f\") & 022 )) = 0 ]; then echo \"$f\"; fi; done; "
     + "/usr/bin/unshare --user --map-current-user --net -- /usr/bin/true 2>/dev/null && echo unshare; true"
 
-  function probe(done) {
-    if (tools) { done(tools); return }
+  // (`need`: "browser", "office", or "any" for both: looked for again if it
+  // wasn't there, so one installed since is found.)
+  function probe(done, need) {
+    if (tools && (!need || (need === "any" ? tools.browser && tools.office : tools[need]))) { done(tools); return }
     var files = workspace ? workspace.files : null
     if (!files) { done({ browser: "", office: "", unshare: false }); return }
     files.exec(["/usr/bin/bash", "-c", probeScript, "uber-notebook-export-tools"].concat(browsers, ["/usr/lib/libreoffice/program/soffice"]), function(ok, out) {
@@ -89,7 +91,7 @@ Item {
           })
         })
       })
-    })
+    }, kind === "docx" ? "office" : "browser")
   }
 
   // Every equation on them drawn (the editor's MathJax), or given up on

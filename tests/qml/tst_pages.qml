@@ -725,6 +725,12 @@ Item {
       view.exportAs("pdf", false)
       tryVerify(function() { return files.disk["/tmp/picked/Plain.pdf"] === "PDF" }, 3000)
       compare(lastRun(isPdf)[0], "/usr/lib/chromium/chromium")
+      // LibreOffice installed since ("install it and try again"): found.
+      files.exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\n"
+      service.nextSave = "/tmp/picked/Later.docx"
+      view.exportAs("docx", false)
+      tryVerify(function() { return files.disk["/tmp/picked/Later.docx"] === "DOCX" }, 3000, "tried again, it's made")
+      files.exportTools = "/usr/lib/chromium/chromium\n"
       // Equations drawn by the editor's MathJax, diagrams made pictures, as
       // the page shows them, before it's written.
       files.exportTools = "/usr/lib/chromium/chromium\n"

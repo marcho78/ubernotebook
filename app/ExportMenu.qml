@@ -17,7 +17,8 @@ Pop {
   readonly property bool hasPages: { var r = view && view.workspace ? view.workspace.revision : 0; return !!(view && view.page && view.hasChildPages(view.page.id)) }
   readonly property var tools: view && view.exporter ? view.exporter.tools : null
 
-  onAboutToShow: if (view && view.exporter) view.exporter.probe(function() {})
+  // (Looked for again while one's missing: installed since, it's offered.)
+  onAboutToShow: if (view && view.exporter) view.exporter.probe(function() {}, "any")
 
   contentItem: Column {
     spacing: 4
