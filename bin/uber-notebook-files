@@ -83,11 +83,13 @@
 
 import base64
 import errno
+import gzip
 import hashlib
 import html.parser
 import json
 import os
 import re
+import resource
 import shutil
 import stat
 import sys
@@ -130,13 +132,20 @@ def open_dir(name, parent_fd):
     return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
 
 
-def folder_for(root_fd, parts):
-    """The folder at `parts` below root_fd, made as needed, every step
-    opened without following a link. An open fd the caller closes."""
+def folder_for(root_fd, parts, budget=None):
+    """The folder at `parts` below root_fd, made as needed (each one made
+    counted in `budget`), every step opened without following a link. An
+    open fd the caller closes."""
     fd = os.dup(root_fd)
     try:
         for p in parts:
             try:
+                if budget is not None:
+                    # (Counted before it's made: the last one too many isn't.)
+                    try:
+                        os.stat(p, dir_fd=fd, follow_symlinks=False)
+                    except FileNotFoundError:
+                        budget.folder()
                 os.mkdir(p, 0o700, dir_fd=fd)
             except FileExistsError:
                 pass
@@ -150,16 +159,32 @@ def folder_for(root_fd, parts):
 
 
 class Budget:
+    """What an archive may make: bytes, and files and folders (each a file
+    of the filesystem's) counted together; and how many entries it may have
+    in all, made or skipped (four for each file it may make)."""
+
     def __init__(self, max_bytes, max_files):
         self.max_bytes = max_bytes
         self.max_files = max_files
         self.bytes = 0
         self.files = 0
+        self.folders = 0
+        self.entries = 0
 
     def file(self):
         self.files += 1
-        if self.files > self.max_files:
+        if self.files + self.folders > self.max_files:
             raise Refused("more than %d files" % self.max_files)
+
+    def folder(self):
+        self.folders += 1
+        if self.files + self.folders > self.max_files:
+            raise Refused("more than %d files" % self.max_files)
+
+    def entry(self):
+        self.entries += 1
+        if self.entries > 4 * self.max_files:
+            raise Refused("more than %d entries" % (4 * self.max_files))
 
     def take(self, n):
         self.bytes += n
@@ -836,6 +861,7 @@ def is_link(info):
 
 def unzip_into(zf, root_fd, budget, skipped):
     for info in zf.infolist():
+        budget.entry()
         parts = parts_of(info.filename)
         if parts is None:
             skipped["names"] += 1
@@ -851,13 +877,13 @@ def unzip_into(zf, root_fd, budget, skipped):
             continue
         if info.is_dir():
             try:
-                os.close(folder_for(root_fd, parts))
+                os.close(folder_for(root_fd, parts, budget))
             except OSError:
                 skipped["names"] += 1
             continue
         budget.file()
         try:
-            dfd = folder_for(root_fd, parts[:-1])
+            dfd = folder_for(root_fd, parts[:-1], budget)
         except OSError:
             skipped["names"] += 1
             continue
@@ -872,12 +898,48 @@ def unzip_into(zf, root_fd, budget, skipped):
             os.close(dfd)
 
 
+def zip_directory(f):
+    """A zip's entries and its central directory's size, from the record at
+    its end (zip64's too), before zipfile reads (and keeps) all of it."""
+    end = f.seek(0, os.SEEK_END)
+    tail_at = max(0, end - (65535 + 22))
+    f.seek(tail_at)
+    tail = f.read(end - tail_at)
+    at = tail.rfind(b"PK\x05\x06")
+    if at < 0 or at + 22 > len(tail):
+        raise zipfile.BadZipFile("not a zip")
+    entries = int.from_bytes(tail[at + 10:at + 12], "little")
+    size = int.from_bytes(tail[at + 12:at + 16], "little")
+    if entries == 0xFFFF or size == 0xFFFFFFFF:
+        loc = at - 20
+        if loc < 0 or tail[loc:loc + 4] != b"PK\x06\x07":
+            raise zipfile.BadZipFile("not a zip")
+        f.seek(int.from_bytes(tail[loc + 8:loc + 16], "little"))
+        rec = f.read(56)
+        if len(rec) < 56 or rec[:4] != b"PK\x06\x06":
+            raise zipfile.BadZipFile("not a zip")
+        entries = int.from_bytes(rec[32:40], "little")
+        size = int.from_bytes(rec[40:48], "little")
+    f.seek(0)
+    return entries, size
+
+
+def open_zip(f, budget):
+    """zipfile on `f`, once its directory's known to be within `budget`
+    (as many entries as it may have, 1 KB of directory each at most)."""
+    entries, size = zip_directory(f)
+    room = 4 * budget.max_files - budget.entries
+    if entries > room or size > max(1, room) * 1024:
+        raise Refused("more than %d entries" % (4 * budget.max_files))
+    return zipfile.ZipFile(f)
+
+
 def cmd_unzip(path, folder, max_bytes, max_files):
     budget = Budget(int(max_bytes), int(max_files))
     skipped = {"names": 0, "links": 0, "special": 0, "taken": 0, "unreadable": 0}
     root_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
-        with open_regular(path) as f, zipfile.ZipFile(f) as zf:
+        with open_regular(path) as f, open_zip(f, budget) as zf:
             unzip_into(zf, root_fd, budget, skipped)
         # Zips that were in it, at its top (an export in parts): into the
         # same folder, within the same budget, then gone.
@@ -892,7 +954,7 @@ def cmd_unzip(path, folder, max_bytes, max_files):
                 os.close(fd)
                 continue
             try:
-                with os.fdopen(fd, "rb") as inner, zipfile.ZipFile(inner) as zf:
+                with os.fdopen(fd, "rb") as inner, open_zip(inner, budget) as zf:
                     unzip_into(zf, root_fd, budget, skipped)
             except zipfile.BadZipFile:
                 skipped["unreadable"] += 1
@@ -925,6 +987,46 @@ class Hashing:
             self.h.update(data)
 
 
+class Bounded:
+    """What a backup unpacks to, read through: at most `limit` bytes in all,
+    and no one read asking for more than that (a header claiming gigabytes
+    is refused, not read into memory)."""
+
+    def __init__(self, f, limit):
+        self.f = f
+        self.left = limit
+
+    def read(self, n=-1):
+        if n is None or n < 0 or n > self.left + 1:
+            n = self.left + 1
+        data = self.f.read(n)
+        self.left -= len(data)
+        if self.left < 0:
+            raise Refused("it unpacks to more than it may")
+        return data
+
+
+def tar_members(src, limit, most):
+    """A .tar.gz's members, one at a time (none kept once passed: tarfile
+    would keep them all), from at most `limit` bytes unpacked and `most`
+    members. Yields (tarfile, member)."""
+    with gzip.GzipFile(fileobj=src, mode="rb") as gz, tarfile.open(fileobj=Bounded(gz, limit), mode="r|") as tf:
+        n = 0
+        while True:
+            m = tf.next()
+            if m is None:
+                return
+            n += 1
+            if n > most:
+                raise Refused("more than %d entries" % most)
+            yield tf, m
+            tf.members = []
+
+
+# What a backup may unpack to while it's looked into (all its profiles).
+INSPECT_BYTES = 256 * 1024 * 1024 * 1024
+INSPECT_MEMBERS = 8000000
+
 TYPES = {tarfile.REGTYPE: "-", tarfile.AREGTYPE: "-", tarfile.DIRTYPE: "d", tarfile.SYMTYPE: "l", tarfile.LNKTYPE: "h",
          tarfile.CHRTYPE: "c", tarfile.BLKTYPE: "b", tarfile.FIFOTYPE: "p", tarfile.CONTTYPE: "-"}
 
@@ -948,21 +1050,20 @@ def cmd_inspect(path):
             outside = 0
             dots = 0
             manifest = b""
-            with tarfile.open(fileobj=src, mode="r|gz") as tf:
-                for m in tf:
-                    types.add(TYPES.get(m.type, "?"))
-                    raw = m.name
-                    if parts_of(raw) is None:
-                        if ".." in raw.split("/"):
-                            dots += 1
-                        else:
-                            outside += 1
-                    elif not belongs(raw):
+            for tf, m in tar_members(src, INSPECT_BYTES, INSPECT_MEMBERS):
+                types.add(TYPES.get(m.type, "?"))
+                raw = m.name
+                if parts_of(raw) is None:
+                    if ".." in raw.split("/"):
+                        dots += 1
+                    else:
                         outside += 1
-                    if raw.strip("/") == MANIFEST and m.isreg():
-                        manifest = tf.extractfile(m).read(200000)
+                elif not belongs(raw):
+                    outside += 1
+                if raw.strip("/") == MANIFEST and m.isreg():
+                    manifest = tf.extractfile(m).read(200000)
             digest = src.rest()
-    except (OSError, Refused, tarfile.TarError, EOFError, zlib.error):
+    except (OSError, Refused, tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile):
         print("readable:0")
         return
     print("readable:1")
@@ -1004,27 +1105,29 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
         try:
             with open_regular(path) as f:
                 src = Hashing(f)
-                with tarfile.open(fileobj=src, mode="r|gz") as tf:
-                    for m in tf:
-                        parts = parts_of(m.name)
-                        if parts is None or len(parts) < 1 or parts[0] != member:
-                            continue
-                        found = True
-                        inner = parts[1:]
-                        if not inner:
-                            continue
-                        if m.isdir():
-                            os.close(folder_for(root_fd, inner))
-                        elif m.isreg():
-                            budget.file()
-                            dfd = folder_for(root_fd, inner[:-1])
-                            try:
-                                write_new(dfd, inner[-1], tf.extractfile(m), budget)
-                                os.utime(inner[-1], (m.mtime, m.mtime), dir_fd=dfd, follow_symlinks=False)
-                            finally:
-                                os.close(dfd)
-                        else:
-                            raise Refused("a link or a special file in it")
+                # (All of it unpacked, the other profiles too: at most four
+                # times what one may be, with a header's room for four
+                # entries a file, and four entries for each file.)
+                for tf, m in tar_members(src, 4 * budget.max_bytes + 4 * budget.max_files * 1024 + 1024 * 1024, 4 * budget.max_files):
+                    parts = parts_of(m.name)
+                    if parts is None or len(parts) < 1 or parts[0] != member:
+                        continue
+                    found = True
+                    inner = parts[1:]
+                    if not inner:
+                        continue
+                    if m.isdir():
+                        os.close(folder_for(root_fd, inner, budget))
+                    elif m.isreg():
+                        budget.file()
+                        dfd = folder_for(root_fd, inner[:-1], budget)
+                        try:
+                            write_new(dfd, inner[-1], tf.extractfile(m), budget)
+                            os.utime(inner[-1], (m.mtime, m.mtime), dir_fd=dfd, follow_symlinks=False)
+                        finally:
+                            os.close(dfd)
+                    else:
+                        raise Refused("a link or a special file in it")
                 digest = src.rest()
         finally:
             os.close(root_fd)
@@ -1041,7 +1144,19 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
     print(os.path.join(os.path.dirname(base.rstrip("/")), name))
 
 
+# What the archive commands may take of memory (a backstop: what they read
+# is bounded besides).
+ARCHIVE_MEMORY = 4 * 1024 * 1024 * 1024
+
+
 def main(argv):
+    if argv[1:2] in (["unzip"], ["inspect-backup"], ["restore-backup"]):
+        try:
+            soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+            cap = ARCHIVE_MEMORY if hard == resource.RLIM_INFINITY else min(ARCHIVE_MEMORY, hard)
+            resource.setrlimit(resource.RLIMIT_AS, (cap, hard))
+        except (ValueError, OSError):
+            pass
     try:
         if len(argv) == 6 and argv[1] == "unzip":
             cmd_unzip(argv[2], argv[3], argv[4], argv[5])
@@ -1066,7 +1181,7 @@ def main(argv):
         else:
             sys.stderr.write("usage: uber-notebook-files unzip|inspect-backup|restore-backup ...\n")
             return 2
-    except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error) as e:
+    except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error, MemoryError) as e:
         if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"]):
             print(json.dumps({"ok": False, "error": str(e)[:300]}))
             return 1

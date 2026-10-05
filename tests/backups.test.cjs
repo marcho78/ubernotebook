@@ -179,6 +179,30 @@ try {
     assert.notEqual(small.code, 0);
     assert.match(small.err, /more than 4 bytes/);
     assert.ok(!fs.existsSync(path.join(tmp, "Small")));
+    // What it unpacks to, all of it (the other profiles too), bounded: a
+    // backup whose other profile unpacks to megabytes, refused for a small one.
+    const big = path.join(tmp, "big");
+    write(path.join(big, "uber-notebook-backup.json"), JSON.stringify(B.manifest([{ name: "a" }, { name: "b" }], "1", new Date())));
+    write(path.join(big, "p1", "a.json"), "{}");
+    write(path.join(big, "p2", "huge.bin"), "x".repeat(3 * 1024 * 1024));
+    const bf = path.join(tmp, "big.tar.gz");
+    execFileSync("/usr/bin/tar", ["-czf", bf, "-C", big, "uber-notebook-backup.json", "p2", "p1"]);
+    const bc = plain(B.checked(helper(["inspect-backup", bf]).out));
+    const unpacked = helper(["restore-backup", bf, "p1", path.join(tmp, "Unpacked"), bc.hash, "100", "10"]);
+    assert.notEqual(unpacked.code, 0);
+    assert.match(unpacked.err, /unpacks to more than it may/);
+    assert.ok(!fs.existsSync(path.join(tmp, "Unpacked")));
+    // Folders count: a file six folders down is seven of its room.
+    const deep = path.join(tmp, "deep");
+    write(path.join(deep, "uber-notebook-backup.json"), JSON.stringify(B.manifest([{ name: "a" }], "1", new Date())));
+    write(path.join(deep, "p1", "a", "b", "c", "d", "e", "f", "x.json"), "{}");
+    const df = path.join(tmp, "deep.tar.gz");
+    execFileSync("/usr/bin/tar", ["-czf", df, "-C", deep, "uber-notebook-backup.json", "p1"]);
+    const dc = plain(B.checked(helper(["inspect-backup", df]).out));
+    const deepR = helper(["restore-backup", df, "p1", path.join(tmp, "Deep"), dc.hash, MAXB, "5"]);
+    assert.notEqual(deepR.code, 0);
+    assert.match(deepR.err, /more than 5 files/);
+    assert.ok(!fs.existsSync(path.join(tmp, "Deep")));
   });
 
   check("files that aren't backups, or reach outside, refused", () => {

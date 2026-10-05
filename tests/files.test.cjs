@@ -361,6 +361,43 @@ try {
     }
     assert.equal(copy(path.join(src, "ok.png"), 0, "", "../escape.png").ok, false, "a name, not a path");
   });
+  check("a zip's folders count, every entry counts, and its directory's size is known before it's read", () => {
+    const run = (zipFile, maxFiles) => {
+      const to = folder("unzip-" + path.basename(zipFile));
+      const r = helperRun(["unzip", zipFile, to, "1000000", String(maxFiles)]);
+      return { r: JSON.parse(r.out.trim().split("\n").pop()), made: execFileSync("/usr/bin/find", [to, "-mindepth", "1"], { encoding: "utf8" }).split("\n").filter(Boolean).length };
+    };
+    // Thirty empty folders, room for ten: refused, at most ten made.
+    const dirs = run(zip(path.join(tmp, "dirs.zip"), Array.from({ length: 30 }, (_, i) => ({ name: "d" + i + "/" }))), 10);
+    assert.deepEqual([dirs.r.ok, dirs.r.error], [false, "more than 10 files"]);
+    assert.ok(dirs.made <= 10, String(dirs.made));
+    // A hundred: more entries than it may have, none made.
+    const hundred = run(zip(path.join(tmp, "hundred.zip"), Array.from({ length: 100 }, (_, i) => ({ name: "d" + i + "/" }))), 10);
+    assert.deepEqual([hundred.r.ok, hundred.r.error, hundred.made], [false, "more than 40 entries", 0]);
+    // A file six folders down: the folders it takes count too.
+    const deep = run(zip(path.join(tmp, "deep.zip"), [{ name: "a/b/c/d/e/f/x.md", data: "x" }]), 5);
+    assert.deepEqual([deep.r.ok, deep.r.error], [false, "more than 5 files"]);
+    // More entries than four for each file it may make: refused before its directory's read.
+    const many = run(zip(path.join(tmp, "many.zip"), Array.from({ length: 30 }, (_, i) => ({ name: "f" + i + ".md", data: "" }))), 5);
+    assert.deepEqual([many.r.ok, many.r.error, many.made], [false, "more than 20 entries", 0]);
+    // Skipped entries count too, across the zips inside it: three inner zips
+    // of fifteen names it won't make add up past forty.
+    const inner = [0, 1, 2].map((k) => ({ name: "part" + k + ".zip", file: zip(path.join(tmp, "inner" + k + ".zip"), Array.from({ length: 15 }, (_, i) => ({ name: "../evil" + k + "-" + i, data: "x" }))) }));
+    const nested = run(zip(path.join(tmp, "nested.zip"), inner), 10);
+    assert.deepEqual([nested.r.ok, nested.r.error], [false, "more than 40 entries"]);
+    // A zip whose end says it has one entry, and has thirty: each counted as it's read.
+    const liar = zip(path.join(tmp, "liar.zip"), Array.from({ length: 30 }, (_, i) => ({ name: "../evil" + i, data: "x" })));
+    const bytes = fs.readFileSync(liar);
+    const end = bytes.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    bytes.writeUInt16LE(1, end + 8);
+    bytes.writeUInt16LE(1, end + 10);
+    fs.writeFileSync(liar, bytes);
+    const lied = run(liar, 5);
+    assert.deepEqual([lied.r.ok, lied.r.error], [false, "more than 20 entries"]);
+    // Within its room: as before.
+    const fine = run(zip(path.join(tmp, "fine.zip"), [{ name: "a/b/x.md", data: "x" }, { name: "c/" }]), 5);
+    assert.deepEqual([fine.r.ok, fine.r.files, fine.made], [true, 1, 4]);
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }
