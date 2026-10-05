@@ -467,6 +467,26 @@ The first version.
   put in place. A file that can't be read is said and never saved over
   (before, it could be taken for one that isn't there). If the helper doesn't
   answer, it's done as before.
+- **Pictures copied in only as pictures**: attached, in a gallery, in
+  imported notes or a notebook moved to Pages, each by the files helper,
+  only a plain file whose bytes are a picture Qt can show (50 MB, 16384 px a
+  side), as a new file; an agent's only from its own folder, through no
+  link. Pictures on a page are decoded no bigger than they're shown.
+- **Archives counted before they're made**: every folder and every entry,
+  a zip's directory before it's read, and all a backup unpacks to; the
+  helper at most 4 GB of memory.
+- **The recorder runs ffmpeg as every other command runs** (its own process
+  group, a tool's environment, its output read in pieces, within budgets).
+- **Bookmarks read only from the internet**, step by step, from the address
+  looked up, past any proxy, redirects checked one by one.
+- **The Markdown copy's changes checked on the file's bytes** (SHA-256, as
+  it's moved aside), so a file you edited is never written over or taken
+  away; one from before is the copy's only if it's exactly what it would
+  write.
+- **What's taken away is checked as it's moved aside** (the launcher entry,
+  the skill's links, a failed backup's folder), backups never written over
+  one, and temporary folders always made new.
+- **Imports' LibreOffice gets no network**, as exports' does.
 - **Exports are made offline**: the page as HTML with every word escaped,
   its pictures put in and every tag checked by the files helper (nothing that
   loads from anywhere gets past), then Chromium or LibreOffice with a

@@ -989,44 +989,53 @@ marcho78.uber-notebook`), for you to run in a terminal, where it shows what
 changes and asks first.
 
 **The network, for three things.** A web bookmark you add: its page (http or
-https, at most 2 MB, 15 seconds) and its picture, which the page names: https
-only, from a host whose addresses are all public (not this computer or your
-network), fetched from that address, never redirected, at most 5 MB. GitHub's
+https, at most 2 MB, 15 seconds) and its picture, which the page names (https
+only, at most 5 MB, kept only if it's a picture). Each is read only from a
+host whose addresses are all public (not this computer or your network),
+from the address looked up, past any proxy (which would look it up again for
+itself); curl never follows a redirect: Uber Notebook does, five at most,
+checking each one again (the picture's never). PDFs, Word files and imports
+are made offline (below). GitHub's
 list of the project's releases (https only, at most 2 MB, a minute after it
 starts and once a day while Settings → About has it on; nothing of yours is
 in it). And the agents you ask (they use their own connection). A link you
 click opens in your browser only if it's http, https or mailto: a link in a
 page never opens a file on your computer.
 
-**Programs.** Every command runs by absolute path, with an argument list, in
-its own process group (`/usr/bin/setsid`) with a deadline and a budget for
-what it prints; when it's done (or overruns, or Uber Notebook stops), anything
-it left running ends too (`/usr/bin/kill` on its group), but `wl-copy`, which
-holds what you copied. A command gets only the environment a tool needs (your
-home, your language, the Wayland, D-Bus and PipeWire sockets, Hyprland's
-instance, a proxy you set) and `PATH=/usr/bin`: nothing that changes how a
-shell or a tool starts (`BASH_ENV`, `LD_PRELOAD`, `TAR_OPTIONS`...). Note text is
-never part of a script, only its arguments.
+**Programs.** Every command it waits on (the recorder's ffmpeg too) runs by
+absolute path, with an argument list, in its own process group
+(`/usr/bin/setsid`) with a deadline and a budget for what it prints (counted
+in characters, as they're kept; its errors too); when it's done (or overruns,
+or Uber Notebook stops), anything it left running ends too (`/usr/bin/kill`
+on its group), but `wl-copy`, which holds what you copied. A command gets only
+the environment a tool needs (your home, your language, the Wayland, D-Bus
+and PipeWire sockets, Hyprland's instance, a proxy you set) and
+`PATH=/usr/bin`: nothing that changes how a shell or a tool starts
+(`BASH_ENV`, `LD_PRELOAD`, `TAR_OPTIONS`...). A few are started and left to
+themselves, with the shell's environment: opening a link or a file in its
+app (`uwsm-app xdg-open`), the OSD, a process group's `kill`, and taking its
+skill's links out as it stops. Note text is never part of a script, only its
+arguments.
 
 | Program | Why |
 |---|---|
 | `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
 | `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -e`: plain text, never a pattern) |
-| `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders; copy pictures in and out (never over a file that's there); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
-| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs), put a page's pictures in a document made of it and check it (below), unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders (its temporary ones new, never one that's there); save a picture, a PDF or a Word file where you say (the dialog asks before replacing one), and pictures into an export or the Markdown copy (new files only); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
 | `/usr/lib/chromium/chromium` (or Chrome's or Brave's own program), `/usr/lib/libreoffice/program/soffice`, `/usr/bin/unshare` | a page made a PDF (Chromium, headless) or a Word file (LibreOffice, headless), each only a plain program owned by root that no one else can change (never the `chromium` launcher, which reads your flags and extensions), with a profile of its own, and no network at all (below) |
 | `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
 | `/usr/bin/uwsm-app` with `xdg-open` | open a link (http, https, mailto), or one of Uber Notebook's own folders and files |
 | `/usr/bin/hyprctl` | read Hyprland's bindings; register and remove the shortcuts and rules |
 | `/usr/bin/omarchy-shell`, `/usr/bin/omarchy-notification-send`, `/usr/bin/omarchy-menu`, `/usr/bin/omarchy-default-agent`, `/usr/bin/omarchy-agent-prompt` | the OSD; a reminder as a notification (a title or text starting with "-" made safe); the menu for choosing your agent; which agent is Omarchy's default; an agent in a terminal |
-| `/usr/bin/soffice`, `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown (LibreOffice with a profile of its own; pandoc with `--sandbox`: it reads only that file) |
-| `/usr/bin/ffmpeg`, `/usr/bin/pactl` | record from your microphone (with a deadline on the clock too); even out a voice; make a recording a WAV for voxtype; a video's still; a picture copied as PNG. A file it reads is read as a file, in one of a few formats (`-protocol_whitelist file -format_whitelist ...`): never a playlist or a list of other files. `pactl` lists the microphones |
-| `/usr/bin/curl` | a bookmark's page and picture; GitHub's list of releases (`-q`: no `~/.curlrc`) |
-| `/usr/bin/getent` | `ahosts`: where a bookmark's picture is, before it's fetched |
+| `/usr/bin/soffice`, `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown (LibreOffice with a profile of its own and no network, `unshare --net`, where the system allows it: a document can name pictures on the web; pandoc with `--sandbox`: it reads only that file) |
+| `/usr/bin/ffmpeg`, `/usr/bin/pactl` | record from your microphone (as every other command runs, with a deadline on the clock too; stopped with SIGINT, so it finishes its file); even out a voice; make a recording a WAV for voxtype; a video's still; a picture copied as PNG. A file it reads is read as a file, in one of a few formats (`-protocol_whitelist file -format_whitelist ...`): never a playlist or a list of other files. `pactl` lists the microphones |
+| `/usr/bin/curl` | a bookmark's page and picture, one request a step, never redirected by curl, from the address looked up (`--resolve`), past any proxy (`--noproxy '*'`); GitHub's list of releases (`-q`: no `~/.curlrc`) |
+| `/usr/bin/getent` | `ahosts`: where a bookmark's page (each step) and picture are, before each is fetched |
 | `/usr/bin/voxtype` | `transcribe`; `meeting start`, `stop`, `pause`, `resume`, `list`, `export`; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on |
 | `/usr/bin/systemctl` | `--user restart voxtype.service`, once, when you turn voxtype's meeting mode on (your own voxtype service; it reads that setting only as it starts) |
-| `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp` | make a backup (written beside where it goes, named when it's whole) |
+| `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp` | make a backup (written into files of its own beside where it goes, then named when it's whole, never over a file that's there) |
 | `/usr/bin/gio` | `trash`: automatic backups past how many are kept |
 
 **Your notes.** Their files (pages, their history, Pages' index, People, the
@@ -1061,10 +1070,14 @@ files helper, from one open file (only a plain file, not a link): what's in
 them is written below a folder made for it, through folders opened without
 following links, as new files only; nothing in them can name a place outside
 that folder, be a link or a device, or take more than its room (an import 4
-GB and 200,000 files, the zips in it too; a profile put back 64 GB and
-2,000,000 files). A backup is put back only if it's still the file that was
-looked into (its SHA-256), into a new folder, and if anything goes wrong,
-only that folder is taken away.
+GB and 200,000 files and folders, the zips in it too; a profile put back 64
+GB and 2,000,000), counted before they're made: every folder, every entry
+(four for each file it may make, a zip's directory checked before it's
+read), and all a backup unpacks to, its other profiles too; the helper
+itself may take at most 4 GB of memory. A backup is put back only if it's
+still the file that was looked into (its SHA-256), into a new folder, and if
+anything goes wrong, only that folder is taken away (if it's still the one
+it made).
 
 **Your agent.** In the panel, Claude Code, Grok and Codex work through Uber
 Notebook's commands: they read and change your notes, as you ask.
@@ -1096,8 +1109,9 @@ Notebook's commands: they read and change your notes, as you ask.
   own, `omarchy-shell uber-notebook-agent`, and those read and change your
   notes (pages, People, the calendar, templates), not Uber Notebook's
   settings (the permissions you give agents among them), profiles or
-  backups; a file one takes comes only from the agent's folder, and is read
-  by the files helper first (only a plain file, at most 2 MB); with no
+  backups; a file one takes comes only from the agent's folder: Markdown
+  read by the files helper first (only a plain file, at most 2 MB), a
+  picture copied in by it, every step from the folder through no link; with no
   agent working in the panel, they do nothing. Yours, a script's and a
   terminal's agent's (`omarchy-shell uber-notebook`) go on as always
   meanwhile. Claude Code is held to the panel's name by its permission rules;
@@ -1130,8 +1144,10 @@ and `~/.pi/agent/skills` that exists (never over anything already called that;
 taken out only if it still links to its skill); `~/.config/omarchy/defaults/agent`
 when you choose your agent; voxtype's `meeting.enabled` when you turn meeting
 mode on; the Markdown copy, in the folder you choose (never over, or taking
-away, a file you edited there: that one is yours, and its page's copy goes
-beside it); and exports and backups where you say. Its settings are written by
+away, a file you edited there: each change is made by the files helper only
+to a file still as the copy wrote it, checked on its bytes (SHA-256) as it's
+moved aside, else it's put back, yours, and its page's copy goes beside it);
+and exports and backups where you say. Its settings are written by
 the Omarchy shell to Uber Notebook's entry in `shell.json`.
 
 **What it reads.** Every file is checked as it's read (`Library.js`,
@@ -1148,15 +1164,21 @@ and diagrams have budgets (a drawing too big is said, not drawn), and so does
 everything that reads text someone else wrote (imports, emails, contacts,
 code). Every title, label and name is drawn as plain text.
 
-**Not done yet.** Some things in your notes folder are still done by path,
-with standard tools: moving a page to the trash (`mv`), copying a file or a
-picture in (`cp`, a new file only), listing and pruning a page's history,
-search (`grep`), a backup, a Markdown copy; and notes are, as before, when
-the files helper can't run. A program running as you that swaps a folder
-there for a link could redirect those. Codex in the
-panel can read any file you can (its sandbox reads everywhere). Codex's
-prompt is an argument on its command line, as it takes it there (Claude
-Code's and Grok's go on their input).
+**Not done yet.** These are done by path, with standard tools, so a program
+running as you that swaps a folder for a link at the right moment could
+redirect them: moving a page to the trash (`mv`); copying a file (not a
+picture) in (a new file only); listing and pruning a page's history; search
+(`grep`); a backup; saving where you say; the pictures an export or the
+Markdown copy takes; its launcher entry's and skill links' folders (a link
+to one is followed); the demo's old folder, moved to the Trash by its name
+(only "demo" folders in Uber Notebook's own data folder); and your notes
+themselves when the files helper can't run. Anything that can write in the
+Markdown copy's folder can also change its list of what it wrote
+(`.uber-notebook-mirror.json`). A file (not Markdown or a picture) the
+panel's agent takes is checked by its path, which a link in its folder could
+lead elsewhere. Codex in the panel can read any file you can (its sandbox
+reads everywhere), and its prompt is an argument on its command line, as it
+takes it there (Claude Code's and Grok's go on their input).
 
 ## Development
 

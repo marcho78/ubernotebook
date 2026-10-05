@@ -1493,10 +1493,13 @@ Item {
   // through LibreOffice, whichever there is (pandoc first).
   function convertOffice(list, tmp, skipped, done) {
     if (list.length === 0) { done(); return }
-    files.exec(["/usr/bin/bash", "-c", "for t in /usr/bin/pandoc /usr/bin/soffice; do [ -x \"$t\" ] && echo \"$t\"; done; true", "uber-notebook-which"], function(ok, out) {
+    // (Which there are, and whether LibreOffice can be given a network of
+    // its own with nothing in it: unshare, as for exports.)
+    files.exec(["/usr/bin/bash", "-c", "for t in /usr/bin/pandoc /usr/bin/soffice; do [ -x \"$t\" ] && echo \"$t\"; done; /usr/bin/unshare --user --map-current-user --net -- /usr/bin/true 2>/dev/null && echo unshare; true", "uber-notebook-which"], function(ok, out) {
       var have = String(out || "")
       var pandoc = have.indexOf("/usr/bin/pandoc") >= 0
       var office = have.indexOf("/usr/bin/soffice") >= 0
+      var walled = /^unshare$/m.test(have) ? ["/usr/bin/unshare", "--user", "--map-current-user", "--net", "--"] : []
       var k = 0
       function next() {
         if (k >= list.length) { done(); return }
@@ -1513,7 +1516,9 @@ Item {
               files.readFiles([dir + "/out.md"], function(g) { e.kind = "markdown"; e.source = g[dir + "/out.md"] || ""; e.base = dir + "/out.md"; e.root = tmp; next() })
             }, { timeoutMs: 120000, maxBytes: 1024 * 1024 })
           } else if (office && ["docx", "doc", "odt", "rtf", "fodt", "wpd", "pages"].indexOf(ext) >= 0) {
-            files.exec(["/usr/bin/soffice", "--headless", "-env:UserInstallation=file://" + tmp + "/lo-profile", "--convert-to", "html", "--outdir", dir, e.path], function(ok3) {
+            // (No network: a document can name pictures on the web, which
+            // LibreOffice would fetch as it reads it.)
+            files.exec(walled.concat(["/usr/bin/soffice", "--headless", "-env:UserInstallation=file://" + tmp + "/lo-profile", "--convert-to", "html", "--outdir", dir, e.path]), function(ok3) {
               var html = dir + "/" + e.path.split("/").pop().replace(/\.[A-Za-z0-9]+$/, "") + ".html"
               files.readFiles([html], function(g) {
                 if (!ok3 || !g[html]) { skipped.push(e.path); e.kind = "skip"; next(); return }
