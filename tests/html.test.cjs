@@ -255,4 +255,14 @@ check("HTML from the clipboard: a lot of it, read in time", () => {
   }
 });
 
+check("whatever's in a block, read in time in step with its length (never a frozen shell)", () => {
+  for (const t of ["<a".repeat(100000), "<!--".repeat(50000), "<b>".repeat(50000) + "</x>".repeat(50000), "<a \"".repeat(60000)]) {
+    const t0 = Date.now();
+    Html.sanitize(t, true);
+    assert.ok(Date.now() - t0 < 5000, t.slice(0, 8) + "...: " + (Date.now() - t0) + " ms");
+  }
+  // And the same as ever for what it's meant for.
+  assert.equal(Html.sanitize('a <b>bold</b> <a href="https://e.org">link</a> <!-- note --> end', true).replace(/\s+/g, " "), Html.sanitize('a <b>bold</b> <a href="https://e.org">link</a> end', true).replace(/\s+/g, " "));
+});
+
 console.log(`html: ${passed} checks passed`);

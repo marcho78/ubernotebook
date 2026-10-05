@@ -69,24 +69,36 @@ function styleText(style) {
   return Object.keys(style).sort().map(function(key) { return key + ":" + style[key] + ";" }).join(" ")
 }
 
-// Tags, text and line breaks, in order.
+// Tags, text and line breaks, in order. Each "<" is looked at only as far
+// as the next one (a tag's quoted values can't hold one; the text Uber
+// Notebook writes escapes it), so it takes time in step with the text,
+// whatever's in it: an unclosed tag or comment is read once, not again at
+// every "<" after it. A comment that isn't closed ends what's read.
+var TAG = /^<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)>/
 function tokenize(html) {
+  var s = String(html || "")
   var tokens = []
-  var re = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)|(<)/g
-  var m
-  while ((m = re.exec(String(html || ""))) !== null) {
-    if (m[0].indexOf("<!--") === 0) continue
-    if (m[4] !== undefined) {
-      tokens.push({ kind: "text", text: decodeEntities(m[4]) })
-    } else if (m[5] !== undefined) {
-      tokens.push({ kind: "text", text: "<" })
-    } else {
-      var tag = m[2].toLowerCase()
-      var closing = m[1] === "/"
-      var rest = m[3] || ""
-      var selfClosing = /\/\s*$/.test(rest)
-      tokens.push({ kind: closing ? "close" : "open", tag: tag, attrs: closing ? {} : parseAttrs(rest.replace(/\/\s*$/, "")), selfClosing: selfClosing })
+  var i = 0
+  function text(t) { if (t) tokens.push({ kind: "text", text: decodeEntities(t) }) }
+  while (i < s.length) {
+    var lt = s.indexOf("<", i)
+    if (lt < 0) { text(s.slice(i)); break }
+    text(s.slice(i, lt))
+    if (s.substr(lt, 4) === "<!--") {
+      var end = s.indexOf("-->", lt + 4)
+      if (end < 0) break
+      i = end + 3
+      continue
     }
+    var next = s.indexOf("<", lt + 1)
+    var m = TAG.exec(next < 0 ? s.slice(lt) : s.slice(lt, next))
+    if (!m) { tokens.push({ kind: "text", text: "<" }); i = lt + 1; continue }
+    var tag = m[2].toLowerCase()
+    var closing = m[1] === "/"
+    var rest = m[3] || ""
+    var selfClosing = /\/\s*$/.test(rest)
+    tokens.push({ kind: closing ? "close" : "open", tag: tag, attrs: closing ? {} : parseAttrs(rest.replace(/\/\s*$/, "")), selfClosing: selfClosing })
+    i = lt + m[0].length
   }
   return tokens
 }
@@ -118,6 +130,9 @@ function mergeStyle(base, extra) {
   return out
 }
 
+// Tags open inside one another, at most.
+var MAX_DEPTH = 200
+
 // The inside of a block as runs: { text, style, href } for text, { br: true }
 // for a line break, { img: {…} } for a picture. Nested spans are flattened,
 // so each run carries all the formatting that applies to it.
@@ -140,7 +155,8 @@ function parse(inner) {
       if (token.attrs.style) style = mergeStyle(style, parseStyle(token.attrs.style))
       var href = top.href
       if (token.tag === "a" && token.attrs.href) href = token.attrs.href
-      stack.push({ tag: token.tag, style: style, href: href })
+      // (No deeper than MAX_DEPTH: a close looks through the open ones.)
+      if (stack.length < MAX_DEPTH) stack.push({ tag: token.tag, style: style, href: href })
     } else {
       // Close the innermost matching tag (and anything left open inside it).
       for (var i = stack.length - 1; i > 0; i--) {

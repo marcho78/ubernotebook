@@ -379,4 +379,22 @@ check("projects: kept, their progress, when they're due, the list", () => {
   assert.ok(JSON.parse(W.indexJson(ix2)).pages[d].archived, "kept");
 });
 
+check("the page tree, however deep or looped it says it is, read in time in step with its pages", () => {
+  const id = (i) => "00000000-0000-4000-8000-" + String(i).padStart(12, "0");
+  const n = 20000;
+  const chain = {};
+  for (let i = 0; i < n; i++) chain[id(i)] = { title: "p" + i, parent: i ? id(i - 1) : "", children: [], created: new Date(2026, 0, 1, 0, 0, n - i).toISOString() };
+  let t0 = Date.now();
+  const a = W.cleanIndex({ version: 1, pages: chain });
+  assert.ok(Date.now() - t0 < 5000, "a chain: " + (Date.now() - t0) + " ms");
+  assert.deepEqual([a.top.length, a.pages[id(n - 1)].parent], [1, id(n - 2)], "each under its parent");
+  const loop = {};
+  for (let i = 0; i < n; i++) loop[id(i)] = { title: "p" + i, parent: id((i + 1) % n), children: [] };
+  t0 = Date.now();
+  const b = W.cleanIndex({ version: 1, pages: loop });
+  assert.ok(Date.now() - t0 < 5000, "a loop: " + (Date.now() - t0) + " ms");
+  assert.equal(b.top.length, 1, "a loop broken once, at the top");
+  assert.equal(Object.keys(b.pages).length, n, "and every page kept");
+});
+
 console.log(`workspace: ${passed} checks passed`);

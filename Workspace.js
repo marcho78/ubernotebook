@@ -587,50 +587,75 @@ function cleanIndex(raw) {
     pages[id] = entry(src[id])
     n++
   }
+  // (Each page placed once, by a work list, not by recursion: in time, and
+  // on the stack, in step with the number of pages, however deep the tree
+  // says it goes.)
   var placed = {}
-  var top = []
-  function place(ids, parent, chain) {
+  var queue = []
+  var waitingFor = {}
+  // The pages a page's pages wait for, now it's placed: they can go under it.
+  function release(id) {
+    var kids = waitingFor[id]
+    if (!kids) return
+    delete waitingFor[id]
+    for (var k = 0; k < kids.length; k++) queue.push(kids[k])
+  }
+  // Of `ids`, the ones whose parent is `parent`, placed (each only once).
+  function admit(ids, parent) {
     var out = []
     ;(ids || []).forEach(function(id) {
-      if (!pages[id] || placed[id] || chain[id]) return
-      if (pages[id].parent !== parent) return
+      if (!pages[id] || placed[id] || pages[id].parent !== parent) return
       placed[id] = true
+      release(id)
       out.push(id)
-      var inner = {}
-      for (var c in chain) inner[c] = true
-      inner[id] = true
-      pages[id].children = place(pages[id].rawChildren, id, inner)
     })
     return out
   }
-  top = place(Array.isArray(r.top) ? r.top : [], "", {})
+  // `ids` under `parent`, then the pages each lists as its own, and theirs.
+  function placeFrom(ids, parent) {
+    var out = admit(ids, parent)
+    var work = out.slice()
+    while (work.length) {
+      var id = work.pop()
+      var kids = admit(pages[id].rawChildren, id)
+      pages[id].children = pages[id].children.concat(kids)
+      for (var k = 0; k < kids.length; k++) work.push(kids[k])
+    }
+    return out
+  }
+  for (var pid in pages) pages[pid].children = []
+  var top = placeFrom(Array.isArray(r.top) ? r.top : [], "")
   // Pages the tree didn't reach go under their parent once it's placed, or
   // at the top when they have none (or the oldest of a loop of pages that
   // say they're inside each other goes to the top).
   function settle(id, parent) {
     placed[id] = true
+    release(id)
     pages[id].parent = parent
     if (parent) pages[parent].children.push(id)
     else top.push(id)
-    var chain = {}
-    chain[id] = true
-    pages[id].children = pages[id].children.concat(place(pages[id].rawChildren, id, chain))
+    pages[id].children = pages[id].children.concat(placeFrom(pages[id].rawChildren, id))
   }
   var rest = Object.keys(pages).filter(function(id) { return !placed[id] }).sort(function(a, b) {
     return pages[a].created < pages[b].created ? -1 : pages[a].created > pages[b].created ? 1 : 0
   })
-  while (rest.length) {
-    var waiting = []
-    var moved = false
-    rest.forEach(function(id) {
-      if (placed[id]) return
-      var p = pages[id].parent
-      if (!p || !pages[p]) { settle(id, ""); moved = true }
-      else if (placed[p]) { settle(id, p); moved = true }
-      else waiting.push(id)
-    })
-    if (!moved && waiting.length) settle(waiting.shift(), "")
-    rest = waiting.filter(function(id) { return !placed[id] })
+  rest.forEach(function(id) {
+    var p = pages[id].parent
+    if (!p || !pages[p] || placed[p]) queue.push(id)
+    else (waitingFor[p] = waitingFor[p] || []).push(id)
+  })
+  var qi = 0
+  var ri = 0
+  while (true) {
+    while (qi < queue.length) {
+      var x = queue[qi++]
+      if (placed[x]) continue
+      var px = pages[x].parent
+      settle(x, px && pages[px] && placed[px] ? px : "")
+    }
+    while (ri < rest.length && placed[rest[ri]]) ri++
+    if (ri >= rest.length) break
+    settle(rest[ri], "")
   }
   for (var k in pages) delete pages[k].rawChildren
   // The pages in Favorites, in order.
