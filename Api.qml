@@ -329,6 +329,7 @@ QtObject {
         { use: "backup <profile>", does: "a backup (a .tar.gz in the backup folder) of the open profile (\"\"), every profile (all; not the demo), or one by its name or id; written in a moment" },
         { use: "backups", does: "the backups in the backup folder, newest first: name, file, made, size, automatic; and how the last one went (last, lastFailed, working)" },
         { use: "restoreBackup <file> <open>", does: "a backup put back (only when the user asks): each profile in it a new profile in a new folder (nothing there is changed); open true opens the first" },
+        { use: "skill", does: "this skill (SKILL.md) as Markdown: how an AI uses these commands; give it to any AI that can run commands on this computer" },
         { use: "appVersion", does: "the version running, and whether there's a newer one: latest, updateAvailable, status (current, available, none: no releases yet, failed), checked, releases, and update: how the user installs it (a command they run in a terminal; Uber Notebook doesn't install anything itself)" },
         { use: "checkUpdate", does: "asks GitHub for the newest version now; appVersion says what it found a few seconds later" },
         { use: "releaseNotes", does: "what's new, as Markdown: the newer releases' notes, or (up to date) this version's" }

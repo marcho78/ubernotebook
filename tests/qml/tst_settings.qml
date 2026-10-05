@@ -434,6 +434,26 @@ Item {
       service.setSetting("agentPermissions", [])
     }
 
+    // The skill, for any AI: where it is, copied, saved, shown.
+    function test_10c_the_skill_for_any_ai() {
+      fresh()
+      app.openSettings("ai")
+      var line = null
+      tryVerify(function() { line = named(win(), "aiSkill"); return panel() !== null && line !== null && line.visible }, 1000)
+      verify(line.note.indexOf("skills/uber-notebook/SKILL.md") > 0, line.note)
+      var copied = service.skillCopied
+      click(reach(named(line, "aiSkillCopy")))
+      compare(service.skillCopied, copied + 1)
+      verify(line.note.indexOf("Copied") === 0, line.note)
+      service.skillSaveTo = "/home/u/Documents/uber-notebook-skill.md"
+      click(reach(named(line, "aiSkillSave")))
+      compare(line.note, "Saved to ~/Documents/uber-notebook-skill.md")
+      var shown = service.skillShown
+      click(reach(named(line, "aiSkillShow")))
+      compare(service.skillShown, shown + 1)
+      closeAll()
+    }
+
     function test_11_what_the_sidebar_shows() {
       fresh()
       // From the sidebar: a right-click, Choose what's in the sidebar.

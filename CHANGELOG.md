@@ -45,6 +45,11 @@ The first version.
   to ask whatever your settings say; each takes its request and your
   answers on its input. Each conversation has a folder of its own.
 
+- **The skill for any AI**: Settings → AI → *Use with any AI* copies
+  Uber Notebook's skill, saves a copy where you say, or shows its file, and
+  `omarchy-shell uber-notebook skill` prints it, for an AI that can run
+  commands on this computer.
+
 - **A terminal instead, whenever you like**: *In a terminal* beside *Ask* in
   the agent box, and *Open in a terminal instead* in the panel all along (it
   stops there first), for Claude Code, Grok and Codex as you set them up,

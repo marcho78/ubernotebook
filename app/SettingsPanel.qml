@@ -1028,6 +1028,44 @@ Popup {
             }
           }
         }
+        // The skill, for any AI (Service.copySkill...): Claude Code, Codex, pi
+        // and Hermes find it themselves; anything else, given it.
+        Group {
+          id: skillGroup
+          visible: panel.section === "ai"
+          title: "Use with any AI"
+          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
+          property string said: ""
+          Line {
+            objectName: "aiSkill"
+            label: "The skill"
+            note: skillGroup.said || (panel.service && panel.service.skillPath ? String(panel.service.skillPath).replace(/^\/home\/[^\/]+/, "~") : "")
+            Row {
+              spacing: 6
+              TextButton {
+                objectName: "aiSkillCopy"
+                theme: panel.theme
+                text: "Copy"
+                onClicked: skillGroup.said = panel.service && panel.service.copySkill() ? "Copied: paste it where your AI takes instructions" : "It couldn't be read"
+              }
+              TextButton {
+                objectName: "aiSkillSave"
+                theme: panel.theme
+                text: "Save a copy\u2026"
+                onClicked: if (panel.service) panel.service.saveSkillCopy(function(to, why) {
+                  if (to) skillGroup.said = "Saved to " + to.replace(/^\/home\/[^\/]+/, "~")
+                  else if (why) skillGroup.said = "Not saved: " + why
+                })
+              }
+              TextButton {
+                objectName: "aiSkillShow"
+                theme: panel.theme
+                text: "Show"
+                onClicked: if (panel.service) panel.service.showSkill()
+              }
+            }
+          }
+        }
         Group {
           visible: panel.section === "ai"
           title: "What agents may do without asking"

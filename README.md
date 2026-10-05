@@ -852,7 +852,10 @@ the folders agents read skills from, the ones Omarchy links its own into:
 `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills`
 and `~/.pi/agent/skills`, where those folders exist and nothing called
 `uber-notebook` is there already. It takes its links out again when it stops.
-Agents that don't read skills get the file's path in the prompt.
+Agents that don't read skills get the file's path in the prompt. For any
+other AI that can run commands on this computer, **Settings → AI → Use with
+any AI** copies the skill, saves a copy where you say, or shows its file;
+`omarchy-shell uber-notebook skill` prints it.
 
 **Claude Code** asks before each command unless you allow them in
 `~/.claude/settings.json` (leave `trash` out, so that one still asks):

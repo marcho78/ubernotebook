@@ -37,6 +37,22 @@ Item {
   property bool agentSkill: true
   readonly property string skillDir: pluginDir + "/skills/uber-notebook"
   readonly property string skillPath: skillDir + "/SKILL.md"
+  // The skill, for any AI that can run commands on this computer: its text
+  // (omarchy-shell uber-notebook skill), onto the clipboard, saved where you
+  // say, or its folder shown (Settings → AI).
+  function skillText() { return storeItem.readNow(skillPath, 1024 * 1024) || "" }
+  function copySkill() {
+    var t = skillText()
+    if (t) storeItem.copyText(t)
+    return t !== ""
+  }
+  function saveSkillCopy(done) {
+    pickSavePath("uber-notebook-skill.md", function(to) {
+      if (!to) { done("", ""); return }
+      storeItem.copyFileTo(skillPath, to, function(ok, why) { done(ok ? to : "", ok ? "" : why || "it couldn't be saved there") })
+    }, "document")
+  }
+  function showSkill() { Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", skillDir]) }
 
   readonly property string pluginId: "marcho78.uber-notebook"
   readonly property string pluginDir: decodeURIComponent(Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, ""))
@@ -712,6 +728,8 @@ Item {
         function backups(): string { return root.scoped(commands.agent, "backups", [], function() { return apiItem.backupList() }) }
         function restoreBackup(file: string, open: string): string { return root.scoped(commands.agent, "restoreBackup", [file, open], function() { return apiItem.restoreBackup(file, open) }) }
         function appVersion(): string { return root.scoped(commands.agent, "appVersion", [], function() { return apiItem.appVersion() }) }
+        // omarchy-shell uber-notebook skill: Uber Notebook's skill, for any AI.
+        function skill(): string { return root.scoped(commands.agent, "skill", [], function() { return root.skillText() || JSON.stringify({ ok: false, error: "the skill couldn't be read" }) }) }
         function checkUpdate(): string { return root.scoped(commands.agent, "checkUpdate", [], function() { return apiItem.checkUpdate() }) }
         function releaseNotes(): string { return root.scoped(commands.agent, "releaseNotes", [], function() { return apiItem.releaseNotes() }) }
         function status(): string {

@@ -11,6 +11,13 @@ QtObject {
   property string rootPath: "/tmp/uber-notebook-dev"
   property string version: "1.0.0"
   property string skillPath: "/tmp/uber-notebook-dev-plugin/skills/uber-notebook/SKILL.md"
+  // (The skill for any AI: copied, saved where you say, shown.)
+  property int skillCopied: 0
+  property int skillShown: 0
+  property string skillSaveTo: ""
+  function copySkill() { skillCopied++; return true }
+  function saveSkillCopy(done) { done(skillSaveTo, "") }
+  function showSkill() { skillShown++ }
   // The Markdown copy (Mirror.qml), as Settings shows it.
   property var mirror: QtObject { property string status: ""; property string problem: ""; property int files: 0; property var lastSync: null }
   readonly property string mirrorPath: rootPath + "/Markdown"
