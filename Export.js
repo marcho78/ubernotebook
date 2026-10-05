@@ -48,8 +48,11 @@ var TABLE = "border-collapse:collapse;width:100%;"
 var CELL = "border:1px solid " + LINE + ";padding:4px 8px;vertical-align:top;text-align:left;"
 var HEAD = CELL + "background:#f7f6f3;font-weight:600;"
 var DRAWING = "uber-notebook-drawing:"
-// Synced blocks inside synced blocks: this deep at most.
+// Synced blocks inside synced blocks: this deep at most; and in a whole
+// document, this many expanded, this much of them (then each says it's one).
 var MAX_SYNCED = 3
+var MAX_SYNCED_BLOCKS = 50
+var MAX_SYNCED_CHARS = 4000000
 
 // ---- text ------------------------------------------------------------------------------
 
@@ -513,13 +516,26 @@ function month(b, id) {
 }
 
 // A synced block: its page's blocks (not too deep).
+// A synced block: its page's blocks (not too deep, never a page inside
+// itself, and only so many in a document: a page of a hundred synced blocks
+// of a page of a hundred more doesn't make a document of ten thousand).
 function synced(b, ctx, id) {
   var pid = b.data ? b.data.page : ""
-  var p = pid && (ctx.depth || 0) < MAX_SYNCED && typeof ctx.syncedPage === "function" ? ctx.syncedPage(pid) : null
+  var budget = ctx.synced || { count: 0, chars: 0 }
+  var chain = ctx.chain || []
+  var said = "<p class=\"faint\"" + id + ">(A synced block)</p>"
+  if (!pid || chain.indexOf(pid) >= 0 || (ctx.depth || 0) >= MAX_SYNCED) return said
+  if (budget.count >= MAX_SYNCED_BLOCKS || budget.chars >= MAX_SYNCED_CHARS) return said
+  var p = typeof ctx.syncedPage === "function" ? ctx.syncedPage(pid) : null
   if (!p) return ""
+  budget.count++
   var sub = { page: p, notes: ctx.notes, math: ctx.math, here: ctx.here, em: ctx.em, lookup: ctx.lookup, drawing: ctx.drawing,
-    calendar: ctx.calendar, contactOf: ctx.contactOf, syncedPage: ctx.syncedPage, depth: (ctx.depth || 0) + 1 }
-  return "<div class=\"synced\"" + id + ">" + blocksHtml(p.content || [], sub) + "</div>"
+    calendar: ctx.calendar, contactOf: ctx.contactOf, syncedPage: ctx.syncedPage, depth: (ctx.depth || 0) + 1,
+    synced: budget, chain: chain.concat([pid]) }
+  var inner = blocksHtml(p.content || [], sub)
+  budget.chars += inner.length
+  if (budget.chars > MAX_SYNCED_CHARS) return said
+  return "<div class=\"synced\"" + id + ">" + inner + "</div>"
 }
 
 // ---- the document ---------------------------------------------------------------------------
@@ -531,7 +547,7 @@ function anchorOf(pid) { return "p-" + pid }
 function pageSection(page, o, first) {
   var ctx = {
     page: page, notes: [], math: o.math, em: o.small ? 14 : 16, lookup: o.lookup, drawing: o.drawing,
-    calendar: o.calendar, contactOf: o.contactOf, syncedPage: o.syncedPage, depth: 0,
+    calendar: o.calendar, contactOf: o.contactOf, syncedPage: o.syncedPage, depth: 0, synced: o.syncedBudget, chain: [page.id],
     here: function(pid) { return o.included && o.included[pid] ? anchorOf(pid) : "" }
   }
   var out = ["<section class=\"page" + (first ? "" : " next") + "\" id=\"" + esc(anchorOf(page.id)) + "\">"]
@@ -560,6 +576,7 @@ function toHtml(pages, options) {
   var opts = {}
   for (var k in o) opts[k] = o[k]
   opts.included = included
+  opts.syncedBudget = { count: 0, chars: 0 }
   var families = Docs.font(o.font).families.map(function(f) { return "\"" + f.replace(/["\\]/g, "") + "\"" }).join(", ")
   var generic = o.font === "serif" ? "serif" : o.font === "mono" ? "monospace" : "sans-serif"
   var size = o.small ? 14 : 16

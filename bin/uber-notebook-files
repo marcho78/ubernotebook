@@ -645,10 +645,14 @@ def cmd_export_html(assets, work, max_bytes):
         def put_in(m):
             key = (m.group(1), m.group(2))
             if key not in cache:
-                cache[key] = picture_data(folders[m.group(1)], m.group(2), budget - used[0])
-                if cache[key][0]:
-                    used[0] += len(cache[key][0])
+                cache[key] = picture_data(folders[m.group(1)], m.group(2), budget)
             data, size = cache[key]
+            # (Charged each time it's put in, not once: the same picture a
+            # hundred times is a hundred pictures in the document.)
+            if data and used[0] + len(data) > budget:
+                data = ""
+            if data:
+                used[0] += len(data)
             if not data:
                 counts["missing"] += 1
                 return '<span class="faint">(a picture that couldn\'t be put in)</span>'
@@ -669,6 +673,9 @@ def cmd_export_html(assets, work, max_bytes):
             for v in folders.values():
                 if v is not None:
                     os.close(v)
+        # (The document itself, within the budget and its text's room.)
+        if len(out) > budget + 2 * len(text) + 1024 * 1024:
+            raise Refused("the document would be too big")
         check = ExportCheck()
         check.feed(out)
         check.close()
@@ -1520,7 +1527,7 @@ ARCHIVE_MEMORY = 4 * 1024 * 1024 * 1024
 
 
 def main(argv):
-    if argv[1:2] in (["unzip"], ["inspect-backup"], ["restore-backup"]):
+    if argv[1:2] in (["unzip"], ["inspect-backup"], ["restore-backup"], ["export-html"]):
         try:
             soft, hard = resource.getrlimit(resource.RLIMIT_AS)
             cap = ARCHIVE_MEMORY if hard == resource.RLIM_INFINITY else min(ARCHIVE_MEMORY, hard)

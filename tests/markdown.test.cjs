@@ -163,4 +163,14 @@ check("habits and calendars in Pages", () => {
   assert.ok(md.includes("**14**"), "its circled dates in bold");
 });
 
+check("synced blocks in Markdown: never the page itself, only so many", () => {
+  const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222";
+  const mk = (id, list) => { const blocks = {}; list.forEach((b) => { blocks[b.id] = b; }); return { id, title: id.slice(0, 1), icon: "", content: list.map((b) => b.id), blocks }; };
+  const b = mk(B, [{ id: "x", type: "p", html: "y".repeat(100000) }]);
+  const a = mk(A, Array.from({ length: 200 }, (_, i) => ({ id: "s" + i, type: "synced", data: { page: B } })).concat([{ id: "self", type: "synced", data: { page: A } }]));
+  const md = Markdown.fromDocPage(a, () => null, { syncedPage: (id) => (id === B ? b : id === A ? a : null) });
+  assert.ok(md.length < 5000000, "bounded: " + md.length);
+  assert.ok(md.includes("*(A synced block)*"), "the rest said");
+});
+
 console.log(`markdown: ${passed} checks passed`);

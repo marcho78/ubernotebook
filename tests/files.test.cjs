@@ -291,6 +291,11 @@ try {
     assert.ok(!miss2.out.includes("data:image") && !/secret|evil/.test(miss2.out));
     // Past the room: left out.
     assert.equal(run(img("tall.png", "width:100%;"), 100).r.missing, 1);
+    // The same picture many times: each time charged, not once.
+    const many = run(Array.from({ length: 50 }, () => img("wide.png", "width:10%;")).join(""), 1000);
+    assert.equal(many.r.ok, true);
+    assert.ok(many.r.pictures >= 1 && many.r.pictures < 50 && many.r.missing === 50 - many.r.pictures, JSON.stringify(many.r));
+    assert.ok(many.out.length < 1000 + 50 * 200, "the document within its room: " + many.out.length);
     // Anything that loads from elsewhere: refused, nothing written.
     for (const bad of ['<script>x</script>', '<iframe src="https://e.org"></iframe>', '<img src="https://e.org/x.png" />', '<img src="file:///etc/passwd" />',
       '<link rel="stylesheet" href="https://e.org/a.css" />', '<p style="background:url(https://e.org/x)">x</p>', '<style>@import "https://e.org/a.css";</style>',

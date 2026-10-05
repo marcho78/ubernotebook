@@ -119,4 +119,16 @@ check("base64 of any text, as the browser reads it", () => {
   for (const t of ["", "a", "ab", "abc", "été ✓ \u{1f600}", "<svg>x</svg>"]) assert.equal(Export.base64(t), Buffer.from(t, "utf8").toString("base64"), JSON.stringify(t));
 });
 
+check("synced blocks: never a page inside itself, and only so many in a document", () => {
+  const C = "55555555-5555-4555-8555-555555555555";
+  const big = page(C, "C", [{ type: "p", html: "x".repeat(1000) }]);
+  const mid = page(B, "B", Array.from({ length: 100 }, (_, i) => ({ id: "s" + i, type: "synced", data: { page: C } })));
+  const top = page(A, "A", Array.from({ length: 100 }, (_, i) => ({ id: "t" + i, type: "synced", data: { page: B } })).concat([{ id: "self", type: "synced", data: { page: A } }]));
+  const all = { [A]: top, [B]: mid, [C]: big };
+  const html = Export.toHtml([top], { syncedPage: (id) => all[id] || null, lookup: () => null });
+  assert.ok((html.match(/<div class="synced"/g) || []).length <= 50, "at most 50 expanded");
+  assert.ok(html.length < 2000000, "not ten thousand copies: " + html.length);
+  assert.ok(html.includes('id="b-self">(A synced block)'), "the page itself: said, not expanded");
+});
+
 console.log(`export: ${passed} checks passed`);

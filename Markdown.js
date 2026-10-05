@@ -246,12 +246,19 @@ function fromDocPage(page, lookup, options) {
     return text.split("\n").map(function(l) { return l ? prefix + l : l }).join("\n")
   }
   // A synced block: its blocks, from its page (when there's a way to read it).
+  // (Never the page itself, and only so many in a page: 50, 4 million
+  // characters of them; the synced page's own synced blocks just say so.)
+  var syncedCount = 0
+  var syncedChars = 0
   function syncedLines(b) {
     var id = b.data ? b.data.page : ""
-    var p = id && typeof opts.syncedPage === "function" ? opts.syncedPage(id) : null
+    if (!id || id === page.id || syncedCount >= 50 || syncedChars >= 4000000) return "*(A synced block)*"
+    var p = typeof opts.syncedPage === "function" ? opts.syncedPage(id) : null
     if (!p) return "*(A synced block)*"
+    syncedCount++
     var inner = fromDocPage(p, lookup, { assetPrefix: opts.assetPrefix, calendar: opts.calendar }).replace(/^# .*\n\n?/, "")
-    return inner.trim()
+    syncedChars += inner.length
+    return syncedChars > 4000000 ? "*(A synced block)*" : inner.trim()
   }
 
   // A contact card: the person as People has them (opts.contactOf), else
