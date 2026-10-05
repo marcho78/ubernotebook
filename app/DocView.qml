@@ -2555,11 +2555,15 @@ FocusScope {
   function copyMarkdown() {
     commit()
     if (!page) return
-    workspace.files.copyText(Markdown.fromDocPage(page, function(id) {
-      var e = view.workspace.index.pages[id]
-      return e ? { title: e.title || "Untitled", icon: e.icon, file: "" } : null
-    }, { calendar: workspace.calendar, syncedPage: function(id) { return view.workspace.readPageNow(id) }, contactOf: function(id) { return view.workspace.contactById(id) } }))
-    toast("Copied the page as Markdown")
+    var p = page
+    // (The pages its synced blocks show, read first.)
+    workspace.readSyncedOf([p], function() {
+      view.workspace.files.copyText(Markdown.fromDocPage(p, function(id) {
+        var e = view.workspace.index.pages[id]
+        return e ? { title: e.title || "Untitled", icon: e.icon, file: "" } : null
+      }, { calendar: view.workspace.calendar, syncedPage: function(id) { return view.workspace.readPageNow(id) }, contactOf: function(id) { return view.workspace.contactById(id) } }))
+      view.toast("Copied the page as Markdown")
+    })
   }
 
   function exportPage() {

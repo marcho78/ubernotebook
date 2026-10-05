@@ -589,6 +589,23 @@ Item {
       verify(md.indexOf("X.pdf](assets/file-20261002-120000-abc-x.pdf) (2 KB)") > 0, md)
       verify(md.indexOf("**To do**\n- Ship it") > 0)
       verify(md.indexOf("From the synced block") > 0, "the synced block's blocks")
+      // Just after Uber Notebook starts (the synced page not read yet): read
+      // first, then copied whole.
+      files.copied = ""
+      ws.written = ({})
+      ws.readJson = ({})
+      files.servesAll = true
+      files.holdReads = true
+      try {
+        view.copyMarkdown()
+        compare(files.copied, "", "not before it's read")
+        files.answerReads()
+        verify(files.copied.indexOf("From the synced block") > 0, files.copied)
+      } finally {
+        files.servesAll = false
+        files.holdReads = false
+        files.answerReads()
+      }
     }
   }
 }

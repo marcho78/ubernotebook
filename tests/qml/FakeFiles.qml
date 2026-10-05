@@ -61,6 +61,8 @@ QtObject {
     printed = []
     picturesIn = []
     deferHelperReads = false
+    servesAll = false
+    holdReads = false
     heldReads = []
     failReads = ({})
     readClipboard = null
@@ -114,7 +116,17 @@ QtObject {
 
   // (A path in failReads couldn't be read: not in what's read, said in `failed`.)
   property var failReads: ({})
+  // As Store's while its files helper serves your notes (servesAll): a page
+  // isn't read there and then (readNow), only in the background; with
+  // holdReads, a read waits for answerReads().
+  property bool servesAll: false
+  property bool holdReads: false
+  function servesNotes(path) { return servesAll }
   function readFiles(paths, done) {
+    if (holdReads) { heldReads.push(function() { files.readFilesNow(paths, done) }); return }
+    readFilesNow(paths, done)
+  }
+  function readFilesNow(paths, done) {
     var out = {}
     var failed = []
     paths.forEach(function(p) {

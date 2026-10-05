@@ -1082,6 +1082,53 @@ Item {
       api.settings = null
     }
 
+    // Just after Uber Notebook starts, while the files helper reads the pages
+    // in the background: a page not read yet is read first, and the command
+    // says to run it again (never "isn't there"); one that can't be read
+    // says so, not "again" over and over.
+    function test_28_a_page_not_read_yet() {
+      fresh()
+      api.ui = null
+      var home = named("Getting started")
+      var inside = ws.index.pages[home].children[0]
+      ws.written = ({})
+      ws.readJson = ({})
+      files.servesAll = true
+      files.holdReads = true
+      try {
+        var r = json(api.append(home, file("a.md", "more")))
+        compare(r.ok, false)
+        verify(/reading that page first: run the same command again in a moment/.test(r.error), r.error)
+        verify(ws.isWarming(home))
+        verify(/again in a moment/.test(json(api.rename(home, "Renamed")).error))
+        verify(/again in a moment/.test(json(api.read(home)).error))
+        verify(/again in a moment/.test(json(api.duplicate(home)).error), "a copy: all its pages, or not yet")
+        files.answerReads()
+        verify(!ws.isWarming(home))
+        compare(json(api.append(home, file("a.md", "more"))).added, 1)
+        compare(json(api.rename(home, "Renamed")).ok, true)
+        compare(fileOf(home).title, "Renamed")
+        verify(api.read(home).indexOf("more") >= 0)
+        // One that can't be read (asked for the first time: the copy above
+        // asked for it a moment ago).
+        ws.readJson = ({})
+        ws.written = ({})
+        ws.warmedAt = ({})
+        var f = {}
+        f[Workspace.pageFile(files.rootPath, inside)] = true
+        files.failReads = f
+        verify(/again in a moment/.test(json(api.read(inside)).error))
+        files.answerReads()
+        compare(json(api.read(inside)).error, "couldn't read that page")
+      } finally {
+        files.servesAll = false
+        files.holdReads = false
+        files.failReads = ({})
+        files.answerReads()
+        api.ui = ui
+      }
+    }
+
     function test_8_without_the_window() {
       fresh()
       api.ui = null

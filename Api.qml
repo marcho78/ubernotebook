@@ -383,7 +383,7 @@ QtObject {
     if (d && d !== "-" && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return fail("a due date is like 2026-10-12, \"\" for none, \"-\" to keep it")
     keep(id)
     var page = workspace.readPageNow(id)
-    if (!page) return fail("couldn't read that page")
+    if (!page) return fail(notRead(id))
     if (page.format && page.format.locked) return fail("that page is locked: unlock it in Uber Notebook first")
     var had = page.project || { status: "active", due: "" }
     var next = st === "none" ? null : Workspace.cleanProject({ status: st || had.status, due: d === "-" ? had.due : d })
@@ -530,8 +530,11 @@ QtObject {
     if (!name) return fail("give a tag: tagged \"#idea\" (or tags, for every tag)")
     writeOpen()
     var out = []
-    Workspace.pagesTagged(workspace.index, name).forEach(function(id) {
-      var page = workspace.readPageNow(id)
+    var ids = Workspace.pagesTagged(workspace.index, name)
+    var pages = ids.map(function(id) { return workspace.readPageNow(id) })
+    if (stillReading(ids)) return fail("reading pages first: run the same command again in a moment")
+    ids.forEach(function(id, i) {
+      var page = pages[i]
       if (!page) return
       Workspace.taggedBlocks(page, name).forEach(function(b) {
         var o = { page: id, title: page.title || "Untitled", block: b.uid, type: b.type, text: Markdown.inline(b.html) }
@@ -548,12 +551,16 @@ QtObject {
     if (!live(id)) return fail("there's no page with that id (list or find gives them)")
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (!page) return fail("couldn't read that page")
-    return Markdown.fromDocPage(page, function(pid) {
+    if (!page) return fail(notRead(id))
+    // (A page it syncs that isn't read yet: the whole of it when it is.)
+    var synced = []
+    var md = Markdown.fromDocPage(page, function(pid) {
       var e = api.workspace.index.pages[pid]
       return e && !Workspace.inTrash(api.workspace.index, pid) ? { title: e.title || "Untitled", icon: e.icon, file: "uber-notebook://page/" + pid } : null
     }, { fences: true, contactOf: function(cid) { return api.workspace.contactById(cid) },
-      syncedPage: function(sid) { return live(sid) ? api.workspace.readPageNow(sid) : null } })
+      syncedPage: function(sid) { synced.push(sid); return live(sid) ? api.workspace.readPageNow(sid) : null } })
+    if (stillReading(synced)) return fail("reading a page it syncs first: run the same command again in a moment")
+    return md
   }
 
   // A quick note (Super+Alt+N) as a page in the Inbox: its first line the
@@ -677,7 +684,7 @@ QtObject {
     var id = workspace.pageFromTemplateNow(tpl, into, Workspace.cleanTitle(String(title || "")), function(text, html) {
       return Templates.fill(text, html, now, function(d, pattern) { return Qt.formatDate(Templates.parse(d), pattern) })
     })
-    if (!id) return fail("couldn't make the page")
+    if (!id) return fail(stillReading(Workspace.withDescendants(ix, tpl)) ? "reading the template first: run the same command again in a moment" : "couldn't make the page")
     if (into) placeIn(into, id)
     return answer({ ok: true, id: id, title: ix.pages[id].title || "Untitled", path: where(id) })
   }
@@ -697,7 +704,7 @@ QtObject {
     if (took === true) return answer({ ok: true, id: id, added: blocks.length })
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (!page) return fail("couldn't read that page")
+    if (!page) return fail(notRead(id))
     if (page.format && page.format.locked) return fail("that page is locked: unlock it in Uber Notebook first")
     var n = Workspace.appendBlocks(page, blocks)
     page.modified = new Date().toISOString()
@@ -713,7 +720,7 @@ QtObject {
     if (!live(id)) return fail("there's no page with that id (list or find gives them)")
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (!page) return fail("couldn't read that page")
+    if (!page) return fail(notRead(id))
     return answer(Workspace.blockList(page, Markdown.inline, function(pid) {
       var e = api.workspace.index.pages[pid]
       return e ? e.title || "Untitled" : ""
@@ -736,7 +743,7 @@ QtObject {
     if (list.length === 0) return fail("there's nothing in that file to put in")
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (!page) return fail("couldn't read that page")
+    if (!page) return fail(notRead(id))
     if (page.format && page.format.locked) return fail("that page is locked: unlock it in Uber Notebook first")
     var spot = Workspace.locate(page, String(block || ""))
     if (!spot) return fail("there's no block with that id on the page (blocks <page id> gives them)")
@@ -780,11 +787,17 @@ QtObject {
   // A page's file changed now: fn(page) changes it (false: nothing to do; a
   // string: what's wrong). Kept in its history first (`keepIt`); the window
   // shows it as it is now.
+  // A page that couldn't be read at once: just after Uber Notebook started,
+  // being read now (the same command again has it); else not readable.
+  readonly property string readingFirst: "reading that page first: run the same command again in a moment"
+  function notRead(id) { return workspace.isWarming(id) ? readingFirst : "couldn't read that page" }
+  function stillReading(ids) { return ids.some(function(pid) { return api.workspace.isWarming(pid) }) }
+
   function editPageNow(id, fn, keepIt) {
     if (keepIt) keep(id)
     else writeOpen()
     var page = workspace.readPageNow(id)
-    if (!page) return "couldn't read that page"
+    if (!page) return notRead(id)
     var r = fn(page)
     if (r === false) return ""
     if (typeof r === "string" && r) return r
@@ -890,9 +903,8 @@ QtObject {
   function copyPages(id, asTemplate) {
     var ix = workspace.index
     var e = ix.pages[id]
-    var pages = Workspace.withDescendants(ix, id).filter(function(pid) { return pid === id || !Workspace.inTrash(ix, pid) })
-      .map(function(pid) { return workspace.readPageNow(pid) }).filter(function(p) { return !!p })
-    if (!pages.length) return ""
+    var pages = workspace.readPagesNow(Workspace.withDescendants(ix, id).filter(function(pid) { return pid === id || !Workspace.inTrash(ix, pid) }))
+    if (!pages || !pages.length) return ""
     var copies = Workspace.duplicate(pages, id, new Date())
     var top = copies[0]
     if (asTemplate) { top.title = e.title || ""; if (top.format) delete top.format.locked }
@@ -912,13 +924,14 @@ QtObject {
     workspace.touched()
     return top.id
   }
+  function copyFailed(id) { return stillReading(Workspace.withDescendants(workspace.index, id)) ? "reading its pages first: run the same command again in a moment" : "couldn't copy it (a page in it couldn't be read)" }
   function duplicate(id) {
     var not = unready()
     if (not) return fail(not)
     if (!live(id)) return fail(noPage)
     writeOpen()
     var made = copyPages(id, false)
-    return made ? answer({ ok: true, id: made, title: workspace.index.pages[made].title || "Untitled", path: where(made) }) : fail("couldn't copy it")
+    return made ? answer({ ok: true, id: made, title: workspace.index.pages[made].title || "Untitled", path: where(made) }) : fail(copyFailed(id))
   }
   // A copy of the page (and the pages in it) kept as one of your templates.
   function makeTemplate(id) {
@@ -927,7 +940,7 @@ QtObject {
     if (!live(id)) return fail(noPage)
     writeOpen()
     var made = copyPages(id, true)
-    return made ? answer({ ok: true, id: made, title: workspace.index.pages[made].title || "Untitled", note: "a template now (templates lists it; fromTemplate uses it)" }) : fail("couldn't copy it")
+    return made ? answer({ ok: true, id: made, title: workspace.index.pages[made].title || "Untitled", note: "a template now (templates lists it; fromTemplate uses it)" }) : fail(copyFailed(id))
   }
 
   // ---- a page's history ----
@@ -1155,7 +1168,11 @@ QtObject {
     if (took === true || took === "locked") return took === true
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (!page || lockedNote(page)) return false
+    if (!page) {
+      workspace.editPage(id, function(p) { if (lockedNote(p)) return false; Workspace.appendBlocks(p, list) })
+      return true
+    }
+    if (lockedNote(page)) return false
     Workspace.appendBlocks(page, list)
     page.modified = new Date().toISOString()
     workspace.savePage(page)
@@ -1174,7 +1191,8 @@ QtObject {
     if (!p || p.charAt(0) !== "/" || /\/$/.test(p)) return fail("give the file's full path")
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (page && lockedNote(page)) return fail(lockedNote(page))
+    if (!page) return fail(notRead(id))
+    if (lockedNote(page)) return fail(lockedNote(page))
     var name = p.slice(p.lastIndexOf("/") + 1)
     var kind = files.isImagePath(p) ? "picture" : /\.eml$/i.test(name) ? "email" : Files.kindOf(name) === "video" ? "video" : "file"
     // (The panel's agent's picture only from its own folder, through no link.)
@@ -1255,7 +1273,8 @@ QtObject {
     if (!live(id)) return fail(noPage)
     writeOpen()
     var page = workspace.readPageNow(id)
-    if (page && lockedNote(page)) return fail(lockedNote(page))
+    if (!page) return fail(notRead(id))
+    if (lockedNote(page)) return fail(lockedNote(page))
     var list = pathList(pictures)
     if (!list.length || list.some(function(p) { return p.charAt(0) !== "/" })) return fail("give the pictures' full paths, one a line (or | between them), or a folder's")
     if (list.length > 1 && !list.some(function(p) { return files.isImagePath(p) })) return fail("none of those are pictures (png, jpg, gif, webp, bmp, svg)")
@@ -1280,7 +1299,8 @@ QtObject {
     var act = String(action || "")
     writeOpen()
     var page = workspace.readPageNow(id)
-    var gb = (page ? blockOf(page, block) : null)
+    if (!page) return fail(notRead(id))
+    var gb = blockOf(page, block)
     if (!gb || gb.type !== "gallery") return fail("that isn't a gallery on the page (blocks <page id> gives them)")
     if (lockedNote(page)) return fail(lockedNote(page))
     if (act === "add") {
@@ -1349,7 +1369,8 @@ QtObject {
     if (!live(id)) return fail(noPage)
     writeOpen()
     var page = workspace.readPageNow(id)
-    var b = (page ? blockOf(page, block) : null)
+    if (!page) return fail(notRead(id))
+    var b = blockOf(page, block)
     if (!b || (b.type !== "bookmark" && b.type !== "link")) return fail("that isn't a bookmark or a link to a page (blocks <page id> gives them)")
     if (lockedNote(page)) return fail(lockedNote(page))
     var t = String(target || "").trim()
@@ -1809,7 +1830,7 @@ QtObject {
   function placeIn(parentId, childId) {
     if (viewDoes("addPageBlock", parentId, childId) === true) return
     var parent = workspace.readPageNow(parentId)
-    if (!parent) return
+    if (!parent) { workspace.editPage(parentId, function(p) { Workspace.appendBlocks(p, [{ type: "page", uid: childId, indent: 0 }]) }); return }
     Workspace.appendBlocks(parent, [{ type: "page", uid: childId, indent: 0 }])
     parent.modified = new Date().toISOString()
     workspace.savePage(parent)

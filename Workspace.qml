@@ -99,6 +99,8 @@ Item {
     keptAt = ({})
     keptJson = ({})
     versionNames = ({})
+    warming = ({})
+    warmedAt = ({})
     files.readFiles([ws.indexPath()], function(got, read, failed) {
       if (gen !== ws.generation) return
       ws.keepUnreadable(ws.indexPath(), failed)
@@ -221,7 +223,10 @@ Item {
       else paths.push(pagePath(id))
     })
     if (paths.length === 0) { done(fresh); return }
+    // (Another folder meanwhile: nothing of this one's kept, or given.)
+    var gen = generation
     files.readFiles(paths, function(got) {
+      if (gen !== ws.generation) { done([]); return }
       var out = fresh.slice()
       for (var path in got) {
         var id = path.slice(path.lastIndexOf("/") + 1, -5)
@@ -246,9 +251,47 @@ Item {
     if (!Workspace.isUuid(id)) return null
     if (written[id]) return JSON.parse(JSON.stringify(written[id]))
     if (readJson[id]) return JSON.parse(readJson[id])
-    if (typeof files.servesNotes === "function" && files.servesNotes(pagePath(id))) return null
+    if (typeof files.servesNotes === "function" && files.servesNotes(pagePath(id))) { warm(id); return null }
     var text = files.readNow(pagePath(id), 32 * 1024 * 1024)
     return text === null ? null : Workspace.cleanPage(files.parseJson(text), id)
+  }
+
+  // A page a command asked for before it was read (just after Uber Notebook
+  // starts, while the rest are read in the background): read now, first, so
+  // the command run again has it (isWarming(id) meanwhile). One that can't
+  // be read isn't tried again for ten seconds: "couldn't read" meanwhile.
+  property var warming: ({})
+  property var warmedAt: ({})
+  function warm(id) {
+    if (warming[id] || !index.pages[id]) return
+    if (warmedAt[id] && Date.now() - warmedAt[id] < 10000) return
+    warmedAt[id] = Date.now()
+    warming[id] = true
+    var gen = generation
+    readPage(id, function() { if (gen === ws.generation) delete ws.warming[id] })
+  }
+  function isWarming(id) { return !!warming[id] }
+  // The pages these pages' synced blocks show (and theirs, a few deep), read
+  // first, so what asks for them at once (an export, a Markdown copy) has
+  // them: done().
+  function readSyncedOf(pages, done, round) {
+    var want = []
+    pages.forEach(function(p) {
+      for (var k in (p && p.blocks) || {}) {
+        var b = p.blocks[k]
+        var sid = b && b.type === "synced" && b.data ? b.data.page : ""
+        if (Workspace.isUuid(sid) && want.indexOf(sid) < 0 && !ws.written[sid] && !ws.readJson[sid] && ws.index.pages[sid]) want.push(sid)
+      }
+    })
+    if (!want.length || (round || 0) >= 5) { done(); return }
+    readPages(want.slice(0, 50), function(read) { ws.readSyncedOf(read, done, (round || 0) + 1) })
+  }
+  // Pages read at once, all of them, or null (those not read yet being read).
+  function readPagesNow(ids) {
+    var out = []
+    var missed = false
+    ids.forEach(function(id) { var p = ws.readPageNow(id); if (p) out.push(p); else missed = true })
+    return missed ? null : out
   }
 
   // Every page's text (its title first), so commands find pages at once:
@@ -1171,9 +1214,10 @@ Item {
   // A new page from a template at once (for commands): its id, or "".
   function pageFromTemplateNow(template, parent, title, fill) {
     if (!index.pages[template] || !Workspace.inTemplates(index, template)) return ""
-    var pages = Workspace.withDescendants(index, template).filter(function(pid) { return pid === template || !Workspace.inTrash(ws.index, pid) })
-      .map(function(pid) { var p = ws.readPageNow(pid); if (p) p.id = pid; return p }).filter(function(p) { return p !== null })
-    if (!pages.length) return ""
+    var ids = Workspace.withDescendants(index, template).filter(function(pid) { return pid === template || !Workspace.inTrash(ws.index, pid) })
+    var pages = readPagesNow(ids)
+    if (!pages || !pages.length) return ""
+    pages.forEach(function(p, i) { p.id = ids[i] })
     var id = Workspace.uuid4()
     placeTemplate(pages, template, id, fill, function(top) {
       ws.createPage({ id: id, parent: parent, title: title || top.title, icon: top.icon, cover: top.cover, format: top.format, project: top.project,

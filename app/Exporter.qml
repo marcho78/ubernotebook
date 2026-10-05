@@ -78,11 +78,13 @@ Item {
         var work = files.runtimeDir + "/uber-notebook-export-" + Workspace.uuid4().slice(0, 8)
         // (A folder of its own, made new: never one that's there, which is
         // taken away after; one it couldn't make, it leaves.)
-        files.exec(["/usr/bin/mkdir", "-m", "700", "--", work, work + "/drawings"], function(made) {
-          if (!made) { ex.fail("", "its folder couldn't be made"); return }
-          ex.drawEquations(pages, function() {
-            ex.drawDiagrams(pages, work, function(drawings) {
-              ex.write(kind, pages, work, drawings, t)
+        workspace.readSyncedOf(pages, function() {
+          files.exec(["/usr/bin/mkdir", "-m", "700", "--", work, work + "/drawings"], function(made) {
+            if (!made) { ex.fail("", "its folder couldn't be made"); return }
+            ex.drawEquations(pages, function() {
+              ex.drawDiagrams(pages, work, function(drawings) {
+                ex.write(kind, pages, work, drawings, t)
+              })
             })
           })
         })
