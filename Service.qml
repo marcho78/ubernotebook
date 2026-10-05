@@ -6,6 +6,7 @@ import qs.Commons
 import "Defaults.js" as Defaults
 import "Settings.js" as Settings
 import "Scope.js" as Scope
+import "QuickQueue.js" as QuickQueue
 
 // Uber Notebook: notebooks that look and feel like paper, and pages made of
 // blocks (Pages), on Omarchy.
@@ -143,6 +144,9 @@ Item {
     // first, where it was.
     if (changes && Object.prototype.hasOwnProperty.call(changes, "folder") && changes.folder !== settings.folder) {
       saveOpen()
+      // (Quick notes still waiting for this one's Pages: into its Quick notes
+      // notebook now, while it's open.)
+      if (quickWaiting.length) flushQuick(false)
       // (What couldn't be saved, tried again where it was.)
       storeItem.retryUnsaved(null)
     }
@@ -460,13 +464,14 @@ Item {
   }
 
   // Into the Pages Inbox, once Pages has loaded (a note made before then
-  // waits for it; if Pages can't load, it goes to the Quick notes notebook,
-  // so it's never lost).
+  // waits for it, with the profile it was made in; if Pages can't load, it
+  // goes to that profile's Quick notes notebook, so it's never lost, and
+  // never into another profile: QuickQueue.js).
   property var quickWaiting: []
 
   function quickToPages(value) {
     if (!workspaceItem.loaded) {
-      quickWaiting = quickWaiting.concat([value])
+      quickWaiting = QuickQueue.add(quickWaiting, value, storeItem.rootPath)
       quickTimer.restart()
       return
     }
@@ -479,11 +484,13 @@ Item {
     }
   }
 
+  // Those made in the profile open now, written; any of another, kept till
+  // it's open again.
   function flushQuick(toPages) {
     quickTimer.stop()
-    var list = quickWaiting
-    quickWaiting = []
-    list.forEach(function(v) { if (toPages) root.quickToPages(v); else root.quickToNotebook(v) })
+    var t = QuickQueue.take(quickWaiting, storeItem.rootPath)
+    quickWaiting = t.rest
+    t.mine.forEach(function(v) { if (toPages) root.quickToPages(v); else root.quickToNotebook(v) })
   }
 
   Connections {

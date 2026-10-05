@@ -12,6 +12,7 @@ if grep -rlP '[\x{2028}\x{2029}]' --include='*.js' --include='*.qml' . >/dev/nul
 fi
 
 node tests/settings.test.cjs
+node tests/quickqueue.test.cjs
 node tests/html.test.cjs
 node tests/blocks.test.cjs
 node tests/papers.test.cjs
