@@ -627,7 +627,7 @@ release notes, contact).
 | `scrollSpeed` | `"normal"` | how fast a page scrolls with a trackpad or a wheel: `slower`, `normal`, `faster` (a trackpad's quick strokes go further, as on a MacBook) |
 | `reduceMotion` | `false` | fade instead of turning pages and swinging covers |
 | `zoom` | `100` | 60 to 200 |
-| `space` | `notebooks` | which Uber Notebook opens in: `notebooks` or `pages` (the one you were in) |
+| `space` | `pages` | which Uber Notebook opens in: `pages` or `notebooks` (the one you were in last) |
 | `recentColors` | `""` | the colors of your own you picked last in a mind map, newest first (up to 8) |
 | `exportTo` | `ask` | where exports go: `ask` (a folder picker each time) or `folder` (`Exports/` in your notebooks folder) |
 | `inbox` | `""` | the page agents' and scripts' new pages go into: made (as *Inbox*) the first time; `omarchy-shell uber-notebook set inbox <page id>` makes it another page |
