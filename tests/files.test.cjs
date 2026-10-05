@@ -238,6 +238,15 @@ try {
     assert.deepEqual([unknown.ok, unknown.error], [false, "no such request"], "only what Uber Notebook asks for");
     assert.ok(fs.existsSync(path.join(root, "Pages", "a.json")));
     assert.deepEqual(fs.readdirSync(path.join(root, "Pages")).filter((n) => n.endsWith(".tmp")), [], "no half-written file left");
+    // A page written survives a power cut: the file on disk, then its
+    // folder (the rename in it).
+    const synced = spawnSync("/usr/bin/python3", ["-I", "-S", "-c",
+      "import os, runpy, stat, sys\nseen = []\nreal = os.fsync\n"
+      + "def fsync(fd):\n    seen.append('dir' if stat.S_ISDIR(os.fstat(fd).st_mode) else 'file')\n    return real(fd)\n"
+      + "os.fsync = fsync\nsys.argv = sys.argv[1:]\ntry:\n    runpy.run_path(sys.argv[0], run_name='__main__')\nfinally:\n    sys.stderr.write('FSYNC ' + ','.join(seen) + '\\n')\n",
+      helper, "serve", root], { input: JSON.stringify({ id: 1, op: "write", path: "Pages/c.json", text: "{}" }) + "\n", encoding: "utf8", timeout: 10000 });
+    assert.equal(JSON.parse(synced.stdout.trim()).ok, true);
+    assert.match(synced.stderr, /FSYNC file,dir\n/, synced.stderr);
     // Only a folder of yours.
     const notYours = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "serve", "/"], { input: JSON.stringify({ id: 1, op: "read", paths: ["etc/hostname"] }) + "\n", encoding: "utf8", timeout: 10000 });
     assert.notEqual(notYours.status, 0);

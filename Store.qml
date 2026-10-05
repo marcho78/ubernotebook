@@ -782,11 +782,11 @@ Item {
     })
   }
 
-  function writePage(id, page) {
+  function writePage(id, page, done) {
     remember(id, page)
     var path = Library.pageFile(rootPath, id, page.id)
     var text = pageJson(page)
-    whenReady(id, function() { store.writeFile(path, text) })
+    whenReady(id, function() { store.writeFile(path, text, done) })
     changed()
   }
 
@@ -832,10 +832,10 @@ Item {
     return page
   }
 
-  function savePage(id, page) {
+  function savePage(id, page, done) {
     var nb = index[id]
-    if (!nb) return
-    writePage(id, page)
+    if (!nb) { if (done) done(false); return }
+    writePage(id, page, done)
     var added = nb.pages.indexOf(page.id) < 0
     if (added) nb.pages = nb.pages.concat([page.id])
     nb.modified = page.modified

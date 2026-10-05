@@ -1077,7 +1077,9 @@ FocusScope {
       var e = view.workspace.index.pages[id]
       if (e && e.trashed) view.workspace.restorePage(id, true)
     })
-    workspace.savePage(p)
+    // (Not saved, a full disk say: still to be saved, tried again with your
+    // next change, another page, or closing; meanwhile it's kept as it is.)
+    workspace.savePage(p, function(ok) { if (ok === false && view.page && view.page.id === p.id) view.pageDirty = true })
     revision++
   }
 
@@ -1269,6 +1271,8 @@ FocusScope {
     workspace.importPaths(paths, parentId || "", function(r) {
       var note = r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") : "There were no notes to import"
       if (r.skipped && r.skipped.length) note += " (" + r.skipped.length + " not: install pandoc or LibreOffice for Word files)"
+      // (What went wrong too, the first of it; a long message, cut.)
+      if (r.problems && r.problems.length) note += ". " + String(r.problems[0]).replace(/\/home\/[^\/]+/, "~").slice(0, 160) + (r.problems.length > 1 ? " (and " + (r.problems.length - 1) + " more)" : "")
       view.toast(note)
       if (r.first) view.open(r.first)
       else if (parentId && view.page && view.page.id === parentId) view.workspace.readPage(parentId, function(p) { if (p) view.show(p) })

@@ -116,6 +116,9 @@ Item {
   }
   // Several at once ({ key: value }), as one change.
   function setSettings(changes) {
+    // Another notes folder (a profile, `set folder`): what's open is saved
+    // first, where it was.
+    if (changes && Object.prototype.hasOwnProperty.call(changes, "folder") && changes.folder !== settings.folder) saveOpen()
     var next = Settings.clone(user)
     for (var key in changes) if (defaults && Object.prototype.hasOwnProperty.call(defaults, key)) next[key] = changes[key]
     user = Settings.overrides(defaults, Settings.merge(defaults, next, schema))

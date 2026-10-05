@@ -248,6 +248,22 @@ Item {
       verify(view.pageSheet.dateText.indexOf("\u2013") > 0, "named otherwise, the week's dates are beside it")
     }
 
+    // A save that couldn't be written stays to be saved: the next one has it.
+    function test_12b_a_failed_save_is_tried_again() {
+      openFirst()
+      var id = view.page.id
+      view.pageSheet.titleField.text = "Kept"
+      view.markDirty()
+      fakeStore.failSaves = true
+      view.commit()
+      verify(view.pageDirty, "still to be saved")
+      compare(stored(id).title, "Lisbon, in October")
+      fakeStore.failSaves = false
+      view.commit()
+      verify(!view.pageDirty)
+      compare(stored(id).title, "Kept")
+    }
+
     function test_13_the_template_picker() {
       openFirst()
       view.openTemplates()

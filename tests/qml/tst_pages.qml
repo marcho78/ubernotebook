@@ -750,6 +750,34 @@ Item {
       view.toast.disconnect(heard)
     }
 
+    // A save that couldn't be written (a full disk) stays to be saved: the
+    // next save, here the next change, has it, and nothing is lost.
+    function test_25_a_failed_save_is_tried_again() {
+      fresh()
+      view.newPage("")
+      tryVerify(function() { return view.page && view.page.title === "" }, 2000)
+      var id = view.page.id
+      files.failWrites = id
+      keyClick("P")
+      keyClick("l")
+      view.commit()
+      verify(view.pageDirty, "still to be saved")
+      compare(fileOf(id) ? fileOf(id).title : "", "")
+      files.failWrites = ""
+      keyClick("a")
+      keyClick("n")
+      tryCompare(view, "pageDirty", false, 3000)
+      compare(fileOf(id).title, "Plan")
+      files.failWrites = id
+      keyClick("s")
+      view.commit()
+      verify(view.pageDirty)
+      files.failWrites = ""
+      view.commit()
+      verify(!view.pageDirty)
+      compare(fileOf(id).title, "Plans", "and a commit (another page, closing) has it too")
+    }
+
     function test_23_what_couldnt_be_read_isnt_written_over() {
       fresh()
       var cal = ws.calendarPath()
@@ -769,9 +797,15 @@ Item {
         tryVerify(function() { return ws.calendarLoaded }, 2000)
         verify(ws.unreadable[cal] && ws.unreadable[ix], "both kept as unreadable")
         compare(told.filter(function(m) { return m.indexOf("calendar.json") >= 0 }).length, 1, "said once: " + JSON.stringify(told))
-        // Changed meanwhile: in memory, never written over.
+        // Changed meanwhile: in memory, never written over, and said so
+        // (once a minute at most).
+        ws.refusedAt = ({})
+        told = []
+        ws.writeCalendar()
         ws.writeCalendar()
         ws.flushIndex()
+        compare(told.filter(function(m) { return m.indexOf("Not saved") === 0 && m.indexOf("calendar.json") >= 0 }).length, 1, JSON.stringify(told))
+        compare(told.filter(function(m) { return m.indexOf("Not saved") === 0 && m.indexOf("index.json") >= 0 }).length, 1, JSON.stringify(told))
         view.newPage("")
         tryVerify(function() { return view.page && view.page.title === "" }, 2000)
         ws.flushIndex()
@@ -788,6 +822,31 @@ Item {
         ws.failed.disconnect(heard)
         files.failReads = ({})
       }
+    }
+
+    // What went wrong importing is said with what was imported, not under it;
+    // outside an import, as it happens.
+    function test_26_an_import_says_what_went_wrong() {
+      fresh()
+      files.disk["/tmp/broken.zip"] = "NOT A ZIP"
+      var said = []
+      function heard(t) { said.push(t) }
+      view.toast.connect(heard)
+      try {
+        view.importPaths(["/tmp/broken.zip"], "")
+        tryVerify(function() { return said.some(function(t) { return t.indexOf("no notes to import") >= 0 }) }, 3000)
+        var last = said[said.length - 1]
+        verify(last.indexOf("Couldn't unzip /tmp/broken.zip") > 0, last)
+        compare(ws.importing, false)
+      } finally {
+        view.toast.disconnect(heard)
+      }
+      var told = []
+      function heard2(m) { told.push(m) }
+      ws.failed.connect(heard2)
+      ws.importProblem("A picture wasn't copied")
+      ws.failed.disconnect(heard2)
+      compare(told, ["A picture wasn't copied"])
     }
 
     function test_8_the_open_page_reloads_after_the_store_changes_it() {

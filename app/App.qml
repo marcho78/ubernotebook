@@ -523,6 +523,13 @@ FocusScope {
     function onFailed(message) { root.toast(message) }
     function onExported(path) { root.toast("Exported to " + path.replace(/^\/home\/[^\/]+/, "~")) }
   }
+  // (Pages' own: a file it couldn't read, so left as it is; a zip that
+  // wouldn't unzip; a picture not copied.)
+  Connections {
+    target: root.workspace
+    ignoreUnknownSignals: true
+    function onFailed(message) { if (typeof message === "string" && message) root.toast(message) }
+  }
 
   // ---- keys -------------------------------------------------------------------------------
 

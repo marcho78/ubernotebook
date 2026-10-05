@@ -23,6 +23,7 @@ QtObject {
 
   function reset() {
     readClipboard = null
+    failSaves = false
     data = ({})
     order = []
     seed()
@@ -96,12 +97,15 @@ QtObject {
     return page
   }
 
-  function savePage(id, page) {
+  // (failSaves: a save that couldn't be written, done(false).)
+  property bool failSaves: false
+  function savePage(id, page, done) {
     var nb = data[id]
-    if (!nb) return
+    if (!nb || failSaves) { if (done) done(false); return }
     for (var i = 0; i < nb.pages.length; i++) if (nb.pages[i].id === page.id) nb.pages[i] = copy(page)
     nb.modified = page.modified
     refresh()
+    if (done) done(true)
   }
 
   function deletePage(id, pageId) {

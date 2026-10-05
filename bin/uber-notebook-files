@@ -349,6 +349,13 @@ def serve_write(root_fd, req):
             except OSError:
                 pass
             raise
+        # The rename itself on disk too: after a power cut, the page as it
+        # was or as it is, never neither. (A file system that can't is left
+        # to do what it does.)
+        try:
+            os.fsync(dfd)
+        except OSError:
+            pass
         return {}
     finally:
         os.close(dfd)

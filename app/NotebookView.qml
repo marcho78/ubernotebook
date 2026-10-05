@@ -139,7 +139,8 @@ Item {
     p.title = Library.cleanTitle(sheet.titleField.text)
     p.modified = new Date().toISOString()
     p.text = Blocks.plainText(p.blocks)
-    store.savePage(nb.id, p)
+    // (Not saved: still to be saved, tried again with your next change.)
+    store.savePage(nb.id, p, function(ok) { if (ok === false && view.page && view.page.id === p.id) view.pageDirty = true })
     revision++
   }
 

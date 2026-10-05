@@ -86,6 +86,21 @@ Item {
       verify(!ws.keepVersion(id, "command", true), "but not the same page twice")
     }
 
+    // A version that couldn't be written doesn't hold back the next ten
+    // minutes: the next save keeps one.
+    function test_1b_a_version_not_written_is_kept_next_time() {
+      fresh()
+      var id = view.page.id
+      files.failWrites = Workspace.historyDir(files.rootPath, id)
+      write("first")
+      compare(versionsOf(id).length, 0, "it couldn't be written")
+      files.failWrites = ""
+      write("second")
+      var list = versionsOf(id)
+      compare(list.length, 1, "kept with the next save")
+      compare(versionAt(list[0]).page.title, view.page.title)
+    }
+
     function test_2_the_panel_and_putting_a_version_back() {
       fresh()
       var id = view.page.id

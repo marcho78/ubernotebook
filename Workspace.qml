@@ -166,6 +166,15 @@ Item {
     ws.failed("Couldn't read " + path.replace(files.home, "~") + ": it's left as it is, and changes to it aren't saved over it")
     return true
   }
+  // A change to one of them, not saved: said (once a minute at most), so a
+  // person added or an event moved isn't thought kept.
+  property var refusedAt: ({})
+  function notSaved(path) {
+    var now = Date.now()
+    if (refusedAt[path] && now - refusedAt[path] < 60000) return
+    refusedAt[path] = now
+    ws.failed("Not saved: " + path.replace(files.home, "~") + " couldn't be read, so it's left as it is")
+  }
 
   Timer {
     id: indexTimer
@@ -177,7 +186,7 @@ Item {
   function flushIndex(done) {
     indexTimer.stop()
     if (!ready && Object.keys(index.pages).length === 0) { if (done) done(false); return }
-    if (unreadable[indexPath()]) { if (done) done(false); return }
+    if (unreadable[indexPath()]) { notSaved(indexPath()); if (done) done(false); return }
     var text = Workspace.indexJson(index)
     withFolder(function() { files.writeFile(ws.indexPath(), text, done) }, done)
   }
@@ -384,6 +393,8 @@ Item {
     // (Never two in the same millisecond: each has a file of its own.)
     var now = Math.max(Date.now(), (keptAt[id] || 0) + 1)
     if (!always && keptAt[id] && now - keptAt[id] < historyGap) return false
+    // (A page with no file yet, just made, counts as kept now; a version
+    // that couldn't be written doesn't hold back the next.)
     keptAt[id] = now
     var page = readPageNow(id)
     if (!page) return false
@@ -393,11 +404,15 @@ Item {
     keptJson[id] = json
     var dir = Workspace.historyDir(files.rootPath, id)
     var text = JSON.stringify({ kept: new Date(now).toISOString(), why: why || "edit", page: JSON.parse(json) })
+    function missed() {
+      if (ws.keptAt[id] === now) delete ws.keptAt[id]
+      if (ws.keptJson[id] === json) delete ws.keptJson[id]
+    }
     files.mkdirs([dir], function(ok) {
-      if (!ok) return
+      if (!ok) { missed(); return }
       var name = Workspace.versionName(new Date(now))
       files.writeFile(dir + "/" + name, text, function(written) {
-        if (!written) return
+        if (!written) { missed(); return }
         if (ws.versionNames[id]) ws.versionNames[id] = [name].concat(ws.versionNames[id])
         ws.versionKept(id)
         ws.pruneVersions(id)
@@ -540,7 +555,8 @@ Item {
   }
 
   function writeCalendar() {
-    if (!folder || unreadable[calendarPath()]) return
+    if (!folder) return
+    if (unreadable[calendarPath()]) { notSaved(calendarPath()); return }
     files.writeFile(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
   }
 
@@ -612,7 +628,8 @@ Item {
     })
   }
   function writeChats() {
-    if (!folder || unreadable[chatsPath()]) return
+    if (!folder) return
+    if (unreadable[chatsPath()]) { notSaved(chatsPath()); return }
     var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
     withFolder(function() { files.writeFile(ws.chatsPath(), text) })
   }
@@ -654,7 +671,8 @@ Item {
   }
 
   function writeContacts() {
-    if (!folder || unreadable[contactsPath()]) return
+    if (!folder) return
+    if (unreadable[contactsPath()]) { notSaved(contactsPath()); return }
     withFolder(function() { files.writeFile(ws.contactsPath(), JSON.stringify(ws.contacts, null, 1) + "\n") })
   }
 
@@ -1345,6 +1363,13 @@ Item {
   // their pictures. done({ pages, first, skipped }).
   property bool importing: false
   property int importCount: 0
+  // What went wrong while importing (a zip that wouldn't unzip, a picture
+  // left out): given with the result as `problems`, said with it.
+  property var importProblems: []
+  function importProblem(message) {
+    if (importing) importProblems.push(message)
+    else ws.failed(message)
+  }
 
   // Every file under the paths given ("R\t<root>" before each one's files),
   // each ended by a NUL (a name can't have one; it can have a newline).
@@ -1355,6 +1380,7 @@ Item {
     if (!ready || importing || list.length === 0) { if (done) done({ pages: 0, first: "", skipped: [] }); return }
     importing = true
     importCount = 0
+    importProblems = []
     var tmp = files.runtimeDir + "/uber-notebook-import-" + Workspace.uuid4().slice(0, 8)
     // (A folder of its own, made new: never one that's there, which is
     // taken away after.)
@@ -1365,6 +1391,7 @@ Item {
           files.exec(["/usr/bin/rm", "-rf", "--", tmp], function() {})
           ws.importing = false
           ws.touched()
+          result.problems = ws.importProblems
           if (done) done(result)
         })
       })
@@ -1390,7 +1417,7 @@ Item {
         files.helper(["unzip", p, dir, String(ws.unzipMaxBytes), String(ws.unzipMaxFiles)], function(ok, output) {
           var r = null
           try { r = JSON.parse(String(output || "").trim().split("\n").pop()) } catch (e) { r = null }
-          if (!ok || !r || !r.ok) { ws.failed("Couldn't unzip " + p + (r && r.error ? ": " + r.error : "")); next(); return }
+          if (!ok || !r || !r.ok) { ws.importProblem("Couldn't unzip " + p + (r && r.error ? ": " + r.error : "")); next(); return }
           out.push(dir)
           next()
         }, { timeoutMs: 10 * 60 * 1000, maxBytes: 64 * 1024 })
@@ -1540,7 +1567,7 @@ Item {
   // Something in what's imported that couldn't be read: said, and the import
   // over (what was made stays), never stuck.
   function importFailed(e, skipped, done) {
-    ws.failed("Couldn't import all of it: " + String(e && e.message ? e.message : e).slice(0, 200))
+    ws.importProblem("Couldn't import all of it: " + String(e && e.message ? e.message : e).slice(0, 200))
     done({ pages: ws.importCount, first: "", skipped: skipped || [] })
   }
 
@@ -1650,7 +1677,10 @@ Item {
     function copyNext() {
       if (i >= copies.length) { done({ pages: count, first: first, skipped: skipped }); return }
       var c = copies[i++]
-      files.copyPictureIn(c.from, c.to.slice(0, c.to.lastIndexOf("/")), c.to.slice(c.to.lastIndexOf("/") + 1), function() { copyNext() })
+      files.copyPictureIn(c.from, c.to.slice(0, c.to.lastIndexOf("/")), c.to.slice(c.to.lastIndexOf("/") + 1), function(copied, why) {
+        if (!copied) ws.importProblem("A picture wasn't copied: " + (why || c.from))
+        copyNext()
+      })
     }
     files.mkdirs([Workspace.assetsDir(files.rootPath)], function() { copyNext() })
   }
