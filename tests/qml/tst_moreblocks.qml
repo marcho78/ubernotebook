@@ -218,13 +218,13 @@ Item {
       view.dataAction(view.editor.uidAt(i), "copy", null)
       compare(files.copied, "https://example.com/post")
       // A page that can't be read: the link's kept, it says so.
-      view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://nowhere.example/x" })
-      tryVerify(function() { return dataAt(i).url === "https://nowhere.example/x" && dataAt(i).title === "" }, 2000)
+      view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://nowhere.example.org/x" })
+      tryVerify(function() { return dataAt(i).url === "https://nowhere.example.org/x" && dataAt(i).title === "" }, 2000)
       verify(root.lastToast.indexOf("couldn't be read") >= 0, root.lastToast)
       // Not read (as an agent's bookmark is): read only when you ask, with
       // the card's own button (not opened in the browser by that click).
       tryVerify(function() { var b = named(bv, "bookmarkRead"); return b !== null && b.y > 0 }, 1000, "it says it can be read")
-      files.fetchPages["https://nowhere.example/x"] = '<html><head><title>Found it</title></head></html>'
+      files.fetchPages["https://nowhere.example.org/x"] = '<html><head><title>Found it</title></head></html>'
       var opened = files.opened.length
       mouseClick(named(bv, "bookmarkRead"))
       tryVerify(function() { return dataAt(i).title === "Found it" }, 2000, "read when you click")
@@ -244,8 +244,42 @@ Item {
         view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://example.com/inside" + k })
         tryVerify(function() { return dataAt(i).title === "Inside " + k }, 2000)
         compare(dataAt(i).image, "", "no picture: " + pictures[k])
-        verify(!files.ran.slice(before).some(function(a) { return a[0] === "/usr/bin/curl" }), "never fetched: " + pictures[k])
+        verify(!files.ran.slice(before).some(function(a) { return a[0] === "/usr/bin/curl" && a[a.length - 1] === pictures[k] }), "never fetched: " + pictures[k])
       }
+      // The page itself: read step by step, from the address looked up,
+      // past no proxy, redirects followed here, each checked again.
+      function curls(from) { return files.ran.slice(from).filter(function(a) { return a[0] === "/usr/bin/curl" }) }
+      files.fetchPages["http://plain.example.com/a"] = "REDIRECT https://example.com/b"
+      files.fetchPages["https://example.com/b"] = '<html><head><title>Followed</title></head></html>'
+      var mark = files.ran.length
+      view.dataAction(view.editor.uidAt(i), "fetch", { url: "http://plain.example.com/a" })
+      tryVerify(function() { return dataAt(i).title === "Followed" }, 2000, "plain http, and a redirect followed")
+      var two = curls(mark)
+      compare(two.length, 2)
+      verify(two.every(function(a) { return a.indexOf("--noproxy") > 0 && a[a.indexOf("--noproxy") + 1] === "*" && a[a.indexOf("--max-redirs") + 1] === "0" }), "past no proxy, never redirected by curl")
+      compare(two[0][two[0].indexOf("--resolve") + 1], "plain.example.com:80:93.184.215.14")
+      compare(two[1][two[1].indexOf("--resolve") + 1], "example.com:443:93.184.215.14")
+      // Sent on to your own network: not followed.
+      files.privateHosts = { "admin.example.net": "10.0.0.1" }
+      files.fetchPages["https://example.com/sneaky"] = "REDIRECT https://admin.example.net/secret"
+      files.fetchPages["https://admin.example.net/secret"] = '<html><head><title>Secret</title></head></html>'
+      mark = files.ran.length
+      view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://example.com/sneaky" })
+      tryVerify(function() { return dataAt(i).url === "https://example.com/sneaky" && root.lastToast.indexOf("isn't on the internet") >= 0 }, 2000, root.lastToast)
+      compare(dataAt(i).title, "")
+      verify(!curls(mark).some(function(a) { return a[a.length - 1] === "https://admin.example.net/secret" }), "never read")
+      // A site on your network asked for itself: not read either.
+      mark = files.ran.length
+      view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://admin.example.net/secret" })
+      tryVerify(function() { return root.lastToast.indexOf("isn't on the internet") >= 0 && dataAt(i).url === "https://admin.example.net/secret" }, 2000)
+      compare(curls(mark).length, 0)
+      // Sent on and on: five times at most.
+      for (var hop = 0; hop < 8; hop++) files.fetchPages["https://example.com/loop" + hop] = "REDIRECT https://example.com/loop" + (hop + 1)
+      mark = files.ran.length
+      view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://example.com/loop0" })
+      tryVerify(function() { return root.lastToast.indexOf("too many times") >= 0 }, 2000, root.lastToast)
+      compare(curls(mark).length, 6)
+      files.privateHosts = ({})
     }
 
     // A link to a page: Change (under the pointer) picks another; its page

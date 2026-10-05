@@ -356,20 +356,15 @@ QtObject {
       done(true, String(disk[argv[4]].length) + "\n")
       return
     }
-    // A link's page, and its picture (`pages`: { url: html }; `pictures`: { url: content type }).
-    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-fetch") {
-      var html = fetchPages[argv[4]]
-      done(html !== undefined, html || "")
-      return
-    }
     // A page's picture: its host looked up (a public address, unless
     // privateHosts names it), then fetched from there into a file.
     if (argv[0] === "/usr/bin/getent" && argv[1] === "ahosts") {
       done(true, (privateHosts[argv[2]] || "93.184.215.14") + "     STREAM " + argv[2] + "\n")
       return
     }
-    // A page read step by step for an agent (Workspace.fetchBookmarkWithin):
-    // "REDIRECT <url>" in fetchPages says it's sent on.
+    // A page read step by step (Workspace.fetchPage; `fetchPages`: { url:
+    // html }, "REDIRECT <url>" says it's sent on; `fetchPictures`: { url:
+    // content type }).
     if (argv[0] === "/usr/bin/curl" && argv.indexOf("\n%{http_code}\t%{redirect_url}") > 0) {
       var page = fetchPages[argv[argv.length - 1]]
       if (page === undefined) { done(false, "\n000\t"); return }

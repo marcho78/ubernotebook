@@ -965,28 +965,28 @@ Item {
   readonly property string stillScript: "w='-protocol_whitelist file -format_whitelist mov,matroska,avi,ogg,mpegts,flv,asf'; /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y $w -ss 1 -i \"$1\" -frames:v 1 -vf 'scale=min(1280\\,iw):-2' \"$2\" || /usr/bin/ffmpeg -hide_banner -loglevel error -nostdin -y $w -i \"$1\" -frames:v 1 \"$2\""
 
   // A link's page read (its title, a line about it, its picture, kept in
-  // assets): done(bookmark data, or null and why). Only http and https;
-  // a page of at most 2 MB, a picture of at most 5 MB, 15 seconds each.
-  readonly property string fetchScript: "/usr/bin/curl -q -sL --proto =http,https --proto-redir =http,https --max-time 15 --max-filesize 2000000 -A 'Mozilla/5.0 (X11; Linux) Uber Notebook' -H 'Accept: text/html' -- \"$1\" | /usr/bin/head -c 2000000"
+  // assets): done(bookmark data, or null and why). Only http and https, and
+  // only on the internet (fetchPage); a page of at most 2 MB, a picture of
+  // at most 5 MB, 15 seconds each.
   function fetchBookmark(url, done) {
     var u = Bookmark.cleanUrl(url)
     if (!u) { done(null, "That isn't a web link (https://...)"); return }
-    files.exec(["/usr/bin/bash", "-c", fetchScript, "uber-notebook-fetch", u], function(ok, html) {
-      if (!ok || !String(html || "").trim()) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, "The page couldn't be read: the link's kept"); return }
-      var meta = Bookmark.parse(html, u)
+    fetchPage(u, false, function() { return "" }, function(html, from, why) {
+      if (html === null || !String(html).trim()) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, why || "The page couldn't be read: the link's kept"); return }
+      var meta = Bookmark.parse(html, from)
       var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
       ws.fetchBookmarkPicture(meta.image, function(src) {
         if (src) data.image = src
         done(data, "")
       })
-    }, { timeoutMs: 20000, maxBytes: 2200000 })
+    })
   }
 
   // A link's page read for an agent, contacting only `hosts` (the sites
-  // you've let it have contacted, Permissions.js): https only; each step one
-  // request that curl itself never redirects; a redirect followed only to
-  // one of them, at most five; the picture only from one of them. Then as
-  // fetchBookmark: done(bookmark data, or null and why).
+  // you've let it have contacted, Permissions.js): https only, and as
+  // fetchPage reads any; a redirect followed only to one of them; the
+  // picture only from one of them. Then as fetchBookmark: done(bookmark
+  // data, or null and why).
   readonly property string fetchAgent: "Mozilla/5.0 (X11; Linux) Uber Notebook"
   function fetchBookmarkWithin(url, hosts, done) {
     var u = Bookmark.cleanUrl(url)
@@ -994,37 +994,63 @@ Item {
     function within(link) { var h = Permissions.hostOf(link); return h !== "" && allowed.indexOf(h) >= 0 }
     if (!u || !within(u)) { done(null, "Uber Notebook may not contact that site for it"); return }
     function kept(why) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, why) }
-    // (Each step prints the page, then on a line of its own after it, how
-    // it answered: its code, and where it sends you on to.)
+    fetchPage(u, true, function(link) { return within(link) ? "" : "It goes on to a site you haven't let it contact: the link's kept" }, function(html, from, why) {
+      if (html === null || !String(html).trim()) { kept(why || "The page couldn't be read: the link's kept"); return }
+      var meta = Bookmark.parse(html, from)
+      var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
+      if (!meta.image || !within(meta.image)) { done(data, ""); return }
+      ws.fetchBookmarkPicture(meta.image, function(src) { if (src) data.image = src; done(data, "") })
+    })
+  }
+
+  // A page read step by step (a bookmark's): each step one request that
+  // curl itself never redirects, to a host looked up first (every address
+  // it has a public one: not this computer, your network or a reserved
+  // range), from that address (--resolve), past no proxy (one would look it
+  // up again for itself); a redirect followed here, at most five, each one
+  // checked again, and by `allow(link)` ("" or why not). done(html, the link
+  // it's from, "") or done(null, "", why).
+  function fetchPage(url, httpsOnly, allow, done) {
     function step(link, hops) {
-      files.exec(["/usr/bin/curl", "-q", "-s", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "2000000",
-        "-A", ws.fetchAgent, "-H", "Accept: text/html", "-w", "\n%{http_code}\t%{redirect_url}", "--", link], function(ok, out) {
-        var text = String(out || "")
-        var cut = text.lastIndexOf("\n")
-        var parts = (cut >= 0 ? text.slice(cut + 1) : "").split("\t")
-        var code = Number(parts[0])
-        var next = String(parts[1] || "").trim()
-        if (ok && code >= 300 && code < 400 && next) {
-          if (hops >= 5 || !within(next)) { kept("It goes on to a site you haven't let it contact: the link's kept"); return }
-          step(next, hops + 1)
-          return
-        }
-        var html = cut >= 0 ? text.slice(0, cut) : ""
-        if (!ok || code !== 200 || !html.trim()) { kept("The page couldn't be read: the link's kept"); return }
-        var meta = Bookmark.parse(html, link)
-        var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
-        if (!meta.image || !within(meta.image)) { done(data, ""); return }
-        ws.fetchBookmarkPicture(meta.image, function(src) { if (src) data.image = src; done(data, "") })
-      }, { timeoutMs: 20000, maxBytes: 2100000 })
+      var no = allow(link)
+      if (no) { done(null, "", no); return }
+      var target = Bookmark.pageTarget(link, httpsOnly)
+      if (!target) { done(null, "", "The page couldn't be read: the link's kept"); return }
+      files.exec(["/usr/bin/getent", "ahosts", target.host], function(okR, outR) {
+        var ips = okR ? Bookmark.addresses(outR) : []
+        if (!ips.length || !ips.every(Bookmark.isPublicIp)) { done(null, "", "That site isn't on the internet (it's this computer or your network): the link's kept"); return }
+        var ip = ips.filter(function(a) { return a.indexOf(":") < 0 })[0] || ips[0]
+        var at = target.host + ":" + target.port + ":" + (ip.indexOf(":") >= 0 ? "[" + ip + "]" : ip)
+        // (It prints the page, then on a line of its own after it, how it
+        // answered: its code, and where it sends you on to.)
+        files.exec(["/usr/bin/curl", "-q", "-s", "--noproxy", "*", "--proto", httpsOnly ? "=https" : "=http,https", "--max-redirs", "0",
+          "--resolve", at, "--max-time", "15", "--max-filesize", "2000000", "-A", ws.fetchAgent, "-H", "Accept: text/html",
+          "-w", "\n%{http_code}\t%{redirect_url}", "--", target.url], function(ok, out) {
+          var text = String(out || "")
+          var cut = text.lastIndexOf("\n")
+          var parts = (cut >= 0 ? text.slice(cut + 1) : "").split("\t")
+          var code = Number(parts[0])
+          var next = String(parts[1] || "").trim()
+          if (ok && code >= 300 && code < 400 && next) {
+            if (hops >= 5) { done(null, "", "It sends you on too many times: the link's kept"); return }
+            step(next, hops + 1)
+            return
+          }
+          var html = cut >= 0 ? text.slice(0, cut) : ""
+          if (!ok || code !== 200 || !html.trim()) { done(null, "", "The page couldn't be read: the link's kept"); return }
+          done(html, target.url, "")
+        }, { timeoutMs: 20000, maxBytes: 2100000 })
+      }, { timeoutMs: 5000, maxBytes: 65536 })
     }
-    step(u, 0)
+    step(url, 0)
   }
 
   // The page's picture (its og:image, named by the page, not by you): only
   // from the internet (Bookmark.imageTarget, isPublicIp): its host looked up
   // first, every address it has a public one, then fetched from that
-  // address, never redirected, into a file of its own, and copied into
-  // assets under a new name. done("assets/<name>") or done("").
+  // address, past no proxy, never redirected, into a folder of its own;
+  // then copied into assets under a new name, only if it's a picture
+  // (Store.copyPictureIn). done("assets/<name>") or done("").
   function fetchBookmarkPicture(url, done) {
     var target = Bookmark.imageTarget(url)
     if (!target) { done(""); return }
@@ -1034,18 +1060,19 @@ Item {
       var ip = ips.filter(function(a) { return a.indexOf(":") < 0 })[0] || ips[0]
       var at = target.host + ":" + target.port + ":" + (ip.indexOf(":") >= 0 ? "[" + ip + "]" : ip)
       var tmp = files.runtimeDir + "/uber-notebook-picture-" + Workspace.uuid4()
-      files.exec(["/usr/bin/curl", "-q", "-sS", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
-        "--resolve", at, "-A", "Mozilla/5.0 (X11; Linux) Uber Notebook", "-o", tmp, "-w", "%{content_type}", "--", target.url], function(ok2, type) {
-        var name = ok2 ? Bookmark.imageName(String(type || ""), target.url, new Date()) : ""
-        if (!name) { files.exec(["/usr/bin/rm", "-f", "--", tmp], null); done(""); return }
-        var dir = Workspace.assetsDir(files.rootPath)
-        files.mkdirs([dir], function() {
-          files.exec(["/usr/bin/cp", "--update=none-fail", "--", tmp, dir + "/" + name], function(ok3) {
-            files.exec(["/usr/bin/rm", "-f", "--", tmp], null)
-            done(ok3 ? "assets/" + name : "")
-          }, { timeoutMs: 20000 })
-        })
-      }, { timeoutMs: 20000, maxBytes: 4096 })
+      files.mkdirs([tmp], function(madeTmp) {
+        if (!madeTmp) { done(""); return }
+        function finish(src) { files.exec(["/usr/bin/rm", "-rf", "--", tmp], null); done(src) }
+        files.exec(["/usr/bin/curl", "-q", "-sS", "--noproxy", "*", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
+          "--resolve", at, "-A", ws.fetchAgent, "-o", tmp + "/picture", "-w", "%{content_type}", "--", target.url], function(ok2, type) {
+          var name = ok2 ? Bookmark.imageName(String(type || ""), target.url, new Date()) : ""
+          if (!name) { finish(""); return }
+          var dir = Workspace.assetsDir(files.rootPath)
+          files.mkdirs([dir], function() {
+            files.copyPictureIn(tmp + "/picture", dir, name, function(ok3) { finish(ok3 ? "assets/" + name : "") })
+          })
+        }, { timeoutMs: 20000, maxBytes: 4096 })
+      })
     }, { timeoutMs: 5000, maxBytes: 65536 })
   }
 

@@ -197,4 +197,17 @@ check("a bookmark's page read once along it, in time whatever it holds", () => {
   assert.equal(BM.parse('<title x="1">Plain &amp; simple</title><meta name="og:title">', "https://e.org").title, "Plain & simple");
 });
 
+check("a page read only from a name on the internet: http or https (https only for an agent), never an address or a local name", () => {
+  const t = (u, https) => plain(BM.pageTarget(u, https));
+  assert.deepEqual(t("https://example.com/a?b=1"), { url: "https://example.com/a?b=1", host: "example.com", port: 443 });
+  assert.deepEqual(t("http://news.example.org/x"), { url: "http://news.example.org/x", host: "news.example.org", port: 80 });
+  assert.equal(t("http://news.example.org/x", true), null, "an agent's: https only");
+  assert.equal(t("https://example.com:8443/").port, 8443);
+  for (const u of ["https://127.0.0.1/", "https://192.168.1.1/admin", "http://router/", "https://box.local/", "https://nas.lan/", "https://x.internal/",
+    "https://user@example.com/", "https://example.com:0/", "https://example.com:70000/", "ftp://example.com/", "file:///etc/passwd", "https://[::1]/"]) {
+    assert.equal(t(u), null, u);
+  }
+  assert.equal(BM.imageTarget("http://example.com/a.png"), null, "a picture: https only");
+});
+
 console.log(`moreblocks: ${passed} checks passed`);

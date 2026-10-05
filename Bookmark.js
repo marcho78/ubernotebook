@@ -34,13 +34,23 @@ function cleanUrl(url) {
 
 // { url, host, port } to fetch a page's picture from, or null.
 function imageTarget(url) {
+  return pageTarget(url, true)
+}
+
+// { url, host, port } to read a page from (a bookmark's, and each page it
+// sends you on to): http or https (`httpsOnly`: https), a host that's a name
+// (not an address, nor one only a local network has), or null. Its
+// addresses are looked up and checked (isPublicIp) before it's read.
+function pageTarget(url, httpsOnly) {
   var s = cleanUrl(url)
-  var m = /^https:\/\/([A-Za-z0-9.-]{1,253})(?::(\d{1,5}))?(?:[\/?#]|$)/.exec(s)
+  var m = /^(https?):\/\/([A-Za-z0-9.-]{1,253})(?::(\d{1,5}))?(?:[\/?#]|$)/i.exec(s)
   if (!m) return null
-  var host = m[1].toLowerCase().replace(/\.$/, "")
+  var scheme = m[1].toLowerCase()
+  if (httpsOnly && scheme !== "https") return null
+  var host = m[2].toLowerCase().replace(/\.$/, "")
   if (/^[0-9.]+$/.test(host) || !/\.[a-z][a-z0-9-]*$/.test(host)) return null
   if (/(^|\.)(localhost|local|localdomain|internal|intranet|lan|home|corp|private|arpa|test|invalid|example)$/.test(host)) return null
-  var port = m[2] ? Number(m[2]) : 443
+  var port = m[3] ? Number(m[3]) : scheme === "https" ? 443 : 80
   if (port < 1 || port > 65535) return null
   return { url: s, host: host, port: port }
 }
