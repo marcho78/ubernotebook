@@ -103,8 +103,33 @@ QtObject {
       read(Permissions.clean(list).filter(function(r) { return r.agent === who && r.action === "contact" }).map(function(r) { return r.target }))
       return "its page is being read (" + host + " is a site you've let it contact); the card shows it in a moment"
     }
-    viewDoes("askAgentPermission", { agent: who, action: "contact", target: host, why: "to get a link's title and picture", run: read })
+    // (The whole link shown: what it would send there is in it too.)
+    viewDoes("askAgentPermission", { agent: who, action: "contact", target: host, why: "to get a link's title and picture", detail: url, run: read })
     return "added as its link only: the user is asked in the panel before Uber Notebook contacts " + host
+  }
+
+  // A removal the panel's agent asks for (`kind`: "trash", "contact",
+  // "event", "tag"; `what`: what it is, in words): done at once if it may
+  // (pages to the trash, where they can be put back: Always, kept in
+  // settings; a person, an event or a tag, which have no trash: for this
+  // conversation, its scope's grants), else asked in the panel first, and
+  // done when you say yes. Yours, a script's, a terminal's agent's: as always.
+  function agentRemoval(kind, what, doIt) {
+    if (!caller) return doIt()
+    var who = String(caller.id || "")
+    var grants = caller.grants || {}
+    var list = settings && settings.agentPermissions ? settings.agentPermissions : []
+    if (kind === "trash" && Permissions.allowed(list, who, "trash", "pages")) return doIt()
+    if (grants["remove " + kind] === true) return doIt()
+    var asked = viewDoes("askAgentPermission", {
+      key: "remove " + kind + " " + what, agent: who, text: what,
+      action: kind === "trash" ? "trash" : "", target: kind === "trash" ? "pages" : "",
+      always: kind === "trash" ? "Always let it trash pages" : "",
+      grant: kind === "trash" ? "" : "remove " + kind, conversation: kind === "trash" ? "" : "Allow for this conversation",
+      run: function() { doIt() }
+    })
+    if (asked !== true) return fail("not without the user's yes, and they can't be asked now")
+    return answer({ ok: true, asked: true, note: "the user is asked in the panel first: it's done when they say yes (no need to run it again)" })
   }
 
   function answer(o) { return JSON.stringify(o) }
@@ -161,10 +186,12 @@ QtObject {
     if (p.indexOf("~/") === 0 && files && files.home) p = files.home + p.slice(1)
     if (!p || p.charAt(0) !== "/" || /[\u0000-\u001f]/.test(p)) return { error: needed }
     if (!files || typeof files.helper !== "function") return { error: "couldn't read " + p }
-    var key = max + ":" + p
+    // (The panel's agent's: only from its folder, every step through no link.)
+    var within = caller && caller.dir ? String(caller.dir) : ""
+    var key = max + ":" + within + ":" + p
     var got = keptRead(key)
     // (A helper that answers at once, as in the tests, has it already.)
-    if (!got) { startRead(key, p, max); got = keptRead(key) }
+    if (!got) { startRead(key, p, max, within); got = keptRead(key) }
     if (got && got.at) {
       delete prefetched[key]
       return got.error ? { error: "couldn't read " + p + ": " + got.error } : { text: got.text }
@@ -181,7 +208,7 @@ QtObject {
     if ((e.at && now - e.at >= 120000) || (!e.at && now - e.started >= 60000)) { delete prefetched[key]; return null }
     return e
   }
-  function startRead(key, p, max) {
+  function startRead(key, p, max, within) {
     var keys = Object.keys(prefetched)
     var chars = 0
     keys.forEach(function(k) { var e = prefetched[k]; if (e && typeof e.text === "string") chars += e.text.length })
@@ -190,7 +217,7 @@ QtObject {
     prefetched[key] = { at: 0, started: Date.now() }
     reading++
     // (Its answer is JSON: each character of the file at most six there.)
-    files.helper(["read", String(max), p], function(ok, out) {
+    files.helper(["read", String(max), p].concat(within ? [within] : []), function(ok, out) {
       reading = Math.max(0, reading - 1)
       if (gen !== readsGen) return
       var r = null
@@ -615,9 +642,12 @@ QtObject {
   function removeEvent(id) {
     var not = unready()
     if (not) return fail(not)
-    if (!Calendar.byId(workspace.calendar, String(id || ""))) return fail("there's no event with that id (events lists them)")
-    workspace.setCalendar(Calendar.without(workspace.calendar, String(id)))
-    return answer({ ok: true })
+    var ev = Calendar.byId(workspace.calendar, String(id || ""))
+    if (!ev) return fail("there's no event with that id (events lists them)")
+    return agentRemoval("event", "take the event \u201c" + (ev.title || "Untitled") + "\u201d off the calendar", function() {
+      workspace.setCalendar(Calendar.without(workspace.calendar, String(id)))
+      return answer({ ok: true })
+    })
   }
 
   // Your templates: [{ id, title, icon, pages }].
@@ -735,9 +765,12 @@ QtObject {
     if (not) return fail(not)
     if (!live(id)) return fail("there's no page with that id (list or find gives them)")
     var title = workspace.index.pages[id].title || "Untitled"
-    writeOpen()
-    if (viewDoes("trashPage", id) !== true) workspace.trashPage(id, false)
-    return answer({ ok: true, id: id, title: title, note: "in the trash, where it can be put back" })
+    return agentRemoval("trash", "move \u201c" + title + "\u201d (and the pages in it) to the trash", function() {
+      if (!api.live(id)) return fail("there's no page with that id (list or find gives them)")
+      api.writeOpen()
+      if (api.viewDoes("trashPage", id) !== true) workspace.trashPage(id, false)
+      return answer({ ok: true, id: id, title: title, note: "in the trash, where it can be put back" })
+    })
   }
 
   // ---- pages: their name, place, icon, cover, lock; the trash; copies -------------------------
@@ -1514,8 +1547,10 @@ QtObject {
     var q = String(which || "").trim()
     var c = workspace.contactById(q)
     if (!c) return fail("give their id (contacts lists everyone)")
-    workspace.setContacts(Contacts.without(workspace.contacts, c.id))
-    return answer({ ok: true, id: c.id, name: Contacts.nameOf(c), note: "taken out of People (Undo in People puts them back while Uber Notebook runs)" })
+    return agentRemoval("contact", "take " + Contacts.nameOf(c) + " out of People", function() {
+      workspace.setContacts(Contacts.without(workspace.contacts, c.id))
+      return answer({ ok: true, id: c.id, name: Contacts.nameOf(c), note: "taken out of People (Undo in People puts them back while Uber Notebook runs)" })
+    })
   }
 
   // ---- tags: renamed, or taken off every page ----
@@ -1540,9 +1575,11 @@ QtObject {
     if (!from) return fail("give a tag: removeTag \"#idea\"")
     var pages = Workspace.pagesTagged(workspace.index, from).length
     if (!pages) return fail("no page has #" + from)
-    writeOpen()
-    workspace.changeTag(from, "", function() {})
-    return answer({ ok: true, tag: "#" + from, pages: pages, note: "taken off each page, the #tag out of the text (each keeps its version before)" })
+    return agentRemoval("tag", "take #" + from + " off " + pages + (pages === 1 ? " page" : " pages"), function() {
+      api.writeOpen()
+      workspace.changeTag(from, "", function() {})
+      return answer({ ok: true, tag: "#" + from, pages: pages, note: "taken off each page, the #tag out of the text (each keeps its version before)" })
+    })
   }
 
   // ---- notebooks (the Notebooks space) ----

@@ -21,9 +21,13 @@
 #       "dots:<n>", "hash:<sha256 of the file>", "---", its
 #       uber-notebook-backup.json (at most 200 KB). "readable:0" when it
 #       isn't one.
-#   read <max bytes> <file>
+#   read <max bytes> <file> [<within>]
 #       A text file (a regular file, not a link to one, at most <max bytes>),
-#       as JSON: { ok: true, text } or { ok: false, error }.
+#       as JSON: { ok: true, text } or { ok: false, error }. With <within>
+#       (an agent's folder), only a file in it, every step through no link.
+#   put <folder> <path>
+#       What's on its input as <path> in <folder> (a folder of yours): a new
+#       file put in place (a link there is replaced, never followed). "put".
 #   create-owned <file> <text>
 #       A small file of Uber Notebook's own (its entry in the app launcher):
 #       made only where nothing is ("made"); one that's there already is left
@@ -1104,10 +1108,19 @@ def cmd_ascii_lines():
 
 # ---- a text file -------------------------------------------------------------------------------
 
-def cmd_read(max_bytes, path):
+def cmd_read(max_bytes, path, within=None):
     limit = int(max_bytes)
     try:
-        with open_regular(path) as f:
+        # (An agent's: only from its folder, every step through no link.)
+        if within:
+            fd = open_within(path, within)
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                os.close(fd)
+                raise Refused("not a plain file")
+            f = os.fdopen(fd, "rb")
+        else:
+            f = open_regular(path)
+        with f:
             if os.fstat(f.fileno()).st_size > limit:
                 raise Refused("more than %d bytes" % limit)
             data = f.read(limit + 1)
@@ -1126,6 +1139,47 @@ def cmd_read(max_bytes, path):
         print(json.dumps({"ok": False, "error": str(e)[:200]}))
         return
     print(json.dumps({"ok": True, "text": data.decode("utf-8", "replace")}))
+
+
+def cmd_put(folder, path):
+    """A file of Uber Notebook's own in a folder of its own (an agent's
+    sandbox profile), what's on its input: every folder below opened without
+    following a link (made as needed), the file written new beside it, then
+    put in its place, over whatever's there (a link included: the link is
+    what's replaced, never what it points to). Prints "put"."""
+    parts = parts_of(path)
+    if not parts:
+        raise Refused("not a path in that folder")
+    data = sys.stdin.buffer.read(1024 * 1024 + 1)
+    if len(data) > 1024 * 1024:
+        raise Refused("too big")
+    root = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        if os.fstat(root).st_uid != os.getuid():
+            raise Refused("that folder isn't yours")
+        dfd = folder_for(root, parts[:-1])
+    finally:
+        os.close(root)
+    try:
+        tmp = ".uber-notebook-new-%s" % os.urandom(6).hex()
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        try:
+            view = memoryview(data)
+            while view:
+                view = view[os.write(fd, view):]
+        finally:
+            os.close(fd)
+        try:
+            os.rename(tmp, parts[-1], src_dir_fd=dfd, dst_dir_fd=dfd)
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=dfd)
+            except OSError:
+                pass
+            raise
+    finally:
+        os.close(dfd)
+    print("put")
 
 
 # ---- files of Uber Notebook's own ---------------------------------------------------------------
@@ -1537,8 +1591,10 @@ def main(argv):
     try:
         if len(argv) == 6 and argv[1] == "unzip":
             cmd_unzip(argv[2], argv[3], argv[4], argv[5])
-        elif len(argv) == 4 and argv[1] == "read":
-            cmd_read(argv[2], argv[3])
+        elif len(argv) in (4, 5) and argv[1] == "read":
+            cmd_read(*argv[2:])
+        elif len(argv) == 4 and argv[1] == "put":
+            cmd_put(argv[2], argv[3])
         elif len(argv) == 4 and argv[1] == "create-owned":
             cmd_create_owned(argv[2], argv[3])
         elif len(argv) == 4 and argv[1] == "remove-owned":

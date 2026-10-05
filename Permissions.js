@@ -5,17 +5,22 @@
 //   contact  a site, by its exact name (https only): the agent reads it, or
 //            Uber Notebook does for it (a link's title and picture)
 //   search   "web": it searches the web
-//   command  a program it runs, by name ("git": a plain git command;
-//            Agent.programOf says which commands can be)
 //   tool     one of your connectors' tools, by its id ("mcp__figma__...")
-// Anything not here is asked, each time (Allow once, Always, No).
+//   trash    "pages": it moves pages to the trash (they can be put back)
+//   shell    "any": it runs any command (Settings only: through a command
+//            it can read any file you can and reach any site, so no program
+//            is safe to allow by its name: git or make run what their
+//            folder says)
+// Anything not here is asked (a command once, or for the conversation). A
+// rule for a program by its name ("command", from before) is no longer
+// kept: it's dropped as the list is read.
 //
 // Shared with tests/permissions.test.cjs, so keep it plain JavaScript with
 // no QML or Node APIs.
 .pragma library
 
 var AGENTS = ["claude", "grok", "codex"]
-var ACTIONS = ["contact", "search", "command", "tool"]
+var ACTIONS = ["contact", "search", "tool", "trash", "shell"]
 var MAX = 300
 
 // A site's exact name ("example.com", "docs.example.com"), lowercase, or "".
@@ -35,7 +40,8 @@ function cleanTarget(action, target) {
   var t = String(target || "").trim()
   if (action === "contact") return cleanHost(t)
   if (action === "search") return t === "web" ? t : ""
-  if (action === "command") return /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/.test(t) ? t : ""
+  if (action === "trash") return t === "pages" ? t : ""
+  if (action === "shell") return t === "any" ? t : ""
   if (action === "tool") return /^mcp__[A-Za-z0-9_-]{1,200}$/.test(t) ? t : ""
   return ""
 }
@@ -89,7 +95,8 @@ function describe(r) {
   var who = agentName(r.agent)
   if (r.action === "contact") return { label: r.target, note: who + " may contact it without asking (or have Uber Notebook do so, for a link)" }
   if (r.action === "search") return { label: "Web search", note: who + " may search the web without asking" }
-  if (r.action === "command") return { label: r.target + " commands", note: who + " may run plain " + r.target + " commands without asking" }
+  if (r.action === "trash") return { label: "Trashing pages", note: who + " may move pages to the trash without asking (they can be put back from it)" }
+  if (r.action === "shell") return { label: "Any command", note: who + " may run any command without asking: through one, it can read any file you can and reach any site" }
   if (r.action === "tool") {
     var parts = r.target.split("__")
     return { label: (parts[1] || "A connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), note: who + " may use it without asking" }

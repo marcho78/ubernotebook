@@ -419,8 +419,17 @@ Item {
       var rows = findAll(win(), function(it) { return it.objectName === "aiPermission" && it.visible }, [])
       compare(rows[0].label, "docs.example.org")
       compare(rows[0].note, "Grok may contact it without asking (or have Uber Notebook do so, for a link)")
-      click(named(rows[0], "aiPermissionRemove"))
+      click(reach(named(rows[0], "aiPermissionRemove")))
       compare(JSON.stringify(service.settings.agentPermissions), JSON.stringify([{ agent: "claude", action: "contact", target: "e.org" }]), "taken back, only that one")
+      // Any command, without asking: off unless you turn it on, for that agent only.
+      var shell = named(win(), "aiShell_grok")
+      verify(shell !== null)
+      var toggle = findAll(shell, function(it) { return it.hasOwnProperty("checked") && it.hasOwnProperty("theme") }, [])[0]
+      compare(toggle.checked, false, "off at first")
+      click(reach(toggle))
+      tryVerify(function() { return JSON.stringify(service.settings.agentPermissions) === JSON.stringify([{ agent: "claude", action: "contact", target: "e.org" }, { agent: "grok", action: "shell", target: "any" }]) }, 1000, JSON.stringify(service.settings.agentPermissions))
+      click(reach(toggle))
+      tryVerify(function() { return JSON.stringify(service.settings.agentPermissions) === JSON.stringify([{ agent: "claude", action: "contact", target: "e.org" }]) }, 1000, "off again")
       closeAll()
       service.setSetting("agentPermissions", [])
     }

@@ -230,8 +230,10 @@ function command(agent, prompt, choice, session, where) {
   var s = session && isSessionId(session.id) ? session : null
   // (Claude Code reads its request, and your answers to what it asks, on its
   // input: input(), answer(). Nothing of yours is in its command line.)
+  // (Your settings, not its folder's: what's in a project's .claude there
+  // could have been put there by an agent.)
   if (agent === "claude") return filtered("").concat([exe, "-p", "--input-format", "stream-json",
-    "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", CLAUDE_TOOLS]
+    "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--setting-sources", "user", "--tools", CLAUDE_TOOLS]
     .concat(skill ? ["--add-dir", skill] : [], ["--permission-mode", "manual", "--permission-prompt-tool", "stdio",
       "--allowedTools", "Bash(omarchy-shell uber-notebook-agent *)", "Edit(/" + dir + "/**)", "Write(/" + dir + "/**)"])
     .concat(s ? [s.resume ? "--resume" : "--session-id", s.id] : [], model ? ["--model", model] : [], effort ? ["--effort", effort] : []))
@@ -342,29 +344,23 @@ function unsupported(id) {
   return JSON.stringify({ type: "control_response", response: { subtype: "error", request_id: String(id), error: "Uber Notebook doesn't do that" } }) + "\n"
 }
 
-// Programs that run whatever they're given (a shell, an interpreter, one
-// that runs others): never allowed for good, only asked about each time.
-var RUNS_ANYTHING = ["bash", "sh", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "env", "exec", "eval", "xargs", "sudo", "su", "doas", "pkexec",
-  "python", "python2", "python3", "node", "nodejs", "deno", "bun", "perl", "ruby", "php", "lua", "awk", "gawk", "mawk", "find", "parallel",
-  "watch", "timeout", "nohup", "setsid", "nice", "ionice", "strace", "ssh", "systemd-run", "uwsm-app", "hyprctl", "omarchy", "busybox"]
-// The program a plain command runs ("git status": git; "LANG=C make": make),
-// or "" when it's more than one command, or anything a shell would expand,
-// redirect or join (; & | ` $ < > \, a line break): those are asked about
-// each time, never allowed for good.
-function programOf(command) {
-  var c = String(command || "").trim()
-  if (!c || /[;&|`$<>\\\n\r(){}]/.test(c)) return ""
-  var words = c.split(/\s+/)
-  var k = 0
-  while (k < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[k])) k++
-  var w = String(words[k] || "")
-  if (w.indexOf("/") >= 0) return ""
-  return /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/.test(w) && RUNS_ANYTHING.indexOf(w.toLowerCase()) < 0 ? w : ""
+// Text it shows you in a question, every character as it is: what can't be
+// seen, or turns text around (control and direction marks), written out as
+// \u{...}; line breaks and tabs kept.
+function visible(text) {
+  return String(text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, function(c) {
+    return "\\u{" + c.charCodeAt(0).toString(16) + "}"
+  })
 }
 
-// What it asks to do (Claude Code's can_use_tool), in words for the panel,
-// and what Always would let it do from then on without asking
-// (Permissions.js): { action, target, text, always }; action "": only once.
+// What it asks to do (Claude Code's can_use_tool, Grok's ACP), in words for
+// the panel, and what it may be allowed for: { action, target, text,
+// detail, always, grant, conversation }: `detail` the whole of it, every
+// character shown (a command); Always (`always`, "" for none) keeps it for
+// good (Permissions.js); `grant` and `conversation`, for this conversation.
+// A command is asked once, or for the conversation (Allow shell for this
+// conversation): never for good by its program, which can run anything its
+// folder says (git, make...); Settings can let an agent run any.
 function askOf(tool, toolInput, title) {
   var i = toolInput && typeof toolInput === "object" ? toolInput : {}
   var t = String(tool || "")
@@ -375,19 +371,18 @@ function askOf(tool, toolInput, title) {
       : { action: "", target: "", text: "read " + clip(url, 200), always: "" }
   }
   if (t === "WebSearch") return { action: "search", target: "web", text: "search the web for \u201c" + clip(String(i.query || ""), 200) + "\u201d", always: "Always let it search" }
-  if (t === "Bash") {
-    var cmd = String(i.command || "")
-    var program = programOf(cmd)
-    return { action: program ? "command" : "", target: program, text: "run: " + clip(cmd, 300), always: program ? "Always for " + program + " commands" : "" }
+  if (t === "Bash" || (typeof i.command === "string" && i.command !== "")) {
+    return { action: "shell", target: "any", text: "run a command", detail: visible(i.command), always: "",
+      grant: "shell", conversation: "Allow shell for this conversation" }
   }
   if (/^mcp__[A-Za-z0-9_-]+$/.test(t)) {
     var parts = t.split("__")
     return { action: "tool", target: t, text: "use " + (parts[1] || "a connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), always: "Always for this tool" }
   }
   var file = String(i.file_path || i.path || i.pattern || "")
-  if (!file && title) return { action: "", target: "", text: "do this: " + clip(String(title), 300), always: "" }
-  var verb = t === "Read" || t === "Glob" || t === "Grep" ? "read " : t === "Write" || t === "Edit" ? "change " : "use " + t + " on "
-  return { action: "", target: "", text: verb + clip(file || t, 300), always: "" }
+  if (!file && title) return { action: "", target: "", text: "do this", detail: visible(title), always: "" }
+  var verb = t === "Read" || t === "Glob" || t === "Grep" ? "read" : t === "Write" || t === "Edit" ? "change" : "use " + visible(t) + " on"
+  return { action: "", target: "", text: verb + " a file", detail: visible(file || t), always: "" }
 }
 
 // Grok's sandbox for the panel, kept in its working folder's
@@ -453,6 +448,7 @@ function cleanChat(c) {
   var turns = (Array.isArray(c.turns) ? c.turns : []).map(cleanTurn).filter(function(t) { return t !== null }).slice(-MAX_CHAT_TURNS)
   if (!turns.length) return null
   return { agent: String(c.agent), session: isSessionId(c.session) ? String(c.session) : "", page: cleanId(c.page), picked: clip(c.picked, 2000),
+    folder: isConversationFolder(c.folder) ? String(c.folder) : "",
     updated: /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(String(c.updated || "")) ? String(c.updated) : "", turns: turns }
 }
 function cleanTurn(t) {
@@ -462,6 +458,9 @@ function cleanTurn(t) {
     answer: clip(t.answer, 8000), status: status, failure: status === "failed" ? clip(t.failure, 400) : "" }
 }
 function cleanId(id) { return /^[A-Za-z0-9_-]{1,64}$/.test(String(id || "")) ? String(id) : "" }
+// A conversation's folder of its own (in Uber Notebook's agent folder): "c-"
+// and 12 hex.
+function isConversationFolder(name) { return /^c-[0-9a-f]{12}$/.test(String(name || "")) }
 function cleanChats(raw) {
   var all = raw && typeof raw === "object" && raw.chats && typeof raw.chats === "object" ? raw.chats : {}
   var list = []

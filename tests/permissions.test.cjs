@@ -41,16 +41,25 @@ check("only what makes sense is kept", () => {
   assert.equal(P.clean(Array.from({ length: 500 }, (_, i) => ({ agent: "claude", action: "contact", target: "s" + i + ".com" }))).length, P.MAX);
 });
 
-check("what else Always can be for: searching, a program, a connector's tool", () => {
+check("what else Always can be for: searching, a connector's tool, trashing pages, any command (Settings)", () => {
   let list = P.withAllowed([], "claude", "search", "web");
-  list = P.withAllowed(list, "claude", "command", "git");
   list = P.withAllowed(list, "claude", "tool", "mcp__figma__get_screenshot");
-  assert.equal(list.length, 3);
-  assert.equal(P.allowed(list, "claude", "command", "git"), true);
-  assert.equal(P.allowed(list, "grok", "command", "git"), false);
-  assert.deepEqual(plain(P.clean([{ agent: "claude", action: "search", target: "everything" }, { agent: "claude", action: "command", target: "git status" },
-    { agent: "claude", action: "tool", target: "rm" }, { agent: "claude", action: "command", target: "../x" }])), [], "nothing that isn't one of them");
-  assert.deepEqual(plain(P.describe({ agent: "claude", action: "command", target: "git" })), { label: "git commands", note: "Claude Code may run plain git commands without asking" });
+  list = P.withAllowed(list, "grok", "trash", "pages");
+  list = P.withAllowed(list, "claude", "shell", "any");
+  assert.equal(list.length, 4);
+  assert.equal(P.allowed(list, "grok", "trash", "pages"), true);
+  assert.equal(P.allowed(list, "claude", "trash", "pages"), false, "not another agent");
+  assert.equal(P.allowed(list, "grok", "shell", "any"), false);
+  assert.deepEqual(plain(P.clean([{ agent: "claude", action: "search", target: "everything" }, { agent: "claude", action: "tool", target: "rm" },
+    { agent: "claude", action: "trash", target: "everything" }, { agent: "claude", action: "shell", target: "git" }])), [], "nothing that isn't one of them");
+  assert.deepEqual(plain(P.describe({ agent: "claude", action: "shell", target: "any" })), { label: "Any command", note: "Claude Code may run any command without asking: through one, it can read any file you can and reach any site" });
+  assert.deepEqual(plain(P.describe({ agent: "grok", action: "trash", target: "pages" })).label, "Trashing pages");
+});
+
+check("a program allowed by its name, from before: dropped (git or make run what their folder says)", () => {
+  assert.deepEqual(plain(P.clean([{ agent: "claude", action: "command", target: "git" }, { agent: "claude", action: "contact", target: "example.com" }])),
+    [{ agent: "claude", action: "contact", target: "example.com" }]);
+  assert.equal(P.allowed([{ agent: "claude", action: "command", target: "git" }], "claude", "command", "git"), false);
 });
 
 check("in settings: a list of them, anything else dropped", () => {

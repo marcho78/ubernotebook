@@ -467,6 +467,29 @@ try {
     assert.ok(!fs.existsSync(plan), "the plan, taken away once read");
     assert.deepEqual(fs.readdirSync(path.join(m, "Pages")).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
+  check("an agent's folder: its sandbox profile put without following a link; its files read only from it", () => {
+    const f = folder("agent-conv");
+    const out = folder("agent-outside");
+    fs.writeFileSync(path.join(out, "target"), "SECRET");
+    fs.mkdirSync(path.join(f, ".grok"));
+    fs.symlinkSync(path.join(out, "target"), path.join(f, ".grok", "sandbox.toml"));
+    const put = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put", f, ".grok/sandbox.toml"], { input: "profile", encoding: "utf8" });
+    assert.equal(put.stdout.trim(), "put", put.stderr);
+    assert.equal(fs.readFileSync(path.join(out, "target"), "utf8"), "SECRET", "what the link pointed to: untouched");
+    assert.ok(!fs.lstatSync(path.join(f, ".grok", "sandbox.toml")).isSymbolicLink());
+    assert.equal(fs.readFileSync(path.join(f, ".grok", "sandbox.toml"), "utf8"), "profile");
+    fs.symlinkSync(out, path.join(f, "linked"));
+    assert.notEqual(spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put", f, "linked/x"], { input: "x" }).status, 0, "never through a linked folder");
+    assert.ok(!fs.existsSync(path.join(out, "x")));
+    // Read: from its folder only, through no link.
+    fs.mkdirSync(path.join(f, "in"));
+    fs.writeFileSync(path.join(f, "in", "a.md"), "hi");
+    const read = (p) => JSON.parse(helperRun(["read", "1000", p, f]).out);
+    assert.deepEqual(read(path.join(f, "in", "a.md")), { ok: true, text: "hi" });
+    assert.equal(read(path.join(f, "linked", "target")).ok, false, "not through a linked folder");
+    assert.equal(read(path.join(out, "target")).ok, false, "not outside it");
+    assert.equal(read(path.join(f, "..", "agent-outside", "target")).ok, false);
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

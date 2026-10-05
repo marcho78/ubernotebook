@@ -1008,8 +1008,30 @@ Popup {
         // (Permissions.js): sites Uber Notebook may contact for each.
         Group {
           visible: panel.section === "ai"
+          title: "Commands"
+          note: "When an agent in the panel wants to run a command, you're asked: for that command, or for the rest of the conversation. Here you can let it run any command without asking. Through a command it can read any file you can and reach any site, so this is off unless you turn it on."
+          Repeater {
+            model: [{ id: "claude", name: "Claude Code" }, { id: "grok", name: "Grok" }]
+            delegate: Line {
+              required property var modelData
+              objectName: "aiShell_" + modelData.id
+              label: modelData.name + " may run any command"
+              note: "Without asking you"
+              Toggle {
+                theme: panel.theme
+                checked: Permissions.allowed(panel.s.agentPermissions, modelData.id, "shell", "any")
+                onToggled: function(on) {
+                  panel.set("agentPermissions", on ? Permissions.withAllowed(panel.s.agentPermissions, modelData.id, "shell", "any")
+                    : Permissions.without(panel.s.agentPermissions, modelData.id, "shell", "any"))
+                }
+              }
+            }
+          }
+        }
+        Group {
+          visible: panel.section === "ai"
           title: "What agents may do without asking"
-          note: "When an agent in the panel wants to contact a site, search the web, run a command or use one of your connectors beyond its rules, you're asked in the panel first. Always puts it here, for that agent only. Agents can't change this list."
+          note: "When an agent in the panel wants to contact a site, search the web, use one of your connectors or move a page to the trash, you're asked in the panel first. Always puts it here, for that agent only. Agents can't change this list."
           Line {
             visible: Permissions.clean(panel.s.agentPermissions).length === 0
             label: "Nothing yet"

@@ -534,17 +534,56 @@ Item {
             width: parent.width
             wrapMode: Text.Wrap
             textFormat: Text.PlainText
-            text: Permissions.agentName(askItem.modelData.agent) + " wants to " + askItem.modelData.text + "."
+            text: Permissions.agentName(askItem.modelData.agent) + " wants to " + askItem.modelData.text + (askItem.modelData.detail ? ":" : ".")
             font.family: panel.theme.uiFont
             font.pixelSize: 12
             color: panel.theme.text
           }
+          // The whole of it (a command, a file), every character shown
+          // (Agent.visible), never cut short: scrolled when it's long.
+          Rectangle {
+            visible: (askItem.modelData.detail || "") !== ""
+            width: parent.width
+            height: Math.min(160, detailText.implicitHeight + 12)
+            radius: 6
+            color: panel.theme.hover
+            Flickable {
+              anchors.fill: parent
+              anchors.margins: 6
+              clip: true
+              contentWidth: width
+              contentHeight: detailText.implicitHeight
+              boundsBehavior: Flickable.StopAtBounds
+              Text {
+                id: detailText
+                objectName: "agentAskDetail"
+                width: parent.width
+                wrapMode: Text.WrapAnywhere
+                textFormat: Text.PlainText
+                text: askItem.modelData.detail || ""
+                font.family: panel.theme.monoFont || "monospace"
+                font.pixelSize: 11
+                color: panel.theme.text
+              }
+            }
+          }
           Flow {
             width: parent.width
             spacing: 6
-            TextButton { objectName: "agentAskOnce"; theme: panel.theme; text: "Allow once"; onClicked: panel.asked(askItem.modelData.key, "once") }
+            TextButton { objectName: "agentAskOnce"; theme: panel.theme; text: askItem.modelData.grant === "shell" ? "Allow this command" : "Allow once"; onClicked: panel.asked(askItem.modelData.key, "once") }
+            TextButton { objectName: "agentAskConversation"; visible: (askItem.modelData.conversation || "") !== ""; theme: panel.theme; text: askItem.modelData.conversation || ""; onClicked: panel.asked(askItem.modelData.key, "conversation") }
             TextButton { objectName: "agentAskAlways"; visible: askItem.modelData.always !== ""; theme: panel.theme; text: askItem.modelData.always; onClicked: panel.asked(askItem.modelData.key, "always") }
             TextButton { objectName: "agentAskNo"; theme: panel.theme; text: "No"; onClicked: panel.asked(askItem.modelData.key, "no") }
+          }
+          Text {
+            visible: askItem.modelData.grant === "shell"
+            width: parent.width
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: "Through a command it can read any file you can and reach any site. Allowed for this conversation, it isn't asked again until the conversation ends."
+            font.family: panel.theme.uiFont
+            font.pixelSize: 11
+            color: panel.theme.faint
           }
         }
       }

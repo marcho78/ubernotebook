@@ -1407,6 +1407,8 @@ FocusScope {
     if (!page || !workspace) return
     var here = !terminal && Agent.runsHere(agent) && typeof workspace.files.stream === "function"
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
+    // (A new conversation: a folder of its own.)
+    if (here) newAgentFolder()
     // (A page made for the last one: kept if it's this one, now asked about.)
     settleAgentPage(agentPage !== null && agentPage.id === page.id)
     commit()
@@ -1430,6 +1432,8 @@ FocusScope {
     if (!workspace || !workspace.ready) return
     var here = !terminal && Agent.runsHere(agent) && typeof workspace.files.stream === "function"
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
+    // (A new conversation: a folder of its own.)
+    if (here) newAgentFolder()
     // (The one made last time: kept if it's where this one goes; gone if
     // it's still empty, and then you were where you were before it.)
     var prev = agentPage
@@ -1526,8 +1530,27 @@ FocusScope {
   // that never said its session, or lost it).
   // The panel's agent works in a folder of its own (where the Markdown it
   // hands Uber Notebook's commands goes).
-  function agentDir() {
+  //
+  // A folder of its own for each conversation ("c-" and 12 hex, kept with
+  // the conversation): what an agent leaves there (settings, instructions,
+  // links) stays with that conversation, and never reaches the next, or
+  // another agent's. Ones not used for two days go.
+  property string agentFolder: ""
+  function newAgentFolder() {
+    agentFolder = "c-" + Workspace.uuid4().replace(/-/g, "").slice(0, 12)
+    var base = agentBase()
+    if (base && workspace && workspace.files) workspace.files.exec(["/usr/bin/find", base, "-mindepth", "1", "-maxdepth", "1", "-type", "d", "-name", "c-*", "-mmin", "+2880",
+      "-exec", "/usr/bin/rm", "-rf", "--", "{}", "+"], null, { okCodes: [0, 1], timeoutMs: 20000 })
+    return agentFolder
+  }
+  function agentBase() {
     return workspace && workspace.files && workspace.files.runtimeDir ? workspace.files.runtimeDir + "/uber-notebook-agent" : ""
+  }
+  function agentDir() {
+    var base = agentBase()
+    if (!base) return ""
+    if (!Agent.isConversationFolder(agentFolder)) newAgentFolder()
+    return base + "/" + agentFolder
   }
 
   // What an agent's work needs your yes for, asked in the panel: Uber
@@ -1553,7 +1576,10 @@ FocusScope {
     } else {
       list.push({ key: key, agent: req.agent, action: String(req.action || ""), target: String(req.target || ""),
         text: req.text ? String(req.text) : "have Uber Notebook contact " + req.target + (req.why ? ", " + req.why : ""),
+        detail: Agent.visible(req.detail || ""),
         always: req.always !== undefined ? String(req.always) : "Always for " + req.target,
+        // (For this conversation: `grant`, said `conversation`; "" for none.)
+        grant: String(req.grant || ""), conversation: req.grant ? String(req.conversation || "Allow for this conversation") : "",
         runs: [req.run], nos: typeof req.no === "function" ? [req.no] : [], owner: req.owner || null })
     }
     agentAsks = list
@@ -1565,7 +1591,21 @@ FocusScope {
     if (!ask) return
     agentAsks = agentAsks.filter(function(a) { return a.key !== key })
     function each(fns, arg) { fns.forEach(function(f) { try { f(arg) } catch (e) { console.warn("Uber Notebook: after you answered: " + e) } }) }
-    if (how !== "once" && !(how === "always" && ask.always)) { each(ask.nos); return }
+    if (how !== "once" && !(how === "always" && ask.always) && !(how === "conversation" && ask.grant)) { each(ask.nos); return }
+    // For this conversation: kept with it (agentTalk.grants, which its runs'
+    // scope shares), and what else waits on the same, allowed now too.
+    if (how === "conversation") {
+      if (agentTalk) {
+        var g = agentTalk.grants || {}
+        g[ask.grant] = true
+        agentTalk.grants = g
+      }
+      var same = agentAsks.filter(function(a) { return a.agent === ask.agent && a.grant === ask.grant })
+      agentAsks = agentAsks.filter(function(a) { return same.indexOf(a) < 0 })
+      same.forEach(function(a) { each(a.runs) })
+      each(ask.runs)
+      return
+    }
     var hosts = [ask.target]
     if (how === "always" && ask.action && service && typeof service.setSetting === "function") {
       var next = Permissions.withAllowed(settings.agentPermissions || [], ask.agent, ask.action, ask.target)
@@ -1585,7 +1625,9 @@ FocusScope {
     var a = Agent.askOf(ev.tool, ev.input, ev.title)
     function reply(allow) { if (run && typeof run.send === "function") run.send(Agent.answerFor(agent, ev, allow)) }
     if (a.action && Permissions.allowed(settings.agentPermissions || [], agent, a.action, a.target)) { reply(true); return }
-    askAgentPermission({ key: "tool " + ev.id, agent: agent, action: a.action, target: a.target, text: a.text, always: a.always, owner: run,
+    if (a.grant && agentTalk && agentTalk.grants && agentTalk.grants[a.grant] === true) { reply(true); return }
+    askAgentPermission({ key: "tool " + ev.id, agent: agent, action: a.action, target: a.target, text: a.text, detail: a.detail || "",
+      always: a.always, grant: a.grant || "", conversation: a.conversation || "", owner: run,
       run: function() { reply(true) }, no: function() { reply(false) } })
   }
   // A run's questions, gone with it.
@@ -1597,7 +1639,9 @@ FocusScope {
   // Uber Notebook's settings, profiles or backups, and read files only from
   // its folder (Scope.js, Service.qml).
   function agentScope(agent, dir) {
-    if (service && typeof service.beginAgentScope === "function") service.beginAgentScope(Agent.name(agent), dir, agent)
+    // (The conversation's grants go with it: a removal you've allowed for
+    // this conversation isn't asked again, Api.agentRemoval.)
+    if (service && typeof service.beginAgentScope === "function") service.beginAgentScope(Agent.name(agent), dir, agent, agentTalk ? agentTalk.grants : null)
   }
   function agentScopeEnd() {
     if (service && typeof service.endAgentScope === "function") service.endAgentScope()
@@ -1606,13 +1650,22 @@ FocusScope {
   function runHere(agent, request, prompt, o) {
     var opts = o || {}
     var files = workspace.files
+    // (A reply goes on in its conversation's folder; one kept from before it
+    // had them, in a new one.)
+    if (opts.reply) {
+      if (agentTalk && Agent.isConversationFolder(agentTalk.folder)) agentFolder = agentTalk.folder
+      else newAgentFolder()
+    }
     var dir = agentDir()
     // The model and effort you chose for it (Settings → AI, or the box).
     var choice = { model: settings[agent + "Model"] || "", effort: settings[agent + "Effort"] || "" }
     var choiceText = ""
     if (typeof files.agentModels === "function") files.agentModels(agent, function(list) { choiceText = Agent.choiceLabel(list, choice.model, choice.effort) })
     var owner = opts.owner || (page ? page.id : "")
-    if (!opts.reply) agentTalk = { agent: agent, id: "", owner: owner, page: owner, picked: opts.picked || "" }
+    // (A conversation's grants, for this conversation: Allow shell..., kept with it.)
+    if (!opts.reply) agentTalk = { agent: agent, id: "", owner: owner, page: owner, picked: opts.picked || "", grants: {}, folder: agentFolder }
+    if (!agentTalk.grants) agentTalk.grants = {}
+    agentTalk.folder = agentFolder
     var talk = agentTalk
     if (!opts.reply || opts.fresh) talk.id = Agent.newSessionId(agent)
     if (opts.reply) agentPanel.next(request)
@@ -1686,7 +1739,16 @@ FocusScope {
         }
         where = { exe: exe, dir: dir, skill: service && typeof service.skillDir === "string" ? service.skillDir : "", helper: files.filesHelper || "" }
         function start() { if (view.agentRun) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
-        if (agent === "grok") files.writeFile(dir + "/.grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir), start)
+        // (Grok's sandbox profile, written by the files helper, never through
+        // a link left there; it doesn't start without it.)
+        if (agent === "grok") files.putFile(dir, ".grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir), function(ok) {
+          if (ok) { start(); return }
+          if (!view.agentRun) return
+          view.agentRun = null
+          view.agentScopeEnd()
+          agentPanel.end(127, "Grok's sandbox couldn't be set up in its folder")
+          view.saveChat()
+        })
         else start()
       })
     })
@@ -1697,7 +1759,7 @@ FocusScope {
   function saveChat() {
     var talk = agentTalk
     if (!talk || !talk.owner || !workspace || !workspace.index.pages[talk.owner]) return
-    workspace.setChat(talk.owner, { agent: talk.agent, session: talk.id, page: talk.page, picked: talk.picked,
+    workspace.setChat(talk.owner, { agent: talk.agent, session: talk.id, page: talk.page, picked: talk.picked, folder: talk.folder || "",
       updated: new Date().toISOString(), turns: agentPanel.transcript() })
   }
 
@@ -1707,7 +1769,7 @@ FocusScope {
     var chat = workspace ? workspace.chatFor(owner) : null
     if (!chat) return false
     if (!agentTalk || agentTalk.owner !== owner || !agentPanel.visible) {
-      agentTalk = { agent: chat.agent, id: chat.session, owner: owner, page: chat.page || owner, picked: chat.picked || "" }
+      agentTalk = { agent: chat.agent, id: chat.session, owner: owner, page: chat.page || owner, picked: chat.picked || "", folder: chat.folder || "", grants: {} }
       var choice = { model: settings[chat.agent + "Model"] || "", effort: settings[chat.agent + "Effort"] || "" }
       agentPanel.show(Agent.name(chat.agent), "", chat.turns)
       var files = workspace.files

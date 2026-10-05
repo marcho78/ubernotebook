@@ -180,6 +180,13 @@ QtObject {
   property var printed: []
   function openPrint(path, done) { printed = printed.concat([path]); if (done) done(true) }
 
+  // A file of Uber Notebook's own (Store.putFile: the files helper's put).
+  property bool failPut: false
+  function putFile(folder, path, text, done) {
+    if (failPut) { if (done) done(false); return }
+    disk[folder + "/" + path] = String(text)
+    if (done) done(true)
+  }
   // (Store.execText: its words through the files helper's to-json; here as they are.)
   function execText(argv, done, options) { exec(argv, done, options) }
 

@@ -188,6 +188,13 @@ Item {
     }, { maxBytes: 3 * max + 1024 * 1024, timeoutMs: 30000 })
   }
 
+  // A file of Uber Notebook's own in a folder of its own (an agent's sandbox
+  // profile), by the files helper (put): never through a link planted there.
+  // done(ok).
+  function putFile(folder, path, text, done) {
+    helper(["put", folder, path], function(ok, out) { if (done) done(ok && String(out || "").trim() === "put") }, { input: String(text), timeoutMs: 10000, maxBytes: 4096 })
+  }
+
   // A command whose words come back as text that may be long, and in any
   // script (a transcript, a list of files): through the files helper's
   // to-json, so it arrives ASCII (Quickshell reads output a piece at a time,

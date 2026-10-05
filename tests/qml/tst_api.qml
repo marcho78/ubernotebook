@@ -900,7 +900,7 @@ Item {
       })
       files.deferHelperReads = true
       api.agentScope = { agent: "Claude Code", dir: "/tmp/in", frozen: false }
-      function kept(p) { return api.prefetched[api.maxBytes + ":" + p] }
+      function kept(p) { var k = Object.keys(api.prefetched).filter(function(x) { return x.indexOf(api.maxBytes + ":") === 0 && x.slice(-p.length - 1) === ":" + p })[0]; return k ? api.prefetched[k] : undefined }
       var path = file("agent.md", "from the agent")
       var first = json(api.append(r.id, path))
       compare(first.ok, false)
@@ -912,6 +912,11 @@ Item {
       verify(kept(path) !== undefined && kept(path).at > 0, "read")
       var again = json(api.append(r.id, path))
       compare(again.ok, true, "asked again: done")
+      // The panel's agent's file: read from its folder only, every step through no link (the helper's read, within it).
+      api.caller = api.agentScope
+      json(api.append(r.id, "/tmp/in/second.md"))
+      api.caller = null
+      verify(files.ran.some(function(a) { return a[4] === "read" && a[6] === "/tmp/in/second.md" && a[7] === "/tmp/in" }), "read within its folder")
       compare(again.added, 1)
       compare(kinds(fileOf(r.id)).join("|"), "p:0:first|p:0:from the agent|p:0:")
       verify(files.ran.some(function(a) { return a[4] === "read" && a[6] === path }), "read by the helper")
@@ -940,6 +945,55 @@ Item {
     // While an agent works, Uber Notebook contacts a site for it only with
     // your yes: asked in its panel (Allow once, Always for that agent and
     // site, No); redirects and pictures only from sites it may contact.
+    // The panel's agent taking things away: pages to the trash, Always may
+    // be said (they can be put back); a person, an event, a tag: asked each
+    // time, or for this conversation (they have no trash). Yours: as always.
+    function test_27_removals_by_the_panels_agent_are_asked() {
+      fresh()
+      api.settings = Qt.binding(function() { return service.settings })
+      var r = json(api.add("Going", file("g.md", "Bye")))
+      var r2 = json(api.add("Going too", file("g2.md", "Bye")))
+      // (As the panel has it: the conversation's grants, its scope's too.)
+      var grants = {}
+      view.agentTalk = { agent: "claude", id: "", owner: "", page: "", picked: "", grants: grants }
+      api.agentScope = { agent: "Claude Code", id: "claude", dir: "/tmp/in", frozen: false, grants: grants }
+      api.caller = api.agentScope
+      var t = json(api.trash(r.id))
+      compare(t.asked, true, JSON.stringify(t))
+      compare(ws.index.pages[r.id].trashed, false, "not until you say yes")
+      var ask = view.agentAsks.filter(function(a) { return a.key.indexOf("remove trash") === 0 })[0]
+      verify(ask !== undefined)
+      compare(ask.always, "Always let it trash pages")
+      view.answerAgentAsk(ask.key, "always")
+      tryVerify(function() { return ws.index.pages[r.id].trashed === true }, 1000, "done with your yes")
+      compare(JSON.stringify(service.settings.agentPermissions), JSON.stringify([{ agent: "claude", action: "trash", target: "pages" }]))
+      api.caller = api.agentScope
+      compare(json(api.trash(r2.id)).asked, undefined, "Always: not asked again")
+      compare(ws.index.pages[r2.id].trashed, true)
+      // A person: asked; for this conversation, then not again.
+      json(api.addContact("Sam One", "", "sam1@e.org"))
+      json(api.addContact("Sam Two", "", "sam2@e.org"))
+      var people = json(api.contacts(""))
+      api.caller = api.agentScope
+      compare(json(api.removeContact(people[0].id)).asked, true)
+      var askP = view.agentAsks.filter(function(a) { return a.key.indexOf("remove contact") === 0 })[0]
+      compare([askP.always, askP.conversation], ["", "Allow for this conversation"])
+      view.answerAgentAsk(askP.key, "conversation")
+      tryVerify(function() { return json(api.contacts("")).length === 1 }, 1000)
+      compare(grants["remove contact"], true, "kept with the conversation")
+      api.caller = api.agentScope
+      compare(json(api.removeContact(people[1].id)).asked, undefined, "this conversation: not asked again")
+      compare(json(api.contacts("")).length, 0)
+      // Yours: as always.
+      api.caller = null
+      api.agentScope = null
+      var r3 = json(api.add("Mine", file("m.md", "x")))
+      compare(json(api.trash(r3.id)).ok, true)
+      compare(ws.index.pages[r3.id].trashed, true)
+      view.agentTalk = null
+      service.setSetting("agentPermissions", [])
+    }
+
     function test_26_sites_contacted_for_an_agent_only_with_your_yes() {
       fresh()
       var r = json(api.add("Links", file("l.md", "x")))
