@@ -86,7 +86,8 @@ Item {
   function stream(argv, onLine, done, options) {
     var o = options || {}
     var runner = streamComponent.createObject(store, { workingDirectory: o.cwd || "", timeoutMs: o.timeoutMs || 30 * 60 * 1000, input: o.input === true,
-      extraEnv: o.env && typeof o.env === "object" ? o.env : ({}), maxBytes: o.maxBytes || 64 * 1024 * 1024, maxLine: o.maxLine || 4 * 1024 * 1024 })
+      extraEnv: o.env && typeof o.env === "object" ? o.env : ({}), maxBytes: o.maxBytes || 64 * 1024 * 1024, maxLine: o.maxLine || 4 * 1024 * 1024,
+      maxErrors: o.maxErrors || o.maxBytes || 64 * 1024 * 1024 })
     var over = false
     runner.line.connect(function(text) { if (!over && onLine) onLine(text) })
     runner.finished.connect(function(code, errors) {
@@ -547,6 +548,10 @@ Item {
       var e = store.unsaved[path]
       // (A newer text asked for since: that write is what counts.)
       if (!e || store.writeVersions[path] !== e.version) { if (e) store.keepUnsaved(path, null); next(); return }
+      // (One being written now, or waiting to be: never queued behind it,
+      // where it would be written after a newer text; that write says how
+      // it went, and if it fails, it's tried again next time.)
+      if (store.writing[path] || store.queued[path]) { next(); return }
       store.writeFile(path, e.text, function(ok) {
         if (ok && store.unsaved[path] === e) { store.keepUnsaved(path, null); saved++ }
         next()

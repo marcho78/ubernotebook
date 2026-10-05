@@ -137,10 +137,36 @@ ShellRoot {
                   store.readFiles([p, q], function(got) {
                     say("kept: tried again, saved, and said", left === 0 && got[p] === "two" && back === 1 && store.unsavedCount === 0, "left " + left + " back " + back + " " + JSON.stringify(got))
                     say("kept: an older text never over a newer one", okOld === false && okNew === true && got[q] === "new", JSON.stringify(got[q]))
-                    store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                    root.raceCheck(d)
                   })
                 })
               })
+            })
+          })
+        })
+      })
+    })
+  }
+  // A retry while a newer text is being written (the window closing just
+  // after an edit): never queued behind it, so the newer text stays.
+  function raceCheck(d) {
+    var r = d + "/ro/z.json"
+    function sh(script, done) { store.exec(["/usr/bin/bash", "-c", script, "x", d], function() { done() }) }
+    sh("/usr/bin/chmod 500 \"$1/ro\"", function() {
+      store.writeKept(r, "old", function(ok1) {
+        sh("/usr/bin/chmod 700 \"$1/ro\"", function() {
+          var newOk = null
+          store.writeKept(r, "new", function(ok2) { newOk = ok2 })
+          // (In the same moment: "new" is being written.)
+          store.retryUnsaved(function() {})
+          var wait = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
+          var tries = 0
+          wait.triggered.connect(function() {
+            if ((newOk === null || store.writing[r] || store.queued[r]) && ++tries < 50) return
+            wait.stop()
+            store.readFiles([r], function(got) {
+              say("kept: a retry while a newer text is written never lands after it", ok1 === false && newOk === true && got[r] === "new" && store.unsavedCount === 0, JSON.stringify(got[r]) + " left " + store.unsavedCount)
+              store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
             })
           })
         })
