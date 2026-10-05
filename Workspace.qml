@@ -1447,6 +1447,11 @@ Item {
     importCount = 0
     importProblems = []
     importFrom = { gen: generation, folder: folder }
+    // (A folder of its own, made new: never one that's there, which is
+    // taken away after. On disk: a zip may unpack to gigabytes. One a day
+    // old, left by an import that never finished, taken away first.)
+    var base = files.cacheDir || files.runtimeDir
+    var tmp = base + "/import-" + Workspace.uuid4().slice(0, 8)
     // (Told once, whatever happens on the way, its temporary folder gone first.)
     var told = false
     function finish(result) {
@@ -1459,11 +1464,6 @@ Item {
       if (ws.importMoved()) result.stopped = true
       if (done) done(result)
     }
-    // (A folder of its own, made new: never one that's there, which is
-    // taken away after. On disk: a zip may unpack to gigabytes. One a day
-    // old, left by an import that never finished, taken away first.)
-    var base = files.cacheDir || files.runtimeDir
-    var tmp = base + "/import-" + Workspace.uuid4().slice(0, 8)
     files.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" || exit 1; "
       + "/usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type d -name 'import-*' -mmin +1440 -exec /usr/bin/rm -rf -- {} + 2>/dev/null; "
       + "/usr/bin/mkdir -m 700 -- \"$2\"", "uber-notebook-import-dir", base, tmp], function(ok) {
