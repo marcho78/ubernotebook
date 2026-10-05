@@ -280,6 +280,13 @@ function hyprOptions(freeBinds, settings) {
   }
 }
 
+// The same, from the module's text (kept as Uber Notebook started): what's
+// run as it stops, when its folder may be gone already (`omarchy plugin
+// remove` moves it away as soon as it's unloaded).
+function hyprRegistrationText(source, options) {
+  return "return load(" + luaString(source) + ")()(" + luaLiteral(options) + ")"
+}
+
 function luaString(text) {
   var out = "\""
   var value = String(text)

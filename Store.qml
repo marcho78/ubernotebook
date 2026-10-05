@@ -417,7 +417,10 @@ Item {
   // and only Uber Notebook's own links (to `target`) are taken out.
   readonly property var skillFolders: [".agents/skills", ".claude/skills", ".codex/skills", ".hermes/skills", ".pi/agent/skills"]
   readonly property string skillScript: "mode=$1; target=$2; shift 2; for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
-    + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; fi; "
+    + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; "
+    // (A link to its skill in another place, gone (an install before, moved
+    // away): made to point here. Anything else there is left.)
+    + "elif [ -L \"$link\" ] && [ ! -e \"$link\" ]; then case \"$(/usr/bin/readlink -- \"$link\")\" in */marcho78.uber-notebook/skills/uber-notebook) /usr/bin/ln -sfnT -- \"$target\" \"$link\";; esac; fi; "
     + "elif [ -L \"$link\" ] && [ \"$(/usr/bin/readlink -- \"$link\")\" = \"$target\" ]; then /usr/bin/rm -f -- \"$link\"; fi; done; exit 0"
 
   function skillDirs() { return skillFolders.map(function(f) { return store.home + "/" + f }) }
@@ -425,10 +428,13 @@ Item {
     exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", "link", target].concat(skillDirs()), null, { timeoutMs: 5000 })
   }
   // (Each link taken out only if it's still Uber Notebook's: read where it's
-  // kept, then taken out there; by the archive helper, as Uber Notebook stops.)
-  function unlinkSkill(target) {
+  // kept, then taken out there; by the archive helper, as Uber Notebook stops:
+  // `runner`, the helper run from its text, kept as it started, when its
+  // folder may be gone by now.)
+  function unlinkSkill(target, runner) {
+    var run = runner && runner.length ? runner : ["/usr/bin/python3", "-I", "-S", filesHelper]
     skillDirs().forEach(function(dir) {
-      Quickshell.execDetached(["/usr/bin/python3", "-I", "-S", filesHelper, "unlink-link", dir + "/uber-notebook", target])
+      Quickshell.execDetached(run.concat(["unlink-link", dir + "/uber-notebook", target]))
     })
   }
 

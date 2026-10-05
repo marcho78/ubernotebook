@@ -390,8 +390,8 @@ Item {
   // disabled or reloaded; write everything waiting to be written.
   Component.onDestruction: {
     // (Only the entry as it was written: one changed or put there since is left.)
-    if (launcherEntry && launcherText) Quickshell.execDetached(["/usr/bin/python3", "-I", "-S", storeItem.filesHelper, "remove-owned", desktopFile, launcherText])
-    if (agentSkill) storeItem.unlinkSkill(skillDir)
+    if (launcherEntry && launcherText) Quickshell.execDetached(stopRunner().concat(["remove-owned", desktopFile, launcherText]))
+    if (agentSkill) storeItem.unlinkSkill(skillDir, stopRunner())
     // Writes from here on finish before the shell goes on stopping.
     storeItem.stopping = true
     if (ui && typeof ui.saveNow === "function") ui.saveNow()
@@ -399,7 +399,7 @@ Item {
     storeItem.flush()
     if (hyprIntegration)
       Quickshell.execDetached(["/usr/bin/hyprctl", "eval",
-        Settings.hyprRegistration(pluginDir + "/hypr/uber-notebook.lua", { remove: true })])
+        hyprText ? Settings.hyprRegistrationText(hyprText, { remove: true }) : Settings.hyprRegistration(pluginDir + "/hypr/uber-notebook.lua", { remove: true })])
   }
 
   Connections {
@@ -571,7 +571,21 @@ Item {
         if (!ok) return
         storeItem.helper(["create-owned", root.desktopFile, entry], function(made, out) {
           var r = String(out || "").trim()
-          if (made && (r === "made" || r === "same")) root.launcherText = entry
+          if (made && (r === "made" || r === "same")) { root.launcherText = entry; return }
+          // (One Uber Notebook left from another place, the same but for its
+          // icon's, which is gone: taken out, if it's still that, and made
+          // again. One you changed is left.)
+          var there = storeItem.readNow(root.desktopFile, 8192) || ""
+          var icon = /^Icon=(\/[^\n]*)$/m.exec(there)
+          if (r !== "taken" || !icon || there.replace(/^Icon=.*$/m, "") !== entry.replace(/^Icon=.*$/m, "")) return
+          storeItem.exec(["/usr/bin/test", "-e", icon[1]], function(iconThere) {
+            if (iconThere) return
+            storeItem.helper(["remove-owned", root.desktopFile, there], function() {
+              storeItem.helper(["create-owned", root.desktopFile, entry], function(made2, out2) {
+                if (made2 && String(out2 || "").trim() === "made") root.launcherText = entry
+              }, { timeoutMs: 5000, maxBytes: 4096 })
+            }, { timeoutMs: 5000, maxBytes: 4096 })
+          }, { okCodes: [0, 1], timeoutMs: 3000 })
         }, { timeoutMs: 5000, maxBytes: 4096 })
       })
     }
@@ -758,8 +772,20 @@ Item {
     }
   }
 
+  // What it takes itself out with as it stops (its launcher entry, its
+  // skill's links, its Hyprland shortcuts), read now, while its folder is
+  // here: `omarchy plugin remove` moves the folder away as soon as it's
+  // unloaded, before what's started as it stops has read anything there.
+  property string helperText: ""
+  property string hyprText: ""
+  function stopRunner() {
+    return helperText ? ["/usr/bin/python3", "-I", "-S", "-c", helperText] : ["/usr/bin/python3", "-I", "-S", storeItem.filesHelper]
+  }
+
   Component.onCompleted: {
     try { ownManifest = JSON.parse(storeItem.readNow(pluginDir + "/manifest.json", 64 * 1024) || "null") } catch (e) { ownManifest = null }
+    helperText = storeItem.readNow(storeItem.filesHelper, 512 * 1024) || ""
+    hyprText = storeItem.readNow(pluginDir + "/hypr/uber-notebook.lua", 256 * 1024) || ""
     scheduleRegister()
     if (launcherEntry) launcherTimer.start()
     if (agentSkill) storeItem.linkSkill(skillDir)

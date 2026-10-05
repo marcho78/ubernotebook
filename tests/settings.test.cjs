@@ -124,6 +124,16 @@ check("the registration runs in lua", () => {
     + 'io.write(result, " ", #fake.active_binds(), " ", #fake.enabled_rules())';
   const out = execFileSync("lua", ["-e", script], { encoding: "utf8" });
   assert.equal(out, "ok 2 4");
+  // Taken out as it stops, from the module's text (its folder may be gone by
+  // then): nothing of it left.
+  const off = Settings.hyprRegistrationText(require("node:fs").readFileSync(path.join(root, "hypr/uber-notebook.lua"), "utf8"), { remove: true });
+  assert.ok(off.indexOf("return load(") === 0, "run from its text, not its file");
+  const both = 'package.path = "' + path.join(root, "tests") + '/?.lua;" .. package.path\n'
+    + 'local fake = require("fake_hl");\n'
+    + '(function() ' + code + ' end)();\n'
+    + 'local result = (function() ' + off + ' end)()\n'
+    + 'io.write(tostring(result), " ", #fake.active_binds(), " ", #fake.enabled_rules())';
+  assert.equal(execFileSync("lua", ["-e", both], { encoding: "utf8" }).replace(/^\S+ /, ""), "0 0");
 });
 
 check("events", () => {

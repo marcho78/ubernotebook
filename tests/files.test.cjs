@@ -137,6 +137,12 @@ try {
     assert.equal(helperRun(["remove-owned", at, text]).out.trim(), "kept");
     fs.writeFileSync(at, text);
     assert.equal(helperRun(["remove-owned", at, text]).out.trim(), "removed");
+    // As Uber Notebook stops, run from its text (kept as it started), its
+    // file gone already: the same.
+    assert.equal(helperRun(["create-owned", at, text]).out.trim(), "made");
+    const fromText = spawnSync("/usr/bin/python3", ["-I", "-S", "-c", fs.readFileSync(helper, "utf8"), "remove-owned", at, text], { encoding: "utf8" });
+    assert.equal(fromText.stdout.trim(), "removed", fromText.stderr);
+    assert.ok(!fs.existsSync(at));
     assert.ok(!fs.existsSync(at));
     // A link at the name: never followed, never taken out.
     const target = path.join(d, "target.txt");
