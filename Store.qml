@@ -449,33 +449,35 @@ Item {
   property bool stopping: false
 
   // Writes text to path (atomically). One write per file at a time; a newer
-  // text waiting for it replaces an older one.
-  function writeFile(path, text, done) {
+  // text waiting for it replaces an older one. (`quiet`: a failure isn't
+  // said; writeKept's tries again.)
+  function writeFile(path, text, done, quiet) {
     if (writing[path]) {
       // The newest text is what's written next; everyone waiting on an
       // earlier one hears when that write (which has theirs in it) is done.
-      var q = queued[path] || { text: "", waiters: [] }
+      var q = queued[path] || { text: "", waiters: [], quiet: true }
       q.text = text
+      q.quiet = q.quiet && !!quiet
       if (done) q.waiters.push(done)
       queued[path] = q
       return
     }
-    writeNow(path, text, done ? [done] : [])
+    writeNow(path, text, done ? [done] : [], !!quiet)
   }
-  function writeNow(path, text, waiters) {
+  function writeNow(path, text, waiters, quiet) {
     writing[path] = true
     var view = null
     function finish(ok, error) {
       delete writing[path]
       if (view) view.destroy()
-      if (!ok) failed("Couldn't save " + path.replace(home, "~") + (error ? ": " + error : ""))
+      if (!ok && !quiet) failed("Couldn't save " + path.replace(home, "~") + (error ? ": " + error : ""))
       waiters.forEach(function(w) {
         try { w(ok) } catch (e) { console.warn("Uber Notebook: after saving " + path + ": " + e) }
       })
       var next = queued[path]
       if (next) {
         delete queued[path]
-        writeNow(path, next.text, next.waiters)
+        writeNow(path, next.text, next.waiters, next.quiet)
       }
     }
     function asBefore() {
@@ -492,6 +494,63 @@ Item {
     notesAsk(h, { op: "write", path: rel, text: String(text) }, function(r) {
       if (r === null) { asBefore(); return }
       finish(r.ok === true, r.ok ? "" : String(r.error || ""))
+    })
+  }
+
+  // ---- what couldn't be saved: kept, and tried again --------------------------------------------
+
+  // Your notes' own files (pages, Pages' tree, People, the calendar,
+  // conversations with agents, notebooks) are written with writeKept: one
+  // that fails (a full disk, say) is kept, its newest text for each file,
+  // and tried again every 30 s, before another folder is opened, and as the
+  // window closes: never a temporary or an exported file. Said when it first
+  // fails (failed), when it's saved after all (recovered), and if it still
+  // isn't as the window closes (Service). An older text's failure never
+  // stands for a newer one (each write has a version), and a newer text
+  // asked for since is never written over by an older one tried again.
+  property var unsaved: ({})
+  property var writeVersions: ({})
+  property int writeVersion: 0
+  property int unsavedCount: 0
+  signal recovered(int count)
+  function writeKept(path, text, done) {
+    var v = ++writeVersion
+    writeVersions[path] = v
+    // (One that's failing already: not said again with each change.)
+    writeFile(path, text, function(ok) {
+      if (store.writeVersions[path] === v) store.keepUnsaved(path, ok ? null : { text: text, version: v })
+      if (done) done(ok)
+    }, unsaved[path] !== undefined)
+  }
+  function keepUnsaved(path, entry) {
+    var next = {}
+    for (var k in unsaved) if (k !== path) next[k] = unsaved[k]
+    if (entry) next[path] = entry
+    unsaved = next
+    unsavedCount = Object.keys(next).length
+    if (unsavedCount > 0 && !retryTimer.running) retryTimer.start()
+    if (unsavedCount === 0) retryTimer.stop()
+  }
+  Timer { id: retryTimer; interval: 30000; repeat: true; onTriggered: store.retryUnsaved(null) }
+  // Each one tried again, quietly: done(how many still aren't saved).
+  function retryUnsaved(done) {
+    var paths = Object.keys(unsaved)
+    if (!paths.length) { if (done) done(0); return }
+    var left = paths.length
+    var saved = 0
+    function next() {
+      if (--left > 0) return
+      if (saved) store.recovered(saved)
+      if (done) done(store.unsavedCount)
+    }
+    paths.forEach(function(path) {
+      var e = store.unsaved[path]
+      // (A newer text asked for since: that write is what counts.)
+      if (!e || store.writeVersions[path] !== e.version) { if (e) store.keepUnsaved(path, null); next(); return }
+      store.writeFile(path, e.text, function(ok) {
+        if (ok && store.unsaved[path] === e) { store.keepUnsaved(path, null); saved++ }
+        next()
+      }, true)
     })
   }
 
@@ -615,7 +674,7 @@ Item {
   }
 
   function saveOrder() {
-    writeFile(Library.libraryFile(rootPath), Library.stringify({ version: 1, order: order }))
+    writeKept(Library.libraryFile(rootPath), Library.stringify({ version: 1, order: order }))
   }
 
   // notebook.json, a moment after the last change to it.
@@ -637,7 +696,7 @@ Item {
     notebookDirty = ({})
     ids.forEach(function(id) {
       var nb = index[id]
-      if (nb) whenReady(id, function() { store.writeFile(Library.notebookFile(store.rootPath, id), Library.stringify(nb)) })
+      if (nb) whenReady(id, function() { store.writeKept(Library.notebookFile(store.rootPath, id), Library.stringify(nb)) })
     })
   }
 
@@ -791,7 +850,7 @@ Item {
     remember(id, page)
     var path = Library.pageFile(rootPath, id, page.id)
     var text = pageJson(page)
-    whenReady(id, function() { store.writeFile(path, text, done) })
+    whenReady(id, function() { store.writeKept(path, text, done) })
     changed()
   }
 
@@ -1222,7 +1281,7 @@ Item {
     notebookDirty = ({})
     ids.forEach(function(id) {
       var nb = index[id]
-      if (nb && folders[id]) store.writeFile(Library.notebookFile(rootPath, id), Library.stringify(nb))
+      if (nb && folders[id]) store.writeKept(Library.notebookFile(rootPath, id), Library.stringify(nb))
     })
     written = ({})
     folders = ({})
@@ -1240,8 +1299,9 @@ Item {
     notebookDirty = ({})
     ids.forEach(function(id) {
       var nb = index[id]
-      if (nb && folders[id]) store.writeFile(Library.notebookFile(rootPath, id), Library.stringify(nb))
+      if (nb && folders[id]) store.writeKept(Library.notebookFile(rootPath, id), Library.stringify(nb))
     })
+    retryUnsaved(null)
   }
 
   Component.onDestruction: flush()

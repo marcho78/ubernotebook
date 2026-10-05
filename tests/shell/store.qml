@@ -114,12 +114,45 @@ ShellRoot {
       })
     })
   }
+  // A save of your notes that fails (here, a folder it can't write in) is
+  // kept, its newest text, said once; tried again once it can be, saved,
+  // and said; an older text never written over a newer one.
+  function keptChecks(d) {
+    var fails = 0
+    var back = 0
+    store.failed.connect(function() { fails++ })
+    store.recovered.connect(function(n) { back += n })
+    function sh(script, done) { store.exec(["/usr/bin/bash", "-c", script, "x", d], function() { done() }) }
+    var p = d + "/ro/x.json"
+    var q = d + "/ro/y.json"
+    sh("/usr/bin/mkdir -p \"$1/ro\" && /usr/bin/chmod 500 \"$1/ro\"", function() {
+      store.writeKept(p, "one", function(ok1) {
+        store.writeKept(p, "two", function(ok2) {
+          say("kept: a save that failed is kept, its newest text, said once", ok1 === false && ok2 === false && store.unsaved[p] !== undefined && store.unsaved[p].text === "two" && fails === 1,
+            "ok " + ok1 + "," + ok2 + " fails " + fails + " " + JSON.stringify(store.unsaved))
+          store.writeKept(q, "old", function(okOld) {
+            sh("/usr/bin/chmod 700 \"$1/ro\"", function() {
+              store.writeKept(q, "new", function(okNew) {
+                store.retryUnsaved(function(left) {
+                  store.readFiles([p, q], function(got) {
+                    say("kept: tried again, saved, and said", left === 0 && got[p] === "two" && back === 1 && store.unsavedCount === 0, "left " + left + " back " + back + " " + JSON.stringify(got))
+                    say("kept: an older text never over a newer one", okOld === false && okNew === true && got[q] === "new", JSON.stringify(got[q]))
+                    store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                  })
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  }
   function helperOff(d, notes) {
     store.writeFile(notes + "/Pages/c.json", '{"c":1}', function(wrote2) {
       store.readFiles([notes + "/Pages/a.json", notes + "/Pages/c.json"], function(got2, read2) {
         say("fallback: the helper off, read and written as before", wrote2 === true && read2 === true && store.notes === null
           && got2[notes + "/Pages/a.json"] === '{"a":1}' && got2[notes + "/Pages/c.json"] === '{"c":1}', JSON.stringify(got2))
-        store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+        root.keptChecks(d)
       })
     })
   }

@@ -146,6 +146,7 @@ Item {
     onVisibleChanged: {
       if (!visible) {
         root.saveNow()
+        if (root.service && typeof root.service.windowClosed === "function") root.service.windowClosed()
         if (!root.closingFromHost && root.shell && typeof root.shell.hide === "function") root.shell.hide(root.pluginId)
       }
     }

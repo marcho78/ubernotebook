@@ -527,6 +527,7 @@ FocusScope {
     target: root.store
     ignoreUnknownSignals: true
     function onFailed(message) { root.toast(message) }
+    function onRecovered(count) { root.toast(count === 1 ? "Saved now: the change that couldn't be saved before" : "Saved now: the " + count + " changes that couldn't be saved before") }
     function onExported(path) { root.toast("Exported to " + path.replace(/^\/home\/[^\/]+/, "~")) }
   }
   // (Pages' own: a file it couldn't read, so left as it is; a zip that

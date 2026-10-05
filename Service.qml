@@ -94,6 +94,13 @@ Item {
 
   // What's open in the window, written (before another profile opens).
   function saveOpen() { if (ui && typeof ui.saveNow === "function") ui.saveNow() }
+  // The window closed: what couldn't be saved tried again, and if it still
+  // can't be, said where you'll see it (it goes on trying).
+  function windowClosed() {
+    storeItem.retryUnsaved(function(left) {
+      if (left > 0) storeItem.notify("Not saved yet", (left === 1 ? "A change" : left + " changes") + " to your notes couldn't be saved (is the disk full?). Uber Notebook keeps trying.", "", "")
+    })
+  }
 
   // A folder picked in the window: done(path), or done("").
   function pickFolder(title, done) {
@@ -118,7 +125,11 @@ Item {
   function setSettings(changes) {
     // Another notes folder (a profile, `set folder`): what's open is saved
     // first, where it was.
-    if (changes && Object.prototype.hasOwnProperty.call(changes, "folder") && changes.folder !== settings.folder) saveOpen()
+    if (changes && Object.prototype.hasOwnProperty.call(changes, "folder") && changes.folder !== settings.folder) {
+      saveOpen()
+      // (What couldn't be saved, tried again where it was.)
+      storeItem.retryUnsaved(null)
+    }
     var next = Settings.clone(user)
     for (var key in changes) if (defaults && Object.prototype.hasOwnProperty.call(defaults, key)) next[key] = changes[key]
     user = Settings.overrides(defaults, Settings.merge(defaults, next, schema))

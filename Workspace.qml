@@ -58,6 +58,12 @@ Item {
   }
 
   function pagePath(id) { return Workspace.pageFile(files.rootPath, id) }
+  // Its own files (pages, the tree, People, the calendar, conversations):
+  // one that couldn't be written is kept and tried again (Store.writeKept).
+  function write(path, text, done) {
+    if (typeof files.writeKept === "function") files.writeKept(path, text, done)
+    else files.writeFile(path, text, done)
+  }
   function indexPath() { return Workspace.indexFile(files.rootPath) }
 
   // ---- the tree of pages ------------------------------------------------------------------
@@ -193,7 +199,7 @@ Item {
     if (!ready && Object.keys(index.pages).length === 0) { if (done) done(false); return }
     if (unreadable[indexPath()]) { notSaved(indexPath()); if (done) done(false); return }
     var text = Workspace.indexJson(index)
-    withFolder(function() { files.writeFile(ws.indexPath(), text, done) }, done)
+    withFolder(function() { ws.write(ws.indexPath(), text, done) }, done)
   }
 
   function touched() {
@@ -325,7 +331,7 @@ Item {
     texts[page.id] = page.text
     var path = pagePath(page.id)
     var text = Workspace.pageJson(page)
-    withFolder(function() { files.writeFile(path, text, done) }, done)
+    withFolder(function() { ws.write(path, text, done) }, done)
     var e = index.pages[page.id]
     if (!e) {
       index.pages[page.id] = { title: page.title, icon: page.icon, parent: "", children: [], trashed: false, created: page.created, modified: page.modified }
@@ -603,7 +609,7 @@ Item {
   function writeCalendar() {
     if (!folder) return
     if (unreadable[calendarPath()]) { notSaved(calendarPath()); return }
-    files.writeFile(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
+    write(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
   }
 
   // The calendar changed (`next`, a new copy), kept, as a step Undo takes back.
@@ -677,7 +683,7 @@ Item {
     if (!folder) return
     if (unreadable[chatsPath()]) { notSaved(chatsPath()); return }
     var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
-    withFolder(function() { files.writeFile(ws.chatsPath(), text) })
+    withFolder(function() { ws.write(ws.chatsPath(), text) })
   }
   // The page's conversation, or null.
   function chatFor(id) { return id && chats[id] ? chats[id] : null }
@@ -719,7 +725,7 @@ Item {
   function writeContacts() {
     if (!folder) return
     if (unreadable[contactsPath()]) { notSaved(contactsPath()); return }
-    withFolder(function() { files.writeFile(ws.contactsPath(), JSON.stringify(ws.contacts, null, 1) + "\n") })
+    withFolder(function() { ws.write(ws.contactsPath(), JSON.stringify(ws.contacts, null, 1) + "\n") })
   }
 
   // The people changed (`next`, a new copy), kept, as a step Undo takes back.
