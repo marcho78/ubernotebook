@@ -29,7 +29,7 @@ Item {
     function writeFile(path, text, done) { writes = writes.concat([path]); files.writeFile(path, text, done) }
     // (Through the files helper: a link there replaced, never written through.)
     property var puts: []
-    function putFile(folder, path, text, done) { writes = writes.concat([folder + "/" + path]); puts = puts.concat([folder + "/" + path]); files.putFile(folder, path, text, done) }
+    function putFile(folder, path, text, done, copy) { writes = writes.concat([folder + "/" + path]); puts = puts.concat([(copy ? "copy:" : "") + folder + "/" + path]); files.putFile(folder, path, text, done) }
     readonly property string runtimeDir: "/tmp"
     function helper(args, done, options) { files.helper(args, done, options) }
     function parseJson(text) { return files.parseJson(text) }
@@ -79,7 +79,7 @@ Item {
       fresh()
       mirror.on = true
       tryVerify(function() { return mirror.status === "Up to date" }, 2000, "it copies once it's on")
-      compare(shim.puts, ["/tmp/copy/" + Mirror.MANIFEST], "what it wrote, kept through the files helper")
+      compare(shim.puts, ["copy:/tmp/copy/" + Mirror.MANIFEST], "what it wrote, kept through the files helper (the copy's folder may be a link to where you keep it)")
       var list = copied()
       verify(list.indexOf("Pages/Getting started.md") >= 0, list.join(", "))
       verify(list.indexOf("Pages/Getting started/A page inside a page.md") >= 0, "a page's pages in its folder")
@@ -205,6 +205,44 @@ Item {
       tryVerify(function() { return mirror.status === "Up to date" }, 2000, "a good folder: it copies")
       mirror.on = false
       compare(mirror.status, "")
+    }
+
+    // Many pages syncing one big one: what synced blocks write, in all the
+    // copy's files of a pass, within one budget.
+    function test_5c_synced_blocks_within_one_budget() {
+      fresh()
+      var sid = ws.newSyncedPage([{ type: "p", html: new Array(100001).join("y"), indent: 0 }])
+      for (var n = 0; n < 10; n++) {
+        var list = []
+        for (var i = 0; i < 5; i++) list.push({ type: "synced", indent: 0, data: { page: sid } })
+        ws.createPage({ parent: "", title: "Syncs " + n, blocks: list })
+      }
+      mirror.syncedMax = 1000000
+      try {
+        mirror.on = true
+        tryVerify(function() { return mirror.status === "Up to date" }, 5000, mirror.status)
+        var mds = copied().filter(function(p) { return /^Pages\/Syncs \d\.md$/.test(p) })
+        compare(mds.length, 10)
+        var total = mds.reduce(function(t, p) { return t + text(p).length }, 0)
+        verify(total < 1000000 + 100000 + 50000, "within it: " + total)
+        verify(mds.some(function(p) { return text(p).indexOf("*(A synced block: open the page in Uber Notebook)*") >= 0 }), "past it: said")
+      } finally {
+        mirror.syncedMax = 16000000
+        mirror.on = false
+      }
+    }
+
+    // Its list of what it wrote not kept: said, not "Up to date".
+    function test_5b_its_list_not_kept_is_said() {
+      fresh()
+      files.failPut = true
+      try {
+        mirror.on = true
+        tryVerify(function() { return mirror.status.indexOf("its list of what it wrote couldn't be kept") > 0 }, 2000, mirror.status)
+      } finally {
+        files.failPut = false
+        mirror.on = false
+      }
     }
 
     // Another profile opened: what it read of these notes isn't kept for

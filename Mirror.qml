@@ -24,6 +24,7 @@ Item {
   property string home: ""
   // How long after a change it copies.
   property int delay: 3000
+  property real syncedMax: 16000000
 
   // What it says in Settings: "" (off), or how it's going.
   property string status: ""
@@ -185,6 +186,9 @@ Item {
     var man = manifest || {}
     var paths = Mirror.claim(Mirror.pagePaths(ix), man, existing)
     var desired = {}
+    // (What synced blocks write, in all the pages of a pass: 16 million
+    // characters at most, so many pages syncing one big one stay small.)
+    var syncedBudget = { chars: 0, max: mirror.syncedMax }
     for (var id in paths) {
       var page = pages[id]
       if (!page) continue
@@ -197,6 +201,7 @@ Item {
         assetPrefix: Mirror.toTop(file),
         calendar: workspace.calendar,
         syncedPage: function(id) { return pages[id] || null },
+        syncedBudget: syncedBudget,
         contactOf: function(id) { return mirror.workspace ? mirror.workspace.contactById(id) : null },
         sketchFile: function(bid) { return Mirror.relative(file, "sketches/" + bid + ".svg") }
       })
@@ -275,7 +280,12 @@ Item {
         }
         // (Through the files helper: a link put where it goes is replaced,
         // never written through.)
-        if (changed) store.putFile(dir, Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Uber Notebook", files: next }, null, 1) + "\n", function() { done() })
+        // (A list that couldn't be kept is said: without it, the next start
+        // would take the copy's files for yours.)
+        if (changed) store.putFile(dir, Mirror.MANIFEST, JSON.stringify({ version: 1, app: "Uber Notebook", files: next }, null, 1) + "\n", function(ok, why) {
+          done()
+          if (!ok) mirror.status = "Copied, but its list of what it wrote couldn't be kept" + (why ? ": " + why : "")
+        }, true)
         else done()
       })
     }

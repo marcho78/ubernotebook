@@ -28,6 +28,11 @@
 #   put <folder> <path>
 #       What's on its input as <path> in <folder> (a folder of yours): a new
 #       file put in place (a link there is replaced, never followed). "put".
+#       The folder itself is never a link (an agent's, for its sandbox file).
+#   put-copy <folder> <path>
+#       The same into the Markdown copy's folder, the one you chose: that
+#       folder may be a link (a vault kept elsewhere), as long as where it
+#       leads is a folder of yours; nothing below it is followed.
 #   create-owned <file> <text>
 #       A small file of Uber Notebook's own (its entry in the app launcher):
 #       made only where nothing is ("made"); one that's there already is left
@@ -1152,7 +1157,7 @@ def cmd_read(max_bytes, path, within=None):
     print(json.dumps({"ok": True, "text": data.decode("utf-8", "replace")}))
 
 
-def cmd_put(folder, path):
+def cmd_put(folder, path, follow_top=False):
     """A file of Uber Notebook's own in a folder of its own (an agent's
     sandbox profile), what's on its input: every folder below opened without
     following a link (made as needed), the file written new beside it, then
@@ -1164,7 +1169,7 @@ def cmd_put(folder, path):
     data = sys.stdin.buffer.read(1024 * 1024 + 1)
     if len(data) > 1024 * 1024:
         raise Refused("too big")
-    root = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    root = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | (0 if follow_top else os.O_NOFOLLOW) | os.O_CLOEXEC)
     try:
         if os.fstat(root).st_uid != os.getuid():
             raise Refused("that folder isn't yours")
@@ -1619,6 +1624,8 @@ def main(argv):
             cmd_read(*argv[2:])
         elif len(argv) == 4 and argv[1] == "put":
             cmd_put(argv[2], argv[3])
+        elif len(argv) == 4 and argv[1] == "put-copy":
+            cmd_put(argv[2], argv[3], True)
         elif len(argv) == 4 and argv[1] == "create-owned":
             cmd_create_owned(argv[2], argv[3])
         elif len(argv) == 4 and argv[1] == "remove-owned":

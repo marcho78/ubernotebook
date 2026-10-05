@@ -523,6 +523,21 @@ try {
     fs.symlinkSync(out, path.join(f, "linked"));
     assert.notEqual(spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put", f, "linked/x"], { input: "x" }).status, 0, "never through a linked folder");
     assert.ok(!fs.existsSync(path.join(out, "x")));
+    assert.notEqual(spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put", path.join(f, "linked"), "x"], { input: "x" }).status, 0, "an agent's folder that's a link: refused");
+    // The Markdown copy's folder, the one you chose, may be a link to where
+    // you keep it (put-copy); nothing below it is followed.
+    const vault = folder("copy-vault");
+    const chosen = path.join(tmp, "copy-chosen");
+    fs.symlinkSync(vault, chosen);
+    const pc = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put-copy", chosen, ".uber-notebook-mirror.json"], { input: "{}", encoding: "utf8" });
+    assert.equal(pc.stdout.trim(), "put", pc.stderr);
+    assert.equal(fs.readFileSync(path.join(vault, ".uber-notebook-mirror.json"), "utf8"), "{}");
+    fs.symlinkSync(out, path.join(vault, "inner"));
+    assert.notEqual(spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put-copy", chosen, "inner/x"], { input: "x" }).status, 0, "a link below it: not followed");
+    assert.ok(!fs.existsSync(path.join(out, "x")));
+    fs.symlinkSync(path.join(out, "target"), path.join(vault, "list.json"));
+    assert.equal(spawnSync("/usr/bin/python3", ["-I", "-S", helper, "put-copy", chosen, "list.json"], { input: "new", encoding: "utf8" }).stdout.trim(), "put");
+    assert.equal(fs.readFileSync(path.join(out, "target"), "utf8"), "SECRET", "a link put there: replaced, not written through");
     // Read: from its folder only, through no link.
     fs.mkdirSync(path.join(f, "in"));
     fs.writeFileSync(path.join(f, "in", "a.md"), "hi");

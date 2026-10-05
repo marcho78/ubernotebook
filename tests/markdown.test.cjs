@@ -171,6 +171,14 @@ check("synced blocks in Markdown: never the page itself, only so many", () => {
   const md = Markdown.fromDocPage(a, () => null, { syncedPage: (id) => (id === B ? b : id === A ? a : null) });
   assert.ok(md.length < 5000000, "bounded: " + md.length);
   assert.ok(md.includes("*(A synced block)*"), "the rest said");
+  // Many pages written at once (the Markdown copy), one budget for them all.
+  const budget = { chars: 0, max: 1000000 };
+  const many = Array.from({ length: 20 }, (_, n) => mk("p" + n, Array.from({ length: 5 }, (_, i) => ({ id: "t" + i, type: "synced", data: { page: B } }))));
+  const out = many.map((p) => Markdown.fromDocPage(p, () => null, { syncedPage: (id) => (id === B ? b : null), syncedBudget: budget }));
+  const total = out.reduce((n, t) => n + t.length, 0);
+  assert.ok(total < 1000000 + 100000 + 20000, "all of them within it: " + total);
+  assert.ok(out[19].includes("*(A synced block: open the page in Uber Notebook)*"), "past it: said");
+  assert.ok(out[0].includes("y".repeat(1000)), "the first pages as always");
 });
 
 console.log(`markdown: ${passed} checks passed`);

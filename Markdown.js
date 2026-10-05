@@ -247,17 +247,24 @@ function fromDocPage(page, lookup, options) {
   }
   // A synced block: its blocks, from its page (when there's a way to read it).
   // (Never the page itself, and only so many in a page: 50, 4 million
-  // characters of them; the synced page's own synced blocks just say so.)
+  // characters of them; the synced page's own synced blocks just say so.
+  // `syncedBudget` ({ chars, max }), shared by many pages written at once
+  // (the Markdown copy): past it, a synced block says where it is.)
   var syncedCount = 0
   var syncedChars = 0
+  var pass = opts.syncedBudget && typeof opts.syncedBudget === "object" ? opts.syncedBudget : null
+  var pastPass = "*(A synced block: open the page in Uber Notebook)*"
   function syncedLines(b) {
     var id = b.data ? b.data.page : ""
     if (!id || id === page.id || syncedCount >= 50 || syncedChars >= 4000000) return "*(A synced block)*"
+    if (pass && pass.chars >= pass.max) return pastPass
     var p = typeof opts.syncedPage === "function" ? opts.syncedPage(id) : null
     if (!p) return "*(A synced block)*"
     syncedCount++
     var inner = fromDocPage(p, lookup, { assetPrefix: opts.assetPrefix, calendar: opts.calendar }).replace(/^# .*\n\n?/, "")
     syncedChars += inner.length
+    if (pass) pass.chars += inner.length
+    if (pass && pass.chars > pass.max) return pastPass
     return syncedChars > 4000000 ? "*(A synced block)*" : inner.trim()
   }
 

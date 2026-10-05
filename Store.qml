@@ -194,8 +194,10 @@ Item {
   // A file of Uber Notebook's own in a folder of its own (an agent's sandbox
   // profile), by the files helper (put): never through a link planted there.
   // done(ok).
-  function putFile(folder, path, text, done) {
-    helper(["put", folder, path], function(ok, out) { if (done) done(ok && String(out || "").trim() === "put") }, { input: String(text), timeoutMs: 10000, maxBytes: 4096 })
+  // (`copy`: the Markdown copy's folder, which may be a link to where you
+  // keep it; never an agent's.)
+  function putFile(folder, path, text, done, copy) {
+    helper([copy ? "put-copy" : "put", folder, path], function(ok, out) { if (done) done(ok && String(out || "").trim() === "put", ok ? "" : String(out || "").trim().split("\n").pop()) }, { input: String(text), timeoutMs: 10000, maxBytes: 4096 })
   }
 
   // A command whose words come back as text that may be long, and in any
