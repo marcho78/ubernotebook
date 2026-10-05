@@ -658,7 +658,9 @@ def cmd_export_html(assets, work, max_bytes):
         def put_in(m):
             key = (m.group(1), m.group(2))
             if key not in cache:
-                cache[key] = picture_data(folders[m.group(1)], m.group(2), budget)
+                # (Given only the room left: a picture past it is never
+                # read, so what's kept is within the document's budget.)
+                cache[key] = picture_data(folders[m.group(1)], m.group(2), max(0, budget - used[0]))
             data, size = cache[key]
             # (Charged each time it's put in, not once: the same picture a
             # hundred times is a hundred pictures in the document.)
@@ -1648,7 +1650,7 @@ def main(argv):
             return 2
     except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error, MemoryError) as e:
         if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"], ["read-files"], ["read-glob"]):
-            print(json.dumps({"ok": False, "error": str(e)[:300]}))
+            print(json.dumps({"ok": False, "error": (str(e) or ("it ran out of memory" if isinstance(e, MemoryError) else type(e).__name__))[:300]}))
             return 1
         sys.stderr.write(str(e)[:300] + "\n")
         return 3

@@ -305,6 +305,22 @@ try {
     assert.equal(many.r.ok, true);
     assert.ok(many.r.pictures >= 1 && many.r.pictures < 50 && many.r.missing === 50 - many.r.pictures, JSON.stringify(many.r));
     assert.ok(many.out.length < 1000 + 50 * 200, "the document within its room: " + many.out.length);
+    // Many different pictures, each within the room, all of them far past it:
+    // only what fits is read and kept (run with little memory to show it).
+    const lots = folder("export-lots");
+    const wl = folder("export-work-lots");
+    fs.mkdirSync(path.join(wl, "drawings"));
+    const filler = Buffer.alloc(1024 * 1024, 7);
+    let lotsBody = "";
+    for (let i = 0; i < 90; i++) {
+      fs.writeFileSync(path.join(lots, "p" + i + ".png"), Buffer.concat([png(10, 10), filler, Buffer.from(String(i))]));
+      lotsBody += img("p" + i + ".png", "width:10%;");
+    }
+    fs.writeFileSync(path.join(wl, "page.src.html"), head + lotsBody + "</body></html>");
+    const low = spawnSync("/usr/bin/prlimit", ["--as=140000000", "--", "/usr/bin/python3", "-I", "-S", helper, "export-html", lots, wl, String(4 * 1048576)], { encoding: "utf8", timeout: 60000 });
+    const lr = JSON.parse(low.stdout.trim().split("\n").pop() || "{}");
+    assert.deepEqual([low.status, lr.ok, lr.pictures + lr.missing], [0, true, 90], low.stdout + low.stderr);
+    assert.ok(lr.pictures >= 1 && lr.pictures <= 3, JSON.stringify(lr));
     // Anything that loads from elsewhere: refused, nothing written.
     for (const bad of ['<script>x</script>', '<iframe src="https://e.org"></iframe>', '<img src="https://e.org/x.png" />', '<img src="file:///etc/passwd" />',
       '<link rel="stylesheet" href="https://e.org/a.css" />', '<p style="background:url(https://e.org/x)">x</p>', '<style>@import "https://e.org/a.css";</style>',
