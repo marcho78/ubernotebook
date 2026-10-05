@@ -1081,6 +1081,10 @@ Item {
       // Any script, or a symbol, is something; what can't be seen isn't.
       byAgent(); compare(json(api.editEvent(ev.id, "notes", "\u1780\u17d2\u1798\u17c2\u179a")).ok, true, "Khmer: not asked")
       byAgent(); compare(json(api.editEvent(ev.id, "notes", "\u2605")).ok, true, "a star: not asked")
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "$")).ok, true, "a symbol: something")
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "\u2022")).ok, true, "a bullet: something")
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "\u2026 --")).asked, true, "dots and dashes: emptying")
+      view.answerAgentAsk(view.agentAsks[view.agentAsks.length - 1].key, "no")
       byAgent(); compare(json(api.editEvent(ev.id, "notes", "\udb40\udc20\u3000\u00a0")).asked, true, "invisible tag letters and blanks: emptying")
       view.agentAsks = []
       g["remove event"] = true
@@ -1290,6 +1294,12 @@ Item {
       var root = files.rootPath
       var other = "/tmp/other-api-notes"
       json(api.addContact("Sam Before", "", "sam.before@e.org"))
+      var home = named("Getting started")
+      ws.setChat(home, { agent: "claude", session: "", page: home, picked: "", folder: "", turns: [{ request: "A's question", status: "done", answer: "A's answer" }] })
+      verify(ws.chatFor(home) !== null)
+      var told = []
+      function heard(m) { told.push(m) }
+      ws.failed.connect(heard)
       files.holdReads = true
       try {
         // A's People, read slowly.
@@ -1301,6 +1311,13 @@ Item {
         compare(r.ok, false)
         verify(/aren't loaded yet/.test(r.error), r.error)
         compare(files.disk[other + "/Pages/contacts.json"], undefined, "nothing of the one before written into it")
+        // Its conversations: none shown or written in the other, till its own are read.
+        compare(ws.chatFor(home), null, "A's conversation isn't shown in B")
+        ws.setChat(home, { agent: "claude", session: "", page: home, picked: "", folder: "", turns: [{ request: "too soon", status: "done", answer: "x" }] })
+        compare(files.disk[other + "/Pages/chats.json"], undefined, "nor written into it")
+        // A change made in the window meanwhile: not saved, and said.
+        ws.writeContacts()
+        verify(told.indexOf("Not saved: this profile is still opening. Try again in a moment") >= 0, JSON.stringify(told))
         tryVerify(function() { files.answerReads(); return ws.ready && ws.contactsLoaded && ws.calendarLoaded }, 3000, "the other loaded")
         late.forEach(function(f) { f() })
         var names = json(api.contacts("")).map(function(c) { return c.name })
@@ -1308,6 +1325,7 @@ Item {
         compare(json(api.addContact("In Time", "", "intime@e.org")).ok, true)
         verify(String(files.disk[other + "/Pages/contacts.json"]).indexOf("Sam Before") < 0)
       } finally {
+        ws.failed.disconnect(heard)
         files.holdReads = false
         files.answerReads()
         files.rootPath = root

@@ -952,6 +952,26 @@ Item {
       }
     }
 
+    // A calendar (or People, or the tree) made so that cleaning it throws:
+    // as one that couldn't be read, left as it is, and the profile still
+    // loads.
+    function test_28_a_file_that_cant_be_cleaned() {
+      fresh()
+      var cal = ws.calendarPath()
+      files.disk[cal] = JSON.stringify({ events: [{ id: "e1", title: "x", start: { toString: 1 }, end: { toString: 1 } }] })
+      var told = []
+      function heard(m) { told.push(m) }
+      ws.failed.connect(heard)
+      try {
+        ws.load()
+        tryVerify(function() { return ws.loaded }, 2000, "loaded all the same")
+        verify(ws.unreadable[cal] === true, "kept as it is")
+        verify(told.some(function(m) { return m.indexOf("calendar.json") >= 0 }), JSON.stringify(told))
+      } finally {
+        ws.failed.disconnect(heard)
+      }
+    }
+
     function test_8_the_open_page_reloads_after_the_store_changes_it() {
       fresh()
       var home = view.page.id

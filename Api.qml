@@ -130,10 +130,12 @@ QtObject {
     var t = String(v || "")
     // (Spaces, controls, format and invisible characters, blank lookalikes;
     // variation selectors and the tag letters, U+E0000 to U+E01EF.)
-    t = t.replace(/[\u0000-\u0020\u007f-\u00a0\u00ad\u034f\u061c\u115f\u1160\u1680\u17b4\u17b5\u180b-\u180f\u2000-\u206f\u2800\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb]/g, "")
-    t = t.replace(/\udb40[\udc00-\uddef]/g, "")
-    // (Punctuation, Latin and general, CJK and full-width.)
-    t = t.replace(/[!-\/:-@\[-`{-~\u00a1\u00a7\u00ab\u00b6\u00b7\u00bb\u00bf\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/g, "")
+    t = t.replace(/[\u0000-\u0020\u007f-\u00a0\u00ad\u034f\u061c\u115f\u1160\u1680\u17b4\u17b5\u180b-\u180f\u2000-\u200f\u2028-\u202f\u205f-\u206f\u2800\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb]/g, "")
+    t = t.replace(/\udb40[\udc00-\uddef]|\ud834[\udd73-\udd7a]/g, "")
+    // (Punctuation: dots, commas, dashes, quotes, brackets and the like,
+    // Latin and general, CJK and full-width. A symbol ($, #, •, §) is
+    // something.)
+    t = t.replace(/[!"'(),\-.\/:;?\[\\\]_`{}*\u00a1\u00ab\u00b7\u00bb\u00bf\u2010-\u2015\u2018-\u201f\u2026\u2039\u203a\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01\uff02\uff07-\uff0f\uff1a\uff1b\uff1f\uff3b-\uff3d\uff3f\uff40\uff5b\uff5d\uff5f-\uff65]/g, "")
     return t === ""
   }
   function agentRemoval(kind, item, what, doIt) {

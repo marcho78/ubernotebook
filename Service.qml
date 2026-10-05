@@ -465,7 +465,7 @@ Item {
   property var quickWaiting: []
 
   function quickToPages(value) {
-    if (!workspaceItem.ready) {
+    if (!workspaceItem.loaded) {
       quickWaiting = quickWaiting.concat([value])
       quickTimer.restart()
       return
@@ -488,7 +488,7 @@ Item {
 
   Connections {
     target: workspaceItem
-    function onReadyChanged() { if (workspaceItem.ready && root.quickWaiting.length) root.flushQuick(true) }
+    function onLoadedChanged() { if (workspaceItem.loaded && root.quickWaiting.length) root.flushQuick(true) }
   }
 
   Timer {

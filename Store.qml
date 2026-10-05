@@ -804,8 +804,11 @@ Item {
       delete queued[k]
       q.waiters.forEach(function(w) { try { w(false) } catch (e) {} })
     })
-    if (Object.keys(writing).some(under)) { trashLater = trashLater.concat([{ path: path, name: name, under: under }]); return }
-    trashNow(path, name)
+    // (Into the trash of the notes it's in, as they are now: never another
+    // profile's, opened while a write finishes.)
+    var dir = Library.trashDir(rootPath)
+    if (Object.keys(writing).some(under)) { trashLater = trashLater.concat([{ path: path, name: name, under: under, dir: dir }]); return }
+    trashNow(path, name, dir)
   }
   // Trashed once what was being written in it is done.
   property var trashLater: []
@@ -813,10 +816,9 @@ Item {
     var ready = trashLater.filter(function(t) { return !Object.keys(store.writing).some(t.under) })
     if (!ready.length) return
     trashLater = trashLater.filter(function(t) { return ready.indexOf(t) < 0 })
-    ready.forEach(function(t) { store.trashNow(t.path, t.name) })
+    ready.forEach(function(t) { store.trashNow(t.path, t.name, t.dir) })
   }
-  function trashNow(path, name) {
-    var dir = Library.trashDir(rootPath)
+  function trashNow(path, name, dir) {
     var stamp = Library.pageId(new Date())
     mkdirs([dir], function(ok) {
       if (!ok) return

@@ -53,6 +53,10 @@ Item {
     ready = false
     contactsLoaded = false
     calendarLoaded = false
+    // (The conversations of the one before aren't shown, or written, here.)
+    chatsLoaded = false
+    chats = ({})
+    chatsRevision++
     if (indexTimer.running && indexRoot) {
       indexTimer.stop()
       var was = Workspace.indexFile(indexRoot)
@@ -110,6 +114,7 @@ Item {
     ready = false
     calendarLoaded = false
     contactsLoaded = false
+    chatsLoaded = false
     var gen = ++generation
     folderMade = false
     // (Nothing of another folder's: its pages may have the same ids.)
@@ -126,7 +131,7 @@ Item {
     files.readFiles([ws.indexPath()], function(got, read, failed) {
       if (gen !== ws.generation) return
       ws.keepUnreadable(ws.indexPath(), failed)
-      var ix = Workspace.cleanIndex(files.parseJson(got[ws.indexPath()] || ""))
+      var ix = ws.cleaned(ws.indexPath(), got[ws.indexPath()] || "", Workspace.cleanIndex)
       files.exec(["/usr/bin/bash", "-c", ws.listScript, "uber-notebook-list", ws.folder], function(listed, output) {
         if (gen !== ws.generation) return
         var onDisk = String(output || "").split("\n").map(function(n) { return n.replace(/\.json$/, "") }).filter(Workspace.isUuid)
@@ -190,6 +195,25 @@ Item {
     unreadable = next
     ws.failed("Couldn't read " + path.replace(files.home, "~") + ": it's left as it is, and changes to it aren't saved over it")
     return true
+  }
+  // One of them read and cleaned (`clean`, its library's): one that can't
+  // be (it makes cleaning throw: damaged, or made to) is as one that
+  // couldn't be read, left as it is, and the rest goes on loading.
+  function cleaned(path, raw, clean) {
+    try { return clean(raw ? files.parseJson(raw) : null) } catch (e) {
+      console.warn("Uber Notebook: " + path + " couldn't be read: " + e)
+      keepUnreadable(path, [path])
+      return clean(null)
+    }
+  }
+  // A change made while a profile's still opening (its People or calendar
+  // not read yet): not saved, and said (once in a few seconds at most).
+  property real notYetAt: 0
+  function notYet() {
+    var now = Date.now()
+    if (now - notYetAt < 5000) return
+    notYetAt = now
+    ws.failed("Not saved: this profile is still opening. Try again in a moment")
   }
   // A change to one of them, not saved: said (once a minute at most), so a
   // person added or an event moved isn't thought kept.
@@ -606,6 +630,9 @@ Item {
   property var calendar: Calendar.make()
   property int calendarRevision: 0
   property bool calendarLoaded: false
+  // All of it read: its pages, People and the calendar (what commands and a
+  // quick note wait for).
+  readonly property bool loaded: ready && contactsLoaded && calendarLoaded
   property var calendarUndo: []
   property var calendarRedo: []
   function calendarPath() { return folder + "/calendar.json" }
@@ -619,8 +646,7 @@ Item {
     files.readFiles([path], function(got, read, failed) {
       if (gen !== ws.generation) return
       ws.keepUnreadable(path, failed)
-      var raw = got[path]
-      ws.calendar = Calendar.clean(raw ? files.parseJson(raw) : null)
+      ws.calendar = ws.cleaned(path, got[path], Calendar.clean)
       ws.calendarUndo = []
       ws.calendarRedo = []
       ws.calendarLoaded = true
@@ -631,7 +657,8 @@ Item {
   }
 
   function writeCalendar() {
-    if (!folder || !calendarLoaded) return
+    if (!folder) return
+    if (!calendarLoaded) { notYet(); return }
     if (unreadable[calendarPath()]) { notSaved(calendarPath()); return }
     write(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
   }
@@ -692,6 +719,8 @@ Item {
   // Uber Notebook's started again.
   property var chats: ({})
   property int chatsRevision: 0
+  // (Read for this folder: till then, none shown or written.)
+  property bool chatsLoaded: false
   function chatsPath() { return folder + "/chats.json" }
 
   function loadChats() {
@@ -701,13 +730,13 @@ Item {
     files.readFiles([path], function(got, read, failed) {
       if (gen !== ws.generation) return
       ws.keepUnreadable(path, failed)
-      var raw = got[path]
-      ws.chats = Agent.cleanChats(raw ? files.parseJson(raw) : null)
+      ws.chats = ws.cleaned(path, got[path], Agent.cleanChats)
+      ws.chatsLoaded = true
       ws.chatsRevision++
     })
   }
   function writeChats() {
-    if (!folder) return
+    if (!folder || !chatsLoaded) return
     if (unreadable[chatsPath()]) { notSaved(chatsPath()); return }
     var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
     var path = chatsPath()
@@ -715,10 +744,10 @@ Item {
     withFolder(function() { if (gen === ws.generation) ws.write(path, text) })
   }
   // The page's conversation, or null.
-  function chatFor(id) { return id && chats[id] ? chats[id] : null }
+  function chatFor(id) { return chatsLoaded && id && chats[id] ? chats[id] : null }
   // Kept (as it is now), or (null) gone.
   function setChat(id, chat) {
-    if (!id) return
+    if (!id || !chatsLoaded) return
     var next = {}
     Object.keys(chats).forEach(function(k) { next[k] = chats[k] })
     var c = chat ? Agent.cleanChat(chat) : null
@@ -745,8 +774,7 @@ Item {
     files.readFiles([path], function(got, read, failed) {
       if (gen !== ws.generation) return
       ws.keepUnreadable(path, failed)
-      var raw = got[path]
-      ws.contacts = Contacts.clean(raw ? files.parseJson(raw) : null)
+      ws.contacts = ws.cleaned(path, got[path], Contacts.clean)
       ws.contactsUndo = []
       ws.contactsLoaded = true
       ws.contactsRevision++
@@ -755,7 +783,8 @@ Item {
   }
 
   function writeContacts() {
-    if (!folder || !contactsLoaded) return
+    if (!folder) return
+    if (!contactsLoaded) { notYet(); return }
     if (unreadable[contactsPath()]) { notSaved(contactsPath()); return }
     var path = contactsPath()
     var gen = generation

@@ -97,6 +97,8 @@ ShellRoot {
       store.writeKept(doomed, "two", function() {})
       store.trash(doomed, "doomed")
       var held = store.trashLater.length === 1 && store.queued[doomed] === undefined
+      // (Another profile opened meanwhile: it still goes into this one's trash.)
+      store.rootPath = d + "/elsewhere"
       sig("CONT", function() {
         var wait = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
         var tries = 0
@@ -104,8 +106,10 @@ ShellRoot {
           if ((store.trashLater.length || store.writing[doomed]) && ++tries < 50) return
           wait.stop()
           // (The move itself, after the save: a moment more.)
-          store.exec(["/usr/bin/bash", "-c", "/usr/bin/sleep 0.5; [ -e \"$1\" ] && echo there || echo gone", "x", doomed], function(ok, out) {
-            say("notes: trashed while being written: waits, then gone", paused && held && String(out).trim() === "gone" && store.unsaved[doomed] === undefined, "held " + held + " " + String(out).trim())
+          store.exec(["/usr/bin/bash", "-c", "/usr/bin/sleep 0.5; [ -e \"$1\" ] && echo there || echo gone; /usr/bin/ls \"$2\" 2>/dev/null | /usr/bin/grep -c doomed; /usr/bin/ls \"$3\" 2>/dev/null | /usr/bin/grep -c doomed", "x", doomed, notes + "/.trash", d + "/elsewhere/.trash"], function(ok, out) {
+            var lines = String(out).trim().split("\n")
+            say("notes: trashed while being written: waits, then gone, into its own profile's trash", paused && held && lines[0] === "gone" && lines[1] === "1" && lines[2] === "0" && store.unsaved[doomed] === undefined, "held " + held + " " + lines.join(" | "))
+            store.rootPath = notes
             root.fallbackChecks(d, notes)
           })
         })
