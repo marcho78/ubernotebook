@@ -33,10 +33,12 @@ The first version.
 - **Claude Code and Grok ask you, in the panel, for what's beyond their
   rules**: a web page, a web search, a command, one of your connectors'
   tools, a file elsewhere (Grok over its agent protocol, in its sandbox,
-  Always-approve off for these runs). A command is shown whole: *Allow this
-  command*, *Allow shell for this conversation* or *No* (Settings → AI →
-  Commands can allow every command for an agent, off unless you turn it
-  on). A site, searching or a tool: *Allow once*, *Always* or *No*; what
+  Always-approve off for these runs). What it is comes from the tool, never
+  from what it's given. A command is shown whole, every line in sight:
+  *Allow this command*, *Allow shell for this conversation* or *No*
+  (Settings → AI → Commands can allow every command for an agent, off
+  unless you turn it on; a command can change any file you can, your notes
+  and settings included, and use the network). A site, searching or a tool: *Allow once*, *Always* or *No*; what
   you've allowed for good is in Settings → AI, to take back. Claude Code
   runs with your own plugins and MCP servers (Figma, Canva...), only your
   own settings (none from the folder it works in), its permission mode set
@@ -524,26 +526,37 @@ The first version.
   copy never writes over or takes away a file you edited there; switching
   profiles keeps nothing of one in the other.
 - **Taking things away is asked**: the panel's agent moving pages to the
-  trash (*Always* there if you like), or removing a person, an event or a
-  tag (at most for that conversation), asks you first.
+  trash (*Always* there if you like), or removing a person, an event, a tag
+  or a person's detail (at most for that conversation), asks you first, one
+  question for each thing, in the conversation that asked; when it ends,
+  what it asked is answered No. A link it adds is read only with your yes to
+  that link.
 - **Text in any script arrives whole**: what a program prints (a
-  transcript, an agent's answer, a list of files) comes back ASCII through
-  the files helper, so no character is cut in two.
+  transcript, an agent's answer, a list of files) and what you paste come
+  back ASCII through the files helper, so no character is cut in two; an
+  agent's output keeps its room, counted as it prints it.
 - **No page or index can freeze the shell**: a page's formatting and Pages'
-  tree are read in time in step with their size.
+  tree are read in time in step with their size, and a tree thousands of
+  pages deep is gone through without running out of stack.
 - **Exports and the Markdown copy within their budgets**: each picture
-  counted every time it's used; synced blocks at most 50 and 4 million
-  characters, never a page inside itself.
-- **A save that fails is said and tried again**: the page stays to be saved
-  (your next change, another page, closing); each page's folder is flushed
-  with it; a change not saved over a file that couldn't be read is said.
+  counted every time it's used, and one past what's left never read;
+  synced blocks at most 50 and 4 million characters a page, never a page
+  inside itself, 16 million in all of a copy's pass.
+- **A save that fails is said and tried again**: your notes' own files that
+  couldn't be written are kept and tried again every 30 s, before another
+  profile opens and as the window closes, whether their page is open or
+  not ("Saved now" when they are, a notification if they still aren't as
+  the window closes); each page's folder is flushed with it; a change not
+  saved over a file that couldn't be read is said.
 - **Just after it starts, commands read the page first** and say to run
   them again, never that it isn't there.
 - **Nothing crosses profiles**: a file, picture or site still on its way
-  when another profile opens, or a Markdown copy that had begun, stays with
-  the one it was for.
+  when another profile opens, or a Markdown copy, an import, an export or
+  *Move to Pages* that had begun, stops or stays with the one it was for;
+  the panel's conversation, and what you allowed in it, stay behind.
 - **Sites read only at the address checked**: a name ending in "." isn't
   read (curl wouldn't keep to that address).
 - **The Markdown copy's own files**: its list of what it wrote is written by
-  the files helper (a link there replaced, never written through), and its
-  pictures are never copied through a linked folder.
+  the files helper (a link there replaced, never written through; the folder
+  you chose may be a link to where you keep it), said if it couldn't be, and
+  its pictures are never copied through a linked folder.

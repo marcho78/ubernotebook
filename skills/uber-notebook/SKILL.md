@@ -122,9 +122,11 @@ its full path. There the commands go under their panel name: run each as
 `omarchy-shell uber-notebook-agent <command> ...` (the same commands and
 arguments as below); they read and change the user's notes, as asked; not
 Uber Notebook's settings, profiles or backups. Taking things away (`trash`,
-`removeContact`, `removeEvent`, `removeTag`) asks the user in the panel
-first: the answer says it's been asked (`"asked": true`), and it's done if
-they say yes.
+`removeContact`, `removeEvent`, `removeTag`, and an `editContact` that
+empties a field or removes a phone or email) asks the user in the panel
+first, one question for each thing: the answer says it's been asked
+(`"asked": true`), and it's done if they say yes. A link you add is read
+(for its card) only after they say yes to that link.
 
 ```bash
 f=$(mktemp "$XDG_RUNTIME_DIR/uber-notebook-XXXXXX.md")
