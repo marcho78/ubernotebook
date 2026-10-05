@@ -28,16 +28,20 @@ The first version.
   menu: a PDF (Chromium) or a Word file (LibreOffice), with the pages inside
   it if you like, saved where you say; *Print…* opens the PDF in your PDF
   viewer to print. Equations drawn, diagrams and pictures in it, on white
-  paper, A4 or Letter as your locale has it.
+  paper, A4 or Letter as your locale has it. Chromium or LibreOffice
+  installed later is found at the next try, no restart.
 - **Claude Code and Grok ask you, in the panel, for what's beyond their
   rules**: a web page, a web search, a command, one of your connectors'
   tools, a file elsewhere (Grok over its agent protocol, in its sandbox,
-  Always-approve off for these runs). *Allow once*, *Always* (for that agent and that site,
-  searching, that program or that tool) or *No*; what you've allowed for
-  good is in Settings → AI, to take back. Claude Code runs with your own
-  plugins and MCP servers (Figma, Canva...), its permission mode set to ask
-  whatever your settings say; each takes its request and your answers on
-  its input.
+  Always-approve off for these runs). A command is shown whole: *Allow this
+  command*, *Allow shell for this conversation* or *No* (Settings → AI →
+  Commands can allow every command for an agent, off unless you turn it
+  on). A site, searching or a tool: *Allow once*, *Always* or *No*; what
+  you've allowed for good is in Settings → AI, to take back. Claude Code
+  runs with your own plugins and MCP servers (Figma, Canva...), only your
+  own settings (none from the folder it works in), its permission mode set
+  to ask whatever your settings say; each takes its request and your
+  answers on its input. Each conversation has a folder of its own.
 
 - **A terminal instead, whenever you like**: *In a terminal* beside *Ask* in
   the agent box, and *Open in a terminal instead* in the panel all along (it
@@ -473,8 +477,12 @@ The first version.
   side), as a new file; an agent's only from its own folder, through no
   link. Pictures on a page are decoded no bigger than they're shown.
 - **Archives counted before they're made**: every folder and every entry,
-  a zip's directory before it's read, and all a backup unpacks to; the
-  helper at most 4 GB of memory.
+  a zip's directory before it's read (zip64's too), and all a backup
+  unpacks to; the helper at most 4 GB of memory. An import unzips on disk
+  (`~/.cache/uber-notebook`), not in the session's memory. A link in a
+  backup (one synced into a profile) is left out when it's put back, and
+  said, instead of making the whole backup unrestorable; a sparse file
+  refuses it.
 - **The recorder runs ffmpeg as every other command runs** (its own process
   group, a tool's environment, its output read in pieces, within budgets).
 - **Bookmarks read only from the internet**, step by step, from the address
@@ -515,3 +523,27 @@ The first version.
   where nothing is, and taken out only if they're still its own; the Markdown
   copy never writes over or takes away a file you edited there; switching
   profiles keeps nothing of one in the other.
+- **Taking things away is asked**: the panel's agent moving pages to the
+  trash (*Always* there if you like), or removing a person, an event or a
+  tag (at most for that conversation), asks you first.
+- **Text in any script arrives whole**: what a program prints (a
+  transcript, an agent's answer, a list of files) comes back ASCII through
+  the files helper, so no character is cut in two.
+- **No page or index can freeze the shell**: a page's formatting and Pages'
+  tree are read in time in step with their size.
+- **Exports and the Markdown copy within their budgets**: each picture
+  counted every time it's used; synced blocks at most 50 and 4 million
+  characters, never a page inside itself.
+- **A save that fails is said and tried again**: the page stays to be saved
+  (your next change, another page, closing); each page's folder is flushed
+  with it; a change not saved over a file that couldn't be read is said.
+- **Just after it starts, commands read the page first** and say to run
+  them again, never that it isn't there.
+- **Nothing crosses profiles**: a file, picture or site still on its way
+  when another profile opens, or a Markdown copy that had begun, stays with
+  the one it was for.
+- **Sites read only at the address checked**: a name ending in "." isn't
+  read (curl wouldn't keep to that address).
+- **The Markdown copy's own files**: its list of what it wrote is written by
+  the files helper (a link there replaced, never written through), and its
+  pictures are never copied through a linked folder.

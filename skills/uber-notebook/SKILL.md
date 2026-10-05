@@ -113,14 +113,18 @@ Content goes in as a Markdown file, by its full path (an argument can't carry a
 page). An empty title (`""`) takes the file's first `# heading`. The first time
 a command names a file (Markdown, contacts, a calendar), it answers "run the
 same command again in a moment": the file is read for it first (only a plain
-file, not a link): run the same command again.
+file, not a link): run the same command again. So does a page just after Uber
+Notebook starts ("reading that page first"): run it again.
 
 Working in Uber Notebook's panel (the prompt says so, and names your working
 folder): write the file with your file-writing tool, in that folder, and give
 its full path. There the commands go under their panel name: run each as
 `omarchy-shell uber-notebook-agent <command> ...` (the same commands and
 arguments as below); they read and change the user's notes, as asked; not
-Uber Notebook's settings, profiles or backups.
+Uber Notebook's settings, profiles or backups. Taking things away (`trash`,
+`removeContact`, `removeEvent`, `removeTag`) asks the user in the panel
+first: the answer says it's been asked (`"asked": true`), and it's done if
+they say yes.
 
 ```bash
 f=$(mktemp "$XDG_RUNTIME_DIR/uber-notebook-XXXXXX.md")

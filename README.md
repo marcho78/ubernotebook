@@ -991,7 +991,8 @@ changes and asks first.
 **The network, for three things.** A web bookmark you add: its page (http or
 https, at most 2 MB, 15 seconds) and its picture, which the page names (https
 only, at most 5 MB, kept only if it's a picture). Each is read only from a
-host whose addresses are all public (not this computer or your network),
+host whose addresses are all public (not this computer or your network; a
+name ending in "." isn't read: curl wouldn't keep to the address checked),
 from the address looked up, past any proxy (which would look it up again for
 itself); curl never follows a redirect: Uber Notebook does, five at most,
 checking each one again (the picture's never). PDFs, Word files and imports
@@ -1015,7 +1016,10 @@ and PipeWire sockets, Hyprland's instance, a proxy you set) and
 themselves, with the shell's environment: opening a link or a file in its
 app (`uwsm-app xdg-open`), the OSD, a process group's `kill`, and taking its
 skill's links out as it stops. Note text is never part of a script, only its
-arguments.
+arguments. Long text a program prints (a transcript, a list of files, an
+agent's lines) comes back through the files helper as ASCII (JSON escapes):
+Quickshell decodes what a program prints a piece at a time, and a character
+cut between two pieces would come out wrong.
 
 | Program | Why |
 |---|---|
@@ -1043,10 +1047,15 @@ calendar, conversations with agents, notebooks) are read and written by the
 files helper, kept running for your notes folder: the folder is opened once
 (only a folder of yours), and every file is reached a folder at a time
 without following a link, read only if it's a plain file within its size, and
-written as a new file beside it, flushed to the disk, then put in its place
-(after a power cut, a page as it was or as it is, never half of it). A file
-that can't be read (a link, a pipe, too big, not yours to read) is said, kept
-in its place, and never saved over; it isn't taken for one that isn't there.
+written as a new file beside it, flushed to the disk, then put in its place,
+its folder flushed too (after a power cut, a page as it was or as it is,
+never half of it, never neither). A file that can't be read (a link, a pipe,
+too big, not yours to read) is said, kept in its place, and never saved
+over (each change to it not saved is said too); it isn't taken for one that
+isn't there. A save that fails (a full disk) is said, and stays to be saved:
+your next change, another page or closing tries it again. A file, a picture
+or a site still on its way when another profile is opened isn't put into
+that profile's notes (their pages may have the same ids).
 If the helper stops or doesn't answer in a minute, that read or write is
 done as before (by path, with Qt and `cat`), and after three failures it
 isn't started again until Uber Notebook starts again.
@@ -1056,7 +1065,7 @@ HTML document (every word on it escaped, links only to the web, email or the
 document itself) in a folder of its own in `$XDG_RUNTIME_DIR` (only yours);
 the files helper puts its pictures in (from `Pages/assets`, through no link,
 plain pictures only: PNG, JPEG, GIF, WebP, BMP, or an SVG that names nothing
-outside itself) and checks every tag and attribute against what Uber
+outside itself; each use of one counted, 512 MB in all) and checks every tag and attribute against what Uber
 Notebook writes, refusing anything that would load something (a script, a
 frame, a picture or a style from anywhere, a link it doesn't write). Then
 Chromium or LibreOffice makes the file in a network of its own with nothing
@@ -1072,35 +1081,47 @@ following links, as new files only; nothing in them can name a place outside
 that folder, be a link or a device, or take more than its room (an import 4
 GB and 200,000 files and folders, the zips in it too; a profile put back 64
 GB and 2,000,000), counted before they're made: every folder, every entry
-(four for each file it may make, a zip's directory checked before it's
-read), and all a backup unpacks to, its other profiles too; the helper
-itself may take at most 4 GB of memory. A backup is put back only if it's
-still the file that was looked into (its SHA-256), into a new folder, and if
-anything goes wrong, only that folder is taken away (if it's still the one
-it made).
+(four for each file it may make, a zip's directory, zip64's too, checked
+before it's read), and all a backup unpacks to, its other profiles too; the
+helper itself may take at most 4 GB of memory. A zip you import is unpacked
+on disk, in `~/.cache/uber-notebook` (the runtime folder is memory the whole
+session shares); one left by an import that never finished is taken away a
+day later. A backup is put back only if it's still the file that was looked
+into (its SHA-256), into a new folder, and if anything goes wrong, only that
+folder is taken away (if it's still the one it made). A link or a special
+file in a backup (one synced into a profile, say) is left out when it's put
+back, and said; a sparse file (its holes would be written out whole) refuses
+the backup.
 
 **Your agent.** In the panel, Claude Code, Grok and Codex work through Uber
 Notebook's commands: they read and change your notes, as you ask.
 
 - Claude Code: with your own setup, as in your terminal (your plugins and
   MCP servers, CLAUDE.md, the allow rules in your Claude Code settings,
-  which apply here too), Uber Notebook's commands, writing files in its own
-  folder and reading Uber Notebook's skill allowed, and its permission mode
-  set to ask (`--permission-mode manual`, whatever your settings' default
-  mode). Anything else (a web page, a web search, a command, one of your
-  plugins' or connectors' tools, a file elsewhere) it asks for, and you're asked in the panel: *Allow once*,
-  *Always* (for that agent and that site, searching, that program, or that
-  tool; a command only when it's a plain one, one program with nothing a
-  shell would join, expand or redirect, and never a shell or an interpreter
-  itself) or *No*. Its request, and your answers, go on its input, not its
-  command line.
+  which apply here too; only your own settings, never ones in the folder it
+  works in: `--setting-sources user`), Uber Notebook's commands, writing
+  files in its own folder and reading Uber Notebook's skill allowed, and its
+  permission mode set to ask (`--permission-mode manual`, whatever your
+  settings' default mode). Anything else (a web page, a web search, a
+  command, one of your plugins' or connectors' tools, a file elsewhere) it
+  asks for, and you're asked in the panel. A command is shown whole (a
+  character you couldn't see written out): *Allow this command*, *Allow
+  shell for this conversation* (any command it runs until the conversation
+  ends: a program's name is no boundary, `git -c` runs anything) or *No*;
+  **Settings → AI → Commands** can allow every command for that agent, off
+  unless you turn it on. A site, searching or a tool: *Allow once*,
+  *Always* (for that agent and that site, searching, or that tool) or *No*.
+  Its request, and your answers, go on its input, not its command line.
 - Grok: over its agent protocol (ACP), in its sandbox (a profile in its
   folder's `.grok/sandbox.toml`: it reads only its folder and the system's,
   writes only there and in temp, and reaches the shell's socket for Uber
   Notebook's commands), with Always-approve off for these runs whatever your
   Grok settings say: anything beyond what it allows by itself (its read-only
   commands, in the sandbox) it asks for, and you're asked in the panel, as
-  for Claude Code. Allow rules saved in your own Grok settings still apply.
+  for Claude Code. The commands it runs have the network (its sandbox
+  profile leaves it on). Allow rules saved in your own Grok settings still
+  apply. Its profile is written by the files helper: a link put there is
+  replaced, never written through.
 - Codex: `--approve-for-me` (its sandbox: it writes only in its own folder, with
   no network; anything else is reviewed by Codex's own reviewer). The
   sandbox's no network keeps Uber Notebook's commands from the shell too, so
@@ -1112,10 +1133,17 @@ Notebook's commands: they read and change your notes, as you ask.
   backups; a file one takes comes only from the agent's folder: Markdown
   read by the files helper first (only a plain file, at most 2 MB), a
   picture copied in by it, every step from the folder through no link; with no
-  agent working in the panel, they do nothing. Yours, a script's and a
-  terminal's agent's (`omarchy-shell uber-notebook`) go on as always
-  meanwhile. Claude Code is held to the panel's name by its permission rules;
-  Grok and Codex, with a shell of their own, could call the other.
+  agent working in the panel, they do nothing. Taking things away is asked
+  in the panel: pages to the trash (*Allow once*, *Always*, *No*), and a
+  person, an event or a tag removed (*Allow once*, *Allow for this
+  conversation*, *No*: never for good). Yours, a script's and a terminal's
+  agent's (`omarchy-shell uber-notebook`) go on as always meanwhile. Claude
+  Code is held to the panel's name by its permission rules; Grok and Codex,
+  with a shell of their own, could call the other, which is yours: it
+  changes settings and folders (where the Markdown copy and backups go among
+  them), switches profiles, imports any folder and puts back a backup. Grok
+  asks you before each command (unless you've allowed its shell); for
+  Codex, its own reviewer is all that stands in the way.
 - A link an agent puts on a page is kept as its link. Uber Notebook contacts
   its site, for its title and picture, only with your yes, asked in the
   panel: *Allow once*, *Always for* that site (that agent, that exact site,
@@ -1126,9 +1154,12 @@ Notebook's commands: they read and change your notes, as you ask.
 - Each is found where it's installed (the folders on your PATH as the shell
   started, links resolved: a plain executable file owned by you or root that no
   one else can change, in a folder no one else can change) and run by that
-  full path, in a folder of Uber Notebook's own under `$XDG_RUNTIME_DIR`, with
+  full path, in a folder of its own for each conversation under
+  `$XDG_RUNTIME_DIR/uber-notebook-agent` (taken away once unused for two
+  days), with
   your environment but what changes how a program starts.
-- What it prints is read in pieces, a line at most 4 MB, 64 MB in all; its
+- What it prints is read in pieces (made ASCII by the files helper first, so
+  no character is cut in two), a line at most 4 MB, 64 MB in all; its
   answer is shown as text Qt draws without fetching anything (no pictures, any
   HTML as text, links only to the web or email).
 
@@ -1146,8 +1177,10 @@ when you choose your agent; voxtype's `meeting.enabled` when you turn meeting
 mode on; the Markdown copy, in the folder you choose (never over, or taking
 away, a file you edited there: each change is made by the files helper only
 to a file still as the copy wrote it, checked on its bytes (SHA-256) as it's
-moved aside, else it's put back, yours, and its page's copy goes beside it);
-and exports and backups where you say. Its settings are written by
+moved aside, else it's put back, yours, and its page's copy goes beside it;
+its list of what it wrote is written by the files helper, a link there
+replaced, never written through; pictures never copied through a linked
+folder); and exports and backups where you say. Its settings are written by
 the Omarchy shell to Uber Notebook's entry in `shell.json`.
 
 **What it reads.** Every file is checked as it's read (`Library.js`,
@@ -1162,7 +1195,11 @@ it's laid out, nothing Qt would load (a page copied from the web can't make
 Uber Notebook fetch its pictures). An email's HTML is rebuilt from a short list of tags. Equations
 and diagrams have budgets (a drawing too big is said, not drawn), and so does
 everything that reads text someone else wrote (imports, emails, contacts,
-code). Every title, label and name is drawn as plain text.
+code), and a page's synced blocks in an export or a Markdown copy (50 at
+most, 4 million characters, never the page itself). Reading a page's
+formatting, and Pages' tree, takes time in step with their size: no page or
+index can hold up the shell. Every title, label and name is drawn as plain
+text.
 
 **Not done yet.** These are done by path, with standard tools, so a program
 running as you that swaps a folder for a link at the right moment could
