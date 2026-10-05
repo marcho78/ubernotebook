@@ -436,9 +436,18 @@ pictures on the web stay links (Uber Notebook never goes online).
 **A page** has an icon (an emoji), a cover (a gradient or a picture of your
 own), a title, and a look of its own in its ⋯ menu: the Default, Serif or
 Mono font, small text, and full width. The same menu copies it as Markdown,
-exports it and the pages in it (as Markdown files, to a folder you pick or to
-`Exports/`, as Settings → Exports says, with its sketches as SVG files beside them), moves it into another page, or puts it
-in the trash. The sidebar shows every page as a tree; the trash at its foot puts a
+prints it, exports it, moves it into another page, or puts it in the trash.
+*Export…* makes it a **PDF** (with Chromium) or a **Word file** (`.docx`,
+with LibreOffice), with the pages inside it if you like (each starting a
+sheet of its own), saved where you say (or in `Exports/`, as Settings →
+Exports says); or **Markdown**: it and the pages in it as Markdown files in a
+folder, with its sketches as SVG files beside them. *Print…* makes the PDF
+and opens it in your PDF viewer, whose print dialog has your printers. A PDF
+or a Word file is the page on white paper (A4, or Letter where your locale
+uses it), in its font: equations drawn, diagrams as pictures, pictures in
+it; what moves or plays as it stands (a toggle open, a board's columns side
+by side, an audio note what was said, a video its picture, a mind map its
+ideas as a list). The sidebar shows every page as a tree; the trash at its foot puts a
 page back where it was, or deletes it from Pages.
 
 Pages follows your Omarchy theme, light or dark.
@@ -496,7 +505,7 @@ Uber Notebook/
     history/6f1c2b9e-…/         its earlier versions, a file each, named for when they were kept (the newest 100)
     assets/                     pictures and covers on Pages' pages
   .trash/                       notebooks and pages you threw away
-  Exports/                      notebooks and pages exported as Markdown (with Settings → Exports on "Exports folder")
+  Exports/                      notebooks and pages exported (Markdown, PDF, Word), with Settings → Exports on "Exports folder"
   Markdown/                     the Markdown copy of every page (Settings → Markdown copy), unless you pick another folder
 ```
 
@@ -1004,7 +1013,8 @@ never part of a script, only its arguments.
 | `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
 | `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -e`: plain text, never a pattern) |
 | `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders; copy pictures in and out (never over a file that's there); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
-| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs), unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs), put a page's pictures in a document made of it and check it (below), unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/lib/chromium/chromium` (or Chrome's or Brave's own program), `/usr/lib/libreoffice/program/soffice`, `/usr/bin/unshare` | a page made a PDF (Chromium, headless) or a Word file (LibreOffice, headless), each only a plain program owned by root that no one else can change (never the `chromium` launcher, which reads your flags and extensions), with a profile of its own, and no network at all (below) |
 | `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
 | `/usr/bin/uwsm-app` with `xdg-open` | open a link (http, https, mailto), or one of Uber Notebook's own folders and files |
@@ -1031,6 +1041,20 @@ in its place, and never saved over; it isn't taken for one that isn't there.
 If the helper stops or doesn't answer in a minute, that read or write is
 done as before (by path, with Qt and `cat`), and after three failures it
 isn't started again until Uber Notebook starts again.
+
+**A page as a PDF or a Word file.** Made offline: the page is written as one
+HTML document (every word on it escaped, links only to the web, email or the
+document itself) in a folder of its own in `$XDG_RUNTIME_DIR` (only yours);
+the files helper puts its pictures in (from `Pages/assets`, through no link,
+plain pictures only: PNG, JPEG, GIF, WebP, BMP, or an SVG that names nothing
+outside itself) and checks every tag and attribute against what Uber
+Notebook writes, refusing anything that would load something (a script, a
+frame, a picture or a style from anywhere, a link it doesn't write). Then
+Chromium or LibreOffice makes the file in a network of its own with nothing
+in it (`unshare --net`, where the system allows it; else Chromium's every
+request goes to a closed port, and the document's policy loads nothing), and
+its folder is taken away. A PDF to print goes in a folder of its own there,
+and what was printed a day before is taken away.
 
 **Archives.** A zip you import and a backup you put back are opened by the
 files helper, from one open file (only a plain file, not a link): what's in
@@ -1161,8 +1185,12 @@ at all).
   or a mind map's ideas; search (Ctrl+P, and on the shelf) looks through all
   of them.
 * Notebooks have no tables (Pages has them), no spell checking (Qt Quick's
-  text editor has none), and no printing or PDF export: export as Markdown,
-  or copy a page.
+  text editor has none), and no printing or PDF export (Pages has them):
+  export as Markdown, copy a page, or *Move to Pages*.
+* A PDF needs Chromium (Omarchy has it); a Word file, LibreOffice
+  (`omarchy pkg add libreoffice-fresh`). A Word file has diagrams and
+  equations as pictures, and LibreOffice's idea of some layouts (columns
+  are a table).
 * Pages has no databases (on purpose: a table is rows and columns of text,
   a board columns of cards, and a project a page with a status, a due date
   and its to-dos), no live embeds of other websites (a link is a bookmark

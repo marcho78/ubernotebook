@@ -500,8 +500,8 @@ Item {
 
   // Where a copy of something goes (a picture saved out), named `name` to
   // start with: done(path), or done("").
-  function pickSavePath(name, done) {
-    if (ui && typeof ui.pickSavePath === "function") ui.pickSavePath(name, done)
+  function pickSavePath(name, done, kind) {
+    if (ui && typeof ui.pickSavePath === "function") ui.pickSavePath(name, done, kind || "")
     else done("")
   }
 

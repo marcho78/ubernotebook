@@ -3,7 +3,8 @@ import QtQuick.Controls
 import "../Docs.js" as Docs
 
 // A page's menu (⋯ at the top right): its font, small text, full width;
-// copying or exporting it as Markdown, moving it, putting it in the trash.
+// copying it as Markdown, printing it, exporting it (a PDF, a Word file,
+// Markdown), moving it, putting it in the trash.
 Pop {
   id: menu
 
@@ -126,7 +127,8 @@ Pop {
       onClicked: { menu.close(); menu.view.openTemplatePick("child", menu.view.page.id, null) }
     }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.copy; text: "Copy as Markdown"; onClicked: { menu.close(); menu.view.copyMarkdown() } }
-    MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.export; text: "Export with its pages\u2026"; onClicked: { menu.close(); menu.view.exportPage() } }
+    MenuRow { objectName: "printPage"; width: parent.width; theme: menu.theme; icon: menu.theme.icons.print; text: "Print\u2026"; onClicked: { menu.close(); menu.view.exportAs("print", false) } }
+    MenuRow { objectName: "exportPage"; width: parent.width; theme: menu.theme; icon: menu.theme.icons.export; text: "Export\u2026"; hint: "PDF, Word, Markdown"; onClicked: { menu.close(); menu.view.openExportMenu() } }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.move; text: "Move to\u2026"; onClicked: { menu.close(); menu.view.movePageAsk(menu.view.page ? menu.view.page.id : "") } }
     Rectangle { width: parent.width; height: 1; color: menu.theme.line }
     MenuRow { width: parent.width; theme: menu.theme; icon: menu.theme.icons.trash; text: "Move to the trash"; danger: true; onClicked: { menu.close(); menu.view.trashPage(menu.view.page ? menu.view.page.id : "") } }

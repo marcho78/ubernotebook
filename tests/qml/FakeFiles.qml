@@ -55,6 +55,9 @@ QtObject {
 
   function reset() {
     ran = []
+    exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
+    failExportHtml = ""
+    printed = []
     deferHelperReads = false
     heldReads = []
     failReads = ({})
@@ -168,8 +171,27 @@ QtObject {
   readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
   function helper(args, done, options) { exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options) }
 
+  // Exports (app/Exporter.qml): the programs there ("" for none), a refusal
+  // from the files helper's export-html, the PDFs opened to print.
+  property string exportTools: "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
+  property string failExportHtml: ""
+  property var printed: []
+  function openPrint(path, done) { printed = printed.concat([path]); if (done) done(true) }
+
   function exec(argv, done, options) {
     ran = ran.concat([argv.slice()])
+    if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-export-tools") { done(true, exportTools); return }
+    if (argv[3] === filesHelper && argv[4] === "export-html") {
+      if (failExportHtml) { done(false, JSON.stringify({ ok: false, error: failExportHtml })); return }
+      disk[argv[6] + "/page.html"] = disk[argv[6] + "/page.src.html"]
+      done(true, JSON.stringify({ ok: true, pictures: 0, missing: 0 }))
+      return
+    }
+    // Chromium printing the page, or LibreOffice converting it.
+    var pdfTo = argv.filter(function(a) { return String(a).indexOf("--print-to-pdf=") === 0 })[0]
+    if (pdfTo) { disk[pdfTo.slice(15)] = "PDF"; done(true, ""); return }
+    if (argv.indexOf("--convert-to") >= 0) { disk[argv[argv.indexOf("--outdir") + 1] + "/page.docx"] = "DOCX"; done(true, ""); return }
+    if (argv[0] === "/usr/bin/test" && argv[1] === "-s") { done(disk[argv[2]] !== undefined, ""); return }
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-scan") {
       var out = ""
       argv.slice(4).forEach(function(root) {

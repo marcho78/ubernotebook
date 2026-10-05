@@ -237,6 +237,68 @@ try {
     assert.match(notYours.stderr, /isn't yours/);
     assert.equal(notYours.stdout, "");
   });
+  check("a page made a document: its pictures put in, sized; nothing that loads from elsewhere gets past", () => {
+    const zlib = require("node:zlib");
+    // A real PNG, w x h.
+    function png(w, h) {
+      const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return ~c >>> 0; };
+      const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const t = Buffer.from(type); const c = Buffer.alloc(4); c.writeUInt32BE(crc(Buffer.concat([t, data]))); return Buffer.concat([len, t, data, c]); };
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+      const raw = Buffer.alloc((w * 3 + 1) * h);
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+    }
+    const assets = folder("export-assets");
+    const outside = folder("export-outside");
+    fs.writeFileSync(path.join(assets, "wide.png"), png(40, 20));
+    fs.writeFileSync(path.join(assets, "tall.png"), png(20, 400));
+    fs.writeFileSync(path.join(assets, "fake.png"), "not a picture");
+    fs.writeFileSync(path.join(outside, "secret.png"), png(10, 10));
+    fs.symlinkSync(path.join(outside, "secret.png"), path.join(assets, "link.png"));
+    fs.writeFileSync(path.join(assets, "closed.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><use href="#a"/></svg>');
+    fs.writeFileSync(path.join(assets, "open.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><image href="https://evil.example/x.png"/></svg>');
+    const head = `<!doctype html>\n<html><head><meta charset="utf-8" />\n<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'" />\n<title>T</title><style>p { color: #111; }</style></head><body>`;
+    let n = 0;
+    function run(body, max) {
+      const work = folder("export-work-" + (n++));
+      fs.mkdirSync(path.join(work, "drawings"));
+      fs.writeFileSync(path.join(work, "drawings", "d1.png"), png(800, 200));
+      fs.writeFileSync(path.join(work, "page.src.html"), head + body + "</body></html>");
+      const r = helperRun(["export-html", assets, work, String(max || 1048576)]);
+      const out = fs.existsSync(path.join(work, "page.html")) ? fs.readFileSync(path.join(work, "page.html"), "utf8") : null;
+      return { r: JSON.parse(r.out.trim().split("\n").pop() || "{}"), out };
+    }
+    const img = (name, style) => `<img src="uber-notebook-asset:${name}" alt="x" style="${style || ""}" />`;
+    // Put in, sized to the share of the page asked for, their proportions kept.
+    const ok = run(`<p>${img("wide.png", "width:50%;")}</p><p>${img("tall.png", "width:100%;")}</p><p><img src="uber-notebook-drawing:d1.png" alt="A diagram" style="max-width:100%;" /></p><p>${img("closed.svg", "width:100%;")}</p><p>Text: url(http://x) @import y; &lt;script&gt;</p>`);
+    assert.deepEqual([ok.r.ok, ok.r.pictures, ok.r.missing], [true, 4, 0], JSON.stringify(ok.r));
+    assert.match(ok.out, /<img src="data:image\/png;base64,[^"]+" alt="x" width="330" height="165" \/>/, "half the page across");
+    assert.match(ok.out, /width="22" height="450"/, "no taller than half a sheet");
+    assert.match(ok.out, /alt="A diagram" width="400" height="100"/, "a drawing at half the pixels it was drawn at");
+    assert.match(ok.out, /data:image\/svg\+xml;base64,[^"]+" alt="x" width="660" height="330"/);
+    assert.ok(ok.out.includes("Text: url(http://x) @import y; &lt;script&gt;"), "words are words");
+    // What can't be put in: said in its place.
+    const miss = run(`${img("link.png")}${img("fake.png")}${img("none.png")}${img("open.svg")}<img src="uber-notebook-asset:../export-outside/secret.png" alt="" />`);
+    assert.deepEqual([miss.r.ok, miss.r.pictures], [false, undefined], "a name that isn't one isn't put in, and the document's refused");
+    const miss2 = run(`${img("link.png")}${img("fake.png")}${img("none.png")}${img("open.svg")}`);
+    assert.deepEqual([miss2.r.ok, miss2.r.pictures, miss2.r.missing], [true, 0, 4], "a link, not a picture, not there, an SVG naming the web");
+    assert.ok(!miss2.out.includes("data:image") && !/secret|evil/.test(miss2.out));
+    // Past the room: left out.
+    assert.equal(run(img("tall.png", "width:100%;"), 100).r.missing, 1);
+    // Anything that loads from elsewhere: refused, nothing written.
+    for (const bad of ['<script>x</script>', '<iframe src="https://e.org"></iframe>', '<img src="https://e.org/x.png" />', '<img src="file:///etc/passwd" />',
+      '<link rel="stylesheet" href="https://e.org/a.css" />', '<p style="background:url(https://e.org/x)">x</p>', '<style>@import "https://e.org/a.css";</style>',
+      '<a href="javascript:alert(1)">x</a>', '<meta http-equiv="refresh" content="0;url=https://e.org" />', '<object data="x"></object>', '<p onclick="x()">x</p>',
+      '<svg><image href="https://e.org/x"/></svg>', '<img src="data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><image href="https://e.org/x"/></svg>').toString("base64") + '" />',
+      '<p style="background:\\75rl(https://e.org)">x</p>', '<base href="https://e.org/" />', '<img srcset="https://e.org/x.png 2x" src="data:image/png;base64,AA==" />']) {
+      const r = run(bad);
+      assert.equal(r.r.ok, false, bad);
+      assert.equal(r.out, null, "nothing written: " + bad);
+    }
+    // The document itself only as a plain file of its own.
+    const work = folder("export-link");
+    fs.symlinkSync(path.join(outside, "secret.png"), path.join(work, "page.src.html"));
+    assert.equal(JSON.parse(helperRun(["export-html", assets, work, "1000000"]).out).ok, false);
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

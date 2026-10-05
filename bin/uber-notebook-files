@@ -53,16 +53,31 @@
 #               plain file, never through a link; after a power cut, the file
 #               as it was or as it is, never half of it)
 #         mkdir { path }        -> {}  (the folders, as needed)
+#   export-html <assets folder> <work folder> <max bytes>
+#       A page made a document (Export.js wrote <work folder>/page.src.html,
+#       a folder of Uber Notebook's own) with its pictures put in, as
+#       <work folder>/page.html: each src="uber-notebook-asset:<name>" (in
+#       <assets folder>) and "uber-notebook-drawing:<name>" (in <work
+#       folder>/drawings), read without following a link, a plain file that's
+#       a PNG, JPEG, GIF, WebP, BMP or SVG (one that names nothing outside
+#       it), within <max bytes> in all; one that can't be is said in its
+#       place. Then every tag and attribute is checked against what Export.js
+#       writes: nothing that loads from anywhere (only data: pictures, links
+#       to the web, email or the document), or it's refused and nothing is
+#       written. Prints JSON: { ok, pictures, missing } or { ok: false, error }.
 #   restore-backup <backup.tar.gz> <pN> <folder> <sha256> <max bytes> <max files>
 #       One profile (pN/ in the backup) into a new folder: <folder>, or
 #       "<folder> 2"... if that's taken, never one that's there. The backup
 #       must still be the one inspected (its sha256); if it isn't, or
 #       anything fails, the new folder is taken away again. Prints the folder.
 
+import base64
 import errno
 import hashlib
+import html.parser
 import json
 import os
+import re
 import shutil
 import stat
 import sys
@@ -344,6 +359,273 @@ def cmd_serve(folder):
             answer["error"] = str(e)[:200]
         out.write(json.dumps(answer, ensure_ascii=False).encode("utf-8", "surrogatepass") + b"\n")
         out.flush()
+
+
+# ---- a page made a document --------------------------------------------------------------------
+
+EXPORT_TAGS = {"html", "head", "meta", "title", "style", "body", "section", "div", "p", "span", "a", "strong", "em", "u",
+               "s", "sup", "sub", "code", "pre", "br", "mark", "h1", "h2", "h3", "blockquote", "ul", "ol", "li", "table",
+               "tr", "td", "th", "colgroup", "col", "img", "hr"}
+EXPORT_ATTRS = {"id", "class", "style", "href", "src", "alt", "width", "height", "charset", "http-equiv", "content"}
+EXPORT_CSP = "default-src 'none'; img-src data:; style-src 'unsafe-inline'"
+# What would load something, in a style.
+STYLE_LOADS = re.compile(r"url\s*\(|@import|image-set\s*\(|expression\s*\(|\\|behavior\s*:|-moz-binding", re.I)
+PICTURE_PLACE = re.compile(r'<img src="uber-notebook-(asset|drawing):([A-Za-z0-9][A-Za-z0-9._-]{0,120})"[^<>]*/>')
+DATA_PICTURE = re.compile(r"^data:image/(png|jpeg|gif|webp|bmp|svg\+xml);base64,[A-Za-z0-9+/]*={0,2}$")
+
+
+def picture_type(data):
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:2] == b"BM":
+        return "image/bmp"
+    head = data[:2048].lstrip().lower()
+    if head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in head):
+        return "image/svg+xml"
+    return ""
+
+
+def picture_size(data, kind):
+    """A picture's width and height in pixels, from its header, or None."""
+    try:
+        if kind == "image/png" and data[12:16] == b"IHDR":
+            return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+        if kind == "image/gif":
+            return int.from_bytes(data[6:8], "little"), int.from_bytes(data[8:10], "little")
+        if kind == "image/bmp":
+            return abs(int.from_bytes(data[18:22], "little", signed=True)), abs(int.from_bytes(data[22:26], "little", signed=True))
+        if kind == "image/webp":
+            chunk = data[12:16]
+            if chunk == b"VP8 ":
+                return int.from_bytes(data[26:28], "little") & 0x3fff, int.from_bytes(data[28:30], "little") & 0x3fff
+            if chunk == b"VP8L":
+                bits = int.from_bytes(data[21:25], "little")
+                return (bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1
+            if chunk == b"VP8X":
+                return int.from_bytes(data[24:27], "little") + 1, int.from_bytes(data[27:30], "little") + 1
+        if kind == "image/jpeg":
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xff:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker in (0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf):
+                    return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
+                if marker in (0xd8, 0x01) or 0xd0 <= marker <= 0xd7:
+                    i += 2
+                    continue
+                i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+        if kind == "image/svg+xml":
+            head = data[:4096].decode("utf-8", "replace")
+            tag = re.search(r"<svg\b[^>]*>", head)
+            if tag:
+                w = re.search(r'\swidth="([\d.]+)(px)?"', tag.group(0))
+                h = re.search(r'\sheight="([\d.]+)(px)?"', tag.group(0))
+                if w and h:
+                    return float(w.group(1)), float(h.group(1))
+                vb = re.search(r'viewBox="[-\d.]+[ ,]+[-\d.]+[ ,]+([\d.]+)[ ,]+([\d.]+)"', tag.group(0))
+                if vb:
+                    return float(vb.group(1)), float(vb.group(2))
+    except (ValueError, IndexError):
+        return None
+    return None
+
+
+# A sheet's room for a picture, in CSS pixels: A4 or Letter less the margins,
+# and no taller than about half a sheet.
+PAGE_WIDTH = 660
+PAGE_HEIGHT = 450
+
+
+def fitted(size, style, drawing):
+    """The width and height a picture is shown at (its proportions kept):
+    within the width its style asks for (a share of the page, or pixels; a
+    drawing at half the pixels it was drawn at) and the height it allows."""
+    w, h = size
+    if not (w > 0 and h > 0):
+        return None
+    share = re.search(r"(?:^|;)\s*width:\s*([\d.]+)(%|px)", style)
+    if share and share.group(2) == "%":
+        box = PAGE_WIDTH * min(100.0, float(share.group(1))) / 100
+    elif share:
+        box = min(PAGE_WIDTH, float(share.group(1)))
+    else:
+        box = min(PAGE_WIDTH, w / 2 if drawing else w)
+    most = re.search(r"(?:^|;)\s*max-height:\s*([\d.]+)px", style)
+    tall = min(PAGE_HEIGHT, float(most.group(1))) if most else PAGE_HEIGHT
+    scale = min(box / w, tall / h)
+    return max(1, round(w * scale)), max(1, round(h * scale))
+
+
+def svg_is_closed(data):
+    """An SVG that names nothing outside itself (links only to #ids within)."""
+    text = data.decode("utf-8", "replace")
+    if re.search(r"<!ENTITY|<!DOCTYPE|<script|<foreignObject|\bon[a-z]+\s*=", text, re.I):
+        return False
+    for m in re.finditer(r"(?:href|src)\s*=\s*([\"'])(.*?)\1", text, re.I | re.S):
+        if not m.group(2).strip().startswith("#"):
+            return False
+    for m in re.finditer(r"url\s*\(\s*([\"']?)(.*?)\1\s*\)", text, re.I | re.S):
+        if not m.group(2).strip().startswith("#"):
+            return False
+    return not re.search(r"@import|image-set\s*\(", text, re.I)
+
+
+class ExportCheck(html.parser.HTMLParser):
+    """Every tag and attribute as Export.js writes them, and nothing that
+    loads from anywhere: else `problem` says what."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.problem = ""
+        self.in_style = False
+
+    def refuse(self, why):
+        if not self.problem:
+            self.problem = why
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in EXPORT_TAGS:
+            self.refuse("a <%s> in it" % tag[:20])
+            return
+        self.in_style = tag == "style"
+        a = {}
+        for name, value in attrs:
+            if name not in EXPORT_ATTRS:
+                self.refuse("an attribute %s in it" % name[:20])
+                return
+            a[name] = value or ""
+        if tag == "meta" and not (a == {"charset": "utf-8"} or a == {"http-equiv": "Content-Security-Policy", "content": EXPORT_CSP}):
+            self.refuse("a <meta> it doesn't write")
+        if "content" in a and tag != "meta" or "http-equiv" in a and tag != "meta" or "charset" in a and tag != "meta":
+            self.refuse("an attribute out of place")
+        if "src" in a and (tag != "img" or not DATA_PICTURE.match(a["src"])):
+            self.refuse("a picture from elsewhere")
+        if tag == "img" and "src" in a and a["src"].startswith("data:image/svg+xml") and not svg_is_closed(base64.b64decode(a["src"].split(",", 1)[1])):
+            self.refuse("a drawing that names something elsewhere")
+        if "href" in a and (tag != "a" or not re.match(r"^(#[A-Za-z0-9_-]{1,80}|https?://[^\s\"'<>]{1,2000}|mailto:[^\s\"'<>]{1,500})$", a["href"], re.I)):
+            self.refuse("a link it doesn't write")
+        if "style" in a and STYLE_LOADS.search(a["style"]):
+            self.refuse("a style that loads something")
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        self.in_style = False
+
+    def handle_endtag(self, tag):
+        if tag == "style":
+            self.in_style = False
+
+    def handle_data(self, data):
+        if self.in_style and STYLE_LOADS.search(data):
+            self.refuse("a style that loads something")
+
+    def handle_decl(self, decl):
+        if decl.lower() != "doctype html":
+            self.refuse("a declaration it doesn't write")
+
+    def handle_pi(self, data):
+        self.refuse("an instruction in it")
+
+    def unknown_decl(self, data):
+        self.refuse("a declaration it doesn't write")
+
+
+def cmd_export_html(assets, work, max_bytes):
+    budget = int(max_bytes)
+    work_fd = os.open(work, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        if os.fstat(work_fd).st_uid != os.getuid():
+            raise Refused("that folder isn't yours")
+        fd = os.open("page.src.html", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=work_fd)
+        with os.fdopen(fd, "rb") as f:
+            if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                raise Refused("not a plain file")
+            source = f.read(64 * 1024 * 1024 + 1)
+        if len(source) > 64 * 1024 * 1024:
+            raise Refused("the document is too big")
+        text = source.decode("utf-8")
+        folders = {}
+        try:
+            folders["asset"] = os.open(assets, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+        except OSError:
+            folders["asset"] = None
+        try:
+            folders["drawing"] = open_dir("drawings", work_fd)
+        except OSError:
+            folders["drawing"] = None
+        used = [0]
+        counts = {"pictures": 0, "missing": 0}
+        cache = {}
+
+        def put_in(m):
+            key = (m.group(1), m.group(2))
+            if key not in cache:
+                cache[key] = picture_data(folders[m.group(1)], m.group(2), budget - used[0])
+                if cache[key][0]:
+                    used[0] += len(cache[key][0])
+            data, size = cache[key]
+            if not data:
+                counts["missing"] += 1
+                return '<span class="faint">(a picture that couldn\'t be put in)</span>'
+            counts["pictures"] += 1
+            alt = re.search(r'\salt="([^"<>]*)"', m.group(0))
+            style = re.search(r'\sstyle="([^"<>]*)"', m.group(0))
+            style = style.group(1) if style else ""
+            # Its size, worked out here, so a Word file keeps its proportions.
+            shown = fitted(size, style, m.group(1) == "drawing") if size else None
+            if shown:
+                style = ";".join(x for x in style.split(";") if x.strip() and not re.match(r"\s*(width|height|max-height|max-width|object-fit)\s*:", x))
+            return ('<img src="' + data + '"' + (' alt="' + alt.group(1) + '"' if alt else "")
+                    + (' width="%d" height="%d"' % shown if shown else "") + (' style="' + style + '"' if style else "") + " />")
+
+        try:
+            out = PICTURE_PLACE.sub(put_in, text)
+        finally:
+            for v in folders.values():
+                if v is not None:
+                    os.close(v)
+        check = ExportCheck()
+        check.feed(out)
+        check.close()
+        if check.problem:
+            raise Refused("not a document Uber Notebook wrote: " + check.problem)
+        data = out.encode("utf-8")
+        fd = os.open("page.html", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=work_fd)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        print(json.dumps({"ok": True, "pictures": counts["pictures"], "missing": counts["missing"]}))
+    finally:
+        os.close(work_fd)
+
+
+def picture_data(dir_fd, name, room):
+    """A picture in that folder as (a data: address, its size or None), or
+    ("", None) (not there, a link, not a plain file, not a picture, past the
+    room left)."""
+    if dir_fd is None or not parts_of(name) or "/" in name:
+        return "", None
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dir_fd)
+    except OSError:
+        return "", None
+    with os.fdopen(fd, "rb") as f:
+        info = os.fstat(f.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size * 4 // 3 + 64 > room:
+            return "", None
+        data = f.read(info.st_size + 1)
+    kind = picture_type(data)
+    if not kind or len(data) > info.st_size or (kind == "image/svg+xml" and not svg_is_closed(data)):
+        return "", None
+    url = "data:" + kind + ";base64," + base64.b64encode(data).decode("ascii")
+    return (url, picture_size(data, kind)) if len(url) <= room else ("", None)
 
 
 # ---- a text file -------------------------------------------------------------------------------
@@ -675,6 +957,8 @@ def main(argv):
             cmd_unlink_link(argv[2], argv[3])
         elif len(argv) == 3 and argv[1] == "inspect-backup":
             cmd_inspect(argv[2])
+        elif len(argv) == 5 and argv[1] == "export-html":
+            cmd_export_html(argv[2], argv[3], argv[4])
         elif len(argv) == 3 and argv[1] == "serve":
             cmd_serve(argv[2])
         elif len(argv) == 8 and argv[1] == "restore-backup":
@@ -683,7 +967,7 @@ def main(argv):
             sys.stderr.write("usage: uber-notebook-files unzip|inspect-backup|restore-backup ...\n")
             return 2
     except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error) as e:
-        if argv[1:2] == ["unzip"]:
+        if argv[1:2] in (["unzip"], ["export-html"]):
             print(json.dumps({"ok": False, "error": str(e)[:300]}))
             return 1
         sys.stderr.write(str(e)[:300] + "\n")

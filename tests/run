@@ -53,6 +53,7 @@ node tests/env.test.cjs
 node tests/scope.test.cjs
 node tests/permissions.test.cjs
 node tests/files.test.cjs
+node tests/export.test.cjs
 node tests/markdownview.test.cjs
 lua tests/hypr.test.lua
 

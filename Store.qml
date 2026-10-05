@@ -1095,6 +1095,20 @@ Item {
     }, { timeoutMs: 5000, maxBytes: 4096 })
   }
 
+  // A PDF made to print, in your PDF viewer (or whatever opens PDFs, a
+  // browser too: it prints them): only one in the print folder.
+  function openPrint(path, done) {
+    var dir = runtimeDir + "/uber-notebook-print/"
+    var p = String(path || "")
+    if (p.indexOf(dir) !== 0 || p.slice(dir.length).indexOf("/") >= 0 || !/\.pdf$/.test(p)) { if (done) done(false); return }
+    exec(["/usr/bin/bash", "-c", appScript, "uber-notebook-app", p], function(ok, out) {
+      var app = (String(out || "").split("\n")[1] || "").trim()
+      if (!app) { if (done) done(false); return }
+      Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", p])
+      if (done) done(true)
+    }, { timeoutMs: 5000, maxBytes: 4096 })
+  }
+
   function openFolder() {
     if (rootPath) Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", rootPath])
   }

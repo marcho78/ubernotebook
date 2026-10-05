@@ -658,6 +658,98 @@ Item {
 
     // A file of its own that couldn't be read as it loaded (a link, too big:
     // not "not there"): left as it is, never written over, said once.
+    // A page as a PDF, a Word file, or printed (app/Exporter.qml): what's
+    // run, and where it goes.
+    function test_24_export_and_print() {
+      fresh()
+      var said = []
+      function heard(t) { said.push(t) }
+      view.toast.connect(heard)
+      view.exporter.tools = null
+      function lastRun(test) { var r = files.ran.filter(test); return r.length ? r[r.length - 1] : null }
+      function isPdf(a) { return a.some(function(x) { return String(x).indexOf("--print-to-pdf=") === 0 }) }
+      var title = view.page.title
+      // A PDF, saved where you say (the save dialog, Documents first).
+      service.nextSave = "/tmp/picked/Doc.pdf"
+      view.exportAs("pdf", false)
+      tryVerify(function() { return files.disk["/tmp/picked/Doc.pdf"] === "PDF" }, 3000)
+      compare(service.saveName, title + ".pdf")
+      var run = lastRun(isPdf)
+      compare(run.slice(0, 5), ["/usr/bin/unshare", "--user", "--map-current-user", "--net", "--"], "with no network at all")
+      compare(run[5], "/usr/lib/chromium/chromium", "Chromium itself, not the launcher that reads your flags")
+      verify(view.exporter.browsers.every(function(b) { return !/^\/usr\/(local\/)?bin\//.test(b) }), "never a launcher on the PATH (chromium-flags.conf, extensions)")
+      verify(run.indexOf("--proxy-server=http://127.0.0.1:9") > 0 && run.indexOf("--host-resolver-rules=MAP * ~NOTFOUND") > 0, "every request sent nowhere")
+      verify(run.indexOf("--disable-extensions") > 0 && run.some(function(a) { return /^--user-data-dir=\/tmp\/uber-notebook-export-[0-9a-f]{8}\/profile$/.test(a) }), "a profile of its own")
+      var work = /^--user-data-dir=(.*)\/profile$/.exec(run.filter(function(a) { return a.indexOf("--user-data-dir=") === 0 })[0])[1]
+      var src = files.disk[work + "/page.src.html"]
+      verify(src.indexOf("Content-Security-Policy") > 0 && src.indexOf(title) > 0, "the page as a document")
+      var checked = lastRun(function(a) { return a[4] === "export-html" })
+      compare(checked.slice(5), [files.rootPath + "/Pages/assets", work, String(512 * 1024 * 1024)], "its pictures put in, and checked, first")
+      verify(files.ran.indexOf(checked) < files.ran.indexOf(run))
+      tryVerify(function() { return lastRun(function(a) { return a[0] === "/usr/bin/rm" && a[3] === work }) !== null }, 2000)
+      // A Word file: LibreOffice, a profile of its own, no network.
+      service.nextSave = "/tmp/picked/Doc.docx"
+      view.exportAs("docx", false)
+      tryVerify(function() { return files.disk["/tmp/picked/Doc.docx"] === "DOCX" }, 3000)
+      var office = lastRun(function(a) { return a.indexOf("--convert-to") >= 0 })
+      compare(office.slice(0, 6), ["/usr/bin/unshare", "--user", "--map-current-user", "--net", "--", "/usr/lib/libreoffice/program/soffice"])
+      verify(office.some(function(a) { return /^-env:UserInstallation=file:\/\/\/tmp\/uber-notebook-export-[0-9a-f]{8}\/lo$/.test(a) }))
+      compare(office[office.indexOf("--convert-to") + 1], "docx:MS Word 2007 XML")
+      // Not saved: nothing kept.
+      service.nextSave = ""
+      view.exportAs("pdf", false)
+      tryVerify(function() { return said.indexOf("Not saved") >= 0 }, 3000)
+      // Printing: in the print folder, opened in your PDF viewer.
+      view.exportAs("print", false)
+      tryVerify(function() { return files.printed.length === 1 }, 3000)
+      compare(files.printed[0], "/tmp/uber-notebook-print/" + title + ".pdf")
+      // The Exports folder (Settings), never over a file that's there.
+      service.setSetting("exportTo", "folder")
+      view.exportAs("pdf", false)
+      tryVerify(function() { return Object.keys(files.disk).some(function(k) { return k.indexOf(files.rootPath + "/Exports/" + title + " ") === 0 && /\.pdf$/.test(k) }) }, 3000)
+      verify(lastRun(function(a) { return a[0] === "/usr/bin/cp" && a[1] === "--update=none-fail" }) !== null)
+      service.setSetting("exportTo", "ask")
+      // The pictures couldn't be checked: nothing's made.
+      files.failExportHtml = "a picture from elsewhere"
+      var pdfs = files.ran.filter(isPdf).length
+      view.exportAs("pdf", false)
+      tryVerify(function() { return said.some(function(t) { return t.indexOf("a picture from elsewhere") >= 0 }) }, 3000)
+      compare(files.ran.filter(isPdf).length, pdfs, "not converted")
+      files.failExportHtml = ""
+      // No LibreOffice: said, nothing run; no unshare: Chromium as it is.
+      view.exporter.tools = null
+      files.exportTools = "/usr/lib/chromium/chromium\n"
+      view.exportAs("docx", false)
+      tryVerify(function() { return said.some(function(t) { return t.indexOf("needs LibreOffice") >= 0 }) }, 3000)
+      service.nextSave = "/tmp/picked/Plain.pdf"
+      view.exportAs("pdf", false)
+      tryVerify(function() { return files.disk["/tmp/picked/Plain.pdf"] === "PDF" }, 3000)
+      compare(lastRun(isPdf)[0], "/usr/lib/chromium/chromium")
+      // Equations drawn by the editor's MathJax, diagrams made pictures, as
+      // the page shows them, before it's written.
+      files.exportTools = "/usr/lib/chromium/chromium\n"
+      view.exporter.tools = null
+      service.setSetting("exportTo", "folder")
+      var page = JSON.parse(JSON.stringify(view.page))
+      page.content = ["m1", "m2", "d1"]
+      page.blocks = {
+        m1: { id: "m1", type: "p", html: 'A line with <a href="uber-notebook://math/x%5E2">x^2</a> in it' },
+        m2: { id: "m2", type: "code", lang: "Math", html: "\\frac{1}{2}" },
+        d1: { id: "d1", type: "code", lang: "Mermaid", html: "flowchart LR<br />A --&gt; B" }
+      }
+      var before = files.ran.filter(isPdf).length
+      view.exporter.run("pdf", page, false)
+      tryVerify(function() { return files.ran.filter(isPdf).length > before }, 15000)
+      var run2 = lastRun(isPdf)
+      var work2 = /^--user-data-dir=(.*)\/profile$/.exec(run2.filter(function(a) { return a.indexOf("--user-data-dir=") === 0 })[0])[1]
+      var src2 = files.disk[work2 + "/page.src.html"]
+      compare((src2.match(/src="data:image\/svg\+xml;base64,/g) || []).length, 2, "both equations drawn")
+      verify(src2.indexOf('src="uber-notebook-drawing:d1.png"') > 0, "the diagram, as its picture")
+      compare(files.disk[work2 + "/drawings/d1.png"], "PNG")
+      service.setSetting("exportTo", "ask")
+      view.toast.disconnect(heard)
+    }
+
     function test_23_what_couldnt_be_read_isnt_written_over() {
       fresh()
       var cal = ws.calendarPath()

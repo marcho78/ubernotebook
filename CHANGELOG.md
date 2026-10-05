@@ -24,6 +24,11 @@ The first version.
 
 ### Added
 
+- **Print, PDF and Word for Pages.** *Print…* and *Export…* in a page's ⋯
+  menu: a PDF (Chromium) or a Word file (LibreOffice), with the pages inside
+  it if you like, saved where you say; *Print…* opens the PDF in your PDF
+  viewer to print. Equations drawn, diagrams and pictures in it, on white
+  paper, A4 or Letter as your locale has it.
 - **Claude Code and Grok ask you, in the panel, for what's beyond their
   rules**: a web page, a web search, a command, one of your connectors'
   tools, a file elsewhere (Grok over its agent protocol, in its sandbox,
@@ -462,6 +467,10 @@ The first version.
   put in place. A file that can't be read is said and never saved over
   (before, it could be taken for one that isn't there). If the helper doesn't
   answer, it's done as before.
+- **Exports are made offline**: the page as HTML with every word escaped,
+  its pictures put in and every tag checked by the files helper (nothing that
+  loads from anywhere gets past), then Chromium or LibreOffice with a
+  profile of its own and no network at all.
 - **Archives** (a zip you import, a backup you put back) are opened by a small
   helper (`bin/uber-notebook-files`, Python, isolated): nothing in them can land
   outside its folder, be a link or a device, or take more than its room; a

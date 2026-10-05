@@ -369,9 +369,14 @@ Item {
   // its name filled in.
   property var saveDone: null
   property string saveFolder: ""
-  function pickSavePath(name, done) {
+  // (A document, a PDF or a Word file: where the last went, your Documents
+  // folder the first time.)
+  property string saveDocFolder: ""
+  property bool savingDoc: false
+  function pickSavePath(name, done, kind) {
     saveDone = done
-    var folder = saveFolder || Quickshell.env("HOME") + "/Pictures"
+    savingDoc = kind === "document"
+    var folder = savingDoc ? saveDocFolder || Quickshell.env("HOME") + "/Documents" : saveFolder || Quickshell.env("HOME") + "/Pictures"
     var file = String(name || "Picture.png")
     savePicker.defaultSuffix = (/\.([A-Za-z0-9]{1,5})$/.exec(file) || [])[1] || ""
     savePicker.currentFolder = "file://" + encodeURI(folder)
@@ -381,7 +386,8 @@ Item {
   function savePicked(path) {
     var done = root.saveDone
     root.saveDone = null
-    if (path) saveFolder = path.replace(/\/[^\/]*$/, "") || saveFolder
+    if (path && savingDoc) saveDocFolder = path.replace(/\/[^\/]*$/, "") || saveDocFolder
+    else if (path) saveFolder = path.replace(/\/[^\/]*$/, "") || saveFolder
     if (done) done(path)
   }
 

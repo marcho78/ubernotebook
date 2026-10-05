@@ -2501,6 +2501,27 @@ FocusScope {
     if (page) workspace.exportPage(page.id)
   }
 
+  // The page as a PDF or a Word file, or printed (app/Exporter.qml); with
+  // the pages inside it, when `withPages`.
+  readonly property var exporter: exporterItem
+  function exportAs(kind, withPages) {
+    commit()
+    if (page) exporterItem.run(kind, JSON.parse(JSON.stringify(page)), withPages === true)
+  }
+  function hasChildPages(id) {
+    return !!workspace && Workspace.withDescendants(workspace.index, id).length > 1
+  }
+  function openExportMenu() { exportMenu.open() }
+  function openPageMenu() { pageMenu.open() }
+  Exporter {
+    id: exporterItem
+    workspace: view.workspace
+    editor: editor
+    service: view.service
+    settings: view.settings
+    onToast: function(text) { view.toast(text) }
+  }
+
   // Pages to link to with "[[": the ones called what's typed, or the most
   // recent; not this one.
   function findPages(query) {
@@ -2768,6 +2789,13 @@ FocusScope {
           onClicked: pageMenu.open()
           PageMenu {
             id: pageMenu
+            theme: view.theme
+            view: view
+            x: moreButton.width - width
+            y: moreButton.height + 6
+          }
+          ExportMenu {
+            id: exportMenu
             theme: view.theme
             view: view
             x: moreButton.width - width
