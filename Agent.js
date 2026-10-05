@@ -359,12 +359,13 @@ function unsupported(id) {
 }
 
 // Text it shows you in a question, every character as it is: what can't be
-// seen, or turns text around (control and direction marks), written out as
-// \u{...}; tabs kept; each line break shown (⏎), and a run of more than
-// two blank lines one line that says how many, so what comes after them
-// is in sight.
+// seen, turns text around (control and direction marks), or looks like
+// nothing but isn't a plain space (a no-break space, ideographic and
+// braille blanks, Hangul fillers), written out as \u{...}; tabs kept; each
+// line break shown (⏎), and a run of more than two blank lines one line
+// that says how many, so what comes after them is in sight.
 function visible(text) {
-  var s = String(text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, function(c) {
+  var s = String(text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u00a0\u00ad\u034f\u061c\u115f\u1160\u1680\u17b4\u17b5\u180e\u2000-\u200f\u2028-\u202f\u205f-\u206f\u2800\u3000\u3164\ufeff\uffa0\ufff9-\ufffb]/g, function(c) {
     return "\\u{" + c.charCodeAt(0).toString(16) + "}"
   })
   var lines = s.split("\n")
@@ -414,7 +415,8 @@ function askOf(tool, toolInput, title, name) {
   }
   // (A site's address and a search, whole in `detail`: what's past the
   // first words of either goes to the site too.)
-  if (t === "WebFetch") {
+  // (One with no address: asked as a tool, all it was given shown.)
+  if (t === "WebFetch" && String(i.url || "") !== "") {
     var url = String(i.url || "")
     var host = Permissions.hostOf(url)
     return host ? { action: "contact", target: host, text: "contact " + host + ", to read " + clip(url, 200), detail: url, always: "Always for " + host }

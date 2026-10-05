@@ -546,10 +546,11 @@ Item {
           // and how many lines it is said above it.
           Text {
             objectName: "agentAskLines"
-            visible: (askItem.modelData.lines || 0) > 1
+            readonly property bool over: detailFlick.contentHeight > detailFlick.height + 1
+            visible: (askItem.modelData.lines || 0) > 1 || over
             width: parent.width
             textFormat: Text.PlainText
-            text: (askItem.modelData.lines || 0) + " lines" + (detailFlick.contentHeight > detailFlick.height + 1 ? ": scroll to see all of it" : "")
+            text: ((askItem.modelData.lines || 0) > 1 ? (askItem.modelData.lines || 0) + " lines" : "Long") + (over ? ": scroll to see all of it" : "")
             font.family: panel.theme.uiFont
             font.pixelSize: 11
             color: panel.theme.muted
