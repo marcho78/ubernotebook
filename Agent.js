@@ -216,7 +216,7 @@ var OUTPUT_MAX = 64 * 1024 * 1024
 function streamLimits(where) {
   var w = where || {}
   var helper = /^\/[^\u0000-\u001f]{1,4000}$/.test(String(w.helper || ""))
-  return helper ? { maxLine: 6 * LINE_MAX + 1024, maxBytes: 6 * OUTPUT_MAX + 1024 * 1024 } : { maxLine: LINE_MAX, maxBytes: OUTPUT_MAX }
+  return helper ? { maxLine: 6 * LINE_MAX + 1024, maxBytes: 6 * OUTPUT_MAX + 1024 * 1024, maxErrors: OUTPUT_MAX } : { maxLine: LINE_MAX, maxBytes: OUTPUT_MAX, maxErrors: OUTPUT_MAX }
 }
 
 function command(agent, prompt, choice, session, where) {
@@ -412,13 +412,15 @@ function askOf(tool, toolInput, title, name) {
     var parts = t.split("__")
     return { action: "tool", target: t, text: "use " + (parts[1] || "a connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), detail: inputText(i), always: "Always for this tool" }
   }
+  // (A site's address and a search, whole in `detail`: what's past the
+  // first words of either goes to the site too.)
   if (t === "WebFetch") {
     var url = String(i.url || "")
     var host = Permissions.hostOf(url)
-    return host ? { action: "contact", target: host, text: "contact " + host + ", to read " + clip(url, 200), always: "Always for " + host }
-      : { action: "", target: "", text: "read " + clip(url, 200), always: "" }
+    return host ? { action: "contact", target: host, text: "contact " + host + ", to read " + clip(url, 200), detail: url, always: "Always for " + host }
+      : { action: "", target: "", text: "read " + clip(url, 200), detail: url, always: "" }
   }
-  if (t === "WebSearch") return { action: "search", target: "web", text: "search the web for \u201c" + clip(String(i.query || ""), 200) + "\u201d", always: "Always let it search" }
+  if (t === "WebSearch") return { action: "search", target: "web", text: "search the web for \u201c" + clip(String(i.query || ""), 200) + "\u201d", detail: String(i.query || ""), always: "Always let it search" }
   if (t === "Bash") {
     return { action: "shell", target: "any", text: "run a command", detail: typeof i.command === "string" ? i.command : String(title || inputText(i)), always: "",
       grant: "shell", conversation: "Allow shell for this conversation" }

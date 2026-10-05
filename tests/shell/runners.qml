@@ -69,6 +69,11 @@ ShellRoot {
     stream(["/usr/bin/bash", "-c", "yes 0123456789 >&2"], { maxBytes: 200000 }, function(code, errors, lines) {
       say("stream: its errors count too: past maxBytes it's stopped", code === 1 && /printed more than/.test(errors) && errors.length <= 8200, "code " + code + " errors " + errors.length)
     })
+    // (An agent's: its output has six times the room, being made ASCII on
+    // its way; its errors aren't, and keep theirs.)
+    stream(["/usr/bin/bash", "-c", "yes 0123456789 >&2"], { maxBytes: 6000000, maxErrors: 200000 }, function(code, errors, lines) {
+      say("stream: its errors past their own room: stopped", code === 1 && errors.indexOf("printed more than 195 KB") >= 0, "code " + code + " " + errors.slice(-60))
+    })
     stream(["/usr/bin/bash", "-c", "/usr/bin/sleep 30 & echo $!"], {}, function(code, errors, lines) {
       var pid = parseInt(lines[0])
       Qt.callLater(function() { begin(); delay3.start(); delay3.then = function() { alive(pid, function(yes) { say("stream: what it left running ends with it", pid > 0 && !yes, "pid " + pid); end() }) } })

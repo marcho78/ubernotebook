@@ -221,7 +221,7 @@ Item {
       var run = files.streamed[0]
       compare(run.argv[7], "/usr/bin/claude", "by its full path")
       compare([run.argv[5], run.argv[6]], [String(4 * 1024 * 1024), String(64 * 1024 * 1024)], "what it may print, counted as it prints it")
-      compare([run.maxLine, run.maxBytes], [6 * 4194304 + 1024, 6 * 67108864 + 1048576], "and the room what's escaped takes")
+      compare([run.maxLine, run.maxBytes, run.maxErrors], [6 * 4194304 + 1024, 6 * 67108864 + 1048576, 67108864], "and the room what's escaped takes; its errors, as before")
       verify(run.argv[2].indexOf("ascii-lines") > 0 && run.argv[4] === files.filesHelper, "what it prints, through the files helper's ascii-lines")
       // While it works, the commands change only its page, files only from its folder.
       compare(service.agentScope.frozen, false)
@@ -352,7 +352,8 @@ Item {
       // A site: asked, in words; Allow once (clicked): allowed, nothing kept.
       ask("r1", "WebFetch", { url: "https://e.org/a" })
       tryVerify(function() { var st = named(panel, "agentPanelAsks"); return st !== null && st.height > 0 && named(panel, "agentAskOnce") !== null && !view.agentBox.visible }, 1000)
-      compare(named(panel, "agentAskText").text, "Claude Code wants to contact e.org, to read https://e.org/a.")
+      compare(named(panel, "agentAskText").text, "Claude Code wants to contact e.org, to read https://e.org/a:")
+      compare(named(panel, "agentAskDetail").text, "https://e.org/a", "the whole address")
       compare(named(panel, "agentAskAlways").text, "Always for e.org")
       wait(50)
       mouseClick(named(panel, "agentAskOnce"))

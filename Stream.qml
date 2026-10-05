@@ -32,6 +32,10 @@ Item {
   property int timeoutMs: 30 * 60 * 1000
   property int maxLine: 4 * 1024 * 1024
   property real maxBytes: 64 * 1024 * 1024
+  // Its errors on their own, at most this (as they're printed: an agent's
+  // output is made ASCII on its way here, and has the room that takes; its
+  // errors aren't, and don't).
+  property real maxErrors: maxBytes
   readonly property bool running: proc.running
 
   signal line(string text)
@@ -42,6 +46,7 @@ Item {
   property string _part: ""
   property bool _skipping: false
   property real _seen: 0
+  property real _errSeen: 0
   property string _over: ""
   property int _pid: 0
   property var _queue: []
@@ -55,6 +60,7 @@ Item {
     _part = ""
     _skipping = false
     _seen = 0
+    _errSeen = 0
     _over = ""
     _pid = 0
     // (What was sent, or closed, before it starts stays for it.)
@@ -133,8 +139,9 @@ Item {
   function _takeErr(data) {
     if (_over) return
     _seen += data.length
-    if (_seen > maxBytes) {
-      _over = "printed more than " + _size(maxBytes)
+    _errSeen += data.length
+    if (_seen > maxBytes || _errSeen > maxErrors) {
+      _over = "printed more than " + _size(_errSeen > maxErrors ? maxErrors : maxBytes)
       _note(_over)
       stop()
       return

