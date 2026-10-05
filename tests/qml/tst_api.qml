@@ -1077,7 +1077,11 @@ Item {
       byAgent(); compare(json(api.editEvent(ev.id, "notes", "-")).asked, true)
       verify(view.agentAsks.some(function(a) { return a.text.indexOf("clear the notes of \u201cDentist\u201d (\u201cBring card\u201d)") === 0 }), JSON.stringify(view.agentAsks.map(function(a) { return a.text })))
       byAgent(); compare(json(api.editEvent(ev.id, "place", "Clinic")).ok, true, "a new place: not asked")
-      byAgent(); compare(json(api.editEvent(ev.id, "title", ".")).ok, false, "a title that's nothing: refused")
+      byAgent(); compare(json(api.editEvent(ev.id, "title", "\u2615")).ok, true, "a title that's a symbol: a title")
+      // Any script, or a symbol, is something; what can't be seen isn't.
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "\u1780\u17d2\u1798\u17c2\u179a")).ok, true, "Khmer: not asked")
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "\u2605")).ok, true, "a star: not asked")
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "\udb40\udc20\u3000\u00a0")).asked, true, "invisible tag letters and blanks: emptying")
       view.agentAsks = []
       g["remove event"] = true
       byAgent(); compare(json(api.editEvent(ev.id, "notes", "")).asked, undefined, "a yes to removing events covers their details")
@@ -1273,6 +1277,40 @@ Item {
       } finally {
         files.holdReads = false
         files.answerReads()
+        api.ui = ui
+      }
+    }
+
+    // Another profile opened: a command waits till it's loaded, its People
+    // and calendar too (never the one before's written into it), and a slow
+    // read of the one before never lands in it.
+    function test_32_while_another_profile_loads() {
+      fresh()
+      api.ui = null
+      var root = files.rootPath
+      var other = "/tmp/other-api-notes"
+      json(api.addContact("Sam Before", "", "sam.before@e.org"))
+      files.holdReads = true
+      try {
+        // A's People, read slowly.
+        ws.loadContacts()
+        var late = files.heldReads.splice(0)
+        verify(late.length > 0)
+        files.rootPath = other
+        var r = json(api.addContact("Too Soon", "", "soon@e.org"))
+        compare(r.ok, false)
+        verify(/aren't loaded yet/.test(r.error), r.error)
+        compare(files.disk[other + "/Pages/contacts.json"], undefined, "nothing of the one before written into it")
+        tryVerify(function() { files.answerReads(); return ws.ready && ws.contactsLoaded && ws.calendarLoaded }, 3000, "the other loaded")
+        late.forEach(function(f) { f() })
+        var names = json(api.contacts("")).map(function(c) { return c.name })
+        verify(names.indexOf("Sam Before") < 0, "the one before's People never land in it: " + JSON.stringify(names))
+        compare(json(api.addContact("In Time", "", "intime@e.org")).ok, true)
+        verify(String(files.disk[other + "/Pages/contacts.json"]).indexOf("Sam Before") < 0)
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.rootPath = root
         api.ui = ui
       }
     }

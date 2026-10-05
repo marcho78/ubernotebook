@@ -48,6 +48,11 @@ Item {
     // not only once this one's loaded. Its tree, changed and not written
     // yet, is written where it came from, never here.)
     generation++
+    // (Nothing of the one before is read or changed by a command from now
+    // till this one's loaded, its People and calendar too: Api.unready.)
+    ready = false
+    contactsLoaded = false
+    calendarLoaded = false
     if (indexTimer.running && indexRoot) {
       indexTimer.stop()
       var was = Workspace.indexFile(indexRoot)
@@ -607,9 +612,14 @@ Item {
 
   function loadCalendar() {
     if (!folder) return
-    files.readFiles([calendarPath()], function(got, read, failed) {
-      ws.keepUnreadable(ws.calendarPath(), failed)
-      var raw = got[ws.calendarPath()]
+    // (Read for this folder: an answer that comes once another's open is
+    // for nothing.)
+    var gen = generation
+    var path = calendarPath()
+    files.readFiles([path], function(got, read, failed) {
+      if (gen !== ws.generation) return
+      ws.keepUnreadable(path, failed)
+      var raw = got[path]
       ws.calendar = Calendar.clean(raw ? files.parseJson(raw) : null)
       ws.calendarUndo = []
       ws.calendarRedo = []
@@ -621,7 +631,7 @@ Item {
   }
 
   function writeCalendar() {
-    if (!folder) return
+    if (!folder || !calendarLoaded) return
     if (unreadable[calendarPath()]) { notSaved(calendarPath()); return }
     write(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
   }
@@ -686,9 +696,12 @@ Item {
 
   function loadChats() {
     if (!folder) return
-    files.readFiles([chatsPath()], function(got, read, failed) {
-      ws.keepUnreadable(ws.chatsPath(), failed)
-      var raw = got[ws.chatsPath()]
+    var gen = generation
+    var path = chatsPath()
+    files.readFiles([path], function(got, read, failed) {
+      if (gen !== ws.generation) return
+      ws.keepUnreadable(path, failed)
+      var raw = got[path]
       ws.chats = Agent.cleanChats(raw ? files.parseJson(raw) : null)
       ws.chatsRevision++
     })
@@ -727,9 +740,12 @@ Item {
 
   function loadContacts() {
     if (!folder) return
-    files.readFiles([contactsPath()], function(got, read, failed) {
-      ws.keepUnreadable(ws.contactsPath(), failed)
-      var raw = got[ws.contactsPath()]
+    var gen = generation
+    var path = contactsPath()
+    files.readFiles([path], function(got, read, failed) {
+      if (gen !== ws.generation) return
+      ws.keepUnreadable(path, failed)
+      var raw = got[path]
       ws.contacts = Contacts.clean(raw ? files.parseJson(raw) : null)
       ws.contactsUndo = []
       ws.contactsLoaded = true
@@ -739,7 +755,7 @@ Item {
   }
 
   function writeContacts() {
-    if (!folder) return
+    if (!folder || !contactsLoaded) return
     if (unreadable[contactsPath()]) { notSaved(contactsPath()); return }
     var path = contactsPath()
     var gen = generation

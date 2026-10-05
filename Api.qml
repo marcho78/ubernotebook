@@ -122,10 +122,19 @@ QtObject {
   // the other way round), else asked in the panel first, one question for
   // each thing, and done when you say yes. Yours, a script's, a terminal's
   // agent's: as always.
-  // A value with no letters or digits in it ("", ".", "-", a control
-  // character, blanks): what it's put in, emptied.
+  // A value with nothing in it but blanks, punctuation and what can't be
+  // seen ("", ".", "-", a control character, a no-break space, the
+  // invisible tag letters): what it's put in, emptied. Any letter, digit or
+  // symbol, in any script (Khmer, Amharic, ☕, ①), is something.
   function blankish(v) {
-    return !/[0-9A-Za-z\u00aa\u00b5\u00ba\u00c0-\u02af\u0370-\u052f\u0531-\u0587\u05d0-\u05ea\u0620-\u064a\u0660-\u0669\u066e-\u06d3\u06f0-\u06ff\u0900-\u0dff\u0e01-\u0e5b\u0e81-\u0edf\u10a0-\u10ff\u1100-\u115e\u1161-\u11ff\u1e00-\u1fff\u3041-\u30ff\u3131-\u3163\u3165-\u318e\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\ud800-\udbff\uf900-\ufaff\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\uff66-\uff9f\uffa1-\uffdc]/.test(String(v || ""))
+    var t = String(v || "")
+    // (Spaces, controls, format and invisible characters, blank lookalikes;
+    // variation selectors and the tag letters, U+E0000 to U+E01EF.)
+    t = t.replace(/[\u0000-\u0020\u007f-\u00a0\u00ad\u034f\u061c\u115f\u1160\u1680\u17b4\u17b5\u180b-\u180f\u2000-\u206f\u2800\u3000\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb]/g, "")
+    t = t.replace(/\udb40[\udc00-\uddef]/g, "")
+    // (Punctuation, Latin and general, CJK and full-width.)
+    t = t.replace(/[!-\/:-@\[-`{-~\u00a1\u00a7\u00ab\u00b6\u00b7\u00bb\u00bf\u3001-\u3003\u3008-\u3011\u3014-\u301f\u30fb\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/g, "")
+    return t === ""
   }
   function agentRemoval(kind, item, what, doIt) {
     if (!caller) return doIt()
@@ -152,7 +161,8 @@ QtObject {
 
   function unready() {
     if (noProfile) return "Uber Notebook has no profile yet: make one with addProfile (or the user can, opening Uber Notebook)"
-    if (!workspace || !workspace.ready) return "Uber Notebook's pages aren't loaded yet: try again in a moment"
+    // (All of it: its pages, People and the calendar, of the profile open now.)
+    if (!workspace || !workspace.ready || !workspace.contactsLoaded || !workspace.calendarLoaded) return "Uber Notebook's pages aren't loaded yet: try again in a moment"
     return ""
   }
 
@@ -1513,7 +1523,7 @@ QtObject {
     // (The change, made to it as it is when it's made: { event } or { error }.)
     function edited(cur) {
       var n = JSON.parse(JSON.stringify(cur))
-      if (f === "title") { if (!v || blankish(v)) return { error: "what is it called?" }; n.title = v }
+      if (f === "title") { if (!v) return { error: "what is it called?" }; n.title = v }
       else if (f === "when") {
         var q = Calendar.quick("x " + v, new Date())
         if (!q) return { error: "there's no day or time in that (\"fri 3pm\", \"oct 12 9:30-10:00\")" }
