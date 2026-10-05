@@ -1051,6 +1051,41 @@ Item {
       view.agentTalk = null
     }
 
+    // Emptying a person's or an event's detail another way (a control
+    // character, a dot) is asked too; a new value isn't; a yes to removing
+    // events covers their details.
+    function test_31_emptied_another_way_is_asked_too() {
+      fresh()
+      view.agentAsks = []
+      api.settings = Qt.binding(function() { return service.settings })
+      json(api.addContact("Ana Lee", "", "ana@e.org"))
+      var ana = json(api.contacts("Ana"))[0]
+      json(api.editContact(ana.id, "company", "Acme"))
+      json(api.editContact(ana.id, "notes", "Met in Lisbon"))
+      var ev = json(api.addEvent("Dentist oct 12 3pm", ""))
+      json(api.editEvent(ev.id, "place", "Main St"))
+      json(api.editEvent(ev.id, "notes", "Bring card"))
+      var g = {}
+      view.agentTalk = { agent: "claude", id: "", owner: "", page: "", picked: "", grants: g, folder: "c-dddddddddddd" }
+      api.agentScope = { agent: "Claude Code", id: "claude", dir: "/tmp/in", frozen: false, grants: g, talk: "c-dddddddddddd" }
+      function byAgent() { api.caller = api.agentScope }
+      byAgent(); compare(json(api.editContact(ana.id, "company", "\u0001")).asked, true, "a control character: emptying")
+      byAgent(); compare(json(api.editContact(ana.id, "notes", ".")).asked, true, "a dot: emptying")
+      byAgent(); compare(json(api.editContact(ana.id, "company", "Acme Corp")).ok, true, "a new value: not asked")
+      compare(json(api.contact(ana.id)).notes, "Met in Lisbon", "not until you say yes")
+      byAgent(); compare(json(api.editEvent(ev.id, "place", "")).asked, true)
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "-")).asked, true)
+      verify(view.agentAsks.some(function(a) { return a.text.indexOf("clear the notes of \u201cDentist\u201d (\u201cBring card\u201d)") === 0 }), JSON.stringify(view.agentAsks.map(function(a) { return a.text })))
+      byAgent(); compare(json(api.editEvent(ev.id, "place", "Clinic")).ok, true, "a new place: not asked")
+      byAgent(); compare(json(api.editEvent(ev.id, "title", ".")).ok, false, "a title that's nothing: refused")
+      view.agentAsks = []
+      g["remove event"] = true
+      byAgent(); compare(json(api.editEvent(ev.id, "notes", "")).asked, undefined, "a yes to removing events covers their details")
+      api.caller = null
+      api.agentScope = null
+      view.agentTalk = null
+    }
+
     function test_26_sites_contacted_for_an_agent_only_with_your_yes() {
       fresh()
       var r = json(api.add("Links", file("l.md", "x")))

@@ -122,6 +122,11 @@ QtObject {
   // the other way round), else asked in the panel first, one question for
   // each thing, and done when you say yes. Yours, a script's, a terminal's
   // agent's: as always.
+  // A value with no letters or digits in it ("", ".", "-", a control
+  // character, blanks): what it's put in, emptied.
+  function blankish(v) {
+    return !/[0-9A-Za-z\u00aa\u00b5\u00ba\u00c0-\u02af\u0370-\u052f\u0531-\u0587\u05d0-\u05ea\u0620-\u064a\u0660-\u0669\u066e-\u06d3\u06f0-\u06ff\u0900-\u0dff\u0e01-\u0e5b\u0e81-\u0edf\u10a0-\u10ff\u1100-\u115e\u1161-\u11ff\u1e00-\u1fff\u3041-\u30ff\u3131-\u3163\u3165-\u318e\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\ud800-\udbff\uf900-\ufaff\uff10-\uff19\uff21-\uff3a\uff41-\uff5a\uff66-\uff9f\uffa1-\uffdc]/.test(String(v || ""))
+  }
   function agentRemoval(kind, item, what, doIt) {
     if (!caller) return doIt()
     var who = String(caller.id || "")
@@ -129,7 +134,7 @@ QtObject {
     var list = settings && settings.agentPermissions ? settings.agentPermissions : []
     if (kind === "trash" && Permissions.allowed(list, who, "trash", "pages")) return doIt()
     if (grants["remove " + kind] === true) return doIt()
-    if (kind === "contact detail" && grants["remove contact"] === true) return doIt()
+    if (/ detail$/.test(kind) && grants["remove " + kind.replace(/ detail$/, "")] === true) return doIt()
     var asked = viewDoes("askAgentPermission", {
       key: "remove " + kind + " " + (caller.talk || "") + " " + item, agent: who, text: what,
       action: kind === "trash" ? "trash" : "", target: kind === "trash" ? "pages" : "",
@@ -1503,35 +1508,53 @@ QtObject {
     if (not) return fail(not)
     var e = Calendar.byId(workspace.calendar, String(id || ""))
     if (!e) return fail("there's no event with that id (events lists them)")
-    var n = JSON.parse(JSON.stringify(e))
     var v = String(value === undefined ? "" : value).trim()
     var f = String(field || "")
-    if (f === "title") { if (!v) return fail("what is it called?"); n.title = v }
-    else if (f === "when") {
-      var q = Calendar.quick("x " + v, new Date())
-      if (!q) return fail("there's no day or time in that (\"fri 3pm\", \"oct 12 9:30-10:00\")")
-      n.start = q.start; n.end = q.end; n.allDay = q.allDay
+    // (The change, made to it as it is when it's made: { event } or { error }.)
+    function edited(cur) {
+      var n = JSON.parse(JSON.stringify(cur))
+      if (f === "title") { if (!v || blankish(v)) return { error: "what is it called?" }; n.title = v }
+      else if (f === "when") {
+        var q = Calendar.quick("x " + v, new Date())
+        if (!q) return { error: "there's no day or time in that (\"fri 3pm\", \"oct 12 9:30-10:00\")" }
+        n.start = q.start; n.end = q.end; n.allDay = q.allDay
+      }
+      else if (f === "start" || f === "end") { if (!Dates.fromIso(v)) return { error: "a date like 2026-10-05, or 2026-10-05T09:30" }; n[f] = v }
+      else if (f === "allDay") n.allDay = yes(v)
+      else if (f === "place") n.place = v
+      else if (f === "notes") n.detail = v
+      else if (f === "repeat") {
+        var r = v.toLowerCase()
+        if (r && Calendar.REPEATS.indexOf(r) < 0) return { error: "repeat is daily, weekdays, weekly, monthly or yearly (\"\" for not)" }
+        n.repeat = r ? { freq: r, every: n.repeat ? n.repeat.every : 1, until: n.repeat ? n.repeat.until : "" } : null
+      }
+      else if (f === "alert") {
+        var mins = v === "" || v === "none" ? -1 : Number(v)
+        if (mins !== -1 && Calendar.ALERTS.indexOf(mins) < 0) return { error: "an alert is one of " + Calendar.ALERTS.join(", ") + " minutes before, or none" }
+        n.alert = mins
+      }
+      else if (f === "color") { var c = v ? Calendar.cleanColor(v.toLowerCase()) : ""; if (v && !c) return { error: "a color is one of Pages' (blue, red...) or a hex like #ff8800, or \"\" for the calendar's" }; n.color = c }
+      else return { error: "the field is title, when, start, end, allDay, place, notes, repeat, alert or color" }
+      var clean = Calendar.cleanEvent(n)
+      if (!clean) return { error: "that doesn't make an event" }
+      return { event: clean }
     }
-    else if (f === "start" || f === "end") { if (!Dates.fromIso(v)) return fail("a date like 2026-10-05, or 2026-10-05T09:30"); n[f] = v }
-    else if (f === "allDay") n.allDay = yes(v)
-    else if (f === "place") n.place = v
-    else if (f === "notes") n.detail = v
-    else if (f === "repeat") {
-      var r = v.toLowerCase()
-      if (r && Calendar.REPEATS.indexOf(r) < 0) return fail("repeat is daily, weekdays, weekly, monthly or yearly (\"\" for not)")
-      n.repeat = r ? { freq: r, every: n.repeat ? n.repeat.every : 1, until: n.repeat ? n.repeat.until : "" } : null
+    var first = edited(e)
+    if (first.error) return fail(first.error)
+    function save() {
+      var cur = Calendar.byId(api.workspace.calendar, e.id)
+      if (!cur) return fail("that event is no longer on the calendar")
+      var r = edited(cur)
+      if (r.error) return fail(r.error)
+      var clean = r.event
+      api.workspace.setCalendar(Calendar.withEvent(api.workspace.calendar, clean))
+      return answer({ ok: true, id: clean.id, title: clean.title, start: clean.start, end: clean.end, allDay: clean.allDay, place: clean.place, repeat: clean.repeat ? clean.repeat.freq : "", alert: clean.alert, color: clean.color })
     }
-    else if (f === "alert") {
-      var mins = v === "" || v === "none" ? -1 : Number(v)
-      if (mins !== -1 && Calendar.ALERTS.indexOf(mins) < 0) return fail("an alert is one of " + Calendar.ALERTS.join(", ") + " minutes before, or none")
-      n.alert = mins
-    }
-    else if (f === "color") { var c = v ? Calendar.cleanColor(v.toLowerCase()) : ""; if (v && !c) return fail("a color is one of Pages' (blue, red...) or a hex like #ff8800, or \"\" for the calendar's"); n.color = c }
-    else return fail("the field is title, when, start, end, allDay, place, notes, repeat, alert or color")
-    var clean = Calendar.cleanEvent(n)
-    if (!clean) return fail("that doesn't make an event")
-    workspace.setCalendar(Calendar.withEvent(workspace.calendar, clean))
-    return answer({ ok: true, id: clean.id, title: clean.title, start: clean.start, end: clean.end, allDay: clean.allDay, place: clean.place, repeat: clean.repeat ? clean.repeat.freq : "", alert: clean.alert, color: clean.color })
+    // Emptying its place or its notes (the calendar keeps no history):
+    // asked first, as a removal.
+    var had = f === "place" && blankish(v) ? String(e.place || "").trim() : f === "notes" && blankish(v) ? String(e.detail || "").trim() : ""
+    if (!had) return save()
+    return agentRemoval("event detail", e.id + " " + f, "clear the " + f + " of \u201c" + (e.title || "Untitled") + "\u201d (\u201c" + (had.length > 80 ? had.slice(0, 80) + "\u2026" : had) + "\u201d)", save)
   }
 
   // An .ics file's events on the calendar (those it hasn't got already):
@@ -1595,7 +1618,7 @@ QtObject {
     // Taking away something they have (a field emptied, a number or an
     // email): asked first, as a removal (People keeps no history).
     var name = Contacts.nameOf(c)
-    var had = ["name", "company", "title", "address", "notes", "birthday", "website"].indexOf(f) >= 0 && !v ? String(c[f] || "") : ""
+    var had = ["name", "company", "title", "address", "notes", "birthday", "website"].indexOf(f) >= 0 && blankish(v) ? String(c[f] || "").trim() : ""
     var takes = had ? "clear " + name + "\u2019s " + f + " (\u201c" + (had.length > 80 ? had.slice(0, 80) + "\u2026" : had) + "\u201d)"
       : f === "removePhone" ? "take the number \u201c" + raw + "\u201d from " + name
       : f === "removeEmail" ? "take the email \u201c" + raw + "\u201d from " + name : ""

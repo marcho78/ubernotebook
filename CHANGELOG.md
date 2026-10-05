@@ -531,8 +531,9 @@ The first version.
   copy never writes over or takes away a file you edited there; switching
   profiles keeps nothing of one in the other.
 - **Taking things away is asked**: the panel's agent moving pages to the
-  trash (*Always* there if you like), or removing a person, an event, a tag
-  or a person's detail (at most for that conversation), asks you first, one
+  trash (*Always* there if you like), or removing a person, an event, a tag,
+  or emptying a person's or an event's detail (at most for that
+  conversation), asks you first, one
   question for each thing, in the conversation that asked; when it ends,
   what it asked is answered No. A link it adds is read only with your yes to
   that link.

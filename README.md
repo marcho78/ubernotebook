@@ -1117,8 +1117,8 @@ Notebook's commands: they read and change your notes, as you ask.
   asks for, and you're asked in the panel. What it is comes from the tool
   itself (Claude Code's tool, Grok's kind for it), never from what the tool
   is given: a connector's tool is asked about as that tool, whatever its
-  input says. A command is shown whole (a character you couldn't see written
-  out, each line break marked, a run of blank lines said, how many lines it
+  input says. A command is shown whole (a character you couldn't see, or a
+  blank that isn't a plain space, written out, each line break marked, a run of blank lines said, how many lines it
   is said, its scrollbar in sight): *Allow this command*, *Allow shell for
   this conversation* (any command it runs until the conversation ends: a
   program's name is no boundary, `git -c` runs anything) or *No*; **Settings
@@ -1152,10 +1152,12 @@ Notebook's commands: they read and change your notes, as you ask.
   picture copied in by it, every step from the folder through no link; with no
   agent working in the panel, they do nothing. Taking things away is asked
   in the panel, one question for each thing: pages to the trash (*Allow
-  once*, *Always*, *No*), and a person, an event or a tag removed, or a
-  person's detail (a field emptied, a number or an email taken off) (*Allow
-  once*, *Allow for this conversation*, *No*: never for good; a yes to
-  taking people out covers their details, not the other way round). A
+  once*, *Always*, *No*), and a person, an event or a tag removed, a
+  person's detail (a field emptied, a number or an email taken off) or an
+  event's place or notes emptied (*Allow once*, *Allow for this
+  conversation*, *No*: never for good; a yes to taking people or events
+  out covers their details, not the other way round; a value with no
+  letters or digits in it, "." say, counts as emptying). A
   question belongs to the conversation that asked: *Allow for this
   conversation* is kept there, and when it ends (a new one, another page's,
   another profile), what it asked and you haven't answered is answered No.
