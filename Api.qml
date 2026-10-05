@@ -1192,7 +1192,7 @@ QtObject {
     var list = pathList(text)
     if (list.length === 1 && !files.isImagePath(list[0])) {
       var dir = list[0].replace(/\/+$/, "")
-      files.exec(["/usr/bin/bash", "-c", Library.LIST_SCRIPT, "uber-notebook-pictures", dir], function(ok, out) {
+      files.execText(["/usr/bin/bash", "-c", Library.LIST_SCRIPT, "uber-notebook-pictures", dir], function(ok, out) {
         var names = String(out || "").split("\n").map(function(l) { var m = /^f\t[0-9.]+\t(.+)$/.exec(l); return m ? dir + "/" + m[1] : "" })
           .filter(function(p) { return p && files.isImagePath(p) }).sort()
         done(names.slice(0, 200))

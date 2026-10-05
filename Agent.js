@@ -214,7 +214,15 @@ function command(agent, prompt, choice, session, where) {
   var dir = String(w.dir || "")
   if (!/^\/[^\u0000-\u001f]{1,4000}$/.test(exe) || !/^\/[^\u0000-\u001f*?\[\]]{1,4000}$/.test(dir)) return null
   var skill = /^\/[^\u0000-\u001f*?\[\]]{1,4000}$/.test(String(w.skill || "")) ? String(w.skill) : ""
-  var head = ["/usr/bin/bash", "-c", "exec \"$@\" < /dev/null", "uber-notebook-agent"]
+  // (What it prints, through the files helper's ascii-lines, when there is
+  // one: each JSON line again, ASCII only, so no character is cut in two on
+  // its way here, the input of a tool it asks to use included.)
+  var helper = /^\/[^\u0000-\u001f]{1,4000}$/.test(String(w.helper || "")) ? String(w.helper) : ""
+  function filtered(input) {
+    return helper ? ["/usr/bin/bash", "-c", "h=$1; shift; set -o pipefail; \"$@\"" + input + " | /usr/bin/python3 -I -S \"$h\" ascii-lines", "uber-notebook-agent", helper]
+      : ["/usr/bin/bash", "-c", "exec \"$@\"" + input, "uber-notebook-agent"]
+  }
+  var head = filtered(" < /dev/null")
   var p = String(prompt)
   var c = choice || {}
   var model = cleanChoice(c.model)
@@ -222,15 +230,14 @@ function command(agent, prompt, choice, session, where) {
   var s = session && isSessionId(session.id) ? session : null
   // (Claude Code reads its request, and your answers to what it asks, on its
   // input: input(), answer(). Nothing of yours is in its command line.)
-  if (agent === "claude") return ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent", exe, "-p", "--input-format", "stream-json",
+  if (agent === "claude") return filtered("").concat([exe, "-p", "--input-format", "stream-json",
     "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", CLAUDE_TOOLS]
     .concat(skill ? ["--add-dir", skill] : [], ["--permission-mode", "manual", "--permission-prompt-tool", "stdio",
       "--allowedTools", "Bash(omarchy-shell uber-notebook-agent *)", "Edit(/" + dir + "/**)", "Write(/" + dir + "/**)"])
-    .concat(s ? [s.resume ? "--resume" : "--session-id", s.id] : [], model ? ["--model", model] : [], effort ? ["--effort", effort] : [])
+    .concat(s ? [s.resume ? "--resume" : "--session-id", s.id] : [], model ? ["--model", model] : [], effort ? ["--effort", effort] : []))
   // (Grok works over ACP, its agent protocol, on its input and output:
   // acpInit, acpSession, acpPrompt, fromAcp, reply. Its sandbox: env().)
-  if (agent === "grok") return ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent", exe, "agent"]
-    .concat(model ? ["-m", model] : [], effort ? ["--reasoning-effort", effort] : [], ["stdio"])
+  if (agent === "grok") return filtered("").concat([exe, "agent"], model ? ["-m", model] : [], effort ? ["--reasoning-effort", effort] : [], ["stdio"])
   if (agent === "codex") {
     var opts = ["--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false"]
       .concat(model ? ["-m", model] : [], effort ? ["-c", "model_reasoning_effort=\"" + effort + "\""] : [])

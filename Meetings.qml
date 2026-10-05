@@ -133,8 +133,10 @@ Item {
   function fetch(id, done) {
     var clean = Meeting.cleanId(id)
     if (!clean) { done(false, "That isn't a meeting"); return }
-    run(["/usr/bin/voxtype", "meeting", "export", clean, "--format", "json"], function(ok, out) {
-      done(ok, out)
+    if (!files) { done(false, "Uber Notebook runs without the shell"); return }
+    // (Its words in any language: back as ASCII, through Store.execText.)
+    files.execText(["/usr/bin/voxtype", "meeting", "export", clean, "--format", "json"], function(ok, out) {
+      done(ok, ok ? out : String(out || "").replace(/^Error:\s*/m, "").split("\n").filter(function(l) { return l.trim() !== "" })[0] || "voxtype couldn't do it")
     }, { timeoutMs: 20000, maxBytes: 32 * 1024 * 1024 })
   }
 

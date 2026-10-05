@@ -53,6 +53,24 @@
 #               plain file, never through a link; after a power cut, the file
 #               as it was or as it is, never half of it)
 #         mkdir { path }        -> {}  (the folders, as needed)
+#   read-files <max bytes> <total bytes>
+#       Text files, their full paths a JSON list on its input: each a plain
+#       file (a link to one is followed, as for a file you name; never a pipe
+#       or a device, never waited on), at most <max bytes> (and, as it's
+#       sent, three times that), <total bytes> in all (three times, as sent). Prints JSON
+#       (ASCII only): { ok, files: { path: text }, missing, errors: { path:
+#       why } }.
+#   read-glob <folder> <pattern> <max bytes> <total bytes>
+#       The same, for what "*<end>" or "*/<name>" finds in <folder> (plain
+#       files, and folders, not through a link below it).
+#   to-json <max bytes>
+#       What's on its input (at most <max bytes>), as one JSON string, ASCII
+#       only (a program's words, through Quickshell without a character cut
+#       in two). Past <max bytes>: an error, nothing printed.
+#   ascii-lines
+#       Each line on its input (JSON, as agents print) again, ASCII only, as
+#       it comes; a line that isn't JSON as a JSON string; one past 16 MB
+#       left out.
 #   copy-picture <picture> <folder> <name> <max bytes> [<within>]
 #       A picture copied into <folder> (a folder of yours, not a link) as
 #       <name>, a new file (never over one that's there): only a plain file
@@ -258,7 +276,7 @@ def serve_read(root_fd, req):
     seen = 0
     for path in req.get("paths", [])[:100000]:
         try:
-            if seen > total:
+            if seen > 3 * total:
                 raise Refused("more than %d bytes in all" % total)
             parts = path_parts(path)
             dfd = walk(root_fd, parts[:-1])
@@ -272,10 +290,17 @@ def serve_read(root_fd, req):
                 data = f.read(limit + 1)
             if len(data) > limit:
                 raise Refused("more than %d bytes" % limit)
-            seen += len(data)
-            if seen > total:
+            text = data.decode("utf-8", "replace")
+            # (Counted as it's sent, escaped: text in any script is at most
+            # three times as long that way, a file of control bytes six;
+            # three times what it may be, at most.)
+            sent = len(json.dumps(text))
+            if sent > 3 * limit:
+                raise Refused("more than %d bytes as it's sent" % (3 * limit))
+            seen += sent
+            if seen > 3 * total:
                 raise Refused("more than %d bytes in all" % total)
-            files[path] = data.decode("utf-8", "replace")
+            files[path] = text
         except FileNotFoundError:
             missing.append(path)
         except OSError as e:
@@ -406,7 +431,10 @@ def cmd_serve(folder):
             answer["error"] = "a link, not a folder" if e.errno in (errno.ELOOP, errno.ENOTDIR) else (e.strerror or str(e))[:200]
         except (Refused, ValueError, TypeError) as e:
             answer["error"] = str(e)[:200]
-        out.write(json.dumps(answer, ensure_ascii=False).encode("utf-8", "surrogatepass") + b"\n")
+        # (ASCII only: Quickshell reads what it prints a piece at a time, each
+        # piece as UTF-8, so a character cut in two between pieces would come
+        # out wrong. JSON's \\u escapes can't be cut.)
+        out.write(json.dumps(answer, ensure_ascii=True).encode("ascii") + b"\n")
         out.flush()
 
 
@@ -925,7 +953,146 @@ def cmd_mirror_apply(folder, plan_file):
         empty_folders_gone(root_fd, emptied)
     finally:
         os.close(root_fd)
-    print(json.dumps(out, ensure_ascii=False))
+    print(json.dumps(out, ensure_ascii=True))
+
+
+# ---- text for Quickshell, ASCII only -------------------------------------------------------------
+
+def read_text_files(paths, limit, total):
+    files, missing, errors = {}, [], {}
+    seen = 0
+    for path in paths[:100000]:
+        if not isinstance(path, str) or not path.startswith("/") or "\x00" in path:
+            continue
+        try:
+            if seen > 3 * total:
+                raise Refused("more than %d bytes in all" % total)
+            fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+            with os.fdopen(fd, "rb") as f:
+                if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                    raise Refused("not a plain file")
+                data = f.read(limit + 1)
+            if len(data) > limit:
+                raise Refused("more than %d bytes" % limit)
+            text = data.decode("utf-8", "replace")
+            sent = len(json.dumps(text))
+            if sent > 3 * limit:
+                raise Refused("more than %d bytes as it's sent" % (3 * limit))
+            seen += sent
+            if seen > 3 * total:
+                raise Refused("more than %d bytes in all" % total)
+            files[path] = text
+        except FileNotFoundError:
+            missing.append(path)
+        except IsADirectoryError:
+            missing.append(path)
+        except (OSError, Refused) as e:
+            errors[path] = (getattr(e, "strerror", None) or str(e))[:200]
+    return {"ok": True, "files": files, "missing": missing, "errors": errors}
+
+
+def cmd_read_files(max_bytes, total_bytes):
+    raw = sys.stdin.buffer.read(16 * 1024 * 1024 + 1)
+    if len(raw) > 16 * 1024 * 1024:
+        raise Refused("too many paths")
+    paths = json.loads(raw.decode("utf-8", "surrogatepass") or "[]")
+    if not isinstance(paths, list):
+        raise Refused("not a list of paths")
+    print(json.dumps(read_text_files(paths, int(max_bytes), int(total_bytes))))
+
+
+def cmd_read_glob(folder, pattern, max_bytes, total_bytes):
+    if not folder.startswith("/"):
+        raise Refused("not a folder's full path")
+    try:
+        dfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    except FileNotFoundError:
+        print(json.dumps({"ok": True, "files": {}, "missing": [], "errors": {}}))
+        return
+    paths = []
+    try:
+        names = sorted(os.listdir(dfd))[:100000]
+        if pattern.startswith("*/") and parts_of(pattern[2:]) and "/" not in pattern[2:]:
+            for name in names:
+                try:
+                    if stat.S_ISDIR(os.lstat(name, dir_fd=dfd).st_mode) and parts_of(name):
+                        paths.append(folder.rstrip("/") + "/" + name + "/" + pattern[2:])
+                except FileNotFoundError:
+                    pass
+        elif pattern.startswith("*") and "/" not in pattern and "*" not in pattern[1:]:
+            for name in names:
+                if name.endswith(pattern[1:]) and parts_of(name) and not name.startswith("."):
+                    try:
+                        if not stat.S_ISDIR(os.lstat(name, dir_fd=dfd).st_mode):
+                            paths.append(folder.rstrip("/") + "/" + name)
+                    except FileNotFoundError:
+                        pass
+        else:
+            raise Refused("a pattern it doesn't take")
+    finally:
+        os.close(dfd)
+    # (Below the folder, no link followed: a link it finds is said, not read.)
+    out = read_text_files([], int(max_bytes), int(total_bytes))
+    files = []
+    for p in paths:
+        try:
+            if stat.S_ISLNK(os.lstat(p).st_mode) or stat.S_ISLNK(os.lstat(os.path.dirname(p)).st_mode):
+                out["errors"][p] = "a link, not a file"
+                continue
+        except FileNotFoundError:
+            continue
+        files.append(p)
+    got = read_text_files(files, int(max_bytes), int(total_bytes))
+    got["errors"].update(out["errors"])
+    got["missing"] = []
+    print(json.dumps(got))
+
+
+def cmd_to_json(max_bytes):
+    limit = int(max_bytes)
+    data = sys.stdin.buffer.read(limit + 1)
+    if len(data) > limit:
+        raise Refused("more than %d bytes" % limit)
+    print(json.dumps(data.decode("utf-8", "replace")))
+
+
+def cmd_ascii_lines():
+    most = 16 * 1024 * 1024
+    out = sys.stdout.buffer
+    part = b""
+    skipping = False
+    src = sys.stdin.buffer.raw if hasattr(sys.stdin.buffer, "raw") else sys.stdin.buffer
+    while True:
+        chunk = src.read(65536)
+        if not chunk:
+            break
+        part += chunk
+        while True:
+            nl = part.find(b"\n")
+            if nl < 0:
+                break
+            line, part = part[:nl], part[nl + 1:]
+            if skipping:
+                skipping = False
+                continue
+            text = line.decode("utf-8", "replace")
+            try:
+                again = json.dumps(json.loads(text), ensure_ascii=True, separators=(",", ":"))
+            except ValueError:
+                again = json.dumps(text)
+            out.write(again.encode("ascii") + b"\n")
+            out.flush()
+        if len(part) > most:
+            part = b""
+            skipping = True
+    if part and not skipping:
+        text = part.decode("utf-8", "replace")
+        try:
+            again = json.dumps(json.loads(text), ensure_ascii=True, separators=(",", ":"))
+        except ValueError:
+            again = json.dumps(text)
+        out.write(again.encode("ascii") + b"\n")
+        out.flush()
 
 
 # ---- a text file -------------------------------------------------------------------------------
@@ -1377,6 +1544,14 @@ def main(argv):
             cmd_copy_picture(*argv[2:])
         elif len(argv) == 4 and argv[1] == "mirror-apply":
             cmd_mirror_apply(argv[2], argv[3])
+        elif len(argv) == 4 and argv[1] == "read-files":
+            cmd_read_files(argv[2], argv[3])
+        elif len(argv) == 6 and argv[1] == "read-glob":
+            cmd_read_glob(argv[2], argv[3], argv[4], argv[5])
+        elif len(argv) == 3 and argv[1] == "to-json":
+            cmd_to_json(argv[2])
+        elif len(argv) == 2 and argv[1] == "ascii-lines":
+            cmd_ascii_lines()
         elif len(argv) == 5 and argv[1] == "export-html":
             cmd_export_html(argv[2], argv[3], argv[4])
         elif len(argv) == 3 and argv[1] == "serve":
@@ -1387,7 +1562,7 @@ def main(argv):
             sys.stderr.write("usage: uber-notebook-files unzip|inspect-backup|restore-backup ...\n")
             return 2
     except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error, MemoryError) as e:
-        if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"]):
+        if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"], ["read-files"], ["read-glob"]):
             print(json.dumps({"ok": False, "error": str(e)[:300]}))
             return 1
         sys.stderr.write(str(e)[:300] + "\n")

@@ -81,6 +81,12 @@ check("Claude Code works here: its command, and the prompt says so", () => {
   const argv = plain(Agent.command("claude", "-starts with a dash", undefined, undefined, W("claude")));
   assert.deepEqual(argv.slice(0, 4), ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent"], "its input kept: it reads its request and your answers there");
   assert.equal(argv[4], "/usr/bin/claude", "by its full path");
+  // With the files helper: what it prints, through its ascii-lines (no character cut in two on its way).
+  const filt = plain(Agent.command("claude", "x", undefined, undefined, Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" })));
+  assert.deepEqual(filt.slice(0, 6), ["/usr/bin/bash", "-c", "h=$1; shift; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" ascii-lines", "uber-notebook-agent", "/plugin/bin/uber-notebook-files", "/usr/bin/claude"]);
+  const codexF = plain(Agent.command("codex", "-x", undefined, undefined, Object.assign(W("codex"), { helper: "/plugin/bin/uber-notebook-files" })));
+  assert.ok(codexF[2].indexOf("\"$@\" < /dev/null | /usr/bin/python3") > 0, "Codex: nothing on its input, its output filtered");
+  assert.equal(codexF[codexF.length - 1], "-x", "its prompt still last");
   for (const a of ["-p", "--verbose", "--include-partial-messages"]) assert.ok(argv.includes(a), a);
   assert.ok(!argv.includes("--restricted") && !argv.includes("--strict-mcp-config") && !argv.includes("--setting-sources"),
     "your setup as in your terminal: your plugins and MCP servers among it");

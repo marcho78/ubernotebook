@@ -1400,7 +1400,7 @@ Item {
   }
 
   function scanImport(roots, tmp, parent, done) {
-    files.exec(["/usr/bin/bash", "-c", scanScript, "uber-notebook-scan"].concat(roots), function(ok, output) {
+    files.execText(["/usr/bin/bash", "-c", scanScript, "uber-notebook-scan"].concat(roots), function(ok, output) {
       var groups = []
       String(output || "").split("\u0000").forEach(function(item) {
         if (!item) return

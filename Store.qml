@@ -128,29 +128,6 @@ Item {
   // paths (or the files a folder pattern matches) it's given, each file put
   // after a mark made new for each read ($1), so what's in a file can never
   // pass for another file.
-  readonly property string readScript: "t=$1; shift; for f in \"$@\"; do if [ -f \"$f\" ]; then printf '\\036%s\\037%s\\037' \"$t\" \"$f\"; /usr/bin/cat -- \"$f\"; fi; done"
-  readonly property string globScript: "shopt -s nullglob; for f in \"$2\"/$3; do printf '\\036%s\\037%s\\037' \"$1\" \"$f\"; /usr/bin/cat -- \"$f\"; done"
-
-  function readMark() {
-    var s = ""
-    for (var i = 0; i < 4; i++) s += ("0000000" + Math.floor(Math.random() * 4294967296).toString(16)).slice(-8)
-    return s
-  }
-  // What a read printed: { path: text }, only for the frames with its mark,
-  // and only paths `wanted` says it may hold.
-  function parseFrames(output, mark, wanted) {
-    var out = {}
-    var head = "\u001e" + mark + "\u001f"
-    String(output || "").split(head).forEach(function(frame, i) {
-      if (i === 0) return
-      var cut = frame.indexOf("\u001f")
-      if (cut <= 0) return
-      var path = frame.slice(0, cut)
-      if (wanted(path)) out[path] = frame.slice(cut + 1)
-    })
-    return out
-  }
-
   // done({ path: text }, ok, failed): ok, the read went through (a file not
   // in it isn't there); `failed`, the paths there that couldn't be read (a
   // link, too big, unreadable: not "not there"). In the notes folder, by the
@@ -169,13 +146,20 @@ Item {
     }
     readFilesAsBefore(paths, done, maxBytes)
   }
+  // (Not by the notes' helper: by the files helper, once (read-files): only
+  // plain files, within their size, what it prints ASCII, so no character
+  // is cut in two on its way here; a file it couldn't read, in `failed`.)
   function readFilesAsBefore(paths, done, maxBytes) {
-    var mark = readMark()
+    var max = maxBytes || 32 * 1024 * 1024
     var asked = {}
     paths.forEach(function(p) { asked[p] = true })
-    exec(["/usr/bin/bash", "-c", readScript, "uber-notebook-read", mark].concat(paths), function(ok, output) {
-      done(ok ? parseFrames(output, mark, function(p) { return asked[p] === true }) : {}, ok, ok ? [] : paths.slice())
-    }, { maxBytes: maxBytes || 32 * 1024 * 1024, timeoutMs: 20000 })
+    helper(["read-files", String(max), String(max)], function(ok, output) {
+      var r = ok ? store.parseJson(String(output || "").trim().split("\n").pop()) : null
+      if (!r || r.ok !== true) { done({}, false, paths.slice()); return }
+      var files = {}
+      for (var p in r.files) if (asked[p] === true) files[p] = r.files[p]
+      done(files, true, Object.keys(r.errors || {}).filter(function(e) { return asked[e] === true }))
+    }, { input: JSON.stringify(paths), maxBytes: 3 * max + 1024 * 1024, timeoutMs: 30000 })
   }
 
   // The files a pattern finds in dir ("*.json", "*/notebook.json"), read:
@@ -194,10 +178,32 @@ Item {
     readGlobAsBefore(dir, pattern, done, maxBytes)
   }
   function readGlobAsBefore(dir, pattern, done, maxBytes) {
-    var mark = readMark()
-    exec(["/usr/bin/bash", "-c", globScript, "uber-notebook-read", mark, dir, pattern], function(ok, output) {
-      done(ok ? parseFrames(output, mark, function(p) { return p.indexOf(dir + "/") === 0 }) : {}, ok, [])
-    }, { maxBytes: maxBytes || 64 * 1024 * 1024, timeoutMs: 30000 })
+    var max = maxBytes || 64 * 1024 * 1024
+    helper(["read-glob", dir, pattern, String(max), String(max)], function(ok, output) {
+      var r = ok ? store.parseJson(String(output || "").trim().split("\n").pop()) : null
+      if (!r || r.ok !== true) { done({}, false, []); return }
+      var files = {}
+      for (var p in r.files) if (p.indexOf(dir + "/") === 0) files[p] = r.files[p]
+      done(files, true, Object.keys(r.errors || {}).filter(function(e) { return e.indexOf(dir + "/") === 0 }))
+    }, { maxBytes: 3 * max + 1024 * 1024, timeoutMs: 30000 })
+  }
+
+  // A command whose words come back as text that may be long, and in any
+  // script (a transcript, a list of files): through the files helper's
+  // to-json, so it arrives ASCII (Quickshell reads output a piece at a time,
+  // each piece decoded alone: a character cut in two between pieces would
+  // come out wrong). done(ok, text), as exec. Its options as exec's, its
+  // maxBytes what it may print.
+  function execText(argv, done, options) {
+    var o = {}
+    for (var k in (options || {})) o[k] = options[k]
+    var max = o.maxBytes || 256 * 1024
+    o.maxBytes = 6 * max + 1024
+    exec(["/usr/bin/bash", "-c", "h=$1; n=$2; shift 2; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" to-json \"$n\"", "uber-notebook-text", filesHelper, String(Math.round(max))].concat(argv), function(ok, out) {
+      var t = store.parseJson(String(out || "").trim())
+      if (typeof t === "string") { done(ok, t); return }
+      done(false, ok ? "it printed more than it may" : String(out || ""))
+    }, o)
   }
 
   // ---- your notes, by the files helper ------------------------------------------------------
@@ -257,7 +263,7 @@ Item {
       h.waiting = {}
       h.sent = {}
       for (var k in left) left[k](null)
-    }, { input: true, timeoutMs: 7 * 24 * 3600 * 1000, maxBytes: 1e15, maxLine: 1024 * 1024 * 1024 })
+    }, { input: true, timeoutMs: 7 * 24 * 3600 * 1000, maxBytes: 1e15, maxLine: 3 * 64 * 1024 * 1024 + 16 * 1024 * 1024 })
     return h
   }
   // Asks it: done(its answer), or done(null) when it doesn't answer.

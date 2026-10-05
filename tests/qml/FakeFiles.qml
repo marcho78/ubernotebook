@@ -180,6 +180,9 @@ QtObject {
   property var printed: []
   function openPrint(path, done) { printed = printed.concat([path]); if (done) done(true) }
 
+  // (Store.execText: its words through the files helper's to-json; here as they are.)
+  function execText(argv, done, options) { exec(argv, done, options) }
+
   function exec(argv, done, options) {
     ran = ran.concat([argv.slice()])
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-export-tools") { done(true, exportTools); return }

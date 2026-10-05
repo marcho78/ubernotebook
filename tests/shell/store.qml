@@ -33,8 +33,9 @@ ShellRoot {
         store.readGlob(d, "*.json", function(all, read2) {
           var names = Object.keys(all).map(function(p) { return p.slice(d.length + 1) }).sort()
           say("glob: the files there, only", read2 === true && JSON.stringify(names) === JSON.stringify(["a.json", "big.json", "c.json"]), JSON.stringify(names))
-          store.readFiles([d + "/a.json", d + "/big.json"], function(got3, read3) {
-            say("a read over its size: said, nothing in it", read3 === false && Object.keys(got3).length === 0, String(read3))
+          store.readFiles([d + "/a.json", d + "/big.json"], function(got3, read3, failed3) {
+            say("a file over its size: said (failed), not read; the others read", read3 === true && got3[d + "/big.json"] === undefined
+              && JSON.stringify(failed3) === JSON.stringify([d + "/big.json"]) && got3[d + "/a.json"] === '{"a":1}', JSON.stringify(failed3))
             // Saves of one file while it's being written: the newest is
             // written, and everyone waiting hears when it's done.
             var heard = []

@@ -219,7 +219,8 @@ Item {
       tryVerify(function() { return files.streamed.length === 1 }, 1000)
       compare(files.launched.length, 0, "no terminal")
       var run = files.streamed[0]
-      compare(run.argv[4], "/usr/bin/claude", "by its full path")
+      compare(run.argv[5], "/usr/bin/claude", "by its full path")
+      verify(run.argv[2].indexOf("ascii-lines") > 0 && run.argv[4] === files.filesHelper, "what it prints, through the files helper's ascii-lines")
       // While it works, the commands change only its page, files only from its folder.
       compare(service.agentScope.frozen, false)
       compare(service.agentScope.dir, "/tmp/uber-notebook-agent")
@@ -419,7 +420,7 @@ Item {
       view.agentBox.send("Turn this into to-dos")
       tryVerify(function() { return files.streamed.length === 1 }, 1000)
       compare(files.launched.length, 0, "no terminal")
-      compare(files.streamed[0].argv.slice(4, 7), ["/usr/bin/codex", "exec", "--json"])
+      compare(files.streamed[0].argv.slice(5, 8), ["/usr/bin/codex", "exec", "--json"])
       compare(panel.agentLabel, "Codex")
       files.streamFeed(JSON.stringify({ type: "thread.started", thread_id: "t1" }))
       files.streamFeed(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "I'll read the page first." } }))
@@ -445,7 +446,7 @@ Item {
       view.agentBox.send("Summarize this page")
       tryVerify(function() { return files.streamed.length === 2 }, 1000)
       var run = files.streamed[1]
-      compare(run.argv.slice(4), ["/usr/bin/grok", "agent", "stdio"])
+      compare(run.argv.slice(5), ["/usr/bin/grok", "agent", "stdio"])
       // In its sandbox (its agent mode takes it from its environment), written in its folder first.
       compare(run.env.GROK_SANDBOX, "uber-notebook")
       verify(String(files.disk["/tmp/uber-notebook-agent/.grok/sandbox.toml"]).indexOf('extends = "strict"') >= 0, "its sandbox")

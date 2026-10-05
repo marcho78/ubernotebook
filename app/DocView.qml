@@ -1684,7 +1684,7 @@ FocusScope {
           view.saveChat()
           return
         }
-        where = { exe: exe, dir: dir, skill: service && typeof service.skillDir === "string" ? service.skillDir : "" }
+        where = { exe: exe, dir: dir, skill: service && typeof service.skillDir === "string" ? service.skillDir : "", helper: files.filesHelper || "" }
         function start() { if (view.agentRun) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
         if (agent === "grok") files.writeFile(dir + "/.grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir), start)
         else start()

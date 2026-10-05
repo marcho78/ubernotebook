@@ -304,7 +304,10 @@ Item {
         transcriber.timeoutMs = Audio.transcribeTimeout(seconds)
         transcriber.file = file
         var even = rec._boosted ? file.replace(/\.wav$/, "") + "-even.wav" : ""
-        transcriber.start(["/usr/bin/bash", "-c", Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, even, rec._boosted ? Audio.BOOST : ""])
+        // (What it says comes back ASCII, through the files helper's
+        // to-json: no character cut in two on its way here.)
+        transcriber.start(["/usr/bin/bash", "-c", "h=$1; n=$2; shift 2; set -o pipefail; \"$@\" | /usr/bin/python3 -I -S \"$h\" to-json \"$n\"", "uber-notebook-text",
+          files.filesHelper, String(2 * 1024 * 1024), "/usr/bin/bash", "-c", Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, even, rec._boosted ? Audio.BOOST : ""])
         return
       }
       var result = { file: rec._final || file, duration: Math.round(seconds * 10) / 10, peaks: Audio.peaks(rec._levels, 120) }
@@ -324,10 +327,11 @@ Item {
   Run {
     id: transcriber
     property string file: ""
-    maxBytes: 2 * 1024 * 1024
+    maxBytes: 6 * 2 * 1024 * 1024 + 1024
     onFinished: function(ok, output) {
       rec._remove(file)
-      var text = ok ? Audio.transcriptOf(output) : ""
+      var said = ok && rec.files ? rec.files.parseJson(String(output || "").trim()) : null
+      var text = typeof said === "string" ? Audio.transcriptOf(said) : ""
       rec._end(text !== "", { text: text, problem: !ok ? "voxtype couldn't write it out: " + String(output || "").split("\n")[0] : text === "" ? "No words were heard" : "" })
     }
   }
@@ -359,7 +363,7 @@ Item {
   function transcribe(file, seconds, done) {
     if (!files || !canTranscribe) { done(false, "", "Writing it out needs voxtype (Omarchy's dictation)"); return }
     var wav = tempDir + "/transcribe-" + Date.now().toString(36) + ".wav"
-    files.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec /usr/bin/bash -c \"$@\"", "uber-notebook-transcribe", tempDir, Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, wav, boost ? Audio.BOOST : ""], function(ok, output) {
+    files.execText(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec /usr/bin/bash -c \"$@\"", "uber-notebook-transcribe", tempDir, Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, wav, boost ? Audio.BOOST : ""], function(ok, output) {
       var text = ok ? Audio.transcriptOf(output) : ""
       done(ok && text !== "", text, !ok ? "voxtype couldn't write it out" : text === "" ? "No words were heard" : "")
     }, { timeoutMs: Audio.transcribeTimeout(seconds), maxBytes: 2 * 1024 * 1024 })
