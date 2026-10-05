@@ -29,6 +29,13 @@ Item {
 
   // One at a time.
   property bool busy: false
+  // The profile the one being made began in ({ gen, folder, root, assets }).
+  property var from: null
+  readonly property string movedWhy: "another profile was opened"
+  function moved() {
+    var w = workspace
+    return !from || !w || w.generation !== from.gen || w.folder !== from.folder || !w.files || w.files.rootPath !== from.root
+  }
   // What's installed: { browser, office, unshare }, once looked for.
   property var tools: null
 
@@ -65,7 +72,11 @@ Item {
     if (busy) { toast("Still making the last one"); return }
     if (!workspace || !page) return
     var files = workspace.files
+    // (The profile it began in: another opened on the way, it stops at the
+    // next step, its folder taken away; nothing is made from a mix of two.)
+    from = { gen: workspace.generation, folder: workspace.folder, root: files.rootPath, assets: Workspace.assetsDir(files.rootPath) }
     probe(function(t) {
+      if (ex.moved()) { toast("Not made: another profile was opened"); return }
       if (kind === "docx" && !t.office) { toast("A Word file needs LibreOffice: install it (omarchy pkg add libreoffice-fresh) and try again"); return }
       if (kind !== "docx" && !t.browser) { toast("A PDF needs Chromium: install it (omarchy pkg add chromium) and try again"); return }
       busy = true
@@ -73,6 +84,7 @@ Item {
       var ids = withPages ? Workspace.withDescendants(workspace.index, page.id).filter(function(pid) { return pid === page.id || !Workspace.inTrash(workspace.index, pid) }) : [page.id]
       var others = ids.filter(function(pid) { return pid !== page.id })
       workspace.readPages(others, function(read) {
+        if (ex.moved()) { ex.fail("", ex.movedWhy); return }
         var byId = {}
         read.forEach(function(p) { byId[p.id] = p })
         byId[page.id] = page
@@ -81,10 +93,14 @@ Item {
         // (A folder of its own, made new: never one that's there, which is
         // taken away after; one it couldn't make, it leaves.)
         workspace.readSyncedOf(pages, function() {
+          if (ex.moved()) { ex.fail("", ex.movedWhy); return }
           files.exec(["/usr/bin/mkdir", "-m", "700", "--", work, work + "/drawings"], function(made) {
             if (!made) { ex.fail("", "its folder couldn't be made"); return }
+            if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
             ex.drawEquations(pages, function() {
+              if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
               ex.drawDiagrams(pages, work, function(drawings) {
+                if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
                 ex.write(kind, pages, work, drawings, t)
               })
             })
@@ -161,11 +177,14 @@ Item {
     })
     files.writeFile(work + "/page.src.html", html, function(wrote) {
       if (!wrote) { ex.fail(work, "it couldn't be written"); return }
-      files.helper(["export-html", Workspace.assetsDir(files.rootPath), work, String(512 * 1024 * 1024)], function(ok, out) {
+      if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
+      files.helper(["export-html", ex.from.assets, work, String(512 * 1024 * 1024)], function(ok, out) {
         var r = files.parseJson(String(out || "").trim().split("\n").pop())
         if (!ok || !r || !r.ok) { ex.fail(work, r && r.error ? r.error : "its pictures couldn't be put in"); return }
+        if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
         ex.convert(kind, work, t, function(made) {
           if (!made) { ex.fail(work, kind === "docx" ? "LibreOffice couldn't make it" : "Chromium couldn't make it"); return }
+          if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
           ex.deliver(kind, made, top, work)
         })
       }, { timeoutMs: 120000, maxBytes: 64 * 1024 })
@@ -223,13 +242,14 @@ Item {
       }, { timeoutMs: 60000 })
     }
     if (settings.exportTo === "folder" || !service || typeof service.pickSavePath !== "function") {
-      var base = files.rootPath + "/Exports"
+      var base = ex.from.root + "/Exports"
       files.mkdirs([base], function() { copyTo(base + "/" + name.replace(/(\.[a-z]+)$/, " " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + "$1"), false) })
       return
     }
     // (Saving over a file that's there, the dialog asks first.)
     service.pickSavePath(name, function(to) {
       if (!to) { ex.done(work); toast("Not saved"); return }
+      if (ex.moved()) { ex.fail(work, ex.movedWhy); return }
       copyTo(to, true)
     }, "document")
   }

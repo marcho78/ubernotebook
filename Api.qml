@@ -84,21 +84,23 @@ QtObject {
     var host = Permissions.hostOf(url)
     if (!who || !host) return "added as its link only: the card reads its page when you ask"
     var list = settings && settings.agentPermissions ? settings.agentPermissions : []
-    function read(hosts) {
-      workspace.fetchBookmarkWithin(url, hosts, function(data) {
-        if (!data || (!data.title && !data.description && !data.image)) return
-        api.editPageNow(id, function(p) {
-          var changed = false
-          for (var k in p.blocks) {
-            var x = p.blocks[k]
-            if (x.type !== "bookmark" || !x.data || x.data.url !== url || x.data.title || x.data.description || x.data.image) continue
-            x.data = Blocks.cleanData("bookmark", data)
-            changed = true
-          }
-          return changed ? undefined : false
-        }, true)
-      })
-    }
+    // (Onto the card in the profile it was added in: another opened by the
+    // time it's read, nothing.)
+    var got = inThisFolder(function(data) {
+      if (!data || (!data.title && !data.description && !data.image)) return
+      api.editPageNow(id, function(p) {
+        var changed = false
+        for (var k in p.blocks) {
+          var x = p.blocks[k]
+          if (x.type !== "bookmark" || !x.data || x.data.url !== url || x.data.title || x.data.description || x.data.image) continue
+          x.data = Blocks.cleanData("bookmark", data)
+          changed = true
+        }
+        return changed ? undefined : false
+      }, true)
+    })
+    var start = inThisFolder(function(hosts) { api.workspace.fetchBookmarkWithin(url, hosts, got) })
+    function read(hosts) { start(hosts) }
     if (Permissions.allowed(list, who, "contact", host)) {
       read(Permissions.clean(list).filter(function(r) { return r.agent === who && r.action === "contact" }).map(function(r) { return r.target }))
       return "its page is being read (" + host + " is a site you've let it contact); the card shows it in a moment"
@@ -1298,11 +1300,11 @@ QtObject {
     var cols = Number(columns)
     if (cols !== 2 && cols !== 4) cols = 3
     var within = caller ? caller.dir : ""
-    picturesOf(pictures, function(paths) {
+    picturesOf(pictures, inThisFolder(function(paths) {
       api.importPictures(paths, api.inThisFolder(function(srcs) {
         if (srcs.length) api.appendNow(id, [{ type: "gallery", indent: 0, data: Blocks.cleanData("gallery", { images: srcs.map(function(s) { return { src: s, caption: "" } }), columns: cols }) }])
       }), within)
-    })
+    }))
     return answer({ ok: true, id: id, columns: cols, note: "the pictures are being copied in: the gallery shows at the end of the page in a moment (blocks <id> lists it)" })
   }
 
@@ -1324,8 +1326,8 @@ QtObject {
       var list = pathList(a)
       if (!list.length || list.some(function(p) { return p.charAt(0) !== "/" })) return fail("give the pictures' full paths, one a line (or | between them), or a folder's")
       var within = caller ? caller.dir : ""
-      picturesOf(a, function(paths) {
-        api.importPictures(paths, function(srcs) {
+      picturesOf(a, inThisFolder(function(paths) {
+        api.importPictures(paths, api.inThisFolder(function(srcs) {
           if (!srcs.length) return
           api.editPageNow(id, function(p) {
             var x = blockOf(p, block)
@@ -1334,8 +1336,8 @@ QtObject {
             d.images = d.images.concat(srcs.map(function(s) { return { src: s, caption: "" } }))
             x.data = Blocks.cleanData("gallery", d)
           }, true)
-        }, within)
-      })
+        }), within)
+      }))
       return answer({ ok: true, id: id, block: block, note: "the pictures are being copied in, then at the gallery's end" })
     }
     var result = {}

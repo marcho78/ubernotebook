@@ -64,6 +64,7 @@ QtObject {
     deferHelperReads = false
     servesAll = false
     holdReads = false
+    holdWrites = false
     heldReads = []
     failReads = ({})
     readClipboard = null
@@ -152,7 +153,13 @@ QtObject {
 
   // (A path with failWrites in it isn't written: done(false).)
   property string failWrites: ""
+  // (holdWrites: written when answerReads() is.)
+  property bool holdWrites: false
   function writeFile(path, text, done) {
+    if (holdWrites) { heldReads.push(function() { files.writeFileNow(path, text, done) }); return }
+    writeFileNow(path, text, done)
+  }
+  function writeFileNow(path, text, done) {
     if (failWrites && String(path).indexOf(failWrites) >= 0) { if (done) done(false); return }
     disk[path] = String(text)
     if (done) done(true)

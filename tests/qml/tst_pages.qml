@@ -861,6 +861,66 @@ Item {
       compare(told, ["A picture wasn't copied"])
     }
 
+    // Another profile opened while something's on its way: nothing of the
+    // one before is made or changed in it (their pages may share ids).
+    function test_27_another_profile_opened_meanwhile() {
+      fresh()
+      var said = []
+      function heard(t) { said.push(t) }
+      view.toast.connect(heard)
+      var root = files.rootPath
+      try {
+        // The folder changes: at once, not once it's loaded.
+        var g = ws.generation
+        files.rootPath = "/tmp/other-notes"
+        verify(ws.generation > g, "what's on its way is for nothing from now")
+        files.rootPath = root
+        fresh()
+        // A page being changed (read first): not changed.
+        var id = view.page.id
+        var title = fileOf(id).title
+        ws.written = ({})
+        ws.readJson = ({})
+        files.holdReads = true
+        var result = null
+        ws.editPage(id, function(p) { p.title = "Crossed" }, function(ok) { result = ok })
+        ws.generation++
+        files.answerReads()
+        compare(result, false)
+        compare(fileOf(id).title, title)
+        // An import: stopped before anything's made, its folder taken away.
+        files.disk["/tmp/exp/Notes.md"] = "# Notes\n\nx"
+        var pagesBefore = Object.keys(ws.index.pages).length
+        said = []
+        view.importPaths(["/tmp/exp"], "")
+        ws.generation++
+        tryVerify(function() { files.answerReads(); return said.indexOf("Not imported: another profile was opened") >= 0 }, 3000, JSON.stringify(said))
+        compare(Object.keys(ws.index.pages).length, pagesBefore, "no page made")
+        compare(ws.importing, false)
+        verify(files.ran.some(function(a) { return a[0] === "/usr/bin/rm" && String(a[3]).indexOf(files.cacheDir + "/import-") === 0 }), "its folder taken away")
+        files.holdReads = false
+        // An export: stopped at the next step, its folder taken away, nothing made.
+        fresh()
+        view.exporter.tools = null
+        files.holdWrites = true
+        service.nextSave = "/tmp/picked/Crossed.pdf"
+        said = []
+        view.exportAs("pdf", false)
+        tryVerify(function() { return files.heldReads.length > 0 }, 2000)
+        ws.generation++
+        tryVerify(function() { files.answerReads(); return !view.exporter.busy }, 3000)
+        verify(said.some(function(t) { return t.indexOf("another profile was opened") >= 0 }), JSON.stringify(said))
+        compare(files.disk["/tmp/picked/Crossed.pdf"], undefined)
+        verify(!files.ran.some(function(a) { return a.some(function(x) { return String(x).indexOf("--print-to-pdf=") === 0 }) }), "Chromium never run")
+      } finally {
+        files.rootPath = root
+        files.holdReads = false
+        files.holdWrites = false
+        files.answerReads()
+        view.toast.disconnect(heard)
+      }
+    }
+
     function test_8_the_open_page_reloads_after_the_store_changes_it() {
       fresh()
       var home = view.page.id

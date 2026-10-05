@@ -367,9 +367,15 @@ FocusScope {
   function moveToPages(notebook) {
     if (!root.store || !root.workspace) return
     var name = "\u201c" + notebook.title + "\u201d"
+    // (In the profile it was asked in: another opened on the way, it stops,
+    // and the notebook stays.)
+    var from = root.store.rootPath
+    function moved() { return root.store.rootPath !== from }
     root.store.openNotebook(notebook.id, function(nb) {
+      if (moved()) { root.toast(name + " wasn't moved: another profile was opened"); return }
       if (!nb) { root.toast(name + " couldn't be read"); return }
-      root.workspace.importNotebook(nb, root.store.rootPath + "/" + notebook.id, function(r) {
+      root.workspace.importNotebook(nb, from + "/" + notebook.id, function(r) {
+        if (r && r.stopped || moved()) { root.toast(name + " wasn't moved: another profile was opened"); return }
         if (!r) { root.toast(name + " couldn't be moved to Pages"); return }
         if (r.tooLong) { root.toast("\u201c" + r.tooLong + "\u201d in " + name + " is longer than a page in Pages can be: nothing was moved"); return }
         // (Into the trash only once all of it is in Pages, and saved.)

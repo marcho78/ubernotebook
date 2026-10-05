@@ -44,6 +44,9 @@ Item {
 
   // Another folder: its own first start (the examples, if it's empty).
   onFolderChanged: {
+    // (What's on its way from the folder before is for nothing from now:
+    // not only once this one's loaded.)
+    generation++
     welcomed = false
     startingPeople = null
     if (folder) loadTimer.restart()
@@ -786,8 +789,11 @@ Item {
   // Changes a page that isn't open: fn(page) changes it, then it's written
   // and pageChanged tells whoever shows it.
   function editPage(id, fn, done) {
+    var gen = generation
+    var where = folder
     readPage(id, function(page) {
-      if (!page) { if (done) done(false); return }
+      // (Another folder meanwhile: not changed there.)
+      if (!page || gen !== ws.generation || where !== ws.folder) { if (done) done(false); return }
       if (fn(page) === false) { if (done) done(false); return }
       page.modified = new Date().toISOString()
       ws.savePage(page)
@@ -1115,6 +1121,10 @@ Item {
   function fetchBookmarkPicture(url, done) {
     var target = Bookmark.imageTarget(url)
     if (!target) { done(""); return }
+    // (Into the assets of the folder it was asked for in, or none: another
+    // opened meanwhile, it isn't kept.)
+    var gen = generation
+    var dest = Workspace.assetsDir(files.rootPath)
     files.exec(["/usr/bin/getent", "ahosts", target.host], function(okR, out) {
       var ips = okR ? Bookmark.addresses(out) : []
       if (!ips.length || !ips.every(Bookmark.isPublicIp)) { done(""); return }
@@ -1127,10 +1137,10 @@ Item {
         files.exec(["/usr/bin/curl", "-q", "-sS", "--noproxy", "*", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
           "--resolve", at, "-A", ws.fetchAgent, "-o", tmp + "/picture", "-w", "%{content_type}", "--", target.url], function(ok2, type) {
           var name = ok2 ? Bookmark.imageName(String(type || ""), target.url, new Date()) : ""
-          if (!name) { finish(""); return }
-          var dir = Workspace.assetsDir(files.rootPath)
-          files.mkdirs([dir], function() {
-            files.copyPictureIn(tmp + "/picture", dir, name, function(ok3) { finish(ok3 ? "assets/" + name : "") })
+          if (!name || gen !== ws.generation) { finish(""); return }
+          files.mkdirs([dest], function() {
+            if (gen !== ws.generation) { finish(""); return }
+            files.copyPictureIn(tmp + "/picture", dest, name, function(ok3) { finish(ok3 && gen === ws.generation ? "assets/" + name : "") })
           })
         }, { timeoutMs: 20000, maxBytes: 4096 })
       })
@@ -1410,6 +1420,11 @@ Item {
   // What went wrong while importing (a zip that wouldn't unzip, a picture
   // left out): given with the result as `problems`, said with it.
   property var importProblems: []
+  // The folder an import began in ({ gen, folder }): another opened since,
+  // it stops before making anything (importMoved()).
+  property var importFrom: null
+  function importMoved() { return !importFrom || importFrom.gen !== generation || importFrom.folder !== folder }
+  function importStopped(skipped, done) { done({ pages: 0, first: "", skipped: skipped || [], stopped: true }) }
   function importProblem(message) {
     if (importing) importProblems.push(message)
     else ws.failed(message)
@@ -1425,6 +1440,19 @@ Item {
     importing = true
     importCount = 0
     importProblems = []
+    importFrom = { gen: generation, folder: folder }
+    // (Told once, whatever happens on the way, its temporary folder gone first.)
+    var told = false
+    function finish(result) {
+      if (told) return
+      told = true
+      files.exec(["/usr/bin/rm", "-rf", "--", tmp], function() {})
+      ws.importing = false
+      ws.touched()
+      result.problems = ws.importProblems
+      if (ws.importMoved()) result.stopped = true
+      if (done) done(result)
+    }
     // (A folder of its own, made new: never one that's there, which is
     // taken away after. On disk: a zip may unpack to gigabytes. One a day
     // old, left by an import that never finished, taken away first.)
@@ -1434,14 +1462,10 @@ Item {
       + "/usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type d -name 'import-*' -mmin +1440 -exec /usr/bin/rm -rf -- {} + 2>/dev/null; "
       + "/usr/bin/mkdir -m 700 -- \"$2\"", "uber-notebook-import-dir", base, tmp], function(ok) {
       if (!ok) { ws.importing = false; if (done) done({ pages: 0, first: "", skipped: list }); return }
+      if (ws.importMoved()) { ws.importStopped([], finish); return }
       ws.unzipAll(list, tmp, function(roots) {
-        ws.scanImport(roots, tmp, parent, function(result) {
-          files.exec(["/usr/bin/rm", "-rf", "--", tmp], function() {})
-          ws.importing = false
-          ws.touched()
-          result.problems = ws.importProblems
-          if (done) done(result)
-        })
+        if (ws.importMoved()) { ws.importStopped([], finish); return }
+        ws.scanImport(roots, tmp, parent, finish)
       })
     })
   }
@@ -1476,6 +1500,7 @@ Item {
 
   function scanImport(roots, tmp, parent, done) {
     files.execText(["/usr/bin/bash", "-c", scanScript, "uber-notebook-scan"].concat(roots), function(ok, output) {
+      if (ws.importMoved()) { ws.importStopped([], done); return }
       var groups = []
       String(output || "").split("\u0000").forEach(function(item) {
         if (!item) return
@@ -1557,8 +1582,11 @@ Item {
   function readImport(plan, images, tmp, parent, skipped, done) {
     var textual = plan.filter(function(e) { return e.kind === "markdown" || e.kind === "html" || e.kind === "text" || e.kind === "enex" })
     files.readFiles(textual.map(function(e) { return e.path }), function(got) {
+      if (ws.importMoved()) { ws.importStopped(skipped, done); return }
       textual.forEach(function(e) { e.source = got[e.path] || "" })
       ws.convertOffice(plan.filter(function(e) { return e.kind === "office" }), tmp, skipped, function() {
+        // (Nothing's made in another folder than it began in.)
+        if (ws.importMoved()) { ws.importStopped(skipped, done); return }
         ws.buildImport(plan, images, parent, skipped, done)
       })
     }, 64 * 1024 * 1024)
@@ -1577,7 +1605,7 @@ Item {
       var walled = /^unshare$/m.test(have) ? ["/usr/bin/unshare", "--user", "--map-current-user", "--net", "--"] : []
       var k = 0
       function next() {
-        if (k >= list.length) { done(); return }
+        if (k >= list.length || ws.importMoved()) { done(); return }
         var e = list[k++]
         var dir = tmp + "/convert-" + k
         var ext = (/\.([A-Za-z0-9]+)$/.exec(e.path) || ["", ""])[1].toLowerCase()
@@ -1754,6 +1782,10 @@ Item {
     }
     importing = true
     var dest = Workspace.assetsDir(files.rootPath)
+    // (Another folder opened meanwhile: stopped, nothing made in it.)
+    var gen = generation
+    var where = folder
+    function moved() { return gen !== ws.generation || where !== ws.folder }
     // Every picture on its pages, once, each with a new name of its own.
     var names = {}
     var taken = {}
@@ -1771,6 +1803,7 @@ Item {
     var missing = 0
     var i = 0
     function copyNext() {
+      if (moved()) { ws.importing = false; done({ stopped: true }); return }
       if (i >= copies.length) { make(); return }
       var c = copies[i++]
       files.copyPictureIn(c.from, dest, c.name, function(ok) {

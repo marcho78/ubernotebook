@@ -1209,6 +1209,32 @@ Item {
         compare(json(api.attach(home, pic)).ok, true)
         files.answerReads()
         verify(Workspace.flatten(fileOf(home)).some(function(b) { return b.type === "image" }), "on the page")
+        // Pictures added to a gallery there: not added in the other profile.
+        var gal = json(api.addGallery(home, pic, 2))
+        files.answerReads()
+        var gb = Workspace.flatten(fileOf(home)).filter(function(b) { return b.type === "gallery" })[0]
+        verify(gb !== undefined, "a gallery")
+        var n = gb.data.images.length
+        compare(json(api.gallery(home, gb.uid, "add", pic, "")).ok, true)
+        ws.generation++
+        files.answerReads()
+        compare(Workspace.flatten(fileOf(home)).filter(function(b) { return b.type === "gallery" })[0].data.images.length, n)
+        ws.generation--
+        files.holdReads = false
+        // A site you say yes to after another profile opened: not contacted.
+        api.ui = ui
+        api.settings = Qt.binding(function() { return service.settings })
+        api.agentScope = { agent: "Grok", id: "grok", dir: "/tmp/in", frozen: false, grants: {}, talk: "" }
+        api.caller = api.agentScope
+        view.agentAsks = []
+        json(api.bookmark(home, "https://late.example.org/a"))
+        compare(view.agentAsks.length, 1)
+        ws.generation++
+        view.answerAgentAsk(view.agentAsks[0].key, "once")
+        verify(!files.ran.some(function(a) { return a.join(" ").indexOf("late.example.org") >= 0 }), "never contacted")
+        ws.generation--
+        api.caller = null
+        api.agentScope = null
       } finally {
         files.holdReads = false
         files.answerReads()

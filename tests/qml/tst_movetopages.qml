@@ -166,6 +166,30 @@ Item {
       verify(store.data[nb.id] !== undefined)
     }
 
+    // Another profile opened while its pictures are copied: it stops, and
+    // the notebook stays; nothing made in the other.
+    function test_2c_another_profile_meanwhile() {
+      fresh()
+      var nb = store.add({ title: "Crossing" }, [{ title: "One", blocks: [{ type: "image", src: "assets/a.png", width: 0.6 }] }])
+      store.refresh()
+      files.disk[store.rootPath + "/" + nb.id + "/assets/a.png"] = "PNG"
+      var others = store.notebooks.length
+      files.holdReads = true
+      try {
+        app.moveToPages({ id: nb.id, title: nb.title })
+        tryVerify(function() { return files.heldReads.length > 0 }, 2000)
+        ws.generation++
+        files.answerReads()
+        tryVerify(function() { return said("\u201cCrossing\u201d wasn't moved: another profile was opened") }, 2000)
+        verify(!Object.keys(ws.index.pages).some(function(id) { return ws.index.pages[id].title === "Crossing" }), "no page made")
+        compare(store.notebooks.length, others, "still on the shelf")
+        compare(ws.importing, false)
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+      }
+    }
+
     function test_2b_not_all_saved_or_too_long() {
       fresh()
       // A page of it couldn't be written: in Pages as far as it went, and
