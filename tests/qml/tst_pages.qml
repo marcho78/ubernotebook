@@ -844,6 +844,12 @@ Item {
         var last = said[said.length - 1]
         verify(last.indexOf("Couldn't unzip /tmp/broken.zip") > 0, last)
         compare(ws.importing, false)
+        // Unzipped on disk (the runtime folder is memory), in a folder of its own.
+        var unzip = files.ran.filter(function(a) { return a[4] === "unzip" })[0]
+        verify(unzip && unzip[6].indexOf(files.cacheDir + "/import-") === 0, JSON.stringify(unzip))
+        var made = files.ran.filter(function(a) { return a[3] === "uber-notebook-import-dir" })[0]
+        compare(made[4], files.cacheDir)
+        verify(made[5] && unzip[6].indexOf(made[5] + "/") === 0)
       } finally {
         view.toast.disconnect(heard)
       }

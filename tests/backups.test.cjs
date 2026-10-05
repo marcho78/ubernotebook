@@ -153,15 +153,17 @@ try {
     write(path.join(base, "keep.txt"), "mine");
     const r = helper(["restore-backup", file, "p1", base, c.hash, MAXB, MAXF]);
     assert.equal(r.code, 0, r.err);
-    const into = r.out.trim();
+    const lines = r.out.trim().split("\n");
+    const into = lines.pop();
     assert.equal(into, base + " 2");
+    assert.deepEqual(lines, ["left-out:0"]);
     assert.equal(fs.readFileSync(path.join(base, "keep.txt"), "utf8"), "mine", "what was there, as it was");
     assert.equal(fs.readFileSync(path.join(into, "Pages", "assets", "a b.png"), "utf8"), "PNG");
     assert.equal(fs.readFileSync(path.join(into, "library.json"), "utf8"), "{\"notebooks\":[]}");
     assert.ok(fs.existsSync(path.join(into, ".trash", "old", "notebook.json")));
     assert.ok(!fs.existsSync(path.join(into, "uber-notebook-backup.json")), "only the profile's own files");
     const w = helper(["restore-backup", file, "p2", path.join(tmp, "Restored Work"), c.hash, MAXB, MAXF]);
-    assert.equal(fs.readFileSync(path.join(w.out.trim(), "Pages", "index.json"), "utf8"), "{\"work\":true}");
+    assert.equal(fs.readFileSync(path.join(w.out.trim().split("\n").pop(), "Pages", "index.json"), "utf8"), "{\"work\":true}");
     // Not in it: nothing made.
     const bad = helper(["restore-backup", file, "p7", path.join(tmp, "Nothing"), c.hash, MAXB, MAXF]);
     assert.notEqual(bad.code, 0);
@@ -220,16 +222,31 @@ try {
     write(path.join(linky, "uber-notebook-backup.json"), JSON.stringify(B.manifest([{ name: "x" }], "1", new Date())));
     fs.mkdirSync(path.join(linky, "p1"));
     fs.symlinkSync("/etc/passwd", path.join(linky, "p1", "passwd"));
+    write(path.join(linky, "p1", "kept.json"), "{}");
     const lf = path.join(tmp, "linky.tar.gz");
     execFileSync("/usr/bin/tar", ["-czf", lf, "-C", linky, "uber-notebook-backup.json", "p1"]);
     const l = plain(B.checked(helper(["inspect-backup", lf]).out));
-    assert.equal(l.ok, false);
-    assert.ok(/links/.test(l.problem), l.problem);
-    // (Put back anyway: it stops at the link, and takes away what it made.)
-    const forced = helper(["restore-backup", lf, "p1", path.join(tmp, "Linky"), sha256(lf), MAXB, MAXF]);
+    assert.equal(l.ok, true, "put back, without the link: " + l.problem);
+    assert.equal(l.leftOut, true);
+    const linked = helper(["restore-backup", lf, "p1", path.join(tmp, "Linky"), l.hash, MAXB, MAXF]);
+    assert.equal(linked.code, 0, linked.err);
+    assert.deepEqual(linked.out.trim().split("\n"), ["left-out:1", path.join(tmp, "Linky")]);
+    assert.deepEqual(fs.readdirSync(path.join(tmp, "Linky")), ["kept.json"], "the link left out, the rest put back");
+    // One with a sparse file (its holes would be written out whole): refused.
+    const sparse = path.join(tmp, "sparse");
+    write(path.join(sparse, "uber-notebook-backup.json"), JSON.stringify(B.manifest([{ name: "x" }], "1", new Date())));
+    fs.mkdirSync(path.join(sparse, "p1"));
+    execFileSync("/usr/bin/truncate", ["-s", "64M", path.join(sparse, "p1", "holes.bin")]);
+    const sf = path.join(tmp, "sparse.tar.gz");
+    execFileSync("/usr/bin/tar", ["-S", "-czf", sf, "-C", sparse, "uber-notebook-backup.json", "p1"]);
+    assert.ok(fs.statSync(sf).size < 100000, "a small file");
+    const sc = plain(B.checked(helper(["inspect-backup", sf]).out));
+    assert.equal(sc.ok, false);
+    assert.match(sc.problem, /sparse/);
+    const forced = helper(["restore-backup", sf, "p1", path.join(tmp, "Sparse"), sha256(sf), MAXB, MAXF]);
     assert.notEqual(forced.code, 0);
-    assert.match(forced.err, /a link or a special file/);
-    assert.ok(!fs.existsSync(path.join(tmp, "Linky")));
+    assert.match(forced.err, /a sparse file/);
+    assert.ok(!fs.existsSync(path.join(tmp, "Sparse")), "what it made, taken away");
     // One with a name that reaches up (made with Python's tarfile, which writes what it's told).
     const up = path.join(tmp, "up.tar.gz");
     execFileSync("/usr/bin/python3", ["-c", "import tarfile,sys,io\nwith tarfile.open(sys.argv[1], 'w:gz') as t:\n  t.add(sys.argv[2], 'uber-notebook-backup.json')\n  d=b'escaped'\n  i=tarfile.TarInfo('p1/../../escape.txt'); i.size=len(d); t.addfile(i, io.BytesIO(d))", up, path.join(linky, "uber-notebook-backup.json")]);

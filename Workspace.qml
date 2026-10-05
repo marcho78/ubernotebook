@@ -1425,10 +1425,14 @@ Item {
     importing = true
     importCount = 0
     importProblems = []
-    var tmp = files.runtimeDir + "/uber-notebook-import-" + Workspace.uuid4().slice(0, 8)
     // (A folder of its own, made new: never one that's there, which is
-    // taken away after.)
-    files.exec(["/usr/bin/mkdir", "-m", "700", "--", tmp], function(ok) {
+    // taken away after. On disk: a zip may unpack to gigabytes. One a day
+    // old, left by an import that never finished, taken away first.)
+    var base = files.cacheDir || files.runtimeDir
+    var tmp = base + "/import-" + Workspace.uuid4().slice(0, 8)
+    files.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" || exit 1; "
+      + "/usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type d -name 'import-*' -mmin +1440 -exec /usr/bin/rm -rf -- {} + 2>/dev/null; "
+      + "/usr/bin/mkdir -m 700 -- \"$2\"", "uber-notebook-import-dir", base, tmp], function(ok) {
       if (!ok) { ws.importing = false; if (done) done({ pages: 0, first: "", skipped: list }); return }
       ws.unzipAll(list, tmp, function(roots) {
         ws.scanImport(roots, tmp, parent, function(result) {

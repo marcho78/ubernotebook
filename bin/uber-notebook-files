@@ -115,7 +115,9 @@
 #       One profile (pN/ in the backup) into a new folder: <folder>, or
 #       "<folder> 2"... if that's taken, never one that's there. The backup
 #       must still be the one inspected (its sha256); if it isn't, or
-#       anything fails, the new folder is taken away again. Prints the folder.
+#       anything fails, the new folder is taken away again. Links and
+#       special files are left out ("left-out:<n>"); a sparse file refuses
+#       it. Prints the folder last.
 
 import base64
 import errno
@@ -1338,16 +1340,22 @@ def zip_directory(f):
         raise zipfile.BadZipFile("not a zip")
     entries = int.from_bytes(tail[at + 10:at + 12], "little")
     size = int.from_bytes(tail[at + 12:at + 16], "little")
-    if entries == 0xFFFF or size == 0xFFFFFFFF:
-        loc = at - 20
-        if loc < 0 or tail[loc:loc + 4] != b"PK\x06\x07":
+    # (zip64's record, whenever its locator is there, whatever the classic
+    # one says: zipfile reads the directory it names.)
+    loc = at - 20
+    has64 = loc >= 0 and tail[loc:loc + 4] == b"PK\x06\x07"
+    if has64 or entries == 0xFFFF or size == 0xFFFFFFFF:
+        if not has64:
             raise zipfile.BadZipFile("not a zip")
         f.seek(int.from_bytes(tail[loc + 8:loc + 16], "little"))
         rec = f.read(56)
         if len(rec) < 56 or rec[:4] != b"PK\x06\x06":
             raise zipfile.BadZipFile("not a zip")
-        entries = int.from_bytes(rec[32:40], "little")
-        size = int.from_bytes(rec[40:48], "little")
+        # (The classic record's 0xFFFF and 0xFFFFFFFF only say "see zip64".)
+        e64 = int.from_bytes(rec[32:40], "little")
+        s64 = int.from_bytes(rec[40:48], "little")
+        entries = e64 if entries == 0xFFFF else max(entries, e64)
+        size = s64 if size == 0xFFFFFFFF else max(size, s64)
     f.seek(0)
     return entries, size
 
@@ -1479,7 +1487,9 @@ def cmd_inspect(path):
             dots = 0
             manifest = b""
             for tf, m in tar_members(src, INSPECT_BYTES, INSPECT_MEMBERS):
-                types.add(TYPES.get(m.type, "?"))
+                # (A sparse file: its holes would be written out whole, far
+                # more than the backup's size. Uber Notebook's never have one.)
+                types.add("S" if m.issparse() else TYPES.get(m.type, "?"))
                 raw = m.name
                 if parts_of(raw) is None:
                     if ".." in raw.split("/"):
@@ -1528,6 +1538,8 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
     pfd, name = new_folder(base)
     done = False
     found = False
+    # Links and special files (a link synced in, say): left out, counted.
+    left_out = 0
     made = None
     try:
         root_fd = open_dir(name, pfd)
@@ -1548,6 +1560,8 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
                         continue
                     if m.isdir():
                         os.close(folder_for(root_fd, inner, budget))
+                    elif m.isreg() and m.issparse():
+                        raise Refused("a sparse file in it")
                     elif m.isreg():
                         budget.file()
                         dfd = folder_for(root_fd, inner[:-1], budget)
@@ -1557,7 +1571,7 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
                         finally:
                             os.close(dfd)
                     else:
-                        raise Refused("a link or a special file in it")
+                        left_out += 1
                 digest = src.rest()
         finally:
             os.close(root_fd)
@@ -1579,6 +1593,7 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
                 else:
                     put_back(pfd, aside, name)
         os.close(pfd)
+    print("left-out:%d" % left_out)
     print(os.path.join(os.path.dirname(base.rstrip("/")), name))
 
 

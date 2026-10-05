@@ -415,6 +415,23 @@ try {
     fs.writeFileSync(liar, bytes);
     const lied = run(liar, 5);
     assert.deepEqual([lied.r.ok, lied.r.error], [false, "more than 20 entries"]);
+    // One whose end says one entry, with a zip64 record before it that says
+    // thirty (zipfile reads that one): refused before its directory's read.
+    const z64 = zip(path.join(tmp, "zip64-liar.zip"), Array.from({ length: 30 }, (_, i) => ({ name: "f" + i + ".md", data: "x" })));
+    const zb = fs.readFileSync(z64);
+    const ze = zb.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    const [count, cdSize, cdAt] = [zb.readUInt16LE(ze + 10), zb.readUInt32LE(ze + 12), zb.readUInt32LE(ze + 16)];
+    const rec = Buffer.alloc(56);
+    rec.writeUInt32LE(0x06064b50, 0); rec.writeBigUInt64LE(44n, 4); rec.writeUInt16LE(45, 12); rec.writeUInt16LE(45, 14);
+    rec.writeBigUInt64LE(BigInt(count), 24); rec.writeBigUInt64LE(BigInt(count), 32); rec.writeBigUInt64LE(BigInt(cdSize), 40); rec.writeBigUInt64LE(BigInt(cdAt), 48);
+    const locator = Buffer.alloc(20);
+    locator.writeUInt32LE(0x07064b50, 0); locator.writeBigUInt64LE(BigInt(ze), 8); locator.writeUInt32LE(1, 16);
+    const classic = Buffer.from(zb.subarray(ze, ze + 22));
+    classic.writeUInt16LE(1, 8); classic.writeUInt16LE(1, 10); classic.writeUInt32LE(46, 12);
+    fs.writeFileSync(z64, Buffer.concat([zb.subarray(0, ze), rec, locator, classic]));
+    assert.equal(execFileSync("/usr/bin/python3", ["-c", "import zipfile,sys; print(len(zipfile.ZipFile(sys.argv[1]).infolist()))", z64], { encoding: "utf8" }).trim(), "30", "zipfile reads all thirty");
+    const lied64 = run(z64, 5);
+    assert.deepEqual([lied64.r.ok, lied64.r.error, lied64.made], [false, "more than 20 entries", 0]);
     // Within its room: as before.
     const fine = run(zip(path.join(tmp, "fine.zip"), [{ name: "a/b/x.md", data: "x" }, { name: "c/" }]), 5);
     assert.deepEqual([fine.r.ok, fine.r.files, fine.made], [true, 1, 4]);

@@ -309,8 +309,10 @@ Item {
     function next() {
       if (i >= list.length) { done(); return }
       var c = list[i++]
-      // (Never over a file that's there: a picture's name is new each time.)
-      store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] || exit 0; /usr/bin/mkdir -p -- \"$2\" && /usr/bin/cp -r --update=none -- \"$1\"/. \"$2\"/", "uber-notebook-mirror-copy", c[0], c[1]], function() { next() }, { timeoutMs: 60000, okCodes: [0, 1] })
+      // (Never over a file that's there: a picture's name is new each time.
+      // Neither folder a link: one put there would copy a folder of yours
+      // into the copy, or the pictures somewhere else.)
+      store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] && [ ! -L \"$1\" ] && [ ! -L \"$2\" ] || exit 0; /usr/bin/mkdir -p -- \"$2\" && /usr/bin/cp -r --update=none -- \"$1\"/. \"$2\"/", "uber-notebook-mirror-copy", c[0], c[1]], function() { next() }, { timeoutMs: 60000, okCodes: [0, 1] })
     }
     next()
   }

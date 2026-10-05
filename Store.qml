@@ -29,6 +29,9 @@ Item {
   property string home: Quickshell.env("HOME")
   // Where imports are unpacked and converted for a moment (a tmpfs of your own).
   readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+  // On disk, for what may be big (an import unzipped): the runtime folder is
+  // memory, shared with the whole session.
+  readonly property string cacheDir: { var c = Quickshell.env("XDG_CACHE_HOME") || ""; return (c.charAt(0) === "/" ? c : home + "/.cache") + "/uber-notebook" }
   // Settings.folder: "" is the default place.
   property string folder: ""
   // Off (no profile yet): no folder is looked for, and nothing's made.

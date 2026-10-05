@@ -127,13 +127,18 @@ Item {
       if (!c.ok) { bk.working = ""; bk.failed = true; bk.note = c.problem; done({ ok: false, error: c.problem }); return }
       var todo = c.manifest.profiles.slice()
       var made = []
+      var leftOut = 0
       function next() {
-        if (!todo.length) { bk.added(made, open, done); return }
+        if (!todo.length) { bk.added(made, open, done, leftOut); return }
         var p = todo.shift()
         var base = Backups.restoreFolder(p.name)
         // (From the file looked into: if it isn't that any more, nothing.)
         bk.files.helper(["restore-backup", c.path, p.dir, bk.home + base.slice(1), c.hash, String(bk.restoreMaxBytes), String(bk.restoreMaxFiles)], function(ok, out) {
-          var at = ok ? String(out || "").trim().split("\n").pop() : ""
+          var lines = ok ? String(out || "").trim().split("\n") : []
+          var at = lines.length ? lines[lines.length - 1] : ""
+          // (Links and special files in it, left out: counted.)
+          lines.forEach(function(l) { var m = /^left-out:(\d{1,9})$/.exec(l); if (m && at) leftOut += Number(m[1]) })
+          if (at && at.charAt(0) !== "/") at = ""
           if (at) made.push({ name: p.name, folder: bk.home && at.indexOf(bk.home + "/") === 0 ? "~" + at.slice(bk.home.length) : at, saved: p.saved })
           next()
         }, { timeoutMs: 30 * 60 * 1000, maxBytes: 64 * 1024 })
@@ -141,13 +146,14 @@ Item {
       next()
     })
   }
-  function added(made, open, done) {
+  function added(made, open, done, leftOut) {
     working = ""
     if (!made.length) { failed = true; note = "Nothing could be put back from that backup."; done({ ok: false, error: note }); return }
     var r = profiles.addRestored(made, open)
     failed = false
     note = "Put back as " + r.map(function(p) { return "“" + p.name + "”" }).join(", ") + "."
-    done({ ok: true, restored: r })
+      + (leftOut ? " " + leftOut + (leftOut === 1 ? " link (or special file) in it was" : " links (or special files) in it were") + " left out." : "")
+    done({ ok: true, restored: r, leftOut: leftOut || 0 })
   }
 
   // ---- automatic ones ----

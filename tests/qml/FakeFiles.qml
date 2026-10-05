@@ -11,6 +11,7 @@ QtObject {
   property string rootPath: "/tmp/uber-notebook-dev"
   property string home: "/tmp"
   property string runtimeDir: "/tmp"
+  property string cacheDir: "/home/u/.cache/uber-notebook"
   // path -> text
   property var disk: ({})
   // The helper's reads answered later, as the real one's are (else at once).

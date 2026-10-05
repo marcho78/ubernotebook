@@ -94,9 +94,11 @@ function readManifest(text) {
   return { version: line(m.version, 20), created: created, profiles: list }
 }
 
-// What the check script says about a file: { ok, problem, manifest }. A
-// backup holds only uber-notebook-backup.json and its profiles' folders (p1/...),
-// plain files and folders, nothing reaching outside them.
+// What the check script says about a file: { ok, problem, manifest, leftOut }.
+// A backup holds only uber-notebook-backup.json and its profiles' folders
+// (p1/...), nothing reaching outside them. Links and special files in it (one
+// synced into a profile, say) are left out when it's put back (`leftOut`);
+// a sparse file, or one of a kind it doesn't know, refuses it.
 function checked(output) {
   var text = String(output || "")
   var cut = text.indexOf("\n---\n")
@@ -106,12 +108,12 @@ function checked(output) {
   var notOurs = "That isn't a backup " + APP + " can read (a .tar.gz it made)."
   if (cut < 0 || fields.readable !== "1") return { ok: false, problem: notOurs, manifest: null }
   if (Number(fields.outside) > 0 || Number(fields.dots) > 0) return { ok: false, problem: "That file holds more than " + APP + "'s notes, so it isn't put back.", manifest: null }
-  if (/[^-d]/.test(fields.types || "")) return { ok: false, problem: "That backup has links or special files in it, so it isn't put back.", manifest: null }
+  if (/[^-dlhcbp]/.test(fields.types || "")) return { ok: false, problem: "That backup has sparse or unknown kinds of files in it, so it isn't put back.", manifest: null }
   var m = readManifest(text.slice(cut + 5))
   if (!m) return { ok: false, problem: notOurs, manifest: null }
   // (What restoring it checks it still is.)
   var hash = /^[0-9a-f]{64}$/.test(fields.hash || "") ? fields.hash : ""
-  return { ok: true, problem: "", manifest: m, hash: hash }
+  return { ok: true, problem: "", manifest: m, hash: hash, leftOut: /[lhcbp]/.test(fields.types || "") }
 }
 
 // The backups in a folder (the list script's lines: "<modified>\t<size>\t<name>"),
