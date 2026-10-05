@@ -817,13 +817,15 @@ Item {
         ws.flushIndex()
         compare(files.disk[cal], "THE CALENDAR AS IT IS")
         compare(files.disk[ix], "THE TREE AS IT IS")
-        // Read again (fine now): written as always.
+        // Read again (fine now, and JSON: text that isn't is kept as it is
+        // too): written as always.
         files.failReads = ({})
+        files.disk[cal] = JSON.stringify({ version: 1, events: [] })
         ws.load()
         tryCompare(ws, "ready", true, 2000)
         tryVerify(function() { return ws.calendarLoaded && !ws.unreadable[cal] }, 2000)
         ws.writeCalendar()
-        verify(files.disk[cal] !== "THE CALENDAR AS IT IS", "written once it could be read")
+        verify(files.disk[cal] !== JSON.stringify({ version: 1, events: [] }), "written once it could be read")
       } finally {
         ws.failed.disconnect(heard)
         files.failReads = ({})
@@ -967,6 +969,16 @@ Item {
         tryVerify(function() { return ws.loaded }, 2000, "loaded all the same")
         verify(ws.unreadable[cal] === true, "kept as it is")
         verify(told.some(function(m) { return m.indexOf("calendar.json") >= 0 }), JSON.stringify(told))
+        // People's file that isn't JSON at all (a stray comma): kept as it
+        // is, never taken for none and written over.
+        var ppl = ws.contactsPath()
+        var damaged = '{"version":1,"contacts":[{"id":"c1","name":"Kept Person",}]}'
+        files.disk[ppl] = damaged
+        ws.load()
+        tryVerify(function() { return ws.loaded }, 2000)
+        verify(ws.unreadable[ppl] === true, "not JSON: as one that couldn't be read")
+        ws.saveContact({ id: "", name: "New Person", phones: [], emails: [] })
+        compare(files.disk[ppl], damaged, "never written over")
       } finally {
         ws.failed.disconnect(heard)
       }

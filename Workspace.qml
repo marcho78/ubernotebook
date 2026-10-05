@@ -200,7 +200,15 @@ Item {
   // be (it makes cleaning throw: damaged, or made to) is as one that
   // couldn't be read, left as it is, and the rest goes on loading.
   function cleaned(path, raw, clean) {
-    try { return clean(raw ? files.parseJson(raw) : null) } catch (e) {
+    // (Text that isn't JSON at all, a hand edit or a sync tool's say, is
+    // damaged too: never taken for an empty file, and written over.)
+    var parsed = raw ? files.parseJson(raw) : null
+    if (parsed === null && String(raw || "").trim() !== "") {
+      console.warn("Uber Notebook: " + path + " couldn't be read: it isn't JSON")
+      keepUnreadable(path, [path])
+      return clean(null)
+    }
+    try { return clean(parsed) } catch (e) {
       console.warn("Uber Notebook: " + path + " couldn't be read: " + e)
       keepUnreadable(path, [path])
       return clean(null)
