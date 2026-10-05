@@ -1487,7 +1487,8 @@ Item {
     var out = []
     var k = 0
     function next() {
-      if (k >= list.length) { done(out); return }
+      // (Another profile opened meanwhile: no more unpacked.)
+      if (k >= list.length || ws.importMoved()) { done(out); return }
       var p = list[k++]
       if (Import.kindOf(p) !== "zip") { out.push(p); next(); return }
       var dir = tmp + "/zip-" + k + "/" + Import.titleFromName(p).replace(/[\/\u0000-\u001f]/g, " ").replace(/^\.+/, "").slice(0, 80)
@@ -1754,7 +1755,9 @@ Item {
       var tops = order.filter(function(e) { return !e.parentEntry || e.parentEntry.kind === "skip" }).map(function(e) { return e.id })
       if (tops.length) ws.editPage(parent, function(p) { tops.forEach(function(id) { Workspace.appendPageBlock(p, id) }); return true })
     }
-    // Pictures, copied in one after another.
+    // Pictures, copied in one after another (into the folder its pages were
+    // made in: another profile opened meanwhile, they still go there, with
+    // their pages).
     var i = 0
     function copyNext() {
       if (i >= copies.length) { done({ pages: count, first: first, skipped: skipped }); return }

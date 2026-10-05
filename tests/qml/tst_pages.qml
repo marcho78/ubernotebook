@@ -898,6 +898,15 @@ Item {
         compare(Object.keys(ws.index.pages).length, pagesBefore, "no page made")
         compare(ws.importing, false)
         verify(files.ran.some(function(a) { return a[0] === "/usr/bin/rm" && String(a[3]).indexOf(files.cacheDir + "/import-") === 0 }), "its folder taken away")
+        // Several zips: once another profile's open, no more unpacked.
+        files.disk["/tmp/one.zip"] = "ZIP"
+        files.disk["/tmp/two.zip"] = "ZIP"
+        said = []
+        view.importPaths(["/tmp/one.zip", "/tmp/two.zip"], "")
+        tryVerify(function() { return files.heldReads.length > 0 }, 2000)
+        ws.generation++
+        tryVerify(function() { files.answerReads(); return said.indexOf("Not imported: another profile was opened") >= 0 }, 3000, JSON.stringify(said))
+        compare(files.ran.filter(function(a) { return a[4] === "unzip" }).length, 1, "the second never started")
         files.holdReads = false
         // An export: stopped at the next step, its folder taken away, nothing made.
         fresh()

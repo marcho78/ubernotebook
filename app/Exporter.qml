@@ -127,7 +127,7 @@ Item {
     var tries = 0
     function check() {
       var left = wanted.filter(function(w) { return !editor.mathOf(w.tex, w.display) })
-      if (!left.length || ++tries > 100) { done(); return }
+      if (!left.length || ++tries > 100 || ex.moved()) { done(); return }
       waiter.next = check
       waiter.restart()
     }
@@ -147,7 +147,7 @@ Item {
     var out = {}
     var n = 0
     function next() {
-      if (n >= list.length || !editor || typeof editor.drawingImage !== "function") { done(out); return }
+      if (n >= list.length || !editor || typeof editor.drawingImage !== "function" || ex.moved()) { done(out); return }
       var d = list[n++]
       editor.drawingImage("diagram", d.source, { ink: Export.INK, back: "#ffffff" }, function(result) {
         var name = "d" + n + ".png"
