@@ -93,6 +93,9 @@ Item {
 
     // Two profiles, with notes; Pages open.
     function fresh() {
+      // (What the test before left to be written, written before its files
+      // are wiped: else it lands in this one's.)
+      ws.flushIndex()
       files.reset()
       files.disk["/tmp/Notes/Personal/library.json"] = "{\"notebooks\":[]}"
       files.disk["/tmp/Notes/Personal/Pages/one.json"] = "{\"page\":1}"
