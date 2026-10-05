@@ -1144,7 +1144,8 @@ QtObject {
     if (page && lockedNote(page)) return fail(lockedNote(page))
     var name = p.slice(p.lastIndexOf("/") + 1)
     var kind = files.isImagePath(p) ? "picture" : /\.eml$/i.test(name) ? "email" : Files.kindOf(name) === "video" ? "video" : "file"
-    if (kind === "picture") workspace.importPicture(p, function(src) { if (src) api.appendNow(id, [{ type: "image", src: src, width: 1, align: "center", indent: 0 }]) })
+    // (The panel's agent's picture only from its own folder, through no link.)
+    if (kind === "picture") workspace.importPicture(p, function(src) { if (src) api.appendNow(id, [{ type: "image", src: src, width: 1, align: "center", indent: 0 }]) }, caller ? caller.dir : "")
     else if (kind === "email") workspace.importEmail(p, function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) })
     else workspace.importFile(p, function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) })
     return answer({ ok: true, id: id, file: name, kind: kind, note: "it's being copied in, and shows at the end of the page in a moment (blocks <id> lists it there; if it doesn't, the file couldn't be read)" })
@@ -1200,8 +1201,9 @@ QtObject {
     }
     done(list.filter(function(p) { return files.isImagePath(p) }).slice(0, 200))
   }
-  // Pictures copied into Pages/assets: done([srcs], in their order).
-  function importPictures(paths, done) {
+  // Pictures copied into Pages/assets: done([srcs], in their order). With
+  // `within` (the panel's agent's folder), only pictures in it.
+  function importPictures(paths, done, within) {
     if (!paths.length) { done([]); return }
     var got = []
     var left = paths.length
@@ -1209,7 +1211,7 @@ QtObject {
       workspace.importPicture(p, function(src) {
         got[i] = src
         if (--left === 0) done(got.filter(function(s) { return !!s }))
-      })
+      }, within)
     })
   }
 
@@ -1226,10 +1228,11 @@ QtObject {
     if (list.length > 1 && !list.some(function(p) { return files.isImagePath(p) })) return fail("none of those are pictures (png, jpg, gif, webp, bmp, svg)")
     var cols = Number(columns)
     if (cols !== 2 && cols !== 4) cols = 3
+    var within = caller ? caller.dir : ""
     picturesOf(pictures, function(paths) {
       api.importPictures(paths, function(srcs) {
         if (srcs.length) api.appendNow(id, [{ type: "gallery", indent: 0, data: Blocks.cleanData("gallery", { images: srcs.map(function(s) { return { src: s, caption: "" } }), columns: cols }) }])
-      })
+      }, within)
     })
     return answer({ ok: true, id: id, columns: cols, note: "the pictures are being copied in: the gallery shows at the end of the page in a moment (blocks <id> lists it)" })
   }
@@ -1250,6 +1253,7 @@ QtObject {
     if (act === "add") {
       var list = pathList(a)
       if (!list.length || list.some(function(p) { return p.charAt(0) !== "/" })) return fail("give the pictures' full paths, one a line (or | between them), or a folder's")
+      var within = caller ? caller.dir : ""
       picturesOf(a, function(paths) {
         api.importPictures(paths, function(srcs) {
           if (!srcs.length) return
@@ -1260,7 +1264,7 @@ QtObject {
             d.images = d.images.concat(srcs.map(function(s) { return { src: s, caption: "" } }))
             x.data = Blocks.cleanData("gallery", d)
           }, true)
-        })
+        }, within)
       })
       return answer({ ok: true, id: id, block: block, note: "the pictures are being copied in, then at the gallery's end" })
     }

@@ -748,6 +748,7 @@ Item {
       tryVerify(function() { img = json(api.blocks(r.id)).filter(function(b) { return b.type === "image" })[0]; return !!img }, 2000)
       compare(img.width, 100, "as it comes: as wide as the page")
       compare(img.align, "center")
+      compare(files.picturesIn[files.picturesIn.length - 1].within, "", "yours: from wherever you said")
       var s = json(api.picture(r.id, img.id, "40%", "right"))
       verify(s.ok, JSON.stringify(s))
       compare(fileOf(r.id).blocks[img.id].width, 0.4)
@@ -805,10 +806,20 @@ Item {
       tryVerify(function() { var x = view.editor.serialize().filter(function(b) { return b.type === "gallery" })[0]; return x && x.data.images[0].caption === "Morning" }, 2000)
       compare(json(api.picture(r.id, img.id, "50", "left")).ok, true)
       tryVerify(function() { var x = view.editor.serialize().filter(function(b) { return b.type === "image" })[0]; return x && x.width === 0.5 && x.align === "left" }, 2000)
+      // The panel's agent's pictures: only from its own folder (the files
+      // helper walks it, through no link).
+      api.agentScope = { agent: "Grok", id: "grok", dir: "/tmp/in", frozen: false }
+      api.caller = api.agentScope
+      files.disk["/tmp/in/two.png"] = "PNG"
+      var before = files.picturesIn.length
+      api.attach(r.id, "/tmp/in/two.png")
+      api.addGallery(r.id, "/tmp/in/beach.png|/tmp/in/two.png", "2")
+      api.caller = null
+      api.agentScope = null
+      tryVerify(function() { return files.picturesIn.length >= before + 3 }, 2000)
+      verify(files.picturesIn.slice(before).every(function(c) { return c.within === "/tmp/in" }), JSON.stringify(files.picturesIn.slice(before)))
     }
 
-    // Links changed; templates from Markdown, said what they're for; a board
-    // sized and colored; the settings there are.
     function test_24_links_templates_boards_settings() {
       fresh()
       files.fetchPages["https://example.com/a"] = "<html><head><title>Page A</title></head></html>"

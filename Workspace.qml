@@ -1242,17 +1242,19 @@ Item {
     }, { timeoutMs: 5000, maxBytes: 4096 })
   }
 
-  // Copies a picture into Pages/assets: done("assets/<name>") or done("").
-  function importPicture(path, done) {
+  // Copies a picture into Pages/assets (Store.copyPictureIn: only a picture,
+  // within its size; with `within`, an agent's folder, only from it):
+  // done("assets/<name>") or done("").
+  function importPicture(path, done, within) {
     if (!files.isImagePath(path)) { done(""); return }
     var name = files.assetName(path)
     var dest = Workspace.assetsDir(files.rootPath)
     files.mkdirs([dest], function(ok) {
       if (!ok) { done(""); return }
-      files.exec(["/usr/bin/cp", "--", path, dest + "/" + name], function(copied, output) {
-        if (!copied) ws.failed("Couldn't copy the picture: " + output)
+      files.copyPictureIn(path, dest, name, function(copied, why) {
+        if (!copied) ws.failed("Couldn't copy the picture: " + why)
         done(copied ? "assets/" + name : "")
-      }, { timeoutMs: 20000 })
+      }, within)
     })
   }
 
@@ -1614,7 +1616,7 @@ Item {
     function copyNext() {
       if (i >= copies.length) { done({ pages: count, first: first, skipped: skipped }); return }
       var c = copies[i++]
-      files.exec(["/usr/bin/cp", "--", c.from, c.to], function() { copyNext() }, { okCodes: [0, 1], timeoutMs: 20000 })
+      files.copyPictureIn(c.from, c.to.slice(0, c.to.lastIndexOf("/")), c.to.slice(c.to.lastIndexOf("/") + 1), function() { copyNext() })
     }
     files.mkdirs([Workspace.assetsDir(files.rootPath)], function() { copyNext() })
   }
@@ -1659,11 +1661,11 @@ Item {
     function copyNext() {
       if (i >= copies.length) { make(); return }
       var c = copies[i++]
-      files.exec(["/usr/bin/cp", "--update=none-fail", "--", c.from, dest + "/" + c.name], function(ok) {
+      files.copyPictureIn(c.from, dest, c.name, function(ok) {
         if (ok) names[c.src] = "assets/" + c.name
         else missing++
         copyNext()
-      }, { timeoutMs: 20000 })
+      })
     }
     function make() {
       var ctx = { image: function(src) { return names[src] || "" } }

@@ -161,6 +161,9 @@ DataCard {
       fillMode: Image.PreserveAspectCrop
       asynchronous: true
       source: bk.has && bk.info.image && bk.editor ? bk.editor.assetUrl(bk.info.image) : ""
+      // (A card's picture: decoded small, whatever size the file is; only
+      // its width, since it's cropped.)
+      sourceSize.width: 640
     }
     HoverHandler { cursorShape: !bk.asking ? Qt.PointingHandCursor : Qt.ArrowCursor }
     TapHandler {

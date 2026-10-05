@@ -958,11 +958,38 @@ Item {
     var dest = Library.assetsDir(rootPath, id)
     mkdirs([dest], function(ok) {
       if (!ok) { done(""); return }
-      store.exec(["/usr/bin/cp", "--", path, dest + "/" + name], function(copied, output) {
-        if (!copied) store.failed("Couldn't copy the picture: " + output)
+      store.copyPictureIn(path, dest, name, function(copied, why) {
+        if (!copied) store.failed("Couldn't copy the picture: " + why)
         done(copied ? "assets/" + name : "")
-      }, { timeoutMs: 20000 })
+      })
     })
+  }
+
+  // A picture copied in (bin/uber-notebook-files copy-picture): only a plain
+  // file that's a picture Qt can show (at most pictureMax bytes, 16384 px a
+  // side), as a new file in `folder` named `name`, never over one; with
+  // `within` (an agent's folder), only a picture in it, through no link.
+  // done(ok, why). A few at a time (a gallery of 200 waits its turn).
+  readonly property real pictureMax: 50 * 1024 * 1024
+  property var pictureQueue: []
+  property int picturesCopying: 0
+  function copyPictureIn(from, folder, name, done, within) {
+    pictureQueue = pictureQueue.concat([{ from: String(from), folder: String(folder), name: String(name), done: done, within: String(within || "") }])
+    nextPicture()
+  }
+  function nextPicture() {
+    while (picturesCopying < 3 && pictureQueue.length) {
+      var c = pictureQueue[0]
+      pictureQueue = pictureQueue.slice(1)
+      picturesCopying++
+      helper(["copy-picture", c.from, c.folder, c.name, String(pictureMax)].concat(c.within ? [c.within] : []), function(ok, out) {
+        store.picturesCopying--
+        var r = store.parseJson(String(out || "").trim().split("\n").pop())
+        var copied = ok && !!r && r.ok === true
+        try { if (c.done) c.done(copied, copied ? "" : r && r.error ? String(r.error) : "it couldn't be read") }
+        finally { store.nextPicture() }
+      }, { timeoutMs: 60000, maxBytes: 4096 })
+    }
   }
 
   // A picture on the clipboard, saved into the notebook: done(src) or done("").

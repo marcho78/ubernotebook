@@ -58,6 +58,7 @@ QtObject {
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
     printed = []
+    picturesIn = []
     deferHelperReads = false
     heldReads = []
     failReads = ({})
@@ -408,6 +409,15 @@ QtObject {
   function assetName(path) { return Library.assetName(path, new Date()) }
   function pasteInto(dest, done) { done("") }
   function copyText(text) { copied = String(text) }
+  // A picture copied in (Store.qml: copy-picture): never over a file;
+  // what it was asked, `within` too, for tests.
+  property var picturesIn: []
+  function copyPictureIn(from, folder, name, done, within) {
+    picturesIn = picturesIn.concat([{ from: from, to: folder + "/" + name, within: within || "" }])
+    var ok = disk[from] !== undefined && disk[folder + "/" + name] === undefined
+    if (ok) disk[folder + "/" + name] = disk[from]
+    if (done) done(ok, ok ? "" : "it couldn't be read")
+  }
   // A picture onto the clipboard (Store.qml: wl-copy): which one.
   property string copiedPicture: ""
   function copyPicture(path, done) {

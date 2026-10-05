@@ -299,6 +299,68 @@ try {
     fs.symlinkSync(path.join(outside, "secret.png"), path.join(work, "page.src.html"));
     assert.equal(JSON.parse(helperRun(["export-html", assets, work, "1000000"]).out).ok, false);
   });
+  check("a picture copied in: only a plain file that's a picture Qt can show, within its size, as a new file; an agent's only from its folder, through no link", () => {
+    const zlib = require("node:zlib");
+    function png(w, h, body) {
+      const crc = (buf) => { let c = ~0; for (const b of buf) { c ^= b; for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1)); } return ~c >>> 0; };
+      const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const t = Buffer.from(type); const c = Buffer.alloc(4); c.writeUInt32BE(crc(Buffer.concat([t, data]))); return Buffer.concat([len, t, data, c]); };
+      const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+      return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(body || Buffer.alloc(16))), chunk("IEND", Buffer.alloc(0))]);
+    }
+    const src = folder("pictures-src");
+    const dest = folder("pictures-dest");
+    const agent = folder("pictures-agent");
+    const elsewhere = folder("pictures-elsewhere");
+    fs.writeFileSync(path.join(src, "ok.png"), png(40, 20));
+    fs.writeFileSync(path.join(src, "huge.png"), png(20000, 100));
+    fs.writeFileSync(path.join(src, "many.png"), png(16000, 16000));
+    fs.writeFileSync(path.join(src, "text.png"), "not a picture at all");
+    fs.writeFileSync(path.join(src, "closed.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"/>');
+    fs.writeFileSync(path.join(src, "open.svg"), '<svg xmlns="http://www.w3.org/2000/svg"><image href="file:///etc/passwd"/></svg>');
+    execFileSync("/usr/bin/mkfifo", [path.join(src, "pipe.png")]);
+    fs.symlinkSync(path.join(src, "ok.png"), path.join(src, "link.png"));
+    fs.writeFileSync(path.join(agent, "mine.png"), png(10, 10));
+    fs.writeFileSync(path.join(elsewhere, "private.png"), png(10, 10));
+    fs.symlinkSync(elsewhere, path.join(agent, "linked"));
+    fs.symlinkSync(path.join(elsewhere, "private.png"), path.join(agent, "alias.png"));
+    let n = 0;
+    const copy = (from, max, within, to) => {
+      const name = to || "p" + (n++) + ".png";
+      const r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "copy-picture", from, dest, name, String(max || 1000000)].concat(within ? [within] : []), { encoding: "utf8", timeout: 10000 });
+      assert.equal(r.error, undefined, "it doesn't wait on anything: " + from);
+      const out = JSON.parse(r.stdout.trim().split("\n").pop());
+      return Object.assign(out, { there: fs.existsSync(path.join(dest, name)), name });
+    };
+    const ok = copy(path.join(src, "ok.png"));
+    assert.deepEqual([ok.ok, ok.width, ok.height, ok.there], [true, 40, 20, true]);
+    assert.deepEqual(fs.readFileSync(path.join(dest, ok.name)), fs.readFileSync(path.join(src, ok.name.replace(/.*/, "ok.png"))), "the same bytes");
+    assert.equal(copy(path.join(src, "link.png")).ok, true, "a link to a picture you picked: followed");
+    assert.equal(copy(path.join(src, "closed.svg"), 0, "", "c.svg").ok, true);
+    for (const [file, why, max] of [["pipe.png", /not a plain file/], ["text.png", /not a picture/], ["huge.png", /too big to show/], ["many.png", /too big to show/],
+      ["open.svg", /names something outside/], ["ok.png", /more than 10 bytes/, 10]]) {
+      const r = copy(path.join(src, file), max);
+      assert.equal(r.ok, false, file);
+      assert.match(r.error, why, file);
+      assert.equal(r.there, false, "nothing left: " + file);
+    }
+    assert.equal(copy("/dev/zero").ok, false, "never a device");
+    // Never over a file that's there; never into a folder that's a link.
+    fs.writeFileSync(path.join(dest, "taken.png"), "MINE");
+    assert.equal(copy(path.join(src, "ok.png"), 0, "", "taken.png").ok, false);
+    assert.equal(fs.readFileSync(path.join(dest, "taken.png"), "utf8"), "MINE");
+    fs.symlinkSync(elsewhere, path.join(src, "dest-link"));
+    const intoLink = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "copy-picture", path.join(src, "ok.png"), path.join(src, "dest-link"), "x.png", "1000000"], { encoding: "utf8" });
+    assert.equal(JSON.parse(intoLink.stdout).ok, false);
+    assert.ok(!fs.existsSync(path.join(elsewhere, "x.png")));
+    // An agent's: only from its folder, through no link.
+    assert.equal(copy(path.join(agent, "mine.png"), 0, agent).ok, true);
+    for (const p of [path.join(agent, "linked", "private.png"), path.join(agent, "alias.png"), path.join(elsewhere, "private.png"), path.join(agent, "..", "pictures-elsewhere", "private.png")]) {
+      const r = copy(p, 0, agent);
+      assert.equal(r.ok, false, p);
+      assert.equal(r.there, false);
+    }
+    assert.equal(copy(path.join(src, "ok.png"), 0, "", "../escape.png").ok, false, "a name, not a path");
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

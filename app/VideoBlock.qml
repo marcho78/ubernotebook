@@ -112,6 +112,9 @@ DataCard {
         fillMode: Image.PreserveAspectFit
         asynchronous: true
         source: vb.info.poster && vb.editor ? vb.editor.assetUrl(vb.info.poster) : ""
+        // (Decoded no bigger than the block can show.)
+        sourceSize.width: 1920
+        sourceSize.height: 1920
       }
       // Paused or not started: a big play button.
       Rectangle {

@@ -53,6 +53,16 @@
 #               plain file, never through a link; after a power cut, the file
 #               as it was or as it is, never half of it)
 #         mkdir { path }        -> {}  (the folders, as needed)
+#   copy-picture <picture> <folder> <name> <max bytes> [<within>]
+#       A picture copied into <folder> (a folder of yours, not a link) as
+#       <name>, a new file (never over one that's there): only a plain file
+#       (never a pipe or a device; it isn't waited on), at most <max bytes>
+#       (counted as it's copied), that's a PNG, JPEG, GIF, WebP, BMP or an SVG
+#       that names nothing outside itself, at most 16384 pixels a side and
+#       64 million in all (what Qt would decode). With <within> (an agent's
+#       folder), the picture must be in it, every step opened without
+#       following a link. Prints JSON: { ok, name, width, height } or
+#       { ok: false, error }.
 #   export-html <assets folder> <work folder> <max bytes>
 #       A page made a document (Export.js wrote <work folder>/page.src.html,
 #       a folder of Uber Notebook's own) with its pictures put in, as
@@ -628,6 +638,94 @@ def picture_data(dir_fd, name, room):
     return (url, picture_size(data, kind)) if len(url) <= room else ("", None)
 
 
+# ---- a picture copied in -----------------------------------------------------------------------
+
+PICTURE_SIDE = 16384
+PICTURE_AREA = 64 * 1024 * 1024
+
+
+def open_within(path, within):
+    """`path` opened for reading, every step from the folder `within`
+    without following a link; Refused when it isn't in it."""
+    base = os.path.normpath(within)
+    full = os.path.normpath(path)
+    if not full.startswith(base + "/"):
+        raise Refused("not in that folder")
+    parts = parts_of(full[len(base) + 1:])
+    if not parts:
+        raise Refused("not in that folder")
+    fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        for p in parts[:-1]:
+            nfd = open_dir(p, fd)
+            os.close(fd)
+            fd = nfd
+        return os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=fd)
+    except OSError as e:
+        if e.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise Refused("a link, not a file in that folder")
+        raise
+    finally:
+        os.close(fd)
+
+
+def cmd_copy_picture(source, folder, name, max_bytes, within=None):
+    limit = int(max_bytes)
+    if not parts_of(name) or "/" in name or name.startswith("."):
+        raise Refused("not a name for a file")
+    # (A link to a picture you picked is followed; never a pipe or a device,
+    # and it isn't waited on: O_NONBLOCK, then only a plain file.)
+    src = open_within(source, within) if within else os.open(source, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        info = os.fstat(src)
+        if not stat.S_ISREG(info.st_mode):
+            raise Refused("not a plain file")
+        if info.st_size > limit:
+            raise Refused("more than %d bytes" % limit)
+        head = os.pread(src, 1024 * 1024, 0)
+        kind = picture_type(head)
+        if not kind:
+            raise Refused("not a picture")
+        if kind == "image/svg+xml":
+            whole = os.pread(src, limit + 1, 0)
+            if len(whole) > limit or not svg_is_closed(whole):
+                raise Refused("a drawing that names something outside it")
+        size = picture_size(head, kind)
+        if kind != "image/svg+xml" and (not size or size[0] > PICTURE_SIDE or size[1] > PICTURE_SIDE or size[0] * size[1] > PICTURE_AREA):
+            raise Refused("a picture too big to show (at most %d pixels a side)" % PICTURE_SIDE)
+        dfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            if os.fstat(dfd).st_uid != os.getuid():
+                raise Refused("that folder isn't yours")
+            out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+            copied = 0
+            try:
+                os.lseek(src, 0, os.SEEK_SET)
+                while True:
+                    chunk = os.read(src, CHUNK)
+                    if not chunk:
+                        break
+                    copied += len(chunk)
+                    if copied > limit:
+                        raise Refused("more than %d bytes" % limit)
+                    view = memoryview(chunk)
+                    while view:
+                        view = view[os.write(out, view):]
+            except BaseException:
+                os.close(out)
+                try:
+                    os.unlink(name, dir_fd=dfd)
+                except OSError:
+                    pass
+                raise
+            os.close(out)
+        finally:
+            os.close(dfd)
+    finally:
+        os.close(src)
+    print(json.dumps({"ok": True, "name": name, "width": size[0] if size else 0, "height": size[1] if size else 0}))
+
+
 # ---- a text file -------------------------------------------------------------------------------
 
 def cmd_read(max_bytes, path):
@@ -957,6 +1055,8 @@ def main(argv):
             cmd_unlink_link(argv[2], argv[3])
         elif len(argv) == 3 and argv[1] == "inspect-backup":
             cmd_inspect(argv[2])
+        elif len(argv) in (6, 7) and argv[1] == "copy-picture":
+            cmd_copy_picture(*argv[2:])
         elif len(argv) == 5 and argv[1] == "export-html":
             cmd_export_html(argv[2], argv[3], argv[4])
         elif len(argv) == 3 and argv[1] == "serve":
@@ -967,7 +1067,7 @@ def main(argv):
             sys.stderr.write("usage: uber-notebook-files unzip|inspect-backup|restore-backup ...\n")
             return 2
     except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error) as e:
-        if argv[1:2] in (["unzip"], ["export-html"]):
+        if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"]):
             print(json.dumps({"ok": False, "error": str(e)[:300]}))
             return 1
         sys.stderr.write(str(e)[:300] + "\n")

@@ -47,11 +47,26 @@ ShellRoot {
       var d = String(out).trim()
       if (!ok || !d) { console.log("FAIL setup"); Qt.quit(); return }
       store.rootPath = d
+      // (A picture copied in for real, by the files helper: a picture, and
+      // never a pipe.)
+      store.exec(["/usr/bin/mkfifo", d + "/pipe.png"], function() {
+        store.copyPictureIn(d + "/Pages/assets/pic.png", d, "copy.png", function(ok) {
+          store.copyPictureIn(d + "/pipe.png", d, "pipe-copy.png", function(ok2, why) {
+            store.exec(["/usr/bin/test", "-s", d + "/copy.png"], function(there) {
+              say("a picture copied in, by the files helper", ok === true && there, "")
+              say("never a pipe: said, not waited on", ok2 === false && /not a plain file/.test(why), why)
+              root.exports(d)
+            })
+          })
+        })
+      })
+    })
+  }
+  function exports(d) {
       exporter.probe(function(t) {
         if (!t.browser || !t.office) { console.log("PASS skipped: no " + (!t.browser ? "Chromium" : "LibreOffice")); root.finish(d); return }
         root.make("pdf", d, function() { root.make("docx", d, function() { root.finish(d) }) })
       })
-    })
   }
 
   function make(kind, d, next) {

@@ -1310,6 +1310,10 @@ Item {
       id: picture
       anchors.fill: parent
       source: block.type === "image" && block.src ? block.editor.assetUrl(block.src) : ""
+      // (Decoded no bigger than a page can show, its shape kept, not at
+      // whatever size the file is.)
+      sourceSize.width: 3072
+      sourceSize.height: 4096
       fillMode: Image.PreserveAspectFit
       asynchronous: true
       smooth: true

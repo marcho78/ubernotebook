@@ -2913,6 +2913,9 @@ FocusScope {
           anchors.fill: parent
           visible: coverArea.stops === null
           source: coverArea.stops === null && view.cover ? view.workspace.assetUrl(view.cover) : ""
+          // (Decoded no wider than a cover can show; only its width, since
+          // it's cropped: both would decode it to fill them.)
+          sourceSize.width: 3840
           fillMode: Image.PreserveAspectCrop
           asynchronous: true
         }
