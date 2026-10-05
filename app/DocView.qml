@@ -1286,6 +1286,7 @@ FocusScope {
     toast("Importing\u2026")
     workspace.importPaths(paths, parentId || "", function(r) {
       if (r.stopped) { view.toast("Not imported: another profile was opened"); return }
+      if (r.movedOn) { view.toast("Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into the profile that was open when it began"); return }
       var note = r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") : "There were no notes to import"
       if (r.skipped && r.skipped.length) note += " (" + r.skipped.length + " not: install pandoc or LibreOffice for Word files)"
       // (What went wrong too, the first of it; a long message, cut.)

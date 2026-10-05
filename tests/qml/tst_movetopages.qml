@@ -184,6 +184,9 @@ Item {
         verify(!Object.keys(ws.index.pages).some(function(id) { return ws.index.pages[id].title === "Crossing" }), "no page made")
         compare(store.notebooks.length, others, "still on the shelf")
         compare(ws.importing, false)
+        var copiedTo = files.picturesIn.filter(function(c) { return c.from.indexOf(nb.id + "/assets/a.png") > 0 }).map(function(c) { return c.to })
+        compare(copiedTo.length, 1)
+        compare(files.disk[copiedTo[0]], undefined, "the picture it copied for it, taken away again")
       } finally {
         files.holdReads = false
         files.answerReads()

@@ -870,10 +870,20 @@ Item {
       view.toast.connect(heard)
       var root = files.rootPath
       try {
-        // The folder changes: at once, not once it's loaded.
+        // The folder changes: at once, not once it's loaded. Its tree,
+        // changed a moment before, is written where it came from, never
+        // into the one opened.
         var g = ws.generation
+        var mine = view.page.id
+        ws.index.pages[mine].title = "Renamed just before"
+        ws.touched()
         files.rootPath = "/tmp/other-notes"
         verify(ws.generation > g, "what's on its way is for nothing from now")
+        verify(String(files.disk[Workspace.indexFile(root)]).indexOf("Renamed just before") > 0, "written where it came from")
+        tryCompare(ws, "ready", true, 2000)
+        wait(400)
+        var other = String(files.disk[Workspace.indexFile("/tmp/other-notes")] || "")
+        verify(other.indexOf(mine) < 0 && other.indexOf("Renamed just before") < 0, "nothing of it in the other: " + other.slice(0, 200))
         files.rootPath = root
         fresh()
         // A page being changed (read first): not changed.
@@ -907,6 +917,18 @@ Item {
         ws.generation++
         tryVerify(function() { files.answerReads(); return said.indexOf("Not imported: another profile was opened") >= 0 }, 3000, JSON.stringify(said))
         compare(files.ran.filter(function(a) { return a[4] === "unzip" }).length, 1, "the second never started")
+        // Its pages made already (its pictures still being copied): said
+        // so, not "not imported", and they stay where they were made.
+        files.disk["/tmp/exp2/Trip.md"] = "# Trip\n\n![map](map.png)\n"
+        files.disk["/tmp/exp2/map.png"] = "PNG"
+        said = []
+        var before2 = Object.keys(ws.index.pages).length
+        view.importPaths(["/tmp/exp2"], "")
+        function made() { return Object.keys(ws.index.pages).length > before2 }
+        tryVerify(function() { if (!made()) files.answerReads(); return made() && files.heldReads.length > 0 }, 3000, "its pages made, its picture on its way")
+        ws.generation++
+        tryVerify(function() { files.answerReads(); return said.some(function(t) { return t.indexOf("Imported") === 0 }) }, 3000, JSON.stringify(said))
+        verify(said.indexOf("Imported 2 pages into the profile that was open when it began") >= 0 || said.indexOf("Imported 1 page into the profile that was open when it began") >= 0, JSON.stringify(said))
         files.holdReads = false
         // An export: stopped at the next step, its folder taken away, nothing made.
         fresh()

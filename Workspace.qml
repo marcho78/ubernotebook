@@ -45,8 +45,15 @@ Item {
   // Another folder: its own first start (the examples, if it's empty).
   onFolderChanged: {
     // (What's on its way from the folder before is for nothing from now:
-    // not only once this one's loaded.)
+    // not only once this one's loaded. Its tree, changed and not written
+    // yet, is written where it came from, never here.)
     generation++
+    if (indexTimer.running && indexRoot) {
+      indexTimer.stop()
+      var was = Workspace.indexFile(indexRoot)
+      if (!unreadable[was]) write(was, Workspace.indexJson(index))
+    }
+    indexRoot = ""
     welcomed = false
     startingPeople = null
     if (folder) loadTimer.restart()
@@ -101,6 +108,7 @@ Item {
     var gen = ++generation
     folderMade = false
     // (Nothing of another folder's: its pages may have the same ids.)
+    indexRoot = ""
     texts = ({})
     written = ({})
     readJson = ({})
@@ -137,6 +145,7 @@ Item {
             changed = true
           }
           ws.index = ix
+          ws.indexRoot = files.rootPath
           ws.ready = true
           ws.revision++
           if (changed) ws.saveIndex()
@@ -194,12 +203,17 @@ Item {
   }
 
   // (done(ok) once it's written.)
+  // (The notes folder its tree was read from: written only there, never
+  // into another one opened since, or while that one's tree is read.)
+  property string indexRoot: ""
   function flushIndex(done) {
     indexTimer.stop()
     if (!ready && Object.keys(index.pages).length === 0) { if (done) done(false); return }
-    if (unreadable[indexPath()]) { notSaved(indexPath()); if (done) done(false); return }
+    if (!indexRoot || indexRoot !== files.rootPath) { if (done) done(false); return }
+    var path = indexPath()
+    if (unreadable[path]) { notSaved(path); if (done) done(false); return }
     var text = Workspace.indexJson(index)
-    withFolder(function() { ws.write(ws.indexPath(), text, done) }, done)
+    withFolder(function() { ws.write(path, text, done) }, done)
   }
 
   function touched() {
@@ -683,7 +697,9 @@ Item {
     if (!folder) return
     if (unreadable[chatsPath()]) { notSaved(chatsPath()); return }
     var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
-    withFolder(function() { ws.write(ws.chatsPath(), text) })
+    var path = chatsPath()
+    var gen = generation
+    withFolder(function() { if (gen === ws.generation) ws.write(path, text) })
   }
   // The page's conversation, or null.
   function chatFor(id) { return id && chats[id] ? chats[id] : null }
@@ -725,7 +741,10 @@ Item {
   function writeContacts() {
     if (!folder) return
     if (unreadable[contactsPath()]) { notSaved(contactsPath()); return }
-    withFolder(function() { ws.write(ws.contactsPath(), JSON.stringify(ws.contacts, null, 1) + "\n") })
+    var path = contactsPath()
+    var gen = generation
+    var text = JSON.stringify(ws.contacts, null, 1) + "\n"
+    withFolder(function() { if (gen === ws.generation) ws.write(path, text) })
   }
 
   // The people changed (`next`, a new copy), kept, as a step Undo takes back.
@@ -1461,7 +1480,9 @@ Item {
       ws.importing = false
       ws.touched()
       result.problems = ws.importProblems
-      if (ws.importMoved()) result.stopped = true
+      // (Another profile opened: nothing made, "stopped"; its pages made
+      // already, in the one before, "movedOn": they're there.)
+      if (ws.importMoved()) { if (result.pages > 0) result.movedOn = true; else result.stopped = true }
       if (done) done(result)
     }
     files.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" || exit 1; "
@@ -1811,12 +1832,20 @@ Item {
     })
     var missing = 0
     var i = 0
+    var copied = []
     function copyNext() {
-      if (moved()) { ws.importing = false; done({ stopped: true }); return }
+      if (moved()) {
+        // (What it copied for pages it won't make: taken away again, each a
+        // new file of its own.)
+        if (copied.length) files.exec(["/usr/bin/rm", "-f", "--"].concat(copied), null)
+        ws.importing = false
+        done({ stopped: true })
+        return
+      }
       if (i >= copies.length) { make(); return }
       var c = copies[i++]
       files.copyPictureIn(c.from, dest, c.name, function(ok) {
-        if (ok) names[c.src] = "assets/" + c.name
+        if (ok) { names[c.src] = "assets/" + c.name; copied.push(dest + "/" + c.name) }
         else missing++
         copyNext()
       })
