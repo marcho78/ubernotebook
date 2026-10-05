@@ -12,7 +12,9 @@ import "Env.js" as Env
 // ended too (unless `keepChildren`: wl-copy stays on to hand over what was
 // copied), as it is when Uber Notebook closes. It gets only the environment
 // a tool needs (Env.js). Output is counted as it arrives, stdout and stderr
-// together, and nothing past the budget is kept. On failure, `output` says
+// together, and nothing past the budget is kept. (The budget counts
+// characters, as they're kept: a character of UTF-8 may have been up to 4
+// bytes of output.) On failure, `output` says
 // why: the budget or deadline it broke, or what the command printed on
 // stderr. `input` is written to its stdin (and stdin closed).
 //

@@ -15,7 +15,9 @@ import "Env.js" as Env
 // when it's done, or Uber Notebook closes, whatever it left running ends too.
 // What it prints is read in pieces and cut into lines here, within budgets:
 // a line longer than maxLine is left out (and said, in errors), and once it
-// has printed more than maxBytes in all it's stopped. It gets the shell's
+// has printed more than maxBytes in all, on its output and its errors
+// together, it's stopped. (Budgets count characters, as they're kept: a
+// character of UTF-8 may have been up to 4 bytes of output.) It gets the shell's
 // environment, but what would change how a program starts (Env.js). With
 // `input`, it's written to as it works (send: a line of JSON for Claude Code,
 // its request, then its answers to what it asks; closeInput when that's all),
@@ -127,6 +129,19 @@ Item {
     _part += rest
   }
 
+  // Its errors: counted with its output, the first 8000 characters kept.
+  function _takeErr(data) {
+    if (_over) return
+    _seen += data.length
+    if (_seen > maxBytes) {
+      _over = "printed more than " + _size(maxBytes)
+      _note(_over)
+      stop()
+      return
+    }
+    if (_err.length < 8000) _err += data.slice(0, 8000 - _err.length)
+  }
+
   Component.onDestruction: if (proc.running) _signal("-KILL")
 
   Timer { id: deadline; interval: st.timeoutMs; onTriggered: st.stop() }
@@ -150,7 +165,7 @@ Item {
     }
     stderr: SplitParser {
       splitMarker: ""
-      onRead: function(data) { if (st._err.length < 8000) st._err += data }
+      onRead: function(data) { st._takeErr(data) }
     }
     onExited: function(exitCode) {
       deadline.stop()

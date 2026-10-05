@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "Audio.js" as Audio
+import "Env.js" as Env
 
 // The microphone, for dictation and audio notes: one recording at a time.
 // ffmpeg records from the microphone Settings picks (or the default one:
@@ -20,11 +21,22 @@ import "Audio.js" as Audio
 // out any recording: done(ok, text, problem). louder(file, to, done) makes a
 // recording louder into a new file: done(ok, peaks). listSources() finds
 // the microphones.
+//
+// ffmpeg runs as Run.qml's and Stream.qml's commands do: by its full path,
+// never through a shell, as the leader of a process group of its own
+// (setsid), with only the environment a tool needs (Env.js). It's stopped
+// with SIGINT, which has it finish its file; if it doesn't, it's ended with
+// anything it started (its group, SIGKILL), as it is when Uber Notebook
+// closes. What it prints is read in pieces, a line at most 4 KB, 64 MB in
+// all (counted in characters, as they're kept), and as many levels as its
+// longest recording has.
 Item {
   id: rec
 
   // Store.qml: running a command once (checks, transcribing).
   property var files: null
+  // The program that records (tests give a stand-in).
+  property string program: "/usr/bin/ffmpeg"
   readonly property string tempDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/uber-notebook-audio"
 
   // What's there: ffmpeg to record, voxtype to write out.
@@ -60,6 +72,14 @@ Item {
   property bool _canceled: false
   property real _started: 0
   property string _err: ""
+  // What it's printed (characters), the line it's in, its group's leader.
+  property real _seen: 0
+  property string _part: ""
+  property bool _skipping: false
+  property int _pid: 0
+  property bool _launched: false
+  property real outputMax: 64 * 1024 * 1024
+  readonly property int lineMax: 4096
 
   Component.onCompleted: check()
 
@@ -100,15 +120,31 @@ Item {
     _stopping = false
     _canceled = false
     _err = ""
+    _seen = 0
+    _part = ""
+    _skipping = false
+    _pid = 0
+    _launched = false
     recent = []
     level = 0
     elapsed = 0
     _started = Date.now()
     phase = "recording"
     var dir = kind === "test" ? tempDir : path.replace(/\/[^\/]*$/, "")
-    proc.command = ["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec \"$@\"", "uber-notebook-record", dir]
-      .concat(Audio.recordCommand(kind, path, { input: input, boost: boost }))
-    proc.running = true
+    var argv = Audio.recordCommand(kind, path, { input: input, boost: boost })
+    argv[0] = program
+    // Its folder first (not through a shell), then ffmpeg; stopped before it
+    // started: nothing recorded.
+    files.exec(["/usr/bin/mkdir", "-p", "-m", "700", "--", dir], function(made) {
+      if (rec._file !== path || rec.phase === "") return
+      if (!made || rec._stopping) {
+        rec._end(false, rec._canceled ? { canceled: true } : { problem: made ? "Nothing was recorded" : "There's nowhere to keep it" })
+        return
+      }
+      rec._launched = true
+      proc.command = ["/usr/bin/setsid", "--wait"].concat(argv)
+      proc.running = true
+    })
     // (ffmpeg's own limit is the recording's length; a microphone that stops
     // sending could keep it waiting, so the clock has one too.)
     wallClock.interval = (Number(Audio.LIMITS[kind] || Audio.LIMITS.audio) + 30) * 1000
@@ -120,9 +156,58 @@ Item {
     if (phase !== "recording") return
     phase = "finishing"
     _stopping = true
-    // ffmpeg finishes its file on SIGINT.
+    if (!_launched) return
+    // ffmpeg finishes its file on SIGINT (it leads its group: setsid).
     proc.signal(2)
     killer.restart()
+  }
+
+  // It, and anything it started: its group.
+  function _killGroup() {
+    var pid = proc.processId > 0 ? proc.processId : _pid
+    if (pid > 0) Quickshell.execDetached(["/usr/bin/kill", "-KILL", "--", "-" + pid])
+  }
+  Component.onDestruction: if (proc.running) _killGroup()
+
+  // What it prints: lines of levels, in pieces (no line past lineMax kept,
+  // nothing past outputMax read: then it's stopped).
+  function _counted(data) {
+    _seen += data.length
+    if (_seen <= outputMax) return true
+    if (phase === "recording") stop()
+    return false
+  }
+  function _takeOut(data) {
+    if (!_counted(data)) return
+    var from = 0
+    var nl
+    while ((nl = data.indexOf("\n", from)) >= 0) {
+      var piece = data.slice(from, nl)
+      from = nl + 1
+      if (_skipping) { _skipping = false; _part = ""; continue }
+      if (_part.length + piece.length > lineMax) { _part = ""; continue }
+      var line = _part + piece
+      _part = ""
+      _level(line)
+    }
+    var rest = data.slice(from)
+    if (_skipping || !rest) return
+    if (_part.length + rest.length > lineMax) { _part = ""; _skipping = true; return }
+    _part += rest
+  }
+  function _takeErr(data) {
+    if (!_counted(data)) return
+    if (_err.length < 600) _err += data.slice(0, 600 - _err.length)
+  }
+  function _level(line) {
+    var v = Audio.levelIn(line)
+    if (v < 0) return
+    // (As many as its longest recording has, a minute more.)
+    if (_levels.length < (Number(Audio.LIMITS[kind] || Audio.LIMITS.audio) + 60) * Audio.RATE) _levels.push(v)
+    level = v
+    var r = recent.slice(-159)
+    r.push(v)
+    recent = r
   }
 
   function cancel() {
@@ -143,7 +228,7 @@ Item {
   Timer {
     id: killer
     interval: 4000
-    onTriggered: if (proc.running) proc.signal(9)
+    onTriggered: if (proc.running) rec._killGroup()
   }
   Timer { id: wallClock; onTriggered: rec.stop() }
 
@@ -174,23 +259,26 @@ Item {
 
   Process {
     id: proc
+    clearEnvironment: true
+    environment: Env.forTools(function(name) { return Quickshell.env(name) })
+    onStarted: rec._pid = proc.processId > 0 ? proc.processId : 0
     stdout: SplitParser {
-      onRead: function(line) {
-        var v = Audio.levelIn(line)
-        if (v < 0) return
-        rec._levels.push(v)
-        rec.level = v
-        var r = rec.recent.slice(-159)
-        r.push(v)
-        rec.recent = r
-      }
+      splitMarker: ""
+      onRead: function(data) { rec._takeOut(data) }
     }
     stderr: SplitParser {
-      onRead: function(line) { if (rec._err.length < 600) rec._err += line + "\n" }
+      splitMarker: ""
+      onRead: function(data) { rec._takeErr(data) }
     }
     onExited: function(exitCode) {
       killer.stop()
       wallClock.stop()
+      // (Its last line, if it didn't end with one; then whatever it started
+      // and left running ends with it.)
+      if (rec._part && !rec._skipping) rec._level(rec._part)
+      rec._part = ""
+      rec._killGroup()
+      rec._pid = 0
       var file = rec._file
       var seconds = rec._levels.length / Audio.RATE
       if (rec.kind === "test") {
