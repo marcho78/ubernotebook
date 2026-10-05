@@ -999,16 +999,29 @@ def cmd_create_owned(path, text):
         os.close(dfd)
 
 
+def take_aside(dfd, name):
+    """`name` in dfd moved aside, one rename (what was there then is what's
+    checked, not what's there by the time it's taken away): its new name,
+    or None (nothing there)."""
+    aside = ".uber-notebook-aside-%s" % os.urandom(6).hex()
+    try:
+        os.rename(name, aside, src_dir_fd=dfd, dst_dir_fd=dfd)
+    except FileNotFoundError:
+        return None
+    return aside
+
+
 def cmd_remove_owned(path, text):
     dfd, name = parent_of(path)
     try:
-        same, st = holds_exactly(dfd, name, text.encode("utf-8"))
-        # (Still that file, not one put there since.)
-        now = os.stat(name, dir_fd=dfd, follow_symlinks=False) if same else None
-        if same and now is not None and (now.st_ino, now.st_dev) == (st.st_ino, st.st_dev):
-            os.unlink(name, dir_fd=dfd)
+        aside = take_aside(dfd, name)
+        same = aside is not None and holds_exactly(dfd, aside, text.encode("utf-8"))[0]
+        if same:
+            os.unlink(aside, dir_fd=dfd)
             print("removed")
         else:
+            if aside is not None:
+                put_back(dfd, aside, name)
             print("kept")
     finally:
         os.close(dfd)
@@ -1017,14 +1030,17 @@ def cmd_remove_owned(path, text):
 def cmd_unlink_link(path, target):
     dfd, name = parent_of(path)
     try:
+        aside = take_aside(dfd, name)
         try:
-            ours = os.readlink(name, dir_fd=dfd) == target
+            ours = aside is not None and os.readlink(aside, dir_fd=dfd) == target
         except OSError:
             ours = False
         if ours:
-            os.unlink(name, dir_fd=dfd)
+            os.unlink(aside, dir_fd=dfd)
             print("removed")
         else:
+            if aside is not None:
+                put_back(dfd, aside, name)
             print("kept")
     finally:
         os.close(dfd)
@@ -1277,8 +1293,10 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
     pfd, name = new_folder(base)
     done = False
     found = False
+    made = None
     try:
         root_fd = open_dir(name, pfd)
+        made = os.fstat(root_fd)
         try:
             with open_regular(path) as f:
                 src = Hashing(f)
@@ -1314,9 +1332,17 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
             raise Refused("that profile isn't in the backup")
         done = True
     finally:
-        if not done:
-            # (Only the folder this made, without following links in it.)
-            shutil.rmtree(name, dir_fd=pfd, ignore_errors=True)
+        if not done and made is not None:
+            # (Only the folder this made: moved aside, then taken away only
+            # if it's still that one, by its device and inode, without
+            # following links in it; anything else put back as it was.)
+            aside = take_aside(pfd, name)
+            if aside is not None:
+                now = os.lstat(aside, dir_fd=pfd)
+                if stat.S_ISDIR(now.st_mode) and (now.st_dev, now.st_ino) == (made.st_dev, made.st_ino):
+                    shutil.rmtree(aside, dir_fd=pfd, ignore_errors=True)
+                else:
+                    put_back(pfd, aside, name)
         os.close(pfd)
     print(os.path.join(os.path.dirname(base.rstrip("/")), name))
 

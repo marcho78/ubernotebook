@@ -146,6 +146,9 @@ try {
     assert.equal(fs.readFileSync(target, "utf8"), "precious");
     assert.equal(helperRun(["remove-owned", path.join(d, "link.desktop"), "precious"]).out.trim(), "kept", "a link isn't the file");
     assert.ok(fs.lstatSync(path.join(d, "link.desktop")).isSymbolicLink());
+    assert.equal(helperRun(["remove-owned", path.join(d, "none.desktop"), text]).out.trim(), "kept", "nothing there: nothing done");
+    // (What's checked is what was moved aside: nothing's left aside after.)
+    assert.deepEqual(fs.readdirSync(d).filter((n) => n.startsWith(".uber-notebook")), []);
   });
 
   check("its skill's link: taken out only if it's its own", () => {
@@ -155,7 +158,11 @@ try {
     assert.equal(helperRun(["unlink-link", path.join(d, "uber-notebook"), "/plugin/skills/uber-notebook"]).out.trim(), "removed");
     fs.mkdirSync(path.join(d, "mine"));
     assert.equal(helperRun(["unlink-link", path.join(d, "mine"), "/plugin/skills/uber-notebook"]).out.trim(), "kept", "a folder isn't a link");
-    assert.ok(fs.existsSync(path.join(d, "mine")));
+    assert.ok(fs.statSync(path.join(d, "mine")).isDirectory(), "put back as it was");
+    fs.writeFileSync(path.join(d, "file"), "x");
+    assert.equal(helperRun(["unlink-link", path.join(d, "file"), "/plugin/skills/uber-notebook"]).out.trim(), "kept", "nor a file");
+    assert.equal(fs.readFileSync(path.join(d, "file"), "utf8"), "x");
+    assert.deepEqual(fs.readdirSync(d).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
 
   check("a text file read for an agent: only a plain file, never one that doesn't end", () => {

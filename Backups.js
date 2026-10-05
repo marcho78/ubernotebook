@@ -188,26 +188,31 @@ var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/find \"$1\" -mindepth 1 -ma
 
 // A backup made: <folder> <stem> <suffix> <uber-notebook-backup.json> then, for
 // each profile, <its folder> <p1...> <a folder in it to leave out, or "">.
-// It's written beside where it goes and named when it's done, so a backup
+// It's written beside where it goes, in files of its own (mktemp: made new,
+// never one that's there), and named when it's done, never over a file
+// that's there (mv --update=none-fail: the next free name then), so a backup
 // that's there is a whole one. Prints its size, then its path.
 var BACKUP_SCRIPT = [
   "dir=$1; stem=$2; suffix=$3; json=$4; shift 4",
   "/usr/bin/mkdir -p -- \"$dir\" || exit 3",
-  "out=\"$dir/$stem$suffix\"; i=2",
-  "while [ -e \"$out\" ]; do out=\"$dir/$stem $i$suffix\"; i=$((i+1)); done",
-  "part=\"$dir/.$stem.part-$$\"",
   "tmp=$(/usr/bin/mktemp -d) || exit 3",
-  "trap '/usr/bin/rm -rf -- \"$tmp\"; /usr/bin/rm -f -- \"$part.tar\" \"$part.tar.gz\"' EXIT",
+  "part=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",
+  "gz=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",
+  "trap '/usr/bin/rm -rf -- \"$tmp\"; /usr/bin/rm -f -- \"$part\" \"$gz\"' EXIT",
   "printf '%s' \"$json\" > \"$tmp/" + MANIFEST + "\" || exit 3",
-  "/usr/bin/tar -cf \"$part.tar\" -C \"$tmp\" " + MANIFEST + " || exit 3",
+  "/usr/bin/tar -cf \"$part\" -C \"$tmp\" " + MANIFEST + " || exit 3",
   "while [ $# -ge 3 ]; do",
   "  src=$1; name=$2; skip=$3; shift 3",
-  "  if [ -n \"$skip\" ]; then /usr/bin/tar -rf \"$part.tar\" -C \"$src\" --exclude=\"./$skip\" --transform=\"s|^\\.|$name|\" .; else /usr/bin/tar -rf \"$part.tar\" -C \"$src\" --transform=\"s|^\\.|$name|\" .; fi",
+  "  if [ -n \"$skip\" ]; then /usr/bin/tar -rf \"$part\" -C \"$src\" --exclude=\"./$skip\" --transform=\"s|^\\.|$name|\" .; else /usr/bin/tar -rf \"$part\" -C \"$src\" --transform=\"s|^\\.|$name|\" .; fi",
   // (1: a file changed while it was read; what was read is kept.)
   "  rc=$?; [ $rc -le 1 ] || exit 3",
   "done",
-  "/usr/bin/gzip -6 -- \"$part.tar\" || exit 3",
-  "/usr/bin/mv -f -- \"$part.tar.gz\" \"$out\" || exit 3",
+  "/usr/bin/gzip -6 -c -- \"$part\" > \"$gz\" || exit 3",
+  "out=\"$dir/$stem$suffix\"; i=2",
+  "until /usr/bin/mv --update=none-fail -- \"$gz\" \"$out\" 2>/dev/null; do",
+  "  [ -e \"$out\" ] && [ $i -lt 1000 ] || exit 3",
+  "  out=\"$dir/$stem $i$suffix\"; i=$((i+1))",
+  "done",
   "/usr/bin/stat -c '%s' -- \"$out\"",
   "printf '%s\\n' \"$out\""
 ].join("\n")

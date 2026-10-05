@@ -1060,7 +1060,7 @@ Item {
       var ip = ips.filter(function(a) { return a.indexOf(":") < 0 })[0] || ips[0]
       var at = target.host + ":" + target.port + ":" + (ip.indexOf(":") >= 0 ? "[" + ip + "]" : ip)
       var tmp = files.runtimeDir + "/uber-notebook-picture-" + Workspace.uuid4()
-      files.mkdirs([tmp], function(madeTmp) {
+      files.exec(["/usr/bin/mkdir", "-m", "700", "--", tmp], function(madeTmp) {
         if (!madeTmp) { done(""); return }
         function finish(src) { files.exec(["/usr/bin/rm", "-rf", "--", tmp], null); done(src) }
         files.exec(["/usr/bin/curl", "-q", "-sS", "--noproxy", "*", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
@@ -1356,7 +1356,9 @@ Item {
     importing = true
     importCount = 0
     var tmp = files.runtimeDir + "/uber-notebook-import-" + Workspace.uuid4().slice(0, 8)
-    files.mkdirs([tmp], function(ok) {
+    // (A folder of its own, made new: never one that's there, which is
+    // taken away after.)
+    files.exec(["/usr/bin/mkdir", "-m", "700", "--", tmp], function(ok) {
       if (!ok) { ws.importing = false; if (done) done({ pages: 0, first: "", skipped: list }); return }
       ws.unzipAll(list, tmp, function(roots) {
         ws.scanImport(roots, tmp, parent, function(result) {
