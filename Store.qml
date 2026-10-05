@@ -519,7 +519,11 @@ Item {
     writeVersions[path] = v
     // (One that's failing already: not said again with each change.)
     writeFile(path, text, function(ok) {
+      // (One that couldn't be saved before, saved now with a newer text:
+      // said, as a retry's is.)
+      var was = store.unsaved[path] !== undefined
       if (store.writeVersions[path] === v) store.keepUnsaved(path, ok ? null : { text: text, version: v })
+      if (ok && was && store.unsaved[path] === undefined) store.recovered(1)
       if (done) done(ok)
     }, unsaved[path] !== undefined)
   }
@@ -533,6 +537,15 @@ Item {
     if (unsavedCount === 0) retryTimer.stop()
   }
   Timer { id: retryTimer; interval: 30000; repeat: true; onTriggered: store.retryUnsaved(null) }
+  // A file, or a folder and what's in it, gone on purpose: nothing of it
+  // kept to be written again (and an older write of it never stands).
+  function forgetUnsaved(path) {
+    var p = String(path || "").replace(/\/+$/, "")
+    if (!p) return
+    Object.keys(unsaved).forEach(function(k) {
+      if (k === p || k.indexOf(p + "/") === 0) { store.writeVersions[k] = ++store.writeVersion; store.keepUnsaved(k, null) }
+    })
+  }
   // Each one tried again, quietly: done(how many still aren't saved).
   function retryUnsaved(done) {
     var paths = Object.keys(unsaved)
@@ -546,8 +559,9 @@ Item {
     }
     paths.forEach(function(path) {
       var e = store.unsaved[path]
-      // (A newer text asked for since: that write is what counts.)
-      if (!e || store.writeVersions[path] !== e.version) { if (e) store.keepUnsaved(path, null); next(); return }
+      // (A newer text asked for since: that write is what counts, and says
+      // how it went when it's done.)
+      if (!e || store.writeVersions[path] !== e.version) { next(); return }
       // (One being written now, or waiting to be: never queued behind it,
       // where it would be written after a newer text; that write says how
       // it went, and if it fails, it's tried again next time.)
@@ -772,6 +786,9 @@ Item {
 
   // Moves a notebook or page into the trash, under a name that's never taken.
   function trash(path, name) {
+    // (What couldn't be saved of it, or in it, isn't tried again: it would
+    // bring back what you took away.)
+    forgetUnsaved(path)
     var dir = Library.trashDir(rootPath)
     var stamp = Library.pageId(new Date())
     mkdirs([dir], function(ok) {

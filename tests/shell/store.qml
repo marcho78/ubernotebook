@@ -135,7 +135,7 @@ ShellRoot {
               store.writeKept(q, "new", function(okNew) {
                 store.retryUnsaved(function(left) {
                   store.readFiles([p, q], function(got) {
-                    say("kept: tried again, saved, and said", left === 0 && got[p] === "two" && back === 1 && store.unsavedCount === 0, "left " + left + " back " + back + " " + JSON.stringify(got))
+                    say("kept: tried again, saved, and said (that one, and the one a newer save saved)", left === 0 && got[p] === "two" && back === 2 && store.unsavedCount === 0, "left " + left + " back " + back + " " + JSON.stringify(got))
                     say("kept: an older text never over a newer one", okOld === false && okNew === true && got[q] === "new", JSON.stringify(got[q]))
                     root.raceCheck(d)
                   })
@@ -151,6 +151,8 @@ ShellRoot {
   // after an edit): never queued behind it, so the newer text stays.
   function raceCheck(d) {
     var r = d + "/ro/z.json"
+    var said = 0
+    store.recovered.connect(function(n) { said += n })
     function sh(script, done) { store.exec(["/usr/bin/bash", "-c", script, "x", d], function() { done() }) }
     sh("/usr/bin/chmod 500 \"$1/ro\"", function() {
       store.writeKept(r, "old", function(ok1) {
@@ -166,6 +168,27 @@ ShellRoot {
             wait.stop()
             store.readFiles([r], function(got) {
               say("kept: a retry while a newer text is written never lands after it", ok1 === false && newOk === true && got[r] === "new" && store.unsavedCount === 0, JSON.stringify(got[r]) + " left " + store.unsavedCount)
+              say("kept: saved after all by the next save: said", said === 1, "said " + said)
+              root.goneCheck(d)
+            })
+          })
+        })
+      })
+    })
+  }
+  // A page you took away whose save had failed: never written again (it
+  // would come back).
+  function goneCheck(d) {
+    var g = d + "/ro/gone/page.json"
+    function sh(script, done) { store.exec(["/usr/bin/bash", "-c", script, "x", d], function() { done() }) }
+    sh("/usr/bin/mkdir -p \"$1/ro/gone\" && /usr/bin/chmod 500 \"$1/ro/gone\"", function() {
+      store.writeKept(g, "text", function(ok1) {
+        var kept = store.unsaved[g] !== undefined
+        store.trash(d + "/ro/gone", "gone")
+        sh("/usr/bin/chmod 700 \"$1/ro/gone\" 2>/dev/null; true", function() {
+          store.retryUnsaved(function(left) {
+            store.exec(["/usr/bin/test", "-e", g], function(there) {
+              say("kept: what's taken away isn't written again", ok1 === false && kept && left === 0 && !there && store.unsaved[g] === undefined, "kept " + kept + " left " + left + " there " + there)
               store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
             })
           })
