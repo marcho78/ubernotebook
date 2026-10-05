@@ -303,7 +303,10 @@ function fromAcp(line) {
     var prm = e.params && typeof e.params === "object" ? e.params : {}
     var tc = prm.toolCall && typeof prm.toolCall === "object" ? prm.toolCall : {}
     var raw = tc.rawInput && typeof tc.rawInput === "object" ? tc.rawInput : {}
-    return [{ kind: "ask", id: e.id, tool: String(raw.variant || tc.kind || ""), input: raw, title: String(tc.title || ""), options: Array.isArray(prm.options) ? prm.options : [] }]
+    // (What it is, by the kind Grok gives it; its input's "variant" only names it.)
+    var kind = String(tc.kind || "")
+    return [{ kind: "ask", id: e.id, tool: ACP_TOOLS.hasOwnProperty(kind) ? ACP_TOOLS[kind] : "", name: String(raw.variant || kind || ""),
+      input: raw, title: String(tc.title || ""), options: Array.isArray(prm.options) ? prm.options : [] }]
   }
   if (e.method !== undefined && e.id !== undefined) return [{ kind: "control", id: e.id }]
   if (e.method === "session/update" && e.params && e.params.update) {
@@ -346,24 +349,58 @@ function unsupported(id) {
 
 // Text it shows you in a question, every character as it is: what can't be
 // seen, or turns text around (control and direction marks), written out as
-// \u{...}; line breaks and tabs kept.
+// \u{...}; tabs kept; each line break shown (⏎), and a run of more than
+// two blank lines one line that says how many, so what comes after them
+// is in sight.
 function visible(text) {
-  return String(text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, function(c) {
+  var s = String(text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff\ufff9-\ufffb]/g, function(c) {
     return "\\u{" + c.charCodeAt(0).toString(16) + "}"
   })
+  var lines = s.split("\n")
+  var out = []
+  for (var i = 0; i < lines.length; i++) {
+    var j = i
+    while (j < lines.length - 1 && /^[ \t]*$/.test(lines[j])) j++
+    if (j - i > 2) { out.push("\u22ef " + (j - i) + " blank lines \u22ef\u23ce"); i = j - 1; continue }
+    out.push(lines[i] + (i < lines.length - 1 ? "\u23ce" : ""))
+  }
+  return out.join("\n")
+}
+// How many lines it has (a question says so when it's more than one).
+function lineCount(text) { return String(text || "").split("\n").length }
+
+// Grok's tools, by the kind it gives each (ACP's, set by Grok, not by what
+// a tool's given): a command, reading a site, reading or changing a file.
+var ACP_TOOLS = { execute: "Bash", fetch: "WebFetch", read: "Read", search: "Grep", edit: "Edit", "delete": "Edit", move: "Edit" }
+var READ_TOOLS = ["Read", "Glob", "Grep"]
+var CHANGE_TOOLS = ["Write", "Edit", "MultiEdit", "NotebookEdit"]
+// All a tool was given, as text (for a question), within reason.
+function inputText(i) {
+  var s = ""
+  try { s = JSON.stringify(i, null, 1) } catch (e) { s = "" }
+  if (!s || s === "{}") return ""
+  return s.length > 20000 ? s.slice(0, 20000) + "\n\u2026 (" + (s.length - 20000) + " more characters)" : s
 }
 
 // What it asks to do (Claude Code's can_use_tool, Grok's ACP), in words for
 // the panel, and what it may be allowed for: { action, target, text,
-// detail, always, grant, conversation }: `detail` the whole of it, every
-// character shown (a command); Always (`always`, "" for none) keeps it for
-// good (Permissions.js); `grant` and `conversation`, for this conversation.
-// A command is asked once, or for the conversation (Allow shell for this
-// conversation): never for good by its program, which can run anything its
-// folder says (git, make...); Settings can let an agent run any.
-function askOf(tool, toolInput, title) {
+// detail, always, grant, conversation }: `detail` the whole of it, as it is
+// (the panel shows it with visible()); Always (`always`, "" for none) keeps
+// it for good (Permissions.js); `grant` and `conversation`, for this
+// conversation. What it is comes from the tool (`tool`: Claude Code's name
+// for it, or Grok's kind, ACP_TOOLS), never from what it's given: a
+// connector's tool given a "command" is still that tool. A command is asked
+// once, or for the conversation (Allow shell for this conversation): never
+// for good by its program, which can run anything its folder says (git,
+// make...); Settings can let an agent run any. A tool it doesn't know
+// (`name`, Grok's, only a name): named, all it was given shown, once only.
+function askOf(tool, toolInput, title, name) {
   var i = toolInput && typeof toolInput === "object" ? toolInput : {}
   var t = String(tool || "")
+  if (/^mcp__[A-Za-z0-9_-]+$/.test(t)) {
+    var parts = t.split("__")
+    return { action: "tool", target: t, text: "use " + (parts[1] || "a connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), detail: inputText(i), always: "Always for this tool" }
+  }
   if (t === "WebFetch") {
     var url = String(i.url || "")
     var host = Permissions.hostOf(url)
@@ -371,18 +408,17 @@ function askOf(tool, toolInput, title) {
       : { action: "", target: "", text: "read " + clip(url, 200), always: "" }
   }
   if (t === "WebSearch") return { action: "search", target: "web", text: "search the web for \u201c" + clip(String(i.query || ""), 200) + "\u201d", always: "Always let it search" }
-  if (t === "Bash" || (typeof i.command === "string" && i.command !== "")) {
-    return { action: "shell", target: "any", text: "run a command", detail: visible(i.command), always: "",
+  if (t === "Bash") {
+    return { action: "shell", target: "any", text: "run a command", detail: typeof i.command === "string" ? i.command : String(title || inputText(i)), always: "",
       grant: "shell", conversation: "Allow shell for this conversation" }
   }
-  if (/^mcp__[A-Za-z0-9_-]+$/.test(t)) {
-    var parts = t.split("__")
-    return { action: "tool", target: t, text: "use " + (parts[1] || "a connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), always: "Always for this tool" }
+  if (READ_TOOLS.indexOf(t) >= 0 || CHANGE_TOOLS.indexOf(t) >= 0) {
+    var file = String(i.file_path || i.notebook_path || i.path || i.pattern || "")
+    return { action: "", target: "", text: (READ_TOOLS.indexOf(t) >= 0 ? "read" : "change") + " a file (" + t + ")", detail: file || String(title || "") || inputText(i), always: "" }
   }
-  var file = String(i.file_path || i.path || i.pattern || "")
-  if (!file && title) return { action: "", target: "", text: "do this", detail: visible(title), always: "" }
-  var verb = t === "Read" || t === "Glob" || t === "Grep" ? "read" : t === "Write" || t === "Edit" ? "change" : "use " + visible(t) + " on"
-  return { action: "", target: "", text: verb + " a file", detail: visible(file || t), always: "" }
+  var called = clip(t || String(name || "") || "a tool", 80)
+  var said = [String(title || ""), inputText(i)].filter(function(x) { return x !== "" }).join("\n")
+  return { action: "", target: "", text: "use \u201c" + visible(called).replace(/\n/g, " ") + "\u201d", detail: said, always: "" }
 }
 
 // Grok's sandbox for the panel, kept in its working folder's

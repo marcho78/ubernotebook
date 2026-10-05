@@ -103,29 +103,37 @@ QtObject {
       read(Permissions.clean(list).filter(function(r) { return r.agent === who && r.action === "contact" }).map(function(r) { return r.target }))
       return "its page is being read (" + host + " is a site you've let it contact); the card shows it in a moment"
     }
-    // (The whole link shown: what it would send there is in it too.)
-    viewDoes("askAgentPermission", { agent: who, action: "contact", target: host, why: "to get a link's title and picture", detail: url, run: read })
+    // (The whole link shown: what it would send there is in it too. Asked
+    // for that link, in the conversation that added it: another link to the
+    // same site is asked about itself.)
+    viewDoes("askAgentPermission", { key: "contact " + (caller.talk || "") + " " + url, agent: who, action: "contact", target: host,
+      why: "to get a link's title and picture", detail: url, talk: caller.talk || "", grants: caller.grants || null, run: read })
     return "added as its link only: the user is asked in the panel before Uber Notebook contacts " + host
   }
 
   // A removal the panel's agent asks for (`kind`: "trash", "contact",
-  // "event", "tag"; `what`: what it is, in words): done at once if it may
-  // (pages to the trash, where they can be put back: Always, kept in
-  // settings; a person, an event or a tag, which have no trash: for this
-  // conversation, its scope's grants), else asked in the panel first, and
-  // done when you say yes. Yours, a script's, a terminal's agent's: as always.
-  function agentRemoval(kind, what, doIt) {
+  // "contact detail", "event", "tag"; `item`: which one, its id; `what`:
+  // what it is, in words): done at once if it may (pages to the trash, where
+  // they can be put back: Always, kept in settings; a person, a detail of
+  // one, an event or a tag, which have no trash: for this conversation, its
+  // scope's grants; a yes to taking people out covers their details, not
+  // the other way round), else asked in the panel first, one question for
+  // each thing, and done when you say yes. Yours, a script's, a terminal's
+  // agent's: as always.
+  function agentRemoval(kind, item, what, doIt) {
     if (!caller) return doIt()
     var who = String(caller.id || "")
     var grants = caller.grants || {}
     var list = settings && settings.agentPermissions ? settings.agentPermissions : []
     if (kind === "trash" && Permissions.allowed(list, who, "trash", "pages")) return doIt()
     if (grants["remove " + kind] === true) return doIt()
+    if (kind === "contact detail" && grants["remove contact"] === true) return doIt()
     var asked = viewDoes("askAgentPermission", {
-      key: "remove " + kind + " " + what, agent: who, text: what,
+      key: "remove " + kind + " " + (caller.talk || "") + " " + item, agent: who, text: what,
       action: kind === "trash" ? "trash" : "", target: kind === "trash" ? "pages" : "",
       always: kind === "trash" ? "Always let it trash pages" : "",
       grant: kind === "trash" ? "" : "remove " + kind, conversation: kind === "trash" ? "" : "Allow for this conversation",
+      talk: caller.talk || "", grants: caller.grants || null,
       run: function() { doIt() }
     })
     if (asked !== true) return fail("not without the user's yes, and they can't be asked now")
@@ -651,7 +659,7 @@ QtObject {
     if (not) return fail(not)
     var ev = Calendar.byId(workspace.calendar, String(id || ""))
     if (!ev) return fail("there's no event with that id (events lists them)")
-    return agentRemoval("event", "take the event \u201c" + (ev.title || "Untitled") + "\u201d off the calendar", function() {
+    return agentRemoval("event", ev.id, "take the event \u201c" + (ev.title || "Untitled") + "\u201d off the calendar", function() {
       workspace.setCalendar(Calendar.without(workspace.calendar, String(id)))
       return answer({ ok: true })
     })
@@ -772,7 +780,7 @@ QtObject {
     if (not) return fail(not)
     if (!live(id)) return fail("there's no page with that id (list or find gives them)")
     var title = workspace.index.pages[id].title || "Untitled"
-    return agentRemoval("trash", "move \u201c" + title + "\u201d (and the pages in it) to the trash", function() {
+    return agentRemoval("trash", id, "move \u201c" + title + "\u201d (and the pages in it) to the trash", function() {
       if (!api.live(id)) return fail("there's no page with that id (list or find gives them)")
       api.writeOpen()
       if (api.viewDoes("trashPage", id) !== true) workspace.trashPage(id, false)
@@ -1550,25 +1558,46 @@ QtObject {
     var q = String(which || "").trim()
     var c = workspace.contactById(q) || (q ? Contacts.find(workspace.contacts, q, 1)[0] : null)
     if (!c) return fail("there's no one like that in People (contacts lists everyone)")
-    var n = JSON.parse(JSON.stringify(c))
     var v = String(value === undefined ? "" : value).trim()
     var f = String(field || "")
     var lm = /^([a-z ]{1,20}):\s*(.+)$/i.exec(v)
     var label = lm ? lm[1].trim() : ""
     var raw = lm ? lm[2].trim() : v
-    if (["name", "company", "title", "address", "notes"].indexOf(f) >= 0) n[f] = v
-    else if (f === "birthday") { if (v && !Contacts.cleanBirthday(v)) return fail("a birthday like 1990-04-12, or --04-12 without the year"); n.birthday = Contacts.cleanBirthday(v) }
-    else if (f === "website") { if (v && !Contacts.cleanWebsite(v)) return fail("a website like https://example.com"); n.website = Contacts.cleanWebsite(v) }
-    else if (f === "phone") { if (!Contacts.cleanPhone(raw)) return fail("that isn't a phone number"); n.phones.push({ label: label || "mobile", value: raw }) }
-    else if (f === "email") { if (!Contacts.cleanEmail(raw)) return fail("that isn't an email"); n.emails.push({ label: label || "work", value: raw }) }
-    else if (f === "removePhone") { var key = Contacts.phoneKey(raw); var before = n.phones.length; n.phones = n.phones.filter(function(p) { return Contacts.phoneKey(p.value) !== key }); if (n.phones.length === before) return fail("they don't have that number") }
-    else if (f === "removeEmail") { var e = Contacts.cleanEmail(raw); var was = n.emails.length; n.emails = n.emails.filter(function(x) { return x.value !== e }); if (n.emails.length === was) return fail("they don't have that email") }
-    else return fail("the field is name, company, title, birthday, address, website, notes, phone, email, removePhone or removeEmail")
-    if (!Contacts.cleanContact(n)) return fail("that would leave nothing to know them by")
-    workspace.saveContact(n)
-    var o = personOut(workspace.contactById(n.id), true)
-    o.ok = true
-    return answer(o)
+    // (The change, made to them as they are when it's made: { contact } or { error }.)
+    function edited(cur) {
+      var n = JSON.parse(JSON.stringify(cur))
+      if (["name", "company", "title", "address", "notes"].indexOf(f) >= 0) n[f] = v
+      else if (f === "birthday") { if (v && !Contacts.cleanBirthday(v)) return { error: "a birthday like 1990-04-12, or --04-12 without the year" }; n.birthday = Contacts.cleanBirthday(v) }
+      else if (f === "website") { if (v && !Contacts.cleanWebsite(v)) return { error: "a website like https://example.com" }; n.website = Contacts.cleanWebsite(v) }
+      else if (f === "phone") { if (!Contacts.cleanPhone(raw)) return { error: "that isn't a phone number" }; n.phones.push({ label: label || "mobile", value: raw }) }
+      else if (f === "email") { if (!Contacts.cleanEmail(raw)) return { error: "that isn't an email" }; n.emails.push({ label: label || "work", value: raw }) }
+      else if (f === "removePhone") { var key = Contacts.phoneKey(raw); var before = n.phones.length; n.phones = n.phones.filter(function(p) { return Contacts.phoneKey(p.value) !== key }); if (n.phones.length === before) return { error: "they don't have that number" } }
+      else if (f === "removeEmail") { var e = Contacts.cleanEmail(raw); var was = n.emails.length; n.emails = n.emails.filter(function(x) { return x.value !== e }); if (n.emails.length === was) return { error: "they don't have that email" } }
+      else return { error: "the field is name, company, title, birthday, address, website, notes, phone, email, removePhone or removeEmail" }
+      if (!Contacts.cleanContact(n)) return { error: "that would leave nothing to know them by" }
+      return { contact: n }
+    }
+    var first = edited(c)
+    if (first.error) return fail(first.error)
+    function save() {
+      var cur = workspace.contactById(c.id)
+      if (!cur) return fail("they're no longer in People")
+      var r = edited(cur)
+      if (r.error) return fail(r.error)
+      workspace.saveContact(r.contact)
+      var o = personOut(workspace.contactById(r.contact.id), true)
+      o.ok = true
+      return answer(o)
+    }
+    // Taking away something they have (a field emptied, a number or an
+    // email): asked first, as a removal (People keeps no history).
+    var name = Contacts.nameOf(c)
+    var had = ["name", "company", "title", "address", "notes", "birthday", "website"].indexOf(f) >= 0 && !v ? String(c[f] || "") : ""
+    var takes = had ? "clear " + name + "\u2019s " + f + " (\u201c" + (had.length > 80 ? had.slice(0, 80) + "\u2026" : had) + "\u201d)"
+      : f === "removePhone" ? "take the number \u201c" + raw + "\u201d from " + name
+      : f === "removeEmail" ? "take the email \u201c" + raw + "\u201d from " + name : ""
+    if (!takes) return save()
+    return agentRemoval("contact detail", c.id + " " + f + " " + raw, takes, save)
   }
 
   function removeContact(which) {
@@ -1577,7 +1606,7 @@ QtObject {
     var q = String(which || "").trim()
     var c = workspace.contactById(q)
     if (!c) return fail("give their id (contacts lists everyone)")
-    return agentRemoval("contact", "take " + Contacts.nameOf(c) + " out of People", function() {
+    return agentRemoval("contact", c.id, "take " + Contacts.nameOf(c) + " out of People", function() {
       workspace.setContacts(Contacts.without(workspace.contacts, c.id))
       return answer({ ok: true, id: c.id, name: Contacts.nameOf(c), note: "taken out of People (Undo in People puts them back while Uber Notebook runs)" })
     })
@@ -1605,7 +1634,7 @@ QtObject {
     if (!from) return fail("give a tag: removeTag \"#idea\"")
     var pages = Workspace.pagesTagged(workspace.index, from).length
     if (!pages) return fail("no page has #" + from)
-    return agentRemoval("tag", "take #" + from + " off " + pages + (pages === 1 ? " page" : " pages"), function() {
+    return agentRemoval("tag", from, "take #" + from + " off " + pages + (pages === 1 ? " page" : " pages"), function() {
       api.writeOpen()
       workspace.changeTag(from, "", function() {})
       return answer({ ok: true, tag: "#" + from, pages: pages, note: "taken off each page, the #tag out of the text (each keeps its version before)" })

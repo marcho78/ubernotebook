@@ -61,6 +61,6 @@ QtObject {
   // While an agent works in the panel (Service.qml: Scope.js): what it's
   // limited to, or null.
   property var agentScope: null
-  function beginAgentScope(agent, dir, id, grants) { agentScope = { agent: agent, id: id, dir: dir, frozen: false, grants: grants || {} } }
+  function beginAgentScope(agent, dir, id, grants, talk) { agentScope = { agent: agent, id: id, dir: dir, frozen: false, grants: grants || {}, talk: talk || "" } }
   function endAgentScope() { agentScope = null }
 }

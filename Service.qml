@@ -549,8 +549,8 @@ Item {
   // through the commands below: Scope.js. null the rest of the time.
   property var agentScope: null
   // (`agent`: its name, `id`: which it is, claude, grok or codex: Permissions.js.)
-  function beginAgentScope(agent, dir, id, grants) {
-    agentScope = { agent: String(agent || "An agent"), id: String(id || ""), dir: String(dir || ""), frozen: false, grants: grants && typeof grants === "object" ? grants : {} }
+  function beginAgentScope(agent, dir, id, grants, talk) {
+    agentScope = { agent: String(agent || "An agent"), id: String(id || ""), dir: String(dir || ""), frozen: false, grants: grants && typeof grants === "object" ? grants : {}, talk: String(talk || "") }
   }
   function endAgentScope() { agentScope = null }
   // A command, from you (`forAgent` false: uber-notebook, a script's or a

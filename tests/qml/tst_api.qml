@@ -994,6 +994,63 @@ Item {
       service.setSetting("agentPermissions", [])
     }
 
+    // One question for each thing taken away (three events called the same
+    // are three questions); a conversation's questions go when it does
+    // (answered No); a person's details are asked about too, under a yes of
+    // their own.
+    function test_30_one_question_a_thing_for_its_conversation() {
+      fresh()
+      view.agentAsks = []
+      api.settings = Qt.binding(function() { return service.settings })
+      var ids = [0, 1, 2].map(function() { return json(api.addEvent("Standup oct 5 9:30", "")).id })
+      var gA = {}
+      view.agentTalk = { agent: "claude", id: "", owner: "", page: "", picked: "", grants: gA, folder: "c-aaaaaaaaaaaa" }
+      api.agentScope = { agent: "Claude Code", id: "claude", dir: "/tmp/in", frozen: false, grants: gA, talk: "c-aaaaaaaaaaaa" }
+      ids.forEach(function(id) { api.caller = api.agentScope; compare(json(api.removeEvent(id)).asked, true) })
+      compare(view.agentAsks.length, 3, "three events, three questions")
+      view.answerAgentAsk(view.agentAsks[0].key, "once")
+      compare(ws.calendar.events.filter(function(e) { return ids.indexOf(e.id) >= 0 }).length, 2, "one yes, one event")
+      // Another conversation: the first one's questions answered No.
+      view.agentTalk = { agent: "grok", id: "", owner: "", page: "", picked: "", grants: {}, folder: "c-bbbbbbbbbbbb" }
+      compare(view.agentAsks.length, 0)
+      compare(ws.calendar.events.filter(function(e) { return ids.indexOf(e.id) >= 0 }).length, 2)
+      // A person's details: taking one away asked (adding one isn't).
+      json(api.addContact("Sam Park", "+1 555 0100", "sam@e.org"))
+      var sam = json(api.contacts("Sam"))[0]
+      api.caller = null
+      json(api.editContact(sam.id, "company", "Acme"))
+      var gB = {}
+      view.agentTalk = { agent: "claude", id: "", owner: "", page: "", picked: "", grants: gB, folder: "c-cccccccccccc" }
+      api.agentScope = { agent: "Claude Code", id: "claude", dir: "/tmp/in", frozen: false, grants: gB, talk: "c-cccccccccccc" }
+      api.caller = api.agentScope
+      compare(json(api.editContact(sam.id, "title", "Engineer")).ok, true, "a field filled in: not asked")
+      api.caller = api.agentScope
+      var cleared = json(api.editContact(sam.id, "company", ""))
+      compare(cleared.asked, true)
+      compare(json(api.contact(sam.id)).company, "Acme", "not until you say yes")
+      var ask = view.agentAsks[0]
+      verify(ask.text.indexOf("clear Sam Park\u2019s company (\u201cAcme\u201d)") === 0, ask.text)
+      compare([ask.always, ask.conversation], ["", "Allow for this conversation"])
+      view.answerAgentAsk(ask.key, "conversation")
+      compare(json(api.contact(sam.id)).company, "")
+      compare(JSON.stringify(gB), JSON.stringify({ "remove contact detail": true }), "kept with the conversation that asked")
+      api.caller = api.agentScope
+      compare(json(api.editContact(sam.id, "removeEmail", "sam@e.org")).asked, undefined, "this conversation: details not asked again")
+      api.caller = api.agentScope
+      compare(json(api.removeContact(sam.id)).asked, true, "a yes for details isn't one for taking the person out")
+      // A yes to taking people out covers their details.
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
+      json(api.addContact("Kim Lee", "+1 555 0101", "kim@e.org"))
+      var kim = json(api.contacts("Kim"))[0]
+      gB["remove contact"] = true
+      delete gB["remove contact detail"]
+      api.caller = api.agentScope
+      compare(json(api.editContact(kim.id, "removePhone", "+1 555 0101")).asked, undefined)
+      api.caller = null
+      api.agentScope = null
+      view.agentTalk = null
+    }
+
     function test_26_sites_contacted_for_an_agent_only_with_your_yes() {
       fresh()
       var r = json(api.add("Links", file("l.md", "x")))
@@ -1023,21 +1080,26 @@ Item {
       compare(cards()[0].url, "https://e.org/?note=private+text")
       compare(view.agentAsks.length, 1)
       compare(view.agentAsks[0].target, "e.org")
-      // Again for the same site: the same question, both waiting on it.
-      var mark = Object.keys(fileOf(r.id).blocks).filter(function(k) { return fileOf(r.id).blocks[k].type === "bookmark" })[0]
+      // Another link to the same site: asked about itself (a yes to one
+      // link isn't a yes to another, which could carry your notes there).
       json(api.bookmark(r.id, "https://e.org/two"))
-      compare(view.agentAsks.length, 1)
-      compare(view.agentAsks[0].runs.length, 2)
+      compare(view.agentAsks.length, 2)
+      compare([view.agentAsks[0].detail, view.agentAsks[1].detail], ["https://e.org/?note=private+text", "https://e.org/two"])
       // Not https: never asked, the card reads it when you ask.
       verify(json(api.bookmark(r.id, "http://plain.example.com/x")).note.indexOf("when you ask") >= 0)
-      compare(view.agentAsks.length, 1)
-      // Asked in the panel, in words; Allow once: read, nothing kept.
+      compare(view.agentAsks.length, 2)
+      // Asked in the panel, in words; Allow once: that link read, nothing kept.
       tryVerify(function() { return find(view.agentPanel, "agentAskText") !== null }, 1000)
       verify(find(view.agentPanel, "agentAskText").text.indexOf("Grok wants to have Uber Notebook contact e.org") === 0, find(view.agentPanel, "agentAskText").text)
       files.fetchPages["https://e.org/?note=private+text"] = '<html><head><title>One</title></head></html>'
       files.fetchPages["https://e.org/two"] = '<html><head><title>Two</title></head></html>'
-      mouseClick(askButton("agentAskOnce"))
-      tryVerify(function() { return cards().filter(function(d) { return d.title === "One" || d.title === "Two" }).length === 2 }, 2000, "both read")
+      view.answerAgentAsk(view.agentAsks[0].key, "once")
+      tryVerify(function() { return cards().some(function(d) { return d.title === "One" }) }, 2000, "that one read")
+      wait(100)
+      verify(!cards().some(function(d) { return d.title === "Two" }), "the other not")
+      compare(view.agentAsks.length, 1, "the other still asked")
+      verify(!files.ran.some(function(a) { return a.join(" ").indexOf("e.org/two") >= 0 }), "nor contacted")
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
       compare(view.agentAsks.length, 0)
       compare(service.settings.agentPermissions.length, 0, "Allow once: nothing kept")
       // Always: kept for Grok and that site; the next one is read at once.

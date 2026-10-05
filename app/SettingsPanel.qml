@@ -1009,7 +1009,7 @@ Popup {
         Group {
           visible: panel.section === "ai"
           title: "Commands"
-          note: "When an agent in the panel wants to run a command, you're asked: for that command, or for the rest of the conversation. Here you can let it run any command without asking. Through a command it can read any file you can and reach any site, so this is off unless you turn it on."
+          note: "When an agent in the panel wants to run a command, you're asked: for that command, or for the rest of the conversation. Here you can let it run any command without asking. A command runs programs that can read and change any file you can (your notes and Uber Notebook's settings too) and use the network, so this is off unless you turn it on."
           Repeater {
             model: [{ id: "claude", name: "Claude Code" }, { id: "grok", name: "Grok" }]
             delegate: Line {

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Effects
 import "../MarkdownView.js" as MarkdownView
 import "../Permissions.js" as Permissions
@@ -540,7 +541,19 @@ Item {
             color: panel.theme.text
           }
           // The whole of it (a command, a file), every character shown
-          // (Agent.visible), never cut short: scrolled when it's long.
+          // (Agent.visible: each line break marked), never cut short:
+          // scrolled when it's long, its scrollbar always in sight then,
+          // and how many lines it is said above it.
+          Text {
+            objectName: "agentAskLines"
+            visible: (askItem.modelData.lines || 0) > 1
+            width: parent.width
+            textFormat: Text.PlainText
+            text: (askItem.modelData.lines || 0) + " lines" + (detailFlick.contentHeight > detailFlick.height + 1 ? ": scroll to see all of it" : "")
+            font.family: panel.theme.uiFont
+            font.pixelSize: 11
+            color: panel.theme.muted
+          }
           Rectangle {
             visible: (askItem.modelData.detail || "") !== ""
             width: parent.width
@@ -548,12 +561,26 @@ Item {
             radius: 6
             color: panel.theme.hover
             Flickable {
+              id: detailFlick
+              objectName: "agentAskFlick"
               anchors.fill: parent
               anchors.margins: 6
+              anchors.rightMargin: detailBar.visible ? 14 : 6
               clip: true
               contentWidth: width
               contentHeight: detailText.implicitHeight
               boundsBehavior: Flickable.StopAtBounds
+              ScrollBar.vertical: ScrollBar {
+                id: detailBar
+                objectName: "agentAskScroll"
+                parent: detailFlick.parent
+                anchors.top: detailFlick.top
+                anchors.bottom: detailFlick.bottom
+                anchors.left: detailFlick.right
+                anchors.leftMargin: 2
+                visible: detailFlick.contentHeight > detailFlick.height + 1
+                policy: ScrollBar.AlwaysOn
+              }
               Text {
                 id: detailText
                 objectName: "agentAskDetail"
@@ -580,7 +607,7 @@ Item {
             width: parent.width
             wrapMode: Text.Wrap
             textFormat: Text.PlainText
-            text: "Through a command it can read any file you can and reach any site. Allowed for this conversation, it isn't asked again until the conversation ends."
+            text: "A command runs programs that can read and change any file you can (your notes and Uber Notebook's settings too) and use the network. Allowed for this conversation, no command is asked about again until it ends."
             font.family: panel.theme.uiFont
             font.pixelSize: 11
             color: panel.theme.faint

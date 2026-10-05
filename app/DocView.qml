@@ -1046,6 +1046,11 @@ FocusScope {
       if (service && service.agentScope) service.agentScope.frozen = true
       agentRun.stop()
     }
+    // (Its conversation, and what you allowed in it, stay with the folder
+    // it was in: the panel closes.)
+    agentTalk = null
+    agentPending = null
+    agentPanel.visible = false
     saveTimer.stop()
     pageDirty = false
     page = null
@@ -1577,7 +1582,9 @@ FocusScope {
   // each waiting run going when you answer (by its key, as the panel gives
   // back a copy). Always keeps your yes in settings (Permissions.js), where
   // an agent can't change it; `owner`: the run it's for, whose questions go
-  // with it.
+  // with it. `talk` and `grants`: the conversation that asked (its folder,
+  // and the grants its runs share): Allow for this conversation is kept
+  // there, never in another; when it ends, what it asked is answered No.
   property var agentAsks: []
   function askAgentPermission(req) {
     if (!req || !req.agent || typeof req.run !== "function") return false
@@ -1590,11 +1597,13 @@ FocusScope {
       if (typeof req.no === "function") same.nos.push(req.no)
     } else {
       list.push({ key: key, agent: req.agent, action: String(req.action || ""), target: String(req.target || ""),
-        text: req.text ? String(req.text) : "have Uber Notebook contact " + req.target + (req.why ? ", " + req.why : ""),
-        detail: Agent.visible(req.detail || ""),
+        // (Its words too, every character shown, on one line.)
+        text: Agent.visible(req.text ? String(req.text) : "have Uber Notebook contact " + req.target + (req.why ? ", " + req.why : "")).replace(/\n/g, " "),
+        detail: Agent.visible(req.detail || ""), lines: req.detail ? Agent.lineCount(req.detail) : 0,
         always: req.always !== undefined ? String(req.always) : "Always for " + req.target,
         // (For this conversation: `grant`, said `conversation`; "" for none.)
         grant: String(req.grant || ""), conversation: req.grant ? String(req.conversation || "Allow for this conversation") : "",
+        talk: String(req.talk || ""), grants: req.grants && typeof req.grants === "object" ? req.grants : null,
         runs: [req.run], nos: typeof req.no === "function" ? [req.no] : [], owner: req.owner || null })
     }
     agentAsks = list
@@ -1607,15 +1616,12 @@ FocusScope {
     agentAsks = agentAsks.filter(function(a) { return a.key !== key })
     function each(fns, arg) { fns.forEach(function(f) { try { f(arg) } catch (e) { console.warn("Uber Notebook: after you answered: " + e) } }) }
     if (how !== "once" && !(how === "always" && ask.always) && !(how === "conversation" && ask.grant)) { each(ask.nos); return }
-    // For this conversation: kept with it (agentTalk.grants, which its runs'
-    // scope shares), and what else waits on the same, allowed now too.
+    // For this conversation: kept with the one that asked (its grants,
+    // which its runs' scope shares), and what else it has waiting on the
+    // same, allowed now too.
     if (how === "conversation") {
-      if (agentTalk) {
-        var g = agentTalk.grants || {}
-        g[ask.grant] = true
-        agentTalk.grants = g
-      }
-      var same = agentAsks.filter(function(a) { return a.agent === ask.agent && a.grant === ask.grant })
+      if (ask.grants) ask.grants[ask.grant] = true
+      var same = agentAsks.filter(function(a) { return a.agent === ask.agent && a.grant === ask.grant && a.grants === ask.grants })
       agentAsks = agentAsks.filter(function(a) { return same.indexOf(a) < 0 })
       same.forEach(function(a) { each(a.runs) })
       each(ask.runs)
@@ -1637,17 +1643,28 @@ FocusScope {
   // Grok; `run`: its stream): allowed at once if you've said Always to the
   // like, else asked.
   function agentAsked(agent, ev, run) {
-    var a = Agent.askOf(ev.tool, ev.input, ev.title)
+    var a = Agent.askOf(ev.tool, ev.input, ev.title, ev.name)
     function reply(allow) { if (run && typeof run.send === "function") run.send(Agent.answerFor(agent, ev, allow)) }
     if (a.action && Permissions.allowed(settings.agentPermissions || [], agent, a.action, a.target)) { reply(true); return }
     if (a.grant && agentTalk && agentTalk.grants && agentTalk.grants[a.grant] === true) { reply(true); return }
+    if (agentTalk && !agentTalk.grants) agentTalk.grants = {}
     askAgentPermission({ key: "tool " + ev.id, agent: agent, action: a.action, target: a.target, text: a.text, detail: a.detail || "",
       always: a.always, grant: a.grant || "", conversation: a.conversation || "", owner: run,
+      talk: agentTalk ? agentTalk.folder || "" : "", grants: agentTalk ? agentTalk.grants : null,
       run: function() { reply(true) }, no: function() { reply(false) } })
   }
   // A run's questions, gone with it.
   function dropAgentAsks(run) {
     if (run) agentAsks = agentAsks.filter(function(a) { return a.owner !== run })
+  }
+  // Another conversation (or none): what the one before asked and you
+  // haven't answered, answered No.
+  onAgentTalkChanged: {
+    var now = agentTalk ? String(agentTalk.folder || "") : ""
+    var gone = agentAsks.filter(function(a) { return a.talk !== "" && a.talk !== now })
+    if (!gone.length) return
+    agentAsks = agentAsks.filter(function(a) { return gone.indexOf(a) < 0 })
+    gone.forEach(function(a) { a.nos.forEach(function(f) { try { f() } catch (e) { console.warn("Uber Notebook: " + e) } }) })
   }
 
   // While it works, Uber Notebook's commands read and change your notes, not
@@ -1656,7 +1673,7 @@ FocusScope {
   function agentScope(agent, dir) {
     // (The conversation's grants go with it: a removal you've allowed for
     // this conversation isn't asked again, Api.agentRemoval.)
-    if (service && typeof service.beginAgentScope === "function") service.beginAgentScope(Agent.name(agent), dir, agent, agentTalk ? agentTalk.grants : null)
+    if (service && typeof service.beginAgentScope === "function") service.beginAgentScope(Agent.name(agent), dir, agent, agentTalk ? agentTalk.grants : null, agentTalk ? String(agentTalk.folder || "") : "")
   }
   function agentScopeEnd() {
     if (service && typeof service.endAgentScope === "function") service.endAgentScope()
@@ -1833,6 +1850,9 @@ FocusScope {
     var pending = agentPending
     agentPending = null
     agentPanel.contextNote = ""
+    // (Its folder first: the prompt names it.)
+    if (Agent.isConversationFolder(talk.folder)) agentFolder = talk.folder
+    else talk.folder = newAgentFolder()
     if (!Agent.isSessionId(talk.id)) {
       runHere(talk.agent, t, recapPrompt(t, agentPanel.transcript()), { reply: true, fresh: true, terminalPrompt: recapPrompt(t, agentPanel.transcript(), true) })
       return
