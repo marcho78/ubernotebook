@@ -101,4 +101,19 @@ check("a page whose file you took: its copy beside it, at the same name sync aft
   assert.deepEqual(plain(M.claim({ a: "Pages/A.md" }, {}, { "Pages/A.md": true, "Pages/A (2).md": true })), { a: "Pages/A (3).md" });
 });
 
+check("a tree thousands of pages deep: every page's file, without running out of stack, named as before", () => {
+  const id = (i) => "00000000-0000-4000-8000-" + String(i).padStart(12, "0");
+  const n = 20000;
+  const pages = {};
+  for (let i = 0; i < n; i++) pages[id(i)] = { title: "P", parent: i ? id(i - 1) : "", children: i < n - 1 ? [id(i + 1)] : [], trashed: false };
+  const paths = M.pagePaths({ top: [id(0)], pages });
+  assert.equal(Object.keys(paths).length, n);
+  assert.equal(paths[id(2)], "Pages/P/P/P.md");
+  // Siblings named alike: "Name", "Name 2"... in each folder of its own.
+  const t = { top: [id(1), id(2)], pages: {
+    [id(1)]: { title: "A", children: [id(3), id(4)] }, [id(2)]: { title: "a", children: [id(5)] },
+    [id(3)]: { title: "B", children: [] }, [id(4)]: { title: "b", children: [] }, [id(5)]: { title: "B", children: [] } } };
+  assert.deepEqual(JSON.parse(JSON.stringify(M.pagePaths(t))), { [id(1)]: "Pages/A.md", [id(3)]: "Pages/A/B.md", [id(4)]: "Pages/A/b 2.md", [id(2)]: "Pages/a 2.md", [id(5)]: "Pages/a 2/B.md" });
+});
+
 console.log(`mirror: ${passed} checks passed`);

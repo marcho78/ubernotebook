@@ -37,22 +37,24 @@ function safeName(title, fallback) {
 // trash are left out; siblings with one name are "Name", "Name 2"...
 function pagePaths(index) {
   var out = {}
-  var seen = {}
-  function walk(ids, dir) {
-    var used = {}
-    ;(ids || []).forEach(function(id) {
-      var e = index.pages[id]
-      if (!e || e.trashed || seen[id]) return
-      seen[id] = true
-      var base = safeName(e.title, "Untitled")
-      var name = base
-      for (var n = 2; used[name.toLowerCase()]; n++) name = base + " " + n
-      used[name.toLowerCase()] = true
-      out[id] = dir + "/" + name + ".md"
-      if (e.children && e.children.length) walk(e.children, dir + "/" + name)
-    })
+  var seen = Object.create(null)
+  // (A folder at a time, without calling itself: a tree thousands of pages
+  // deep mustn't run the shell out of stack. Each folder's names are its own.)
+  var stack = [{ ids: index.top || [], i: 0, dir: "Pages", used: Object.create(null) }]
+  while (stack.length) {
+    var f = stack[stack.length - 1]
+    if (f.i >= f.ids.length) { stack.pop(); continue }
+    var id = f.ids[f.i++]
+    var e = index.pages[id]
+    if (!e || e.trashed || seen[id]) continue
+    seen[id] = true
+    var base = safeName(e.title, "Untitled")
+    var name = base
+    for (var n = 2; f.used[name.toLowerCase()]; n++) name = base + " " + n
+    f.used[name.toLowerCase()] = true
+    out[id] = f.dir + "/" + name + ".md"
+    if (e.children && e.children.length) stack.push({ ids: e.children, i: 0, dir: f.dir + "/" + name, used: Object.create(null) })
   }
-  walk(index.top, "Pages")
   return out
 }
 
