@@ -76,11 +76,37 @@ ShellRoot {
                   say("notes: never written through a link", wrote2 === false && sec[d + "/secret.json"] === "SECRET", "wrote " + wrote2 + " secret " + sec[d + "/secret.json"])
                   store.exec(["/usr/bin/test", "-d", notes + "/Pages/assets"], function(isDir) {
                     say("notes: folders made", made === true && isDir, "")
-                    root.fallbackChecks(d, notes)
+                    root.trashWhileWriting(d, notes)
                   })
                 })
               })
             })
+          })
+        })
+      })
+    })
+  }
+  // A page put in the trash while its save is under way (the helper held):
+  // what was waiting to be written is dropped, the move waits for the save,
+  // and then the page is gone, never written back.
+  function trashWhileWriting(d, notes) {
+    var doomed = notes + "/Pages/doomed.json"
+    function sig(s, done) { store.exec(["/usr/bin/bash", "-c", "/usr/bin/pkill -" + s + " -f -- \"uber-notebook-files serve $1\\$\"", "x", notes], function(ok) { done(ok) }) }
+    sig("STOP", function(paused) {
+      store.writeKept(doomed, "one", function() {})
+      store.writeKept(doomed, "two", function() {})
+      store.trash(doomed, "doomed")
+      var held = store.trashLater.length === 1 && store.queued[doomed] === undefined
+      sig("CONT", function() {
+        var wait = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
+        var tries = 0
+        wait.triggered.connect(function() {
+          if ((store.trashLater.length || store.writing[doomed]) && ++tries < 50) return
+          wait.stop()
+          // (The move itself, after the save: a moment more.)
+          store.exec(["/usr/bin/bash", "-c", "/usr/bin/sleep 0.5; [ -e \"$1\" ] && echo there || echo gone", "x", doomed], function(ok, out) {
+            say("notes: trashed while being written: waits, then gone", paused && held && String(out).trim() === "gone" && store.unsaved[doomed] === undefined, "held " + held + " " + String(out).trim())
+            root.fallbackChecks(d, notes)
           })
         })
       })

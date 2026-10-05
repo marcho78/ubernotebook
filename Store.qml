@@ -480,6 +480,7 @@ Item {
         delete queued[path]
         writeNow(path, next.text, next.waiters, next.quiet)
       }
+      if (store.trashLater.length) store.trashLaterNow()
     }
     function asBefore() {
       view = writerComponent.createObject(store, { path: path, blockWrites: stopping })
@@ -542,8 +543,13 @@ Item {
   function forgetUnsaved(path) {
     var p = String(path || "").replace(/\/+$/, "")
     if (!p) return
+    // (Every write asked for there now out of date, so none of them is
+    // kept to be tried again either.)
+    Object.keys(writeVersions).forEach(function(k) {
+      if (k === p || k.indexOf(p + "/") === 0) store.writeVersions[k] = ++store.writeVersion
+    })
     Object.keys(unsaved).forEach(function(k) {
-      if (k === p || k.indexOf(p + "/") === 0) { store.writeVersions[k] = ++store.writeVersion; store.keepUnsaved(k, null) }
+      if (k === p || k.indexOf(p + "/") === 0) store.keepUnsaved(k, null)
     })
   }
   // Each one tried again, quietly: done(how many still aren't saved).
@@ -786,9 +792,30 @@ Item {
 
   // Moves a notebook or page into the trash, under a name that's never taken.
   function trash(path, name) {
-    // (What couldn't be saved of it, or in it, isn't tried again: it would
-    // bring back what you took away.)
+    // (What couldn't be saved of it, or in it, isn't tried again, and what's
+    // waiting to be written there isn't: it would bring back what you took
+    // away. One being written now is let finish first, then moved too.)
     forgetUnsaved(path)
+    var p = String(path || "").replace(/\/+$/, "")
+    function under(k) { return k === p || k.indexOf(p + "/") === 0 }
+    Object.keys(queued).forEach(function(k) {
+      if (!under(k)) return
+      var q = queued[k]
+      delete queued[k]
+      q.waiters.forEach(function(w) { try { w(false) } catch (e) {} })
+    })
+    if (Object.keys(writing).some(under)) { trashLater = trashLater.concat([{ path: path, name: name, under: under }]); return }
+    trashNow(path, name)
+  }
+  // Trashed once what was being written in it is done.
+  property var trashLater: []
+  function trashLaterNow() {
+    var ready = trashLater.filter(function(t) { return !Object.keys(store.writing).some(t.under) })
+    if (!ready.length) return
+    trashLater = trashLater.filter(function(t) { return ready.indexOf(t) < 0 })
+    ready.forEach(function(t) { store.trashNow(t.path, t.name) })
+  }
+  function trashNow(path, name) {
     var dir = Library.trashDir(rootPath)
     var stamp = Library.pageId(new Date())
     mkdirs([dir], function(ok) {

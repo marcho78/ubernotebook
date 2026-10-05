@@ -169,7 +169,11 @@ QtObject {
     apply(changes)
     // (Only ever a demo folder of Uber Notebook's own: "demo", or "demo-" and
     // the time it was made, in its own data folder.)
-    if (old.indexOf(base + "/") === 0 && /^demo(-[0-9a-z]{1,13})?$/.test(old.slice(base.length + 1))) files.exec(["/usr/bin/gio", "trash", "--", old], function() {})
+    // (What couldn't be saved in it isn't tried again: it would bring it back.)
+    if (old.indexOf(base + "/") === 0 && /^demo(-[0-9a-z]{1,13})?$/.test(old.slice(base.length + 1))) {
+      if (typeof files.forgetUnsaved === "function") files.forgetUnsaved(old)
+      files.exec(["/usr/bin/gio", "trash", "--", old], function() {})
+    }
     return ""
   }
 }
