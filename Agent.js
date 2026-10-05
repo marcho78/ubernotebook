@@ -60,7 +60,8 @@ function clip(text, max) {
 // block id), into (for a new page: the page it's in, { id, title }, or none
 // for the top of Pages), skill (the uber-notebook skill's SKILL.md),
 // earlier (a conversation it can't pick up where it was: [{ request,
-// answer }], what was said, for it to go on from) }. It carries ids, not the
+// answer }], what was said, for it to go on from), here (in the panel), dir
+// (its folder there), agent (who it's for) }. It carries ids, not the
 // page's text: the agent reads what it needs (the words you selected are the
 // exception, since only you know which they are).
 function prompt(o) {
@@ -103,9 +104,15 @@ function prompt(o) {
     out.push("You're working inside Uber Notebook, with no terminal: what you write shows in a small panel on the page, "
       + "so keep it short, and end by saying what you changed in a sentence or two.")
     out.push("Here Uber Notebook's commands go under their panel name: run each as omarchy-shell uber-notebook-agent <command> ... "
-      + "(the skill's omarchy-shell uber-notebook <command> ..., the same commands and arguments).")
+      + "(the skill's omarchy-shell uber-notebook <command> ..., the same commands and arguments), and only so: if one's refused, "
+      + "say why rather than trying it another way.")
     if (o.dir) out.push("Here only Uber Notebook's commands run (no mktemp, cat or rm): write the Markdown a command takes with your "
       + "file-writing tool, as a file in " + o.dir + " (your working folder), and give the command that file's full path.")
+    // (Codex's sandbox has no network here, which keeps its commands from
+    // the shell's socket too: they go outside it, each reviewed by Codex.)
+    if (o.agent === "codex") out.push("Your sandbox has no network here, and that keeps Uber Notebook's commands from reaching it "
+      + "(they'd say omarchy-shell is not running): run each omarchy-shell uber-notebook-agent command with escalated "
+      + "permissions, outside the sandbox.")
     out.push("")
   }
   out.push("Use the uber-notebook skill: it explains the omarchy-shell uber-notebook commands that read and change my notes "
@@ -179,29 +186,26 @@ function cleanChoice(v) {
   return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/.test(t) ? t : ""
 }
 
-// The command, with nothing to read on its input, the agent run by its full
-// path (`where`: { exe, dir }: the program, found where it's installed and
-// checked, and its working folder). What it may do is only what the panel
-// needs (it works on a page that may have come from anywhere):
-//   Claude Code: print mode (stream-json), --permission-mode dontAsk: Uber
-//     Notebook's commands and writing files in its own folder allowed,
-//     everything else refused (no other commands, files or web);
-//   Grok: single-turn mode (streaming-messages-json, the same lines as
-//     Claude Code's) in its sandbox (GROK_PROFILE, in its folder's
-//     .grok/sandbox.toml): it reads only its folder and the system's,
-//     writes only there and in temp, and reaches nothing of yours but Uber
-//     Notebook's commands; no web search;
+// The command, the agent run by its full path (`where`: { exe, dir, skill }:
+// the program, found where it's installed and checked, its working folder,
+// and Uber Notebook's skill folder). What it does beyond the panel's needs
+// (Uber Notebook's commands, files in its own folder) is asked of you:
+//   Claude Code: print mode, stream-json on its input and output (its
+//     request, and your answers: input, answer). Your own setup as in your
+//     terminal (your plugins and MCP servers, CLAUDE.md, your allow rules);
+//     the tools in CLAUDE_TOOLS, and anything beyond its rules asked
+//     (--permission-mode manual, whatever your settings' default mode);
+//     the skill's folder read without asking;
+//   Grok: over ACP, its agent protocol (acpInit...), in its sandbox (env());
 //   Codex: exec --json, --approve-for-me (its own folder writable, no
 //     network, the rest reviewed for it), outside a git repository.
 // With `choice` ({ model, effort }), the model and effort you chose. With
-// `session` ({ id, resume }), the conversation it's in: Claude Code and Grok
-// start theirs with the id given (--session-id) and go on with it
-// (--resume); Codex names its own (its first line says, see fromCodex) and
-// goes on with it (exec resume). The prompt is always last, never read as an
-// option. null without a program or a folder.
-// The tools Claude Code has in the panel (restricted: your own settings
-// files can't add to them): beyond its rules, it asks for each, and you're
-// asked in the panel (Uber Notebook answers on its input: input, answer).
+// `session` ({ id, resume }), the conversation it's in: Claude Code starts
+// its with the id given (--session-id) and goes on with it (--resume);
+// Grok's and Codex's name their own. Codex's prompt is last, never read as
+// an option. null without a program or a folder.
+// The tools Claude Code has in the panel (beyond its rules, it asks for
+// each, and you're asked in the panel; MCP tools, yours, as well).
 var CLAUDE_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
 
 function command(agent, prompt, choice, session, where) {
@@ -209,6 +213,7 @@ function command(agent, prompt, choice, session, where) {
   var exe = String(w.exe || "")
   var dir = String(w.dir || "")
   if (!/^\/[^\u0000-\u001f]{1,4000}$/.test(exe) || !/^\/[^\u0000-\u001f*?\[\]]{1,4000}$/.test(dir)) return null
+  var skill = /^\/[^\u0000-\u001f*?\[\]]{1,4000}$/.test(String(w.skill || "")) ? String(w.skill) : ""
   var head = ["/usr/bin/bash", "-c", "exec \"$@\" < /dev/null", "uber-notebook-agent"]
   var p = String(prompt)
   var c = choice || {}
@@ -218,8 +223,9 @@ function command(agent, prompt, choice, session, where) {
   // (Claude Code reads its request, and your answers to what it asks, on its
   // input: input(), answer(). Nothing of yours is in its command line.)
   if (agent === "claude") return ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent", exe, "-p", "--input-format", "stream-json",
-    "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--restricted", "--tools", CLAUDE_TOOLS,
-    "--permission-prompt-tool", "stdio", "--allowedTools", "Bash(omarchy-shell uber-notebook-agent *)", "Edit(/" + dir + "/**)", "Write(/" + dir + "/**)"]
+    "--output-format", "stream-json", "--verbose", "--include-partial-messages", "--tools", CLAUDE_TOOLS]
+    .concat(skill ? ["--add-dir", skill] : [], ["--permission-mode", "manual", "--permission-prompt-tool", "stdio",
+      "--allowedTools", "Bash(omarchy-shell uber-notebook-agent *)", "Edit(/" + dir + "/**)", "Write(/" + dir + "/**)"])
     .concat(s ? [s.resume ? "--resume" : "--session-id", s.id] : [], model ? ["--model", model] : [], effort ? ["--effort", effort] : [])
   // (Grok works over ACP, its agent protocol, on its input and output:
   // acpInit, acpSession, acpPrompt, fromAcp, reply. Its sandbox: env().)

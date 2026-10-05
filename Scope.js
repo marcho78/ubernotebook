@@ -53,7 +53,7 @@ function paths(value) {
 // and not at all when no agent is working there. "" or why not.
 function forCaller(forAgent, scope, command, args) {
   if (!forAgent) return ""
-  if (!scope) return "no agent is working in Uber Notebook's panel: the uber-notebook-agent commands are for the panel's agent (yours are omarchy-shell uber-notebook)"
+  if (!scope) return "no agent is working in Uber Notebook's panel: the uber-notebook-agent commands work only for the agent working there, while it works"
   return check(scope, command, args)
 }
 

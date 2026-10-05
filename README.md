@@ -1004,7 +1004,7 @@ never part of a script, only its arguments.
 | `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
 | `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -e`: plain text, never a pattern) |
 | `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders; copy pictures in and out (never over a file that's there); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
-| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the archive helper: unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs), unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
 | `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
 | `/usr/bin/uwsm-app` with `xdg-open` | open a link (http, https, mailto), or one of Uber Notebook's own folders and files |
@@ -1019,8 +1019,21 @@ never part of a script, only its arguments.
 | `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp` | make a backup (written beside where it goes, named when it's whole) |
 | `/usr/bin/gio` | `trash`: automatic backups past how many are kept |
 
+**Your notes.** Their files (pages, their history, Pages' index, People, the
+calendar, conversations with agents, notebooks) are read and written by the
+files helper, kept running for your notes folder: the folder is opened once
+(only a folder of yours), and every file is reached a folder at a time
+without following a link, read only if it's a plain file within its size, and
+written as a new file beside it, flushed to the disk, then put in its place
+(after a power cut, a page as it was or as it is, never half of it). A file
+that can't be read (a link, a pipe, too big, not yours to read) is said, kept
+in its place, and never saved over; it isn't taken for one that isn't there.
+If the helper stops or doesn't answer in a minute, that read or write is
+done as before (by path, with Qt and `cat`), and after three failures it
+isn't started again until Uber Notebook starts again.
+
 **Archives.** A zip you import and a backup you put back are opened by the
-archive helper, from one open file (only a plain file, not a link): what's in
+files helper, from one open file (only a plain file, not a link): what's in
 them is written below a folder made for it, through folders opened without
 following links, as new files only; nothing in them can name a place outside
 that folder, be a link or a device, or take more than its room (an import 4
@@ -1032,11 +1045,13 @@ only that folder is taken away.
 **Your agent.** In the panel, Claude Code, Grok and Codex work through Uber
 Notebook's commands: they read and change your notes, as you ask.
 
-- Claude Code: in its restricted mode (your own settings files can't widen
-  what it may do; its file tools stay in its folder), with Uber Notebook's
-  commands and writing files in its own folder allowed. Anything else (a web
-  page, a web search, a command, one of your connectors' tools, a file
-  elsewhere) it asks for, and you're asked in the panel: *Allow once*,
+- Claude Code: with your own setup, as in your terminal (your plugins and
+  MCP servers, CLAUDE.md, the allow rules in your Claude Code settings,
+  which apply here too), Uber Notebook's commands, writing files in its own
+  folder and reading Uber Notebook's skill allowed, and its permission mode
+  set to ask (`--permission-mode manual`, whatever your settings' default
+  mode). Anything else (a web page, a web search, a command, one of your
+  plugins' or connectors' tools, a file elsewhere) it asks for, and you're asked in the panel: *Allow once*,
   *Always* (for that agent and that site, searching, that program, or that
   tool; a command only when it's a plain one, one program with nothing a
   shell would join, expand or redirect, and never a shell or an interpreter
@@ -1050,13 +1065,15 @@ Notebook's commands: they read and change your notes, as you ask.
   commands, in the sandbox) it asks for, and you're asked in the panel, as
   for Claude Code. Allow rules saved in your own Grok settings still apply.
 - Codex: `--approve-for-me` (its sandbox: it writes only in its own folder, with
-  no network; anything else is reviewed by Codex's own reviewer).
+  no network; anything else is reviewed by Codex's own reviewer). The
+  sandbox's no network keeps Uber Notebook's commands from the shell too, so
+  it's told to run those outside it, each reviewed so.
 - The panel's agent calls Uber Notebook's commands under a name of their
   own, `omarchy-shell uber-notebook-agent`, and those read and change your
   notes (pages, People, the calendar, templates), not Uber Notebook's
   settings (the permissions you give agents among them), profiles or
   backups; a file one takes comes only from the agent's folder, and is read
-  by the archive helper first (only a plain file, at most 2 MB); with no
+  by the files helper first (only a plain file, at most 2 MB); with no
   agent working in the panel, they do nothing. Yours, a script's and a
   terminal's agent's (`omarchy-shell uber-notebook`) go on as always
   meanwhile. Claude Code is held to the panel's name by its permission rules;
@@ -1107,12 +1124,12 @@ and diagrams have budgets (a drawing too big is said, not drawn), and so does
 everything that reads text someone else wrote (imports, emails, contacts,
 code). Every title, label and name is drawn as plain text.
 
-**Not done yet.** Notes are written with Qt's atomic writes (a new file,
-renamed into place) by their path, and a page's file is read by its path in
-one go as it opens: a program running as you that swaps a notes file or folder
-for a link, a pipe or a device could redirect a write or hold the shell up
-(a file you give a command, Markdown, contacts or a calendar, goes through the
-archive helper instead). Codex in the
+**Not done yet.** Some things in your notes folder are still done by path,
+with standard tools: moving a page to the trash (`mv`), copying a file or a
+picture in (`cp`, a new file only), listing and pruning a page's history,
+search (`grep`), a backup, a Markdown copy; and notes are, as before, when
+the files helper can't run. A program running as you that swaps a folder
+there for a link could redirect those. Codex in the
 panel can read any file you can (its sandbox reads everywhere). Codex's
 prompt is an argument on its command line, as it takes it there (Claude
 Code's and Grok's go on their input).
@@ -1160,11 +1177,12 @@ at all).
   notebook there with *Move to Pages…*).
 * Only Claude Code, Grok and Codex work in the panel on the page; Omarchy's
   other agents open in their own terminal (Omarchy's agent window), where what
-  they say is, and you answer them there. In the panel an agent works only
-  through Uber Notebook's commands: it can't run other programs, read other
-  files (Codex can read them) or search the web for you.
-* Notes are written and page files read by their path (see Security: *Not done
-  yet*).
+  they say is, and you answer them there. In the panel, Claude Code and Grok
+  ask you for anything beyond Uber Notebook's commands (a web page, a
+  command, a tool, a file elsewhere); Codex has no network there and writes
+  only in its folder (*Open in a terminal* for more).
+* A few things in your notes folder (the trash, copying files in, a page's
+  history, search) still go by path (see Security: *Not done yet*).
 
 ## Uninstall
 

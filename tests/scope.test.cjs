@@ -68,6 +68,7 @@ check("by who calls: yours as always, the panel's agent's by its rules, and none
   assert.match(Scope.forCaller(true, s, "set", ["paper", "grid"]), /not Uber Notebook's settings/);
   assert.equal(Scope.forCaller(true, s, "append", [A, dir + "/a.md"]), "");
   assert.match(Scope.forCaller(true, null, "read", [A]), /no agent is working in Uber Notebook's panel/, "the panel's name, none working: nothing");
+  assert.ok(!/omarchy-shell uber-notebook\b(?!-)/.test(Scope.forCaller(true, null, "read", [A])), "and it doesn't point an agent at yours");
 });
 
 check("stopping: nothing changes, reading goes on", () => {

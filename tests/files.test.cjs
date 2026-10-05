@@ -174,6 +174,69 @@ try {
     fs.symlinkSync(path.join(d, "a.md"), path.join(d, "l.md"));
     assert.match(JSON.parse(helperRun(["read", "1000", path.join(d, "l.md")]).out).error, /link/);
   });
+  check("your notes, served: read and written below their folder only, never through a link, never a file that isn't one", () => {
+    const root = folder("notes");
+    fs.mkdirSync(path.join(root, "Pages"));
+    fs.writeFileSync(path.join(root, "Pages", "a.json"), '{"a":"\u00e9t\u00e9"}');
+    fs.writeFileSync(path.join(root, "index.json"), "{}");
+    const outside = folder("outside-notes");
+    fs.writeFileSync(path.join(outside, "secret.json"), "SECRET");
+    fs.symlinkSync(outside, path.join(root, "Linked"));
+    fs.symlinkSync(path.join(outside, "secret.json"), path.join(root, "Pages", "link.json"));
+    execFileSync("/usr/bin/mkfifo", [path.join(root, "Pages", "pipe.json")]);
+    fs.writeFileSync(path.join(root, "Pages", "big.json"), "x".repeat(5000));
+    const ask = (reqs) => {
+      const r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "serve", root], { input: reqs.map((q) => typeof q === "string" ? q : JSON.stringify(q)).join("\n") + "\n", encoding: "utf8", timeout: 10000 });
+      assert.equal(r.error, undefined, "it answers, and ends with its input");
+      return r.stdout.trim().split("\n").map((l) => JSON.parse(l));
+    };
+    const [read, wrote, back, found, foundIn, made] = ask([
+      { id: 1, op: "read", paths: ["Pages/a.json", "Pages/none.json", "Linked/secret.json", "Pages/link.json", "Pages/pipe.json", "Pages/big.json", "../outside-notes/secret.json"], max: 1000 },
+      { id: 2, op: "write", path: "Pages/b.json", text: "{\"b\":\"\u2713\"}" },
+      { id: 3, op: "read", paths: ["Pages/b.json"], max: 1000 },
+      { id: 4, op: "find", dir: "Pages", pattern: "*.json", max: 1000 },
+      { id: 5, op: "find", dir: "", pattern: "*/notebook.json", max: 1000 },
+      { id: 6, op: "mkdir", path: "Pages/assets/x" }
+    ]);
+    assert.equal(read.id, 1);
+    assert.deepEqual(read.files, { "Pages/a.json": '{"a":"\u00e9t\u00e9"}' });
+    assert.deepEqual(read.missing, ["Pages/none.json"]);
+    assert.match(read.errors["Linked/secret.json"], /link/, "not through a link to a folder elsewhere");
+    assert.match(read.errors["Pages/link.json"], /link/, "nor a link as the file");
+    assert.match(read.errors["Pages/pipe.json"], /not a plain file/, "nor a pipe (and it doesn't wait on one)");
+    assert.match(read.errors["Pages/big.json"], /more than 1000 bytes/);
+    assert.match(read.errors["../outside-notes/secret.json"], /not a path in the notes folder/);
+    assert.ok(!JSON.stringify(read).includes("SECRET"), "nothing outside read");
+    assert.deepEqual([wrote.ok, back.files["Pages/b.json"]], [true, '{"b":"\u2713"}']);
+    assert.deepEqual(Object.keys(found.files).sort(), ["Pages/a.json", "Pages/b.json"], "found: its plain files read, nothing it left behind");
+    assert.deepEqual(Object.keys(found.errors).sort(), ["Pages/big.json", "Pages/link.json", "Pages/pipe.json"], "a link or a pipe it finds: said, not left out as if not there");
+    assert.match(found.errors["Pages/link.json"], /link/);
+    assert.match(foundIn.errors["Linked/notebook.json"], /link/, "a linked folder too");
+    assert.deepEqual(foundIn.files, {});
+    assert.ok(!JSON.stringify([found, foundIn]).includes("SECRET"), "nothing outside read");
+    assert.ok(made.ok && fs.statSync(path.join(root, "Pages", "assets", "x")).isDirectory());
+    // Never over a link or a folder, never through a linked folder.
+    const [overLink, throughLink, overFolder, odd, unknown] = ask([
+      { id: 8, op: "write", path: "Pages/link.json", text: "x" },
+      { id: 9, op: "write", path: "Linked/new.json", text: "x" },
+      { id: 10, op: "write", path: "Pages/assets", text: "x" },
+      "not json", { id: 12, op: "remove", path: "Pages/a.json" }
+    ]);
+    assert.deepEqual([overLink.ok, overLink.error], [false, "something that isn't a plain file is there"]);
+    assert.equal(fs.readFileSync(path.join(outside, "secret.json"), "utf8"), "SECRET", "what the link points to: untouched");
+    assert.deepEqual([throughLink.ok, throughLink.error], [false, "a link, not a folder"]);
+    assert.ok(!fs.existsSync(path.join(outside, "new.json")));
+    assert.equal(overFolder.ok, false);
+    assert.deepEqual([odd.id, odd.ok], [null, false]);
+    assert.deepEqual([unknown.ok, unknown.error], [false, "no such request"], "only what Uber Notebook asks for");
+    assert.ok(fs.existsSync(path.join(root, "Pages", "a.json")));
+    assert.deepEqual(fs.readdirSync(path.join(root, "Pages")).filter((n) => n.endsWith(".tmp")), [], "no half-written file left");
+    // Only a folder of yours.
+    const notYours = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "serve", "/"], { input: JSON.stringify({ id: 1, op: "read", paths: ["etc/hostname"] }) + "\n", encoding: "utf8", timeout: 10000 });
+    assert.notEqual(notYours.status, 0);
+    assert.match(notYours.stderr, /isn't yours/);
+    assert.equal(notYours.stdout, "");
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

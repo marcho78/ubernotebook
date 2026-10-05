@@ -47,7 +47,7 @@ ShellRoot {
               store.readFiles([d + "/w.json"], function(got4) {
                 say("saves of one file: every waiter hears", heard.length === 4, JSON.stringify(heard))
                 say("saves of one file: the newest is there", got4[d + "/w.json"] === '{"n":4}', JSON.stringify(got4[d + "/w.json"]))
-                store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                root.notesChecks(d)
               })
             })
           }, 1000)
@@ -55,5 +55,72 @@ ShellRoot {
       })
     })
   }
-  Timer { interval: 20000; running: true; onTriggered: { console.log("FAIL timeout"); Qt.quit() } }
+  // The notes folder, by the files helper: what's read and written there,
+  // never through a link; a file that can't be read said, not "not there".
+  function notesChecks(d) {
+    var notes = d + "/notes"
+    store.exec(["/usr/bin/bash", "-c", "mkdir -p \"$1/Pages\" \"$1/nb1\" && printf SECRET > \"$2/secret.json\" && ln -s \"$2/secret.json\" \"$1/Pages/link.json\" && printf '{}' > \"$1/nb1/notebook.json\"", "x", notes, d], function(ok) {
+      store.rootPath = notes
+      store.notesRoot = notes
+      store.writeFile(notes + "/Pages/a.json", '{"a":1}', function(wrote) {
+        say("notes: written", wrote === true && store.notes !== null, "helper " + (store.notes !== null))
+        store.readFiles([notes + "/Pages/a.json", notes + "/Pages/none.json", notes + "/Pages/link.json"], function(got, read, failed) {
+          say("notes: read, by the files helper", read === true && got[notes + "/Pages/a.json"] === '{"a":1}', JSON.stringify(got))
+          say("notes: a link can't be read, and it's said (not taken for not there)", JSON.stringify(failed) === JSON.stringify([notes + "/Pages/link.json"]) && got[notes + "/Pages/link.json"] === undefined, JSON.stringify(failed))
+          store.readGlob(notes, "*/notebook.json", function(found, read2) {
+            say("notes: found by pattern", read2 === true && found[notes + "/nb1/notebook.json"] === "{}", JSON.stringify(found))
+            store.mkdirs([notes + "/Pages/assets"], function(made) {
+              store.writeFile(notes + "/Pages/link.json", "OVERWRITTEN", function(wrote2) {
+                store.readFiles([d + "/secret.json"], function(sec) {
+                  say("notes: never written through a link", wrote2 === false && sec[d + "/secret.json"] === "SECRET", "wrote " + wrote2 + " secret " + sec[d + "/secret.json"])
+                  store.exec(["/usr/bin/test", "-d", notes + "/Pages/assets"], function(isDir) {
+                    say("notes: folders made", made === true && isDir, "")
+                    root.fallbackChecks(d, notes)
+                  })
+                })
+              })
+            })
+          })
+        })
+      })
+    })
+  }
+  // When the helper doesn't answer, notes are read and written as before:
+  // one stopped with a save waiting (paused first, so it can't answer it),
+  // then one off (it failed too often).
+  function fallbackChecks(d, notes) {
+    var h = store.notes
+    store.exec(["/usr/bin/bash", "-c", "/usr/bin/pkill -STOP -f -- \"uber-notebook-files serve $1\\$\"", "x", notes], function(paused) {
+      if (!paused) { say("fallback: helper paused", false, ""); Qt.quit(); return }
+      root.fallbackWrite(d, notes, h)
+      h.run.stop()
+    })
+  }
+  function fallbackWrite(d, notes, h) {
+    store.writeFile(notes + "/Pages/b.json", '{"b":1}', function(wrote) {
+      store.readFiles([notes + "/Pages/b.json"], function(got) {
+        say("fallback: a save the stopped helper didn't answer is written as before", wrote === true && got[notes + "/Pages/b.json"] === '{"b":1}' && h.dead, "wrote " + wrote + " dead " + h.dead)
+        // (Off: it failed 3 times. The one running now ends first.)
+        store.notesFailures = 3
+        if (store.notes) store.notes.run.stop()
+        var wait = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
+        var tries = 0
+        wait.triggered.connect(function() {
+          if (store.notes !== null && ++tries < 100) return
+          wait.stop()
+          root.helperOff(d, notes)
+        })
+      })
+    })
+  }
+  function helperOff(d, notes) {
+    store.writeFile(notes + "/Pages/c.json", '{"c":1}', function(wrote2) {
+      store.readFiles([notes + "/Pages/a.json", notes + "/Pages/c.json"], function(got2, read2) {
+        say("fallback: the helper off, read and written as before", wrote2 === true && read2 === true && store.notes === null
+          && got2[notes + "/Pages/a.json"] === '{"a":1}' && got2[notes + "/Pages/c.json"] === '{"c":1}', JSON.stringify(got2))
+        store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+      })
+    })
+  }
+  Timer { interval: 30000; running: true; onTriggered: { console.log("FAIL timeout"); Qt.quit() } }
 }

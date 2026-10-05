@@ -83,7 +83,7 @@ Item {
   function stream(argv, onLine, done, options) {
     var o = options || {}
     var runner = streamComponent.createObject(store, { workingDirectory: o.cwd || "", timeoutMs: o.timeoutMs || 30 * 60 * 1000, input: o.input === true,
-      extraEnv: o.env && typeof o.env === "object" ? o.env : ({}) })
+      extraEnv: o.env && typeof o.env === "object" ? o.env : ({}), maxBytes: o.maxBytes || 64 * 1024 * 1024, maxLine: o.maxLine || 4 * 1024 * 1024 })
     var over = false
     runner.line.connect(function(text) { if (!over && onLine) onLine(text) })
     runner.finished.connect(function(code, errors) {
@@ -151,21 +151,146 @@ Item {
     return out
   }
 
+  // done({ path: text }, ok, failed): ok, the read went through (a file not
+  // in it isn't there); `failed`, the paths there that couldn't be read (a
+  // link, too big, unreadable: not "not there"). In the notes folder, by the
+  // files helper (notesAsk); else, or when it doesn't answer, as before.
   function readFiles(paths, done, maxBytes) {
-    if (paths.length === 0) { done({}, true); return }
+    if (paths.length === 0) { done({}, true, []); return }
+    var h = notesHelperFor(paths[0])
+    var rels = h ? paths.map(function(p) { return store.notesRel(h, p) }) : []
+    if (h && rels.every(function(r) { return r !== "" })) {
+      notesAsk(h, { op: "read", paths: rels, max: maxBytes || 32 * 1024 * 1024, total: maxBytes || 32 * 1024 * 1024 }, function(r) {
+        if (r === null) { store.readFilesAsBefore(paths, done, maxBytes); return }
+        var got = store.notesGot(h, r)
+        done(got.files, r.ok === true, got.failed)
+      })
+      return
+    }
+    readFilesAsBefore(paths, done, maxBytes)
+  }
+  function readFilesAsBefore(paths, done, maxBytes) {
     var mark = readMark()
     var asked = {}
     paths.forEach(function(p) { asked[p] = true })
     exec(["/usr/bin/bash", "-c", readScript, "uber-notebook-read", mark].concat(paths), function(ok, output) {
-      done(ok ? parseFrames(output, mark, function(p) { return asked[p] === true }) : {}, ok)
+      done(ok ? parseFrames(output, mark, function(p) { return asked[p] === true }) : {}, ok, ok ? [] : paths.slice())
     }, { maxBytes: maxBytes || 32 * 1024 * 1024, timeoutMs: 20000 })
   }
 
+  // The files a pattern finds in dir ("*.json", "*/notebook.json"), read:
+  // done({ path: text }, ok, failed), as readFiles.
   function readGlob(dir, pattern, done, maxBytes) {
+    var h = notesHelperFor(dir + "/x")
+    var rel = h ? (dir === h.root ? "" : store.notesRel(h, dir)) : ""
+    if (h && (rel !== "" || dir === h.root) && /^\*(\/[^\/*]+|[^\/*]*)$/.test(pattern)) {
+      notesAsk(h, { op: "find", dir: rel, pattern: pattern, max: maxBytes || 64 * 1024 * 1024, total: maxBytes || 64 * 1024 * 1024 }, function(r) {
+        if (r === null) { store.readGlobAsBefore(dir, pattern, done, maxBytes); return }
+        var got = store.notesGot(h, r)
+        done(got.files, r.ok === true, got.failed)
+      })
+      return
+    }
+    readGlobAsBefore(dir, pattern, done, maxBytes)
+  }
+  function readGlobAsBefore(dir, pattern, done, maxBytes) {
     var mark = readMark()
     exec(["/usr/bin/bash", "-c", globScript, "uber-notebook-read", mark, dir, pattern], function(ok, output) {
-      done(ok ? parseFrames(output, mark, function(p) { return p.indexOf(dir + "/") === 0 }) : {}, ok)
+      done(ok ? parseFrames(output, mark, function(p) { return p.indexOf(dir + "/") === 0 }) : {}, ok, [])
     }, { maxBytes: maxBytes || 64 * 1024 * 1024, timeoutMs: 30000 })
+  }
+
+  // ---- your notes, by the files helper ------------------------------------------------------
+  //
+  // The files in your notes folder are read and written by the files helper,
+  // kept running for that folder (bin/uber-notebook-files serve): every path
+  // below the folder walked without following a link, to a plain file only,
+  // read within its size, written as a new file put in its place. Only when
+  // it doesn't answer (it can't start, it stopped, it's stuck) is a file read
+  // or written as before, by bash and Qt; what it refuses stays refused. As
+  // the shell stops, writes are Qt's (they finish before it does).
+  // `notes`: { root, run, waiting: { id: done }, sent: { id: time }, next, dead }.
+  property var notes: null
+  property int notesFailures: 0
+  // The notes folder known to be there (locate made it): the helper's only for it.
+  property string notesRoot: ""
+
+  // The helper for a path in the notes folder in use (started as needed:
+  // the last folder's, after a change, answers what it was asked, then
+  // ends), or null.
+  function notesHelperFor(path) {
+    var p = String(path || "")
+    if (notes && !notes.dead && p.indexOf(notes.root + "/") === 0) return notes
+    if (!rootPath || rootPath !== notesRoot || p.indexOf(rootPath + "/") !== 0 || stopping || notesFailures >= 3) return null
+    if (notes && !notes.dead) notes.run.closeInput()
+    notes = startNotes(rootPath)
+    return notes.dead ? null : notes
+  }
+  // Whether the files helper reads and writes that path (in the notes folder, now).
+  function servesNotes(path) {
+    var h = notesHelperFor(path)
+    return h !== null && notesRel(h, path) !== ""
+  }
+  function notesRel(h, path) {
+    var p = String(path || "")
+    if (p.indexOf(h.root + "/") !== 0) return ""
+    var rel = p.slice(h.root.length + 1)
+    return rel && !/(^|\/)\.\.?(\/|$)/.test(rel) && !/\/\//.test(rel) && !/[\u0000-\u001f]/.test(rel) ? rel : ""
+  }
+  function startNotes(root) {
+    var h = { root: root, run: null, waiting: {}, sent: {}, next: 1, dead: false }
+    h.run = stream(["/usr/bin/python3", "-I", "-S", filesHelper, "serve", root], function(line) {
+      var r = store.parseJson(line)
+      if (!r || !Object.prototype.hasOwnProperty.call(h.waiting, r.id)) return
+      var w = h.waiting[r.id]
+      delete h.waiting[r.id]
+      delete h.sent[r.id]
+      w(r)
+    }, function(code, errors) {
+      h.dead = true
+      if (store.notes === h) store.notes = null
+      if (code !== 0 && code !== -1) {
+        store.notesFailures++
+        console.warn("Uber Notebook: the files helper stopped (" + code + "): " + String(errors || "").slice(0, 300))
+      }
+      var left = h.waiting
+      h.waiting = {}
+      h.sent = {}
+      for (var k in left) left[k](null)
+    }, { input: true, timeoutMs: 7 * 24 * 3600 * 1000, maxBytes: 1e15, maxLine: 1024 * 1024 * 1024 })
+    return h
+  }
+  // Asks it: done(its answer), or done(null) when it doesn't answer.
+  function notesAsk(h, req, done) {
+    if (!h || h.dead) { done(null); return }
+    req.id = h.next++
+    h.waiting[req.id] = done
+    h.sent[req.id] = Date.now()
+    h.run.send(JSON.stringify(req) + "\n")
+  }
+  // Its answer to a read, as readFiles gives it: { files: { path: text }, failed }.
+  function notesGot(h, r) {
+    var files = {}
+    var failed = []
+    if (r.ok) {
+      for (var k in r.files) files[h.root + "/" + k] = r.files[k]
+      for (var e in r.errors) failed.push(h.root + "/" + e)
+    }
+    return { files: files, failed: failed }
+  }
+  // (One that's stuck: what it was asked goes on as before, and it's ended.)
+  Timer {
+    interval: 5000
+    repeat: true
+    running: store.notes !== null
+    onTriggered: {
+      var h = store.notes
+      if (!h || h.dead) return
+      var now = Date.now()
+      for (var id in h.sent) {
+        if (now - h.sent[id] > 60000) { console.warn("Uber Notebook: the files helper isn't answering: started again"); h.run.stop(); return }
+      }
+    }
   }
 
   function parseJson(text) {
@@ -321,10 +446,10 @@ Item {
   }
   function writeNow(path, text, waiters) {
     writing[path] = true
-    var view = writerComponent.createObject(store, { path: path, blockWrites: stopping })
+    var view = null
     function finish(ok, error) {
       delete writing[path]
-      view.destroy()
+      if (view) view.destroy()
       if (!ok) failed("Couldn't save " + path.replace(home, "~") + (error ? ": " + error : ""))
       waiters.forEach(function(w) {
         try { w(ok) } catch (e) { console.warn("Uber Notebook: after saving " + path + ": " + e) }
@@ -335,12 +460,47 @@ Item {
         writeNow(path, next.text, next.waiters)
       }
     }
-    view.saved.connect(function() { finish(true, "") })
-    view.saveFailed.connect(function(error) { finish(false, String(error)) })
-    view.setText(text)
+    function asBefore() {
+      view = writerComponent.createObject(store, { path: path, blockWrites: stopping })
+      view.saved.connect(function() { finish(true, "") })
+      view.saveFailed.connect(function(error) { finish(false, String(error)) })
+      view.setText(text)
+    }
+    // (In the notes folder, by the files helper; as before when it doesn't
+    // answer, or as the shell stops.)
+    var h = stopping ? null : notesHelperFor(path)
+    var rel = h ? notesRel(h, path) : ""
+    if (!rel) { asBefore(); return }
+    notesAsk(h, { op: "write", path: rel, text: String(text) }, function(r) {
+      if (r === null) { asBefore(); return }
+      finish(r.ok === true, r.ok ? "" : String(r.error || ""))
+    })
   }
 
   function mkdirs(paths, done) {
+    // (In the notes folder, by the files helper; else, or when it doesn't answer, as before.)
+    var h = paths.length ? notesHelperFor(paths[0] + "/x") : null
+    var rels = h ? paths.map(function(p) { return store.notesRel(h, p) }) : []
+    if (h && rels.every(function(r) { return r !== "" })) {
+      var left = rels.length
+      var allOk = true
+      var why = ""
+      var fellBack = false
+      rels.forEach(function(rel) {
+        notesAsk(h, { op: "mkdir", path: rel }, function(r) {
+          if (r === null) fellBack = true
+          else if (!r.ok) { allOk = false; why = why || String(r.error || "") }
+          if (--left > 0) return
+          if (fellBack) { store.mkdirsAsBefore(paths, done); return }
+          if (!allOk) failed("Couldn't make " + paths[0].replace(home, "~") + ": " + why)
+          if (done) done(allOk)
+        })
+      })
+      return
+    }
+    mkdirsAsBefore(paths, done)
+  }
+  function mkdirsAsBefore(paths, done) {
     exec(["/usr/bin/mkdir", "-p", "--"].concat(paths), function(ok, output) {
       if (!ok) failed("Couldn't make " + paths[0].replace(home, "~") + ": " + output)
       if (done) done(ok)
@@ -378,7 +538,11 @@ Item {
       var next = Settings.resolveFolder(store.folder, store.home, ok)
       if (store.rootPath && next !== store.rootPath) store.leaveRoot()
       store.rootPath = next
-      store.mkdirs([store.rootPath], function(made) { if (made && gen === store.generation) store.loadLibrary() })
+      store.mkdirs([store.rootPath], function(made) {
+        if (!made || gen !== store.generation) return
+        store.notesRoot = store.rootPath
+        store.loadLibrary()
+      })
     })
   }
 
@@ -546,10 +710,13 @@ Item {
   function readPages(id, done) {
     var nb = index[id]
     if (!nb) { done(null); return }
-    readGlob(Library.pagesDir(rootPath, id), "*.json", function(files, read) {
+    readGlob(Library.pagesDir(rootPath, id), "*.json", function(files, read, failed) {
       // (A read that didn't go through isn't an empty notebook: nothing's
       // made or changed from it.)
       if (!read) { store.failed("Couldn't read that notebook's pages"); done(null); return }
+      // (A page that couldn't be read keeps its place, shown or not: said.)
+      var unread = (failed || []).map(function(p) { return p.slice(p.lastIndexOf("/") + 1, p.length - 5) }).filter(Library.isId)
+      if (unread.length) store.failed("Couldn't read " + unread.length + " of that notebook's pages: left as they are")
       var byId = {}
       var onDisk = []
       for (var path in files) {
@@ -562,8 +729,9 @@ Item {
         if (!byId[wid]) onDisk.push(wid)
         byId[wid] = JSON.parse(JSON.stringify(mine[wid]))
       }
-      var ids = Library.reconcilePages(nb.pages, onDisk)
-      var pages = ids.map(function(pid) { return byId[pid] })
+      var ids = Library.reconcilePages(nb.pages, onDisk.concat(unread))
+      var pages = ids.filter(function(pid) { return byId[pid] }).map(function(pid) { return byId[pid] })
+      if (pages.length === 0 && unread.length) { done(null); return }
       if (pages.length === 0) {
         var first = Library.newPage({})
         pages = [first]

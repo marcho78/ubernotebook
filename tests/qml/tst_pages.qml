@@ -656,6 +656,48 @@ Item {
       }
     }
 
+    // A file of its own that couldn't be read as it loaded (a link, too big:
+    // not "not there"): left as it is, never written over, said once.
+    function test_23_what_couldnt_be_read_isnt_written_over() {
+      fresh()
+      var cal = ws.calendarPath()
+      var ix = ws.indexPath()
+      files.disk[cal] = "THE CALENDAR AS IT IS"
+      files.disk[ix] = "THE TREE AS IT IS"
+      var told = []
+      function heard(m) { told.push(m) }
+      ws.failed.connect(heard)
+      try {
+        var f = {}
+        f[cal] = true
+        f[ix] = true
+        files.failReads = f
+        ws.load()
+        tryCompare(ws, "ready", true, 2000)
+        tryVerify(function() { return ws.calendarLoaded }, 2000)
+        verify(ws.unreadable[cal] && ws.unreadable[ix], "both kept as unreadable")
+        compare(told.filter(function(m) { return m.indexOf("calendar.json") >= 0 }).length, 1, "said once: " + JSON.stringify(told))
+        // Changed meanwhile: in memory, never written over.
+        ws.writeCalendar()
+        ws.flushIndex()
+        view.newPage("")
+        tryVerify(function() { return view.page && view.page.title === "" }, 2000)
+        ws.flushIndex()
+        compare(files.disk[cal], "THE CALENDAR AS IT IS")
+        compare(files.disk[ix], "THE TREE AS IT IS")
+        // Read again (fine now): written as always.
+        files.failReads = ({})
+        ws.load()
+        tryCompare(ws, "ready", true, 2000)
+        tryVerify(function() { return ws.calendarLoaded && !ws.unreadable[cal] }, 2000)
+        ws.writeCalendar()
+        verify(files.disk[cal] !== "THE CALENDAR AS IT IS", "written once it could be read")
+      } finally {
+        ws.failed.disconnect(heard)
+        files.failReads = ({})
+      }
+    }
+
     function test_8_the_open_page_reloads_after_the_store_changes_it() {
       fresh()
       var home = view.page.id

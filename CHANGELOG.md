@@ -29,8 +29,10 @@ The first version.
   tools, a file elsewhere (Grok over its agent protocol, in its sandbox,
   Always-approve off for these runs). *Allow once*, *Always* (for that agent and that site,
   searching, that program or that tool) or *No*; what you've allowed for
-  good is in Settings → AI, to take back. Claude Code runs in its restricted
-  mode; each takes its request and your answers on its input.
+  good is in Settings → AI, to take back. Claude Code runs with your own
+  plugins and MCP servers (Figma, Canva...), its permission mode set to ask
+  whatever your settings say; each takes its request and your answers on
+  its input.
 
 - **A terminal instead, whenever you like**: *In a terminal* beside *Ask* in
   the agent box, and *Open in a terminal instead* in the panel all along (it
@@ -454,6 +456,12 @@ The first version.
   installed, checked, and run by their full path.
 - **Nothing installs itself**: no *Update now*, no `installUpdate` command;
   Uber Notebook shows the `omarchy plugin update` command to run yourself.
+- **Your notes are read and written by a helper kept running for their
+  folder** (`bin/uber-notebook-files serve`): never through a link, only a
+  plain file within its size, each save a new file flushed to the disk and
+  put in place. A file that can't be read is said and never saved over
+  (before, it could be taken for one that isn't there). If the helper doesn't
+  answer, it's done as before.
 - **Archives** (a zip you import, a backup you put back) are opened by a small
   helper (`bin/uber-notebook-files`, Python, isolated): nothing in them can land
   outside its folder, be a link or a device, or take more than its room; a

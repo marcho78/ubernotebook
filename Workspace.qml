@@ -94,11 +94,14 @@ Item {
     // (Nothing of another folder's: its pages may have the same ids.)
     texts = ({})
     written = ({})
+    readJson = ({})
+    unreadable = ({})
     keptAt = ({})
     keptJson = ({})
     versionNames = ({})
-    files.readFiles([ws.indexPath()], function(got) {
+    files.readFiles([ws.indexPath()], function(got, read, failed) {
       if (gen !== ws.generation) return
+      ws.keepUnreadable(ws.indexPath(), failed)
       var ix = Workspace.cleanIndex(files.parseJson(got[ws.indexPath()] || ""))
       files.exec(["/usr/bin/bash", "-c", ws.listScript, "uber-notebook-list", ws.folder], function(listed, output) {
         if (gen !== ws.generation) return
@@ -149,6 +152,21 @@ Item {
   // index.json, a moment after the last change to the tree.
   function saveIndex() { indexTimer.restart() }
 
+  // Its own files (the tree, the calendar, People, conversations) that
+  // couldn't be read as it loaded (a link, too big, unreadable: not "not
+  // there"): path -> true. Never written over (what changes meanwhile is kept
+  // till it closes), said once.
+  property var unreadable: ({})
+  function keepUnreadable(path, failed) {
+    if (!failed || failed.indexOf(path) < 0) return false
+    var next = {}
+    for (var k in unreadable) next[k] = true
+    next[path] = true
+    unreadable = next
+    ws.failed("Couldn't read " + path.replace(files.home, "~") + ": it's left as it is, and changes to it aren't saved over it")
+    return true
+  }
+
   Timer {
     id: indexTimer
     interval: 300
@@ -159,6 +177,7 @@ Item {
   function flushIndex(done) {
     indexTimer.stop()
     if (!ready && Object.keys(index.pages).length === 0) { if (done) done(false); return }
+    if (unreadable[indexPath()]) { if (done) done(false); return }
     var text = Workspace.indexJson(index)
     withFolder(function() { files.writeFile(ws.indexPath(), text, done) }, done)
   }
@@ -182,6 +201,8 @@ Item {
 
   // Every page written this session: what's on disk may still be on its way.
   property var written: ({})
+  // Every page read this session, as its JSON: commands read it here, at once.
+  property var readJson: ({})
 
   function readPages(ids, done) {
     var fresh = []
@@ -196,7 +217,7 @@ Item {
       for (var path in got) {
         var id = path.slice(path.lastIndexOf("/") + 1, -5)
         var page = Workspace.cleanPage(files.parseJson(got[path]), id)
-        if (page) out.push(page)
+        if (page) { out.push(page); ws.readJson[id] = JSON.stringify(page) }
       }
       done(out)
     }, 32 * 1024 * 1024)
@@ -208,11 +229,15 @@ Item {
     readPages([id], function(pages) { done(pages.length ? pages[0] : null) })
   }
 
-  // One page, read now, for a command that answers at once: as it was last
-  // written this session, else from its file. null when there's none.
+  // One page, for a command that answers at once: as it was last written or
+  // read this session (every page's read as Pages loads), else null. (While
+  // the files helper reads your notes, never there and then: a file that
+  // never ends would hold up the shell. Without it, as before, from its file.)
   function readPageNow(id) {
     if (!Workspace.isUuid(id)) return null
     if (written[id]) return JSON.parse(JSON.stringify(written[id]))
+    if (readJson[id]) return JSON.parse(readJson[id])
+    if (typeof files.servesNotes === "function" && files.servesNotes(pagePath(id))) return null
     var text = files.readNow(pagePath(id), 32 * 1024 * 1024)
     return text === null ? null : Workspace.cleanPage(files.parseJson(text), id)
   }
@@ -501,7 +526,8 @@ Item {
 
   function loadCalendar() {
     if (!folder) return
-    files.readFiles([calendarPath()], function(got) {
+    files.readFiles([calendarPath()], function(got, read, failed) {
+      ws.keepUnreadable(ws.calendarPath(), failed)
       var raw = got[ws.calendarPath()]
       ws.calendar = Calendar.clean(raw ? files.parseJson(raw) : null)
       ws.calendarUndo = []
@@ -514,7 +540,7 @@ Item {
   }
 
   function writeCalendar() {
-    if (!folder) return
+    if (!folder || unreadable[calendarPath()]) return
     files.writeFile(calendarPath(), JSON.stringify(calendar, null, 1) + "\n")
   }
 
@@ -578,14 +604,15 @@ Item {
 
   function loadChats() {
     if (!folder) return
-    files.readFiles([chatsPath()], function(got) {
+    files.readFiles([chatsPath()], function(got, read, failed) {
+      ws.keepUnreadable(ws.chatsPath(), failed)
       var raw = got[ws.chatsPath()]
       ws.chats = Agent.cleanChats(raw ? files.parseJson(raw) : null)
       ws.chatsRevision++
     })
   }
   function writeChats() {
-    if (!folder) return
+    if (!folder || unreadable[chatsPath()]) return
     var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
     withFolder(function() { files.writeFile(ws.chatsPath(), text) })
   }
@@ -615,7 +642,8 @@ Item {
 
   function loadContacts() {
     if (!folder) return
-    files.readFiles([contactsPath()], function(got) {
+    files.readFiles([contactsPath()], function(got, read, failed) {
+      ws.keepUnreadable(ws.contactsPath(), failed)
       var raw = got[ws.contactsPath()]
       ws.contacts = Contacts.clean(raw ? files.parseJson(raw) : null)
       ws.contactsUndo = []
@@ -626,7 +654,7 @@ Item {
   }
 
   function writeContacts() {
-    if (!folder) return
+    if (!folder || unreadable[contactsPath()]) return
     withFolder(function() { files.writeFile(ws.contactsPath(), JSON.stringify(ws.contacts, null, 1) + "\n") })
   }
 
@@ -738,6 +766,7 @@ Item {
     all.forEach(function(pid) {
       delete index.pages[pid]
       delete written[pid]
+      delete readJson[pid]
       delete texts[pid]
       files.trash(ws.pagePath(pid), "page-" + pid + ".json")
       // Its history goes with it (if it has one).

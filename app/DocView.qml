@@ -1414,7 +1414,7 @@ FocusScope {
       return Agent.prompt({
         request: request, page: { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title },
         scope: ctx.scope, blocks: ctx.blocks, words: ctx.words, line: ctx.line,
-        skill: service && service.skillPath ? service.skillPath : "", here: inPanel, dir: inPanel ? agentDir() : ""
+        skill: service && service.skillPath ? service.skillPath : "", here: inPanel, dir: inPanel ? agentDir() : "", agent: agent
       })
     }
     var prompt = promptFor(here)
@@ -1454,7 +1454,7 @@ FocusScope {
       return Agent.prompt({
         request: request, scope: "new", page: { id: child.id, title: "" },
         into: parent ? { id: parent, title: workspace.index.pages[parent].title } : null,
-        skill: service && service.skillPath ? service.skillPath : "", here: inPanel, dir: inPanel ? agentDir() : ""
+        skill: service && service.skillPath ? service.skillPath : "", here: inPanel, dir: inPanel ? agentDir() : "", agent: agent
       })
     }
     var prompt = promptFor(here)
@@ -1684,7 +1684,7 @@ FocusScope {
           view.saveChat()
           return
         }
-        where = { exe: exe, dir: dir }
+        where = { exe: exe, dir: dir, skill: service && typeof service.skillDir === "string" ? service.skillDir : "" }
         function start() { if (view.agentRun) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
         if (agent === "grok") files.writeFile(dir + "/.grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir), start)
         else start()
@@ -1740,7 +1740,7 @@ FocusScope {
     var here = page ? { id: page.id, title: Workspace.cleanTitle(titleEdit.text) || page.title }
       : talk && workspace.index.pages[talk.owner] ? { id: talk.owner, title: workspace.index.pages[talk.owner].title } : { id: "", title: "" }
     return Agent.prompt({ request: request, page: here, scope: "page", earlier: turns || agentPanel.history,
-      skill: service && service.skillPath ? service.skillPath : "", here: !terminal, dir: terminal ? "" : agentDir() })
+      skill: service && service.skillPath ? service.skillPath : "", here: !terminal, dir: terminal ? "" : agentDir(), agent: talk ? talk.agent : "" })
   }
 
   // What you say back, in the same conversation: where you are now when

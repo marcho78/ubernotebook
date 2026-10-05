@@ -57,6 +57,7 @@ QtObject {
     ran = []
     deferHelperReads = false
     heldReads = []
+    failReads = ({})
     readClipboard = null
     privateHosts = ({})
     failWrites = ""
@@ -106,10 +107,29 @@ QtObject {
     return String(text)
   }
 
+  // (A path in failReads couldn't be read: not in what's read, said in `failed`.)
+  property var failReads: ({})
   function readFiles(paths, done) {
     var out = {}
-    paths.forEach(function(p) { if (files.disk[p] !== undefined) out[p] = files.disk[p] })
-    done(out, true)
+    var failed = []
+    paths.forEach(function(p) {
+      if (failReads[p]) failed.push(p)
+      else if (files.disk[p] !== undefined) out[p] = files.disk[p]
+    })
+    done(out, true, failed)
+  }
+  // The files a pattern finds in dir ("*.json", "*/notebook.json"), as Store's.
+  function readGlob(dir, pattern, done) {
+    var out = {}
+    var sub = pattern.indexOf("*/") === 0 ? pattern.slice(2) : ""
+    var end = sub ? "" : pattern.slice(1)
+    for (var p in files.disk) {
+      if (p.indexOf(dir + "/") !== 0) continue
+      var rest = p.slice(dir.length + 1)
+      var parts = rest.split("/")
+      if (sub ? parts.length === 2 && parts[1] === sub : parts.length === 1 && rest.slice(-end.length) === end) out[p] = files.disk[p]
+    }
+    done(out, true, [])
   }
 
   // (A path with failWrites in it isn't written: done(false).)

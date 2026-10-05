@@ -81,12 +81,19 @@ check("Claude Code works here: its command, and the prompt says so", () => {
   const argv = plain(Agent.command("claude", "-starts with a dash", undefined, undefined, W("claude")));
   assert.deepEqual(argv.slice(0, 4), ["/usr/bin/bash", "-c", "exec \"$@\"", "uber-notebook-agent"], "its input kept: it reads its request and your answers there");
   assert.equal(argv[4], "/usr/bin/claude", "by its full path");
-  for (const a of ["-p", "--verbose", "--include-partial-messages", "--restricted"]) assert.ok(argv.includes(a), a);
+  for (const a of ["-p", "--verbose", "--include-partial-messages"]) assert.ok(argv.includes(a), a);
+  assert.ok(!argv.includes("--restricted") && !argv.includes("--strict-mcp-config") && !argv.includes("--setting-sources"),
+    "your setup as in your terminal: your plugins and MCP servers among it");
   assert.equal(argv[argv.indexOf("--input-format") + 1], "stream-json");
   assert.equal(argv[argv.indexOf("--output-format") + 1], "stream-json");
   assert.equal(argv[argv.indexOf("--permission-prompt-tool") + 1], "stdio", "what's beyond its rules is asked of Uber Notebook (you)");
   assert.equal(argv[argv.indexOf("--tools") + 1], "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch");
-  assert.ok(!argv.includes("--permission-mode"), "asked, not refused or let through");
+  assert.equal(argv[argv.indexOf("--permission-mode") + 1], "manual", "asked, whatever your settings' default mode");
+  assert.ok(!argv.includes("--add-dir"), "no skill folder given: none");
+  const withSkill = plain(Agent.command("claude", "x", undefined, undefined, Object.assign(W("claude"), { skill: "/home/me/.config/omarchy/plugins/marcho78.uber-notebook/skills/uber-notebook" })));
+  assert.deepEqual(withSkill.slice(withSkill.indexOf("--add-dir"), withSkill.indexOf("--add-dir") + 3),
+    ["--add-dir", "/home/me/.config/omarchy/plugins/marcho78.uber-notebook/skills/uber-notebook", "--permission-mode"], "its skill read without asking (and the folder list ended)");
+  assert.ok(!plain(Agent.command("claude", "x", undefined, undefined, Object.assign(W("claude"), { skill: "skills/*" }))).includes("--add-dir"), "only a full path, no pattern");
   const allowed = argv.slice(argv.indexOf("--allowedTools") + 1, argv.indexOf("--allowedTools") + 4);
   assert.deepEqual(allowed, ["Bash(omarchy-shell uber-notebook-agent *)", "Edit(//run/user/1000/uber-notebook-agent/**)", "Write(//run/user/1000/uber-notebook-agent/**)"],
     "Uber Notebook's commands, and files in its own folder, without asking");
@@ -221,7 +228,13 @@ check("finding an agent: where it's installed, checked, by its full path", () =>
   const p = Agent.prompt(Object.assign({ scope: "page", here: true, dir: "/run/user/1000/uber-notebook-agent" }, base));
   assert.ok(p.includes("as a file in /run/user/1000/uber-notebook-agent (your working folder)"), "it's told where its files go");
   assert.ok(p.includes("run each as omarchy-shell uber-notebook-agent <command>"), "and the commands' panel name");
+  assert.ok(p.includes("and only so: if one's refused, say why rather than trying it another way"), "only it");
   assert.ok(!Agent.prompt(Object.assign({ scope: "page", here: false }, base)).includes("uber-notebook-agent"), "not in a terminal: the usual name");
+  // Codex: its commands outside its sandbox (no network there, the shell's socket among it).
+  const codexHere = Agent.prompt(Object.assign({ scope: "page", here: true, dir: "/run/user/1000/uber-notebook-agent", agent: "codex" }, base));
+  assert.ok(codexHere.includes("run each omarchy-shell uber-notebook-agent command with escalated permissions, outside the sandbox"));
+  assert.ok(!p.includes("escalated") && !Agent.prompt(Object.assign({ scope: "page", here: false, agent: "codex" }, base)).includes("escalated"),
+    "not for the others, nor in a terminal");
   // Its steps, by either name.
   assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "omarchy-shell uber-notebook-agent blocks 1111" } }] } }))).map((e) => e.text), ["Reading the page"]);
 });

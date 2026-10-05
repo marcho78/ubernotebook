@@ -34,6 +34,25 @@
 #   unlink-link <link> <target>
 #       A link of Uber Notebook's own (its skill, in an agent's folder) taken
 #       away only if it's a link to <target> ("removed", else "kept").
+#   serve <notes folder>
+#       Your notes, read and written for Uber Notebook as long as it runs:
+#       a request a line on its input (JSON: { id, op, ... }), an answer a
+#       line on its output ({ id, ok, ... } or { id, ok: false, error }).
+#       The folder's opened once (yours, a folder); every path in a request
+#       is below it, walked a folder at a time without following a link, to
+#       a plain file only. Requests:
+#         read  { paths, max, total } -> { files: { path: text }, missing,
+#               errors: { path: why } }  (a file over `max` bytes, or past
+#               `total` for all of them: an error)
+#         find  { dir, pattern, max, total } -> the same, for the files a
+#               pattern finds: "*<end>" (what's there ending so, folders
+#               aside) or "*/<name>" (that file in each of its folders); a
+#               link it finds is in `errors`, not left out as if not there
+#         write { path, text }  -> {}  (a new file beside it, written out to
+#               the disk, then put in its place: never over anything but a
+#               plain file, never through a link; after a power cut, the file
+#               as it was or as it is, never half of it)
+#         mkdir { path }        -> {}  (the folders, as needed)
 #   restore-backup <backup.tar.gz> <pN> <folder> <sha256> <max bytes> <max files>
 #       One profile (pN/ in the backup) into a new folder: <folder>, or
 #       "<folder> 2"... if that's taken, never one that's there. The backup
@@ -142,6 +161,189 @@ def write_new(dir_fd, name, source, budget):
             pass
         raise
     os.close(fd)
+
+
+# ---- your notes, as long as Uber Notebook runs -----------------------------------------------------
+
+def walk(root_fd, parts):
+    """The folder at `parts` below root_fd (none made), every step opened
+    without following a link. An open fd the caller closes."""
+    fd = os.dup(root_fd)
+    try:
+        for p in parts:
+            nfd = open_dir(p, fd)
+            os.close(fd)
+            fd = nfd
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def path_parts(path):
+    parts = parts_of(path) if isinstance(path, str) else None
+    if not parts:
+        raise Refused("not a path in the notes folder")
+    return parts
+
+
+def serve_read(root_fd, req):
+    limit = int(req.get("max", 32 * 1024 * 1024))
+    total = int(req.get("total", 256 * 1024 * 1024))
+    files, missing, errors = {}, [], {}
+    seen = 0
+    for path in req.get("paths", [])[:100000]:
+        try:
+            if seen > total:
+                raise Refused("more than %d bytes in all" % total)
+            parts = path_parts(path)
+            dfd = walk(root_fd, parts[:-1])
+            try:
+                fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dfd)
+            finally:
+                os.close(dfd)
+            with os.fdopen(fd, "rb") as f:
+                if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                    raise Refused("not a plain file")
+                data = f.read(limit + 1)
+            if len(data) > limit:
+                raise Refused("more than %d bytes" % limit)
+            seen += len(data)
+            if seen > total:
+                raise Refused("more than %d bytes in all" % total)
+            files[path] = data.decode("utf-8", "replace")
+        except FileNotFoundError:
+            missing.append(path)
+        except OSError as e:
+            errors[path] = "a link, not a file" if e.errno in (errno.ELOOP, errno.ENOTDIR) else (e.strerror or str(e))[:200]
+        except Refused as e:
+            errors[path] = str(e)[:200]
+    return {"files": files, "missing": missing, "errors": errors}
+
+
+def serve_write(root_fd, req):
+    parts = path_parts(req.get("path"))
+    data = str(req.get("text", "")).encode("utf-8", "surrogatepass")
+    dfd = walk(root_fd, parts[:-1])
+    try:
+        name = parts[-1]
+        try:
+            if not stat.S_ISREG(os.lstat(name, dir_fd=dfd).st_mode):
+                raise Refused("something that isn't a plain file is there")
+        except FileNotFoundError:
+            pass
+        tmp = ".%s.%s.tmp" % (name[:100], os.urandom(6).hex())
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        try:
+            view = memoryview(data)
+            while view:
+                n = os.write(fd, view)
+                view = view[n:]
+            os.fsync(fd)
+        except BaseException:
+            os.close(fd)
+            try:
+                os.unlink(tmp, dir_fd=dfd)
+            except OSError:
+                pass
+            raise
+        os.close(fd)
+        try:
+            os.rename(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=dfd)
+            except OSError:
+                pass
+            raise
+        return {}
+    finally:
+        os.close(dfd)
+
+
+def serve_mkdir(root_fd, req):
+    parts = path_parts(req.get("path"))
+    fd = os.dup(root_fd)
+    try:
+        for p in parts:
+            try:
+                os.mkdir(p, 0o755, dir_fd=fd)
+            except FileExistsError:
+                pass
+            nfd = open_dir(p, fd)
+            os.close(fd)
+            fd = nfd
+    finally:
+        os.close(fd)
+    return {}
+
+
+def serve_find(root_fd, req):
+    pattern = str(req.get("pattern", ""))
+    base = req.get("dir", "")
+    parts = parts_of(base) if base else []
+    if parts is None:
+        raise Refused("not a path in the notes folder")
+    try:
+        dfd = walk(root_fd, parts)
+    except FileNotFoundError:
+        return {"files": {}, "missing": [], "errors": {}}
+    try:
+        prefix = "/".join(parts) + "/" if parts else ""
+        paths = []
+        if pattern.startswith("*/") and parts_of(pattern[2:]) and "/" not in pattern[2:]:
+            for name in sorted(os.listdir(dfd)):
+                try:
+                    mode = os.lstat(name, dir_fd=dfd).st_mode
+                    if (stat.S_ISDIR(mode) or stat.S_ISLNK(mode)) and parts_of(name):
+                        paths.append(prefix + name + "/" + pattern[2:])
+                except FileNotFoundError:
+                    pass
+        elif pattern.startswith("*") and "/" not in pattern and "*" not in pattern[1:]:
+            for name in sorted(os.listdir(dfd)):
+                try:
+                    if name.endswith(pattern[1:]) and parts_of(name) and not stat.S_ISDIR(os.lstat(name, dir_fd=dfd).st_mode):
+                        paths.append(prefix + name)
+                except FileNotFoundError:
+                    pass
+        else:
+            raise Refused("a pattern it doesn't take")
+    finally:
+        os.close(dfd)
+    found = serve_read(root_fd, {"paths": paths, "max": req.get("max", 32 * 1024 * 1024), "total": req.get("total", 256 * 1024 * 1024)})
+    found["missing"] = []
+    return found
+
+
+SERVE = {"read": serve_read, "find": serve_find, "write": serve_write, "mkdir": serve_mkdir}
+
+
+def cmd_serve(folder):
+    root_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    info = os.fstat(root_fd)
+    if info.st_uid != os.getuid():
+        raise Refused("the notes folder isn't yours")
+    out = sys.stdout.buffer
+    for line in sys.stdin.buffer:
+        answer = {"id": None, "ok": False}
+        try:
+            req = json.loads(line)
+            if not isinstance(req, dict):
+                raise Refused("not a request")
+            answer["id"] = req.get("id")
+            op = SERVE.get(req.get("op"))
+            if op is None:
+                raise Refused("no such request")
+            answer.update(op(root_fd, req))
+            answer["ok"] = True
+        except FileNotFoundError:
+            answer["error"] = "not there"
+        except OSError as e:
+            answer["error"] = "a link, not a folder" if e.errno in (errno.ELOOP, errno.ENOTDIR) else (e.strerror or str(e))[:200]
+        except (Refused, ValueError, TypeError) as e:
+            answer["error"] = str(e)[:200]
+        out.write(json.dumps(answer, ensure_ascii=False).encode("utf-8", "surrogatepass") + b"\n")
+        out.flush()
 
 
 # ---- a text file -------------------------------------------------------------------------------
@@ -473,6 +675,8 @@ def main(argv):
             cmd_unlink_link(argv[2], argv[3])
         elif len(argv) == 3 and argv[1] == "inspect-backup":
             cmd_inspect(argv[2])
+        elif len(argv) == 3 and argv[1] == "serve":
+            cmd_serve(argv[2])
         elif len(argv) == 8 and argv[1] == "restore-backup":
             cmd_restore(argv[2], argv[3], argv[4], argv[5], argv[6], argv[7])
         else:

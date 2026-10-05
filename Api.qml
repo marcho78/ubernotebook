@@ -910,28 +910,34 @@ QtObject {
     if (!names) return fail("reading its history: ask again in a moment")
     return answer(names.map(function(n) { var d = Workspace.versionDate(n); return { name: n, kept: d ? d.toISOString() : "" } }))
   }
+  // A kept version of a page: { page } or { error } (read by the helper first,
+  // then asked again: readGiven).
   function versionPage(id, name) {
-    if (!Workspace.versionDate(String(name || ""))) return null
-    var text = files ? files.readNow(Workspace.historyDir(files.rootPath, id) + "/" + name, 32 * 1024 * 1024) : null
-    var v = text ? files.parseJson(text) : null
-    return v ? Workspace.cleanPage(v.page, id) : null
+    var none = "there's no version called that (history <id> lists them)"
+    if (!Workspace.versionDate(String(name || "")) || !files) return { error: none }
+    var got = readGiven(Workspace.historyDir(files.rootPath, id) + "/" + name, 32 * 1024 * 1024, none)
+    if (got.error) return { error: /no file there/.test(got.error) ? none : got.error }
+    var v = files.parseJson(got.text)
+    var page = v ? Workspace.cleanPage(v.page, id) : null
+    return page ? { page: page } : { error: "that version can't be read" }
   }
   // One version, as Markdown.
   function version(id, name) {
     var not = unready()
     if (not) return fail(not)
     if (!Workspace.isUuid(id) || !workspace.index.pages[id]) return fail(noPage)
-    var page = versionPage(id, name)
-    if (!page) return fail("there's no version called that (history <id> lists them)")
-    return Markdown.fromDocPage(page, null, { fences: true })
+    var v = versionPage(id, name)
+    if (v.error) return fail(v.error)
+    return Markdown.fromDocPage(v.page, null, { fences: true })
   }
   // The page as it was: what it is now kept in its history first.
   function restoreVersion(id, name) {
     var not = unready()
     if (not) return fail(not)
     if (!live(id)) return fail(noPage)
-    var old = versionPage(id, name)
-    if (!old) return fail("there's no version called that (history <id> lists them)")
+    var kept = versionPage(id, name)
+    if (kept.error) return fail(kept.error)
+    var old = kept.page
     var err = editPageNow(id, function(p) {
       var lockedNow = lockedNote(p)
       if (lockedNow) return lockedNow
@@ -1537,11 +1543,41 @@ QtObject {
 
   // ---- notebooks (the Notebooks space) ----
 
+  // A notebook's pages, read in the background as a command asks for them
+  // (never there and then): { pid: page }, kept two minutes; null while
+  // they're read (the command says to ask again).
+  property var notebookReads: ({})
+  function notebookPages(id) {
+    var kept = Object.prototype.hasOwnProperty.call(notebookReads, id) ? notebookReads[id] : null
+    var now = Date.now()
+    if (kept && kept.pages && now - kept.at < 120000) return kept.pages
+    if (kept && !kept.pages && now - kept.at < 60000) return null
+    var next = {}
+    for (var k in notebookReads) if (now - notebookReads[k].at < 120000) next[k] = notebookReads[k]
+    next[id] = { at: now, pages: null }
+    notebookReads = next
+    files.readGlob(Library.pagesDir(files.rootPath, id), "*.json", function(got) {
+      var pages = {}
+      for (var path in got) {
+        var pid = path.slice(path.lastIndexOf("/") + 1, -5)
+        var p = Library.cleanPage(files.parseJson(got[path]), pid)
+        if (p) pages[pid] = p
+      }
+      var after = {}
+      for (var n in api.notebookReads) after[n] = api.notebookReads[n]
+      after[id] = { at: Date.now(), pages: pages }
+      api.notebookReads = after
+    }, 64 * 1024 * 1024)
+    kept = notebookReads[id]
+    return kept && kept.pages ? kept.pages : null
+  }
+  // One page of a notebook: { page } or { error }.
   function notebookPage(nb, pid) {
     var mine = files.written && files.written[nb] ? files.written[nb][pid] : null
-    if (mine) return JSON.parse(JSON.stringify(mine))
-    var text = files.readNow(Library.pagesDir(files.rootPath, nb) + "/" + pid + ".json", 8 * 1024 * 1024)
-    return text ? Library.cleanPage(files.parseJson(text), pid) : null
+    if (mine) return { page: JSON.parse(JSON.stringify(mine)) }
+    var pages = notebookPages(nb)
+    if (!pages) return { error: "reading the notebook first: run the same command again in a moment" }
+    return pages[pid] ? { page: pages[pid] } : { error: "couldn't read that page" }
   }
   function notebooks() {
     if (!files || !files.index) return fail("the notebooks aren't loaded yet")
@@ -1555,8 +1591,10 @@ QtObject {
     var nb = files && files.index ? files.index[id] : null
     if (!nb) return fail("there's no notebook with that id (notebooks lists them)")
     var out = []
+    if (!notebookPages(id)) return fail("reading the notebook first: run the same command again in a moment")
     nb.pages.slice(0, 2000).forEach(function(pid, i) {
-      var p = notebookPage(id, pid)
+      var r = notebookPage(id, pid)
+      var p = r.page
       if (p) out.push({ id: pid, n: i + 1, title: p.title || "", day: p.day || "", text: String(p.text || Blocks.plainText(p.blocks)).slice(0, 200) })
     })
     return answer({ id: id, title: nb.title, pages: out })
@@ -1565,9 +1603,9 @@ QtObject {
     var nb = files && files.index ? files.index[id] : null
     if (!nb) return fail("there's no notebook with that id (notebooks lists them)")
     if (nb.pages.indexOf(String(pageId || "")) < 0) return fail("there's no page with that id in it (notebook <id> lists them)")
-    var p = notebookPage(id, pageId)
-    if (!p) return fail("couldn't read that page")
-    return Markdown.fromPage(p, "")
+    var r = notebookPage(id, pageId)
+    if (r.error) return fail(r.error)
+    return Markdown.fromPage(r.page, "")
   }
   // A new page at a notebook's end, from a Markdown file (headings, lists,
   // to-dos, quotes, paragraphs: what a notebook's page holds).
