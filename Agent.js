@@ -325,7 +325,11 @@ function fromAcp(line) {
     if (u.sessionUpdate === "agent_message_chunk" && u.content && u.content.type === "text") return [{ kind: "typing", text: String(u.content.text || ""), fresh: false }]
     if (u.sessionUpdate === "tool_call") {
       var input = u.rawInput && typeof u.rawInput === "object" ? u.rawInput : {}
-      var name = input.command !== undefined ? "Bash" : input.url !== undefined ? "WebFetch" : String(u.title || "")
+      // (A web search says what it looks for only once it's done: Grok's title
+      // is then just "Web search:".)
+      var name = input.command !== undefined ? "Bash" : input.url !== undefined ? "WebFetch"
+        : input.variant === "WebSearch" || /^web search\b/i.test(String(u.title || "")) ? "WebSearch"
+        : String(u.title || "").replace(/\s*:\s*$/, "")
       return stepText(name, input).split("\n").map(function(t) { return { kind: "step", text: t } })
     }
   }
@@ -667,7 +671,7 @@ function stepText(name, input) {
   if (name === "Glob" || name === "Grep" || name === "grep" || name === "list_dir") return "Searching files"
   if (name === "TodoWrite" || name === "todo_write") return "Planning"
   if (name === "WebFetch") { var h = Permissions.hostOf(i.url); return h ? "Reading " + h : "Reading a web page" }
-  if (name === "WebSearch") return "Searching the web"
+  if (name === "WebSearch") return i.query ? "Searching the web for \u201c" + clip(visible(String(i.query)).replace(/\s+/g, " "), 80) + "\u201d" : "Searching the web"
   return String(name || "A step")
 }
 

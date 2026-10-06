@@ -328,6 +328,8 @@ check("what an agent asks, in words; Always only for what can't run code on your
   assert.equal(Agent.lineCount(hidden), 42);
   assert.equal(Agent.programOf, undefined, "no program is allowed by its name any more");
   assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "WebFetch", input: { url: "https://e.org/a" } }, { type: "tool_use", name: "WebSearch", input: {} }] } }))).map((e) => e.text), ["Reading e.org", "Searching the web"]);
+  assert.ok(Agent.stepText("WebSearch", { query: "a\u202eb" }).indexOf("\u202e") < 0, "a direction mark shown, not obeyed");
+  assert.ok(Agent.stepText("WebSearch", { query: "x".repeat(300) }).length < 110, "kept short");
 });
 
 check("Grok and Codex work here too: their commands, in their sandboxes", () => {
@@ -371,6 +373,11 @@ check("Grok over ACP: hello, its session (Always-approve off), the request, what
   assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "run_terminal_command", rawInput: { command: "omarchy-shell uber-notebook-agent insertAfter p1 b1 /run/user/1000/x.md" } } } }),
     [{ kind: "step", text: "Writing on the page" }]);
   assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c2", title: "web_fetch", rawInput: { url: "https://e.org/a" } } } }), [{ kind: "step", text: "Reading e.org" }]);
+  // A web search: its title is "Web search:" with nothing after, its input
+  // without the query (that comes when it's done): said plainly.
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c3", title: "Web search:", kind: "search", rawInput: { variant: "WebSearch", backend: true } } } }), [{ kind: "step", text: "Searching the web" }]);
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c4", title: "Web search: trams", kind: "search", rawInput: { variant: "WebSearch", query: "lisbon\n trams" } } } }), [{ kind: "step", text: "Searching the web for \u201clisbon\u23ce trams\u201d" }], "with its query, when it has one");
+  assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call", toolCallId: "c5", title: "Thinking:", kind: "other", rawInput: {} } } }), [{ kind: "step", text: "Thinking" }], "no title left ending in a colon");
   assert.deepEqual(f({ method: "session/update", params: { sessionId: id, update: { sessionUpdate: "tool_call_update", toolCallId: "c2", status: "completed" } } }), [], "updates: nothing more to show");
   assert.deepEqual(f({ method: "_x.ai/session_notification", params: {} }), [], "its own extras: nothing");
   assert.equal(f({ id: 3, result: { stopReason: "end_turn" } })[0].kind, "done");
