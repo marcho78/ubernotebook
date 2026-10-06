@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 // One line in a menu: an icon, what it does, and its shortcut.
 Rectangle {
@@ -35,19 +36,31 @@ Rectangle {
       anchors.verticalCenter: parent.verticalCenter
     }
     Text {
+      id: label
+      objectName: "menuRowText"
       textFormat: Text.PlainText
       text: rowItem.text
+      width: Math.min(implicitWidth, Math.max(0, rowItem.width - 48))
+      elide: Text.ElideRight
       font.family: rowItem.theme.uiFont
       font.pixelSize: 13
       color: rowItem.danger ? rowItem.theme.urgent : rowItem.theme.text
       anchors.verticalCenter: parent.verticalCenter
     }
   }
+  // (Its hint, in the room left beside what it does: cut short, never over
+  // it; all of it on hover.)
   Text {
+    id: hintText
+    objectName: "menuRowHint"
     textFormat: Text.PlainText
     anchors.right: parent.right
     anchors.rightMargin: 10
     anchors.verticalCenter: parent.verticalCenter
+    width: Math.min(implicitWidth, Math.max(0, rowItem.width - content.x - content.width - 34))
+    visible: rowItem.hint !== "" && width >= 24
+    elide: Text.ElideRight
+    horizontalAlignment: Text.AlignRight
     text: rowItem.hint
     font.family: rowItem.theme.uiFont
     font.pixelSize: 12
@@ -55,6 +68,9 @@ Rectangle {
   }
 
   HoverHandler { id: hover; cursorShape: rowItem.active ? Qt.PointingHandCursor : Qt.ArrowCursor }
+  ToolTip.visible: hover.hovered && (hintText.truncated || !hintText.visible) && rowItem.hint !== ""
+  ToolTip.delay: 500
+  ToolTip.text: rowItem.hint
   // (It takes the click for itself: nothing under the menu gets it too.)
   TapHandler { enabled: rowItem.active; gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: rowItem.clicked() }
 }

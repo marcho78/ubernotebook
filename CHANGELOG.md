@@ -10,6 +10,9 @@ The first version.
 
 ### Changed
 
+- **A menu's hint stays beside its line.** A long one (a model's
+  description in the model menu) is cut short in the room left beside what
+  the line does, never over it, and shown whole on hover.
 - **Pages first.** Uber Notebook opens in Pages (the first time; then where
   you were), and a quick note goes to the Pages Inbox unless you choose the
   Quick notes notebook. The notebooks stay as they are: Pages is where new
