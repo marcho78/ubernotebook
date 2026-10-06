@@ -1326,7 +1326,7 @@ at all).
   text editor has none), and no printing or PDF export (Pages has them):
   export as Markdown, copy a page, or *Move to Pages*.
 * A PDF needs Chromium (Omarchy has it); a Word file, LibreOffice
-  (`omarchy pkg add libreoffice-fresh`). A Word file has diagrams and
+  (the `libreoffice-fresh` package). A Word file has diagrams and
   equations as pictures, and LibreOffice's idea of some layouts (columns
   are a table).
 * Pages has no databases (on purpose: a table is rows and columns of text,

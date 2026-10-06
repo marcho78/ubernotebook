@@ -77,8 +77,8 @@ Item {
     from = { gen: workspace.generation, folder: workspace.folder, root: files.rootPath, assets: Workspace.assetsDir(files.rootPath) }
     probe(function(t) {
       if (ex.moved()) { toast("Not made: another profile was opened"); return }
-      if (kind === "docx" && !t.office) { toast("A Word file needs LibreOffice: install it (omarchy pkg add libreoffice-fresh) and try again"); return }
-      if (kind !== "docx" && !t.browser) { toast("A PDF needs Chromium: install it (omarchy pkg add chromium) and try again"); return }
+      if (kind === "docx" && !t.office) { toast("A Word file needs LibreOffice: install the libreoffice-fresh package and try again"); return }
+      if (kind !== "docx" && !t.browser) { toast("A PDF needs Chromium: install the chromium package and try again"); return }
       busy = true
       toast(kind === "print" ? "Getting it ready to print…" : kind === "docx" ? "Making the Word file…" : "Making the PDF…")
       var ids = withPages ? Workspace.withDescendants(workspace.index, page.id).filter(function(pid) { return pid === page.id || !Workspace.inTrash(workspace.index, pid) }) : [page.id]

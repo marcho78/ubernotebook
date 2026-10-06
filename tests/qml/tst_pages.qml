@@ -721,6 +721,8 @@ Item {
       files.exportTools = "/usr/lib/chromium/chromium\n"
       view.exportAs("docx", false)
       tryVerify(function() { return said.some(function(t) { return t.indexOf("needs LibreOffice") >= 0 }) }, 3000)
+      // (The package named, not a command: Uber Notebook installs nothing.)
+      verify(said.some(function(t) { return t.indexOf("the libreoffice-fresh package") >= 0 && t.indexOf("pkg add") < 0 }), JSON.stringify(said))
       service.nextSave = "/tmp/picked/Plain.pdf"
       view.exportAs("pdf", false)
       tryVerify(function() { return files.disk["/tmp/picked/Plain.pdf"] === "PDF" }, 3000)
