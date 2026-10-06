@@ -41,5 +41,5 @@ Item {
   }
 
   HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-  TapHandler { id: tap; onTapped: swatch.clicked() }
+  TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; id: tap; onTapped: swatch.clicked() }
 }

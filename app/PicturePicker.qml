@@ -107,7 +107,7 @@ Rectangle {
     e.accepted = true
   }
   // (A click beside it: nothing chosen, it goes.)
-  TapHandler { onTapped: function(p) { if (!panel.contains(panel.mapFromItem(pk, p.position.x, p.position.y))) pk.close() } }
+  TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: function(p) { if (!panel.contains(panel.mapFromItem(pk, p.position.x, p.position.y))) pk.close() } }
 
   Rectangle {
     id: panel
@@ -268,6 +268,7 @@ Rectangle {
         }
         HoverHandler { id: cellHover; cursorShape: Qt.PointingHandCursor }
         TapHandler {
+          gesturePolicy: TapHandler.ReleaseWithinBounds
           id: cellTap
           onTapped: {
             if (cell.modelData.dir) pk.open(cell.modelData.path)
@@ -307,7 +308,7 @@ Rectangle {
           font.pixelSize: 13
           color: allHover.hovered ? pk.theme.text : pk.theme.muted
           HoverHandler { id: allHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: pk.allOrNone() }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pk.allOrNone() }
         }
         Text {
           visible: pk.multiple
@@ -333,7 +334,7 @@ Rectangle {
           font.pixelSize: 12
           color: dialogHover.hovered ? pk.theme.text : pk.theme.muted
           HoverHandler { id: dialogHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: { var f = pk.fallback; pk.close(); if (f) f() } }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: { var f = pk.fallback; pk.close(); if (f) f() } }
         }
         TextButton { theme: pk.theme; text: "Cancel"; onClicked: pk.close() }
         TextButton {

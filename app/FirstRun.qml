@@ -31,7 +31,7 @@ Rectangle {
   onVisibleChanged: if (visible) { form.reset("Personal"); Qt.callLater(form.focusName) }
 
   // (Every click and key stays here; Esc closes it when it can be.)
-  TapHandler {}
+  TapHandler { gesturePolicy: TapHandler.WithinBounds }
   Keys.onPressed: function(e) {
     e.accepted = true
     if (e.key === Qt.Key_Escape && fr.again) fr.service.profiles.closeStart()

@@ -29,6 +29,7 @@ Item {
   IconButton { id: iconButton; x: 20; y: 80; theme: th; icon: th.icons.close; onClicked: root.clicked++ }
   Toggle { id: toggle; x: 20; y: 140; theme: th; onToggled: function(on) { root.clicked++ } }
   Chip { id: chip; x: 20; y: 200; theme: th; text: "Chip"; onClicked: root.clicked++ }
+  Swatch { id: swatch; x: 200; y: 20; theme: th; onClicked: root.clicked++ }
 
   // A popover's own choice, as the app's are made (its TapHandler takes its
   // tap: tests/clickthrough.test.cjs checks every one does).
@@ -70,7 +71,7 @@ Item {
     }
 
     function test_1_a_button_takes_its_click() {
-      var buttons = [textButton, iconButton, toggle, chip]
+      var buttons = [textButton, iconButton, toggle, chip, swatch]
       for (var i = 0; i < buttons.length; i++) {
         under.taps = 0
         var before = root.clicked

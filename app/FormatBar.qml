@@ -244,6 +244,7 @@ Item {
                 }
                 HoverHandler { id: penHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
+                  gesturePolicy: TapHandler.ReleaseWithinBounds
                   onTapped: {
                     fontMenu.close()
                     // The notebook's own pen means no font of its own.
@@ -306,6 +307,7 @@ Item {
               }
               HoverHandler { id: sizeHover; cursorShape: Qt.PointingHandCursor }
               TapHandler {
+                gesturePolicy: TapHandler.ReleaseWithinBounds
                 onTapped: {
                   sizeMenu.close()
                   bar.editor.formatInline("size", modelData === bar.normalSize ? 0 : modelData)
@@ -590,7 +592,7 @@ Item {
           color: bar.inkWidth === modelData ? bar.theme.accent : bar.theme.text
         }
         HoverHandler { id: nibHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: bar.inkWidthPicked(modelData) }
+        TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: bar.inkWidthPicked(modelData) }
       }
     }
     Sep2 {}
