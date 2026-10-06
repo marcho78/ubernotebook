@@ -201,9 +201,11 @@ function daemonStart(output) {
   return m ? Number(m[1]) : 0
 }
 
-// voxtype has started since its setting changed (`changedAt`, ms).
+// voxtype has started since its setting changed (`changedAt`, ms): in a
+// later second (the start is known to the second, so one in the same second
+// may be the voxtype from before).
 function restartedSince(started, changedAt) {
-  return started > 0 && changedAt > 0 && started >= Math.floor(changedAt / 1000)
+  return started > 0 && changedAt > 0 && started > Math.floor(changedAt / 1000)
 }
 
 // voxtype's daemon, looked for among your own processes ($1: where they're

@@ -102,7 +102,8 @@ check("meeting mode waiting for voxtype: when its daemon started, and whether th
   assert.equal(M.daemonStart("voxtype\ntrue\ndaemon 1790974991\n"), 1790974991);
   assert.equal(M.daemonStart("voxtype\ntrue\n"), 0, "not said: not known");
   assert.equal(M.daemonStart("daemon 12abc"), 0);
-  assert.equal(M.restartedSince(2000, 1999500), true, "started in the second it was turned on, or after");
+  assert.equal(M.restartedSince(2000, 1999500), true, "started in a later second");
+  assert.equal(M.restartedSince(1999, 1999500), false, "the same second: may be the voxtype from before");
   assert.equal(M.restartedSince(1998, 1999500), false, "started before");
   assert.equal(M.restartedSince(0, 1999500), false, "not running");
   assert.equal(M.restartedSince(2000, 0), false, "not turned on here");
