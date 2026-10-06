@@ -45,6 +45,10 @@ The first version.
   to ask whatever your settings say; each takes its request and your
   answers on its input. Each conversation has a folder of its own.
 
+- **The way out of the demo, in sight**: while the demo is open, a strip at
+  the top says so, with *Make my own profile* (the welcome screen again);
+  the profile menu has *Start screen…* too. Esc, Cancel or *Back to the
+  demo* closes it.
 - **Uber Notebook's name and icon** at the top of Pages' sidebar and the
   shelf (a click: Settings → About).
 - **Claude, Grok and Codex side by side**, first, as tiles in the agent box

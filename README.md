@@ -163,7 +163,9 @@ made anywhere until then. Or **Explore the demo** first: the demo is a
 profile of its own, in Uber Notebook's data folder (`~/.local/share/uber-notebook`),
 with a notebook of things to try and Pages full of examples of what it can
 do (see [Pages](#pages)); *Start over* in Settings makes it new again (the
-old one goes to the trash). A profile of your own starts empty, with the
+old one goes to the trash). While the demo is open, a strip at the top says
+so, with **Make my own profile**: the welcome screen again (your profile, or
+a backup put back). The profile menu has it too, as *Start screen…*. A profile of your own starts empty, with the
 templates. An Uber Notebook from before profiles opens as it was: its folder is a
 profile, *Personal*.
 

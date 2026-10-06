@@ -23,12 +23,30 @@ Rectangle {
 
   objectName: "firstRun"
   color: theme.background
+  // Asked for again (not the very first time): it can be closed, back to
+  // the profile that's open.
+  readonly property bool again: service !== null && service.profiles !== undefined && service.profiles !== null && !service.profiles.firstRun
+  readonly property bool inDemo: again && service.profiles.inDemo
 
   onVisibleChanged: if (visible) { form.reset("Personal"); Qt.callLater(form.focusName) }
 
-  // (Every click and key stays here.)
+  // (Every click and key stays here; Esc closes it when it can be.)
   TapHandler {}
-  Keys.onPressed: function(e) { e.accepted = true }
+  Keys.onPressed: function(e) {
+    e.accepted = true
+    if (e.key === Qt.Key_Escape && fr.again) fr.service.profiles.closeStart()
+  }
+  IconButton {
+    objectName: "firstRunClose"
+    visible: fr.again
+    anchors.top: parent.top
+    anchors.right: parent.right
+    anchors.margins: 16
+    theme: fr.theme
+    icon: fr.theme.icons.close
+    tip: "Back  Esc"
+    onClicked: fr.service.profiles.closeStart()
+  }
 
   Column {
     id: body
@@ -60,7 +78,9 @@ Rectangle {
       width: parent.width
       theme: fr.theme
       service: fr.service
-      cancellable: false
+      // (Asked for again: Esc or Cancel goes back to the profile open.)
+      cancellable: fr.again
+      onCancelled: fr.service.profiles.closeStart()
       createLabel: "Create profile"
     }
     Item { width: 1; height: 14 }
@@ -96,8 +116,8 @@ Rectangle {
         objectName: "firstRunDemo"
         anchors.verticalCenter: parent.verticalCenter
         theme: fr.theme
-        text: "Explore the demo"
-        onClicked: fr.service.profiles.openDemo()
+        text: fr.inDemo ? "Back to the demo" : "Explore the demo"
+        onClicked: if (fr.inDemo) fr.service.profiles.closeStart(); else fr.service.profiles.openDemo()
       }
     }
     Item { width: 1; height: 6 }

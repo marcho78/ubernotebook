@@ -180,6 +180,44 @@ Item {
       compare(profiles.list.filter(function(p) { return p.demo }).length, 1)
     }
 
+    // In the demo: a strip says so, with the welcome screen a click away (and
+    // in the profile menu); closed again (Back to the demo, Esc); gone once
+    // there's a profile of your own.
+    function test_3b_the_way_out_of_the_demo() {
+      fresh()
+      click(named(named(win(), "firstRun"), "firstRunDemo"))
+      tryVerify(function() { return profiles.inDemo && named(win(), "firstRun") === null }, 2000)
+      var strip = null
+      tryVerify(function() { strip = named(win(), "demoStrip"); return strip !== null && strip.height > 0 }, 1000, "the strip")
+      verify(app.docView.y >= strip.height || app.docView.mapToItem(null, 0, 0).y >= strip.height, "what's under it, under it")
+      // Make my own profile: the welcome screen, as the first time; Back to the demo.
+      click(named(strip, "demoStripStart"))
+      var start = null
+      tryVerify(function() { start = named(win(), "firstRun"); return start !== null }, 1000)
+      compare(named(win(), "demoStrip"), null, "the strip not over it")
+      compare(named(start, "firstRunDemo").text, "Back to the demo")
+      click(named(start, "firstRunDemo"))
+      tryVerify(function() { return named(win(), "firstRun") === null && named(win(), "demoStrip") !== null }, 1000)
+      verify(profiles.inDemo, "still in the demo")
+      // From the profile menu: Start screen…; Esc closes it.
+      click(named(win(), "profileSwitch"))
+      var item = null
+      tryVerify(function() { item = named(win(), "profileStart"); return item !== null }, 1000)
+      click(item)
+      tryVerify(function() { return named(win(), "firstRun") !== null }, 1000)
+      verify(named(win(), "firstRunClose") !== null, "it can be closed")
+      wait(200)
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return named(win(), "firstRun") === null }, 1000)
+      // A profile of your own, made there: open, the strip gone.
+      profiles.openStart()
+      tryVerify(function() { return named(win(), "firstRun") !== null }, 1000)
+      verify(profiles.add("Mine", "~/Notes/Mine", true) === "")
+      tryVerify(function() { return !profiles.inDemo && named(win(), "firstRun") === null }, 1000)
+      compare(named(win(), "demoStrip"), null)
+      compare(profiles.current.name, "Mine")
+    }
+
     function test_4_settings() {
       fresh()
       verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")

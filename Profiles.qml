@@ -25,6 +25,13 @@ QtObject {
   property bool settled: false
   // None yet: the window asks for the first (or the demo).
   readonly property bool firstRun: settled && current === null
+  // The welcome screen asked for again (the demo's strip, the profile
+  // menu): over everything till a profile's made, or it's closed.
+  property bool startShown: false
+  function openStart() { startShown = true }
+  function closeStart() { startShown = false }
+  // The demo open now.
+  readonly property bool inDemo: current !== null && current.demo === true
   // Each with its folder as it is now (the open one's, the settings').
   readonly property var shown: service ? Profiles.withCurrent(list, service.settings) : []
 
@@ -93,6 +100,7 @@ QtObject {
     if (!open) { apply({ profiles: next }); return "" }
     if (typeof service.saveOpen === "function") service.saveOpen()
     apply(Profiles.switchTo(next, service.settings, p.id))
+    startShown = false
     return ""
   }
 
@@ -148,6 +156,7 @@ QtObject {
   // The demo: its profile open (made the first time, in Uber Notebook's data folder).
   readonly property var demo: list.filter(function(p) { return p.demo })[0] || null
   function openDemo() {
+    startShown = false
     if (demo) return use(demo.id)
     var p = Profiles.demo(list, dataFolder + "/demo")
     var next = shown.concat([p])

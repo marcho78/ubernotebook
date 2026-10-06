@@ -110,6 +110,7 @@ FocusScope {
   Shelf {
     id: shelf
     anchors.fill: parent
+    anchors.topMargin: demoStrip.height
     theme: themeObject
     store: root.store
     service: root.service
@@ -131,11 +132,49 @@ FocusScope {
     }
   }
 
+  // ---- the demo: the way to your own profile, in sight ----------------------------------
+  // While the demo's open: what it is, and the welcome screen a click away
+  // (your own profile, or a backup put back). Everything else is under it.
+  Rectangle {
+    id: demoStrip
+    objectName: "demoStrip"
+    readonly property bool shown: root.service !== null && root.service.profiles !== undefined && root.service.profiles !== null
+      && root.service.profiles.inDemo === true && !root.service.profiles.startShown
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: parent.top
+    height: shown ? 40 : 0
+    visible: shown
+    z: 40
+    color: themeObject.sidebar
+    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: themeObject.line }
+    Row {
+      anchors.centerIn: parent
+      spacing: 14
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "You're exploring the demo."
+        font.family: themeObject.uiFont
+        font.pixelSize: 13
+        color: themeObject.muted
+      }
+      TextButton {
+        objectName: "demoStripStart"
+        anchors.verticalCenter: parent.verticalCenter
+        theme: themeObject
+        text: "Make my own profile"
+        onClicked: root.service.profiles.openStart()
+      }
+    }
+  }
+
   // ---- the open notebook -----------------------------------------------------------------
 
   NotebookView {
     id: view
     anchors.fill: parent
+    anchors.topMargin: demoStrip.height
     theme: themeObject
     store: root.store
     settings: root.settings
@@ -157,6 +196,7 @@ FocusScope {
   DocView {
     id: docs
     anchors.fill: parent
+    anchors.topMargin: demoStrip.height
     theme: themeObject
     workspace: root.workspace
     service: root.service
@@ -397,7 +437,7 @@ FocusScope {
     z: 50
     theme: themeObject
     service: root.service
-    visible: root.service !== null && root.service.profiles !== undefined && root.service.profiles !== null && root.service.profiles.firstRun
+    visible: root.service !== null && root.service.profiles !== undefined && root.service.profiles !== null && (root.service.profiles.firstRun || root.service.profiles.startShown)
   }
 
   // Another profile (another folder): an open notebook was the one before's,

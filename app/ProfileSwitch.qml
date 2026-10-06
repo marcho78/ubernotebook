@@ -138,6 +138,14 @@ Rectangle {
         onClicked: { menu.close(); ps.profiles.openDemo() }
       }
       MenuRow {
+        objectName: "profileStart"
+        width: parent.width
+        theme: ps.theme
+        icon: ps.theme.icons.info
+        text: "Start screen\u2026"
+        onClicked: { menu.close(); ps.profiles.openStart() }
+      }
+      MenuRow {
         objectName: "profileManage"
         width: parent.width
         theme: ps.theme
