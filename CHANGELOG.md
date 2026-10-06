@@ -232,7 +232,9 @@ The first version.
   in the meeting, turn by turn, each speaker in a color and named with a
   click; Summarize asks your agent for the summary, decisions and to-dos;
   a meeting voxtype recorded on its own can be brought in; meeting mode
-  turned on from the meeting or Settings → Audio;
+  turned on from the meeting or Settings → Audio (in effect once voxtype
+  restarts: log out and back in, or restart its service yourself; Uber
+  Notebook says so until it has);
   dictation (Ctrl+Shift+D, the microphone at the top of a page, `/dictate`,
   and the microphone on the quick note, clicked or held while you speak):
   voxtype writes what you said where your cursor is;

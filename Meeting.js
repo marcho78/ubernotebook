@@ -185,3 +185,33 @@ function parseList(text) {
   })
   return out.filter(function(x) { return x.id !== "" })
 }
+
+// ---- meeting mode, waiting for voxtype -----------------------------------------------------
+
+// Meeting mode turned on in voxtype's settings takes effect when voxtype
+// starts again: Uber Notebook doesn't restart it (it never manages a
+// service), it says so until voxtype has.
+var WAITING = "Meeting mode is on in voxtype's settings. It takes effect once voxtype restarts: log out and back in, or restart the voxtype service yourself."
+
+// When voxtype's daemon started (seconds since 1970; the newest, if more
+// than one), or 0 when it isn't running: "daemon <seconds>" on a line of
+// its own, as DAEMON_SCRIPT prints it.
+function daemonStart(output) {
+  var m = /^daemon (\d{1,12})$/m.exec(String(output || ""))
+  return m ? Number(m[1]) : 0
+}
+
+// voxtype has started since its setting changed (`changedAt`, ms).
+function restartedSince(started, changedAt) {
+  return started > 0 && changedAt > 0 && started >= Math.floor(changedAt / 1000)
+}
+
+// voxtype's daemon, looked for among your own processes ($1: where they're
+// listed, /proc): one run as `voxtype` (with no command, or `daemon`) whose
+// program is voxtype's (/usr/bin/voxtype, or a build of it in
+// /usr/lib/voxtype); when it started, by its entry there. Only reads.
+var DAEMON_SCRIPT = "r=${1:-/proc}; n=0; for p in \"$r\"/[0-9]*; do [ -O \"$p\" ] || continue; a=(); "
+  + "mapfile -d '' -t a < \"$p/cmdline\" 2>/dev/null || continue; [ \"${a[0]##*/}\" = voxtype ] || continue; "
+  + "d=0; [ ${#a[@]} -le 1 ] && d=1; for x in \"${a[@]:1}\"; do [ \"$x\" = daemon ] && d=1; done; [ $d = 1 ] || continue; "
+  + "e=$(/usr/bin/readlink -- \"$p/exe\" 2>/dev/null) || continue; case \"$e\" in /usr/bin/voxtype|/usr/lib/voxtype/voxtype*) ;; *) continue ;; esac; "
+  + "s=$(/usr/bin/stat -c %Y -- \"$p\" 2>/dev/null) || continue; [ \"$s\" -gt \"$n\" ] && n=$s; done; echo \"daemon $n\""

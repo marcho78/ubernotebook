@@ -2,7 +2,9 @@
 // (omacom/omarchy-plugin-marketplace, scripts/build-catalog.mjs): the
 // manifest's fields within their limits, a lowercase id outside omarchy.*,
 // kinds it knows, entry points that are there, no links in the repository,
-// and a README, a license and a preview at its root.
+// and a README, a license and a preview at its root. And no text its
+// security baseline reads as installing software or managing a service
+// (scripts/security-baseline-analysis.mjs): Uber Notebook does neither.
 // Usage (from the plugin directory): node tests/manifest.test.cjs
 
 const assert = require("node:assert/strict");
@@ -49,6 +51,36 @@ check("no links in the repository; a README, a license and a preview at its root
   assert.deepEqual(tracked.filter((t) => t.mode === "120000").map((t) => t.file), []);
   const files = new Set(tracked.map((t) => t.file));
   for (const f of ["README.md", "LICENSE", "preview.png"]) assert.ok(files.has(f), f);
+});
+
+check("nothing that reads as installing software or managing a service", () => {
+  // (The files the baseline reads: code, scripts and the root README, in
+  // any folder but the ones it leaves out; it names a package, never a
+  // command, and never manages a service.)
+  const scanned = /\.(bash|cjs|desktop|fish|js|lua|mjs|pl|py|qml|rb|service|sh|sudoers|toml|ya?ml|zsh)$/i;
+  const left = new Set([".github", "coverage", "docs", "fixtures", "node_modules", "spec", "specs", "test", "tests"]);
+  const flagged = [
+    /\bomarchy\s+pkg\s+(?:add|drop|remove|update)\b/i,
+    /\b(?:pacman|paru|yay|apt|apt-get|dnf|zypper|apk)\s+(?:-[A-Za-z]*[SRU]|install|remove|upgrade|add|del)\b/i,
+    /(?:^|[\s/'"])(?:pip|pip3|pipx)["']?\s+install\b/i,
+    /\bpython[23]?(?:\.[0-9]+)?\s+-m\s+pip\s+install\b/i,
+    /\b(?:npm|pnpm|yarn|bun)\s+(?:install|add)\b/i,
+    /\b(?:cargo|go|gem)\s+install\b/i,
+    /\bbrew\s+(?:install|uninstall|upgrade)\b/i,
+    /\bsystemctl\b|\bsystemd-run\b/i,
+  ];
+  const found = [];
+  for (const { file } of tracked) {
+    const parts = file.toLowerCase().split("/");
+    if (parts.slice(0, -1).some((d) => left.has(d))) continue;
+    if (file !== "README.md" && !scanned.test(file) && parts[0] !== "bin") continue;
+    fs.readFileSync(path.join(root, file), "utf8").split("\n").forEach((line, i) => {
+      // (A comment in code isn't a command; the README's words are read.)
+      if (file !== "README.md" && /^\s*(\/\/|#|\*|\/\*)/.test(line)) return;
+      if (flagged.some((re) => re.test(line))) found.push(`${file}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(found, []);
 });
 
 console.log(`manifest: ${passed} checks passed`);

@@ -49,6 +49,7 @@ Item {
       mt.status = "idle"
       mt.meetingId = ""
       mt.finishing = ""
+      mt.waiting = false
       mt.enabled = true
       mt.available = true
       mt.starts = []
@@ -208,6 +209,16 @@ Item {
       click(on)
       tryVerify(function() { return mt.enabled }, 1000)
       compare(mt.enables, 1)
+      // On in voxtype's settings, not in effect till voxtype restarts (Uber
+      // Notebook doesn't restart it): said, in the meeting and as a toast;
+      // no Start, and the button at the top doesn't start one either.
+      tryVerify(function() { var n = named(m.view, "meetingNote"); return n !== null && n.text === mt.waitingText }, 1000)
+      tryCompare(root, "lastToast", mt.waitingText, 1000)
+      compare(named(m.view, "meetingStart"), null, "no Start yet")
+      view.startMeeting(m.uid)
+      compare(mt.starts.length, 0, "nothing started")
+      // voxtype restarted: Start.
+      mt.waiting = false
       tryVerify(function() { return named(m.view, "meetingStart") !== null }, 1000, "now it can start")
       // One voxtype recorded, brought in.
       click(named(m.view, "meetingImport"))

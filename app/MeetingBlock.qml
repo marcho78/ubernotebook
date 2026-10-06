@@ -210,14 +210,19 @@ Item {
           color: mb.live && !mb.paused ? mb.red : mb.words
         }
         Text {
+          objectName: "meetingNote"
           width: parent.width
           elide: Text.ElideRight
+          // (Waiting for voxtype: what to do, in full.)
+          wrapMode: Text.Wrap
+          maximumLineCount: 3
           textFormat: Text.PlainText
           text: {
             var m = mb.meetings
             if (!mb.started) {
               if (m && m.checked && !m.available) return "Meetings need voxtype, Omarchy's dictation (omarchy voxtype install)"
               if (m && m.checked && !m.enabled) return "voxtype's meeting mode is off: turn it on to record meetings"
+              if (m && m.enabled && m.waiting) return m.waitingText
               if (m && m.status !== "idle") return "voxtype is recording another meeting"
               return "Your microphone and the other side of a call. voxtype writes out who said what when it ends"
             }
@@ -257,12 +262,12 @@ Item {
           visible: !mb.started && !mb.readOnly && mb.meetings !== null && mb.meetings.available && mb.meetings.checked && !mb.meetings.enabled
           label: mb.meetings && mb.meetings.working === "enable" ? "Turning it on\u2026" : "Turn on meeting mode"
           fillColor: mb.tint
-          tip: "Sets meeting.enabled in voxtype's settings, and restarts voxtype"
+          tip: "Sets meeting.enabled in voxtype's settings; it takes effect when voxtype restarts"
           onClicked: if (!mb.meetings.working) mb.act("enable")
         }
         Pill {
           objectName: "meetingStart"
-          visible: !mb.started && !mb.readOnly && mb.meetings !== null && mb.meetings.enabled
+          visible: !mb.started && !mb.readOnly && mb.meetings !== null && mb.meetings.enabled && !mb.meetings.waiting
           label: mb.meetings && mb.meetings.working === "start" ? "Starting\u2026" : "Start"
           fillColor: mb.red
           tip: "Start recording the meeting"

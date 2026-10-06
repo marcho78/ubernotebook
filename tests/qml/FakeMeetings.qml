@@ -8,6 +8,9 @@ QtObject {
   property bool available: true
   property bool enabled: true
   property bool checked: true
+  // Turned on here, voxtype not restarted since (Meetings.qml).
+  property bool waiting: false
+  readonly property string waitingText: "Meeting mode is on in voxtype's settings. It takes effect once voxtype restarts: log out and back in, or restart the voxtype service yourself."
   property string status: "idle"
   property string meetingId: ""
   property string finishing: ""
@@ -35,6 +38,7 @@ QtObject {
   function check(done) { if (done) done() }
   function start(title, done) {
     if (!enabled) { done(false, "Meeting mode is off in voxtype's settings"); return }
+    if (waiting) { done(false, waitingText); return }
     if (status !== "idle") { done(false, "A meeting is already being recorded"); return }
     starts = starts.concat([title])
     meetingId = nextId
@@ -56,5 +60,5 @@ QtObject {
     Qt.callLater(function() { done(true, json) })
   }
   function list(done) { var p = past; Qt.callLater(function() { done(p) }) }
-  function enable(done) { enables++; enabled = true; Qt.callLater(function() { done(true, "") }) }
+  function enable(done) { enables++; enabled = true; waiting = true; Qt.callLater(function() { done(true, "") }) }
 }

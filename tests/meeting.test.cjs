@@ -98,4 +98,44 @@ Meeting 2026-10-01 14:00
   assert.deepEqual(plain(M.parseList("No meetings found.")), []);
 });
 
+check("meeting mode waiting for voxtype: when its daemon started, and whether that's since it was turned on", () => {
+  assert.equal(M.daemonStart("voxtype\ntrue\ndaemon 1790974991\n"), 1790974991);
+  assert.equal(M.daemonStart("voxtype\ntrue\n"), 0, "not said: not known");
+  assert.equal(M.daemonStart("daemon 12abc"), 0);
+  assert.equal(M.restartedSince(2000, 1999500), true, "started in the second it was turned on, or after");
+  assert.equal(M.restartedSince(1998, 1999500), false, "started before");
+  assert.equal(M.restartedSince(0, 1999500), false, "not running");
+  assert.equal(M.restartedSince(2000, 0), false, "not turned on here");
+  assert.ok(M.WAITING.indexOf("log out and back in, or restart the voxtype service yourself") >= 0);
+  assert.ok(!/systemctl/.test(M.DAEMON_SCRIPT + M.WAITING), "no service managed, none named");
+});
+
+check("voxtype's daemon found among your processes: run as voxtype (no command, or daemon), its program voxtype's", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { execFileSync } = require("node:child_process");
+  const proc = fs.mkdtempSync(path.join(os.tmpdir(), "un-proc-"));
+  try {
+    const add = (pid, argv, exe, at) => {
+      const d = path.join(proc, String(pid));
+      fs.mkdirSync(d);
+      fs.writeFileSync(path.join(d, "cmdline"), argv.join("\0") + "\0");
+      fs.symlinkSync(exe, path.join(d, "exe"));
+      fs.utimesSync(d, at, at);
+    };
+    const run = () => execFileSync("/usr/bin/bash", ["-c", M.DAEMON_SCRIPT, "uber-notebook-meetings", proc], { encoding: "utf8", env: {} }).trim();
+    assert.equal(run(), "daemon 0", "none running");
+    add(100, ["/usr/bin/voxtype", "daemon"], "/usr/lib/voxtype/voxtype-avx512", 1000);
+    add(200, ["voxtype", "status", "--follow"], "/usr/lib/voxtype/voxtype-avx512", 3000);
+    add(300, ["/usr/lib/voxtype/voxtype-osd-gtk4"], "/usr/lib/voxtype/voxtype-osd-gtk4", 4000);
+    add(400, ["voxtype"], "/home/someone/voxtype", 5000);
+    add(500, ["voxtype"], "/usr/bin/voxtype", 2000);
+    fs.mkdirSync(path.join(proc, "self"));
+    assert.equal(run(), "daemon 2000", "the newest daemon: not its status, its OSD, or a program named voxtype elsewhere");
+  } finally {
+    fs.rmSync(proc, { recursive: true, force: true });
+  }
+});
+
 console.log(`meeting: ${passed} checks passed`);

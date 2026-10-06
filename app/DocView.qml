@@ -2274,12 +2274,14 @@ FocusScope {
     if (!meetings) return "Meetings aren't here: Uber Notebook runs without the shell"
     if (!meetings.available) return "Meetings need voxtype, Omarchy's dictation (omarchy voxtype install)"
     if (!meetings.enabled) return "voxtype's meeting mode is off: turn it on in the meeting"
+    if (meetings.waiting) return meetings.waitingText
     return ""
   }
 
   // A meeting started into a meeting block, named for the page.
   function startMeeting(uid) {
     if (!page || locked || !meetings || !meetings.available || !meetings.enabled) return
+    if (meetings.waiting) { toast(meetings.waitingText); return }
     if (meetings.status !== "idle" || meetingPending) { toast("voxtype is recording a meeting already"); return }
     var title = Workspace.cleanTitle(titleEdit.text) || page.title || ""
     meetingPending = { pageId: page.id, uid: uid, title: title }
@@ -2400,7 +2402,7 @@ FocusScope {
     else if (what === "import") importMeeting(uid)
     else if (what === "summarize") summarizeMeeting(uid)
     else if (what === "enable") meetings.enable(function(ok, problem) {
-      view.toast(ok ? "voxtype's meeting mode is on" : "Meeting mode couldn't be turned on: " + problem)
+      view.toast(!ok ? "Meeting mode couldn't be turned on: " + problem : meetings.waiting ? meetings.waitingText : "voxtype's meeting mode is on")
     })
   }
 

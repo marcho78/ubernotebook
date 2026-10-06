@@ -1248,8 +1248,9 @@ Popup {
           Line {
             label: "Meetings"
             note: !panel.meetings || (panel.meetings.checked && !panel.meetings.available) ? "Need voxtype, Omarchy's dictation (omarchy voxtype install)."
+              : panel.meetings.enabled && panel.meetings.waiting ? panel.meetings.waitingText
               : panel.meetings.enabled ? "On: /meeting, or the people at the top of a page, records one. voxtype writes out who said what (you, and the other side of a call)."
-              : "voxtype's meeting mode is off. Turning it on sets meeting.enabled in its settings and restarts it."
+              : "voxtype's meeting mode is off. Turning it on sets meeting.enabled in its settings; it takes effect when voxtype restarts."
             Chip {
               objectName: "meetingsEnable"
               visible: panel.meetings !== null && panel.meetings.available && !panel.meetings.enabled

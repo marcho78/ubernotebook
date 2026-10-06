@@ -12,8 +12,9 @@ import "Meeting.js" as Meeting
 // and its id).
 //
 // Meeting mode is off until voxtype's settings turn it on: enable() does
-// (`voxtype config set meeting.enabled true`, then restarts voxtype), when
-// you ask it to.
+// (`voxtype config set meeting.enabled true`), when you ask it to. It takes
+// effect when voxtype starts again, which Uber Notebook leaves to you (it
+// never manages a service): until it has, `waiting`, and it says so.
 Item {
   id: mt
 
@@ -25,6 +26,11 @@ Item {
   property bool available: false
   property bool enabled: false
   property bool checked: false
+  // Meeting mode turned on here (`changedAt`, ms), and voxtype not started
+  // again since: it isn't in effect yet (`waitingText` says what to do).
+  property bool waiting: false
+  property real changedAt: 0
+  readonly property string waitingText: Meeting.WAITING
   // The meeting on now: "recording", "paused" or "idle", and its id.
   property string status: "idle"
   property string meetingId: ""
@@ -42,13 +48,17 @@ Item {
 
   function check(done) {
     if (!files) { if (done) done(); return }
-    files.exec(["/usr/bin/bash", "-c", "[ -x /usr/bin/voxtype ] || exit 0; echo voxtype; /usr/bin/voxtype config get meeting.enabled 2>/dev/null; exit 0"], function(ok, out) {
+    // (And, while waiting, when voxtype's daemon started: Meeting.DAEMON_SCRIPT.)
+    var script = "[ -x /usr/bin/voxtype ] || exit 0; echo voxtype; /usr/bin/voxtype config get meeting.enabled 2>/dev/null; "
+      + (mt.waiting ? Meeting.DAEMON_SCRIPT + "; " : "") + "exit 0"
+    files.exec(["/usr/bin/bash", "-c", script, "uber-notebook-meetings"], function(ok, out) {
       var o = String(out || "")
-      mt.available = /voxtype/.test(o)
+      mt.available = /^voxtype$/m.test(o)
       mt.enabled = mt.available && /\btrue\b/.test(o)
       mt.checked = true
+      if (mt.waiting && (!mt.enabled || Meeting.restartedSince(Meeting.daemonStart(o), mt.changedAt))) mt.waiting = false
       if (done) done()
-    })
+    }, { timeoutMs: 15000, maxBytes: 64 * 1024 })
   }
 
   function take(text) {
@@ -99,6 +109,7 @@ Item {
   function start(title, done) {
     if (!available) { done(false, "Meetings need voxtype (omarchy voxtype install)"); return }
     if (!enabled) { done(false, "Meeting mode is off in voxtype's settings"); return }
+    if (waiting) { done(false, waitingText); return }
     if (status !== "idle") { done(false, "A meeting is already being recorded"); return }
     working = "start"
     var argv = ["/usr/bin/voxtype", "meeting", "start"]
@@ -147,35 +158,27 @@ Item {
     })
   }
 
-  // Meeting mode turned on in voxtype's settings, and voxtype restarted.
+  // Meeting mode turned on in voxtype's settings: done(ok, problem). It
+  // takes effect when voxtype starts again (`waiting` till then).
   function enable(done) {
     if (!available) { done(false, "Meetings need voxtype (omarchy voxtype install)"); return }
     working = "enable"
-    function checkSoon(ok, problem) {
-      // (voxtype takes a moment to come back.)
-      enableCheck.done = done
-      enableCheck.ok = ok
-      enableCheck.problem = problem
-      enableCheck.restart()
-    }
-    // Its setting, then your voxtype service (the user's own, never the
-    // system's) started again, so it reads it.
     run(["/usr/bin/voxtype", "config", "set", "meeting.enabled", "true"], function(ok, problem) {
-      if (!ok) { checkSoon(false, problem); return }
-      run(["/usr/bin/systemctl", "--user", "restart", "voxtype.service"], checkSoon, { timeoutMs: 30000, maxBytes: 64 * 1024 })
+      if (ok) {
+        mt.changedAt = Date.now()
+        mt.waiting = true
+      }
+      mt.check(function() {
+        mt.working = ""
+        done(mt.enabled, mt.enabled ? "" : (ok ? "Meeting mode is still off" : problem))
+      })
     }, { timeoutMs: 15000, maxBytes: 64 * 1024 })
   }
+  // (While waiting: has voxtype started again? Asked every few seconds.)
   Timer {
-    id: enableCheck
-    property var done: null
-    property bool ok: false
-    property string problem: ""
-    interval: 1500
-    onTriggered: mt.check(function() {
-      mt.working = ""
-      var d = done
-      done = null
-      if (d) d(mt.enabled, mt.enabled ? "" : (problem || "Meeting mode is still off"))
-    })
+    interval: 5000
+    repeat: true
+    running: mt.waiting && mt.working === ""
+    onTriggered: mt.check()
   }
 }
