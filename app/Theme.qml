@@ -38,10 +38,12 @@ QtObject {
   readonly property color desk: background
   readonly property color deskLight: mix(background, foreground, dark ? 0.045 : 0.03)
   readonly property color text: foreground
-  // Grey text, still easy to read on the theme's background, whatever its
-  // colors: secondary text at least 8:1 against it, the faintest (hints,
-  // dates, a model's description) at least 6:1; never fainter than the
-  // 42% / 68% of the way to the background they once were.
+  // Grey text, still easy to read whatever the colors, on every background
+  // it's drawn on (the page, the sidebar, popovers and cards, a raised row:
+  // `fills`): secondary text at least 8:1 on each, the faintest (hints,
+  // dates, a model's description) at least 6:1; never fainter than the 42% /
+  // 68% of the way to the page they once were; the text's own color where
+  // even that hasn't.
   readonly property color muted: mix(foreground, background, toward(foreground, background, 8, 0.42))
   readonly property color faint: mix(foreground, background, toward(foreground, background, 6, 0.68))
   readonly property color line: Qt.alpha(foreground, dark ? 0.1 : 0.14)
@@ -92,14 +94,23 @@ QtObject {
     var x = relativeLuminance(a), y = relativeLuminance(b)
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
   }
+  // The backgrounds grey text is drawn on.
+  readonly property var fills: [background, sidebar, surface, surfaceHigh]
+  // Its contrast on the one of them it reads least well on.
+  function leastContrast(c) {
+    var least = 21
+    for (var i = 0; i < fills.length; i++) least = Math.min(least, contrast(c, fills[i]))
+    return least
+  }
   // How far from `fg` toward `bg` (0 to `most`) a color can go and still have
-  // `ratio` against `bg`; 0 when even `fg` hasn't (the text's own color).
+  // `ratio` on every one of `fills`; 0 when even `fg` hasn't (the text's own
+  // color).
   function toward(fg, bg, ratio, most) {
-    if (contrast(mix(fg, bg, most), bg) >= ratio) return most
+    if (leastContrast(mix(fg, bg, most)) >= ratio) return most
     var lo = 0, hi = most
     for (var i = 0; i < 24; i++) {
       var m = (lo + hi) / 2
-      if (contrast(mix(fg, bg, m), bg) >= ratio) lo = m
+      if (leastContrast(mix(fg, bg, m)) >= ratio) lo = m
       else hi = m
     }
     return lo
