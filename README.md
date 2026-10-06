@@ -1,6 +1,6 @@
 # Uber Notebook for Omarchy
 
-![Uber Notebook](screenshots/notebook.png)
+![Uber Notebook: Pages with Ctrl+J asking your agent, a paper notebook behind](screenshots/00-banner.png)
 
 Your notes, in your Omarchy shell. Press **Super+N**, or click the notebook in
 the top bar, and **Pages** opens: a workspace of pages made of blocks, the
@@ -71,6 +71,50 @@ shelf.
   `~/Documents/Uber Notebook`, pictures beside them; export any notebook as Markdown.
 
 ## Screenshots
+
+**The welcome screen**, and the demo's first page with an audio note:
+
+![The welcome screen: a name and a folder for your first profile, or the demo, or a backup put back](screenshots/01-welcome-screen.webp)
+
+![The demo's welcome page in Pages: the sidebar with projects, tags and pages, and an audio note with its words](screenshots/02-pages.webp)
+
+**Your agent, on the page**: Ctrl+J, and every agent it can ask:
+
+![Ask your agent: what to do with this page, suggestions, and Claude with its model and effort](screenshots/03-ask-your-agent.webp)
+
+![The agent menu: Claude, Grok and Codex work here; Copilot, Gemini, OpenCode and others open in a terminal](screenshots/04-agent-choices.webp)
+
+**An audio note** as it records, and **This week**: the day's agenda, your top three, habits and what's due:
+
+![An audio note recording under a page, with its waveform](screenshots/05-audio-note.webp)
+
+![This week: today's and tomorrow's events, the top three, habits to tick and to-dos due soon](screenshots/06-this-week.webp)
+
+**The calendar**, by month and compact, and an event:
+
+![The calendar's month: weekly syncs, a dentist, run club and a trip across three days](screenshots/07-calendar-month.webp)
+
+![The compact calendar: the month beside the days' events](screenshots/08-calendar-compact.webp)
+
+![An event: its time, how it repeats, an alert, where, and notes for it](screenshots/11-event-editor.webp)
+
+**The Library**, everything on your pages, and **People**:
+
+![The Library: files, pictures, audio, sketches, people and emails from every page, with filters](screenshots/09-library.webp)
+
+![People: a person's contact details, birthday, notes and the pages they're on](screenshots/10-people.webp)
+
+**The `/` menu**, and **templates**:
+
+![The "/" menu: callout, divider, code, table, sketch, and planning blocks: agenda, event, habit](screenshots/12-slash-menu.webp)
+
+![Templates: your own, and Uber Notebook's planners, journal, habit tracker and to-do list](screenshots/13-templates.webp)
+
+**Settings**: general, and AI:
+
+![Settings, General: shortcuts, where quick notes go, the window and scrolling](screenshots/14-settings-general.webp)
+
+![Settings, AI: Claude, Grok and Codex side by side, the agents that open in a terminal, and each one's model and effort](screenshots/15-settings-ai.webp)
 
 **The shelf**, and a notebook **opening**:
 
