@@ -6,6 +6,7 @@ import qs.Commons
 import "Defaults.js" as Defaults
 import "Settings.js" as Settings
 import "Scope.js" as Scope
+import "Agent.js" as Agent
 import "QuickQueue.js" as QuickQueue
 
 // Uber Notebook: notebooks that look and feel like paper, and pages made of
@@ -597,8 +598,12 @@ Item {
   // through the commands below: Scope.js. null the rest of the time.
   property var agentScope: null
   // (`agent`: its name, `id`: which it is, claude, grok or codex: Permissions.js.)
+  // (`pictures`: Grok's image tool saves what it makes in its own session for
+  // this conversation; a picture from there may go on a page too.)
   function beginAgentScope(agent, dir, id, grants, talk) {
-    agentScope = { agent: String(agent || "An agent"), id: String(id || ""), dir: String(dir || ""), frozen: false, grants: grants && typeof grants === "object" ? grants : {}, talk: String(talk || "") }
+    var grokHome = /^\//.test(String(Quickshell.env("GROK_HOME") || "")) ? String(Quickshell.env("GROK_HOME")) : storeItem.home + "/.grok"
+    var pictures = String(id || "") === "grok" ? [Agent.grokPictures(grokHome, String(dir || ""))].filter(function(p) { return p !== "" }) : []
+    agentScope = { agent: String(agent || "An agent"), id: String(id || ""), dir: String(dir || ""), pictures: pictures, frozen: false, grants: grants && typeof grants === "object" ? grants : {}, talk: String(talk || "") }
   }
   function endAgentScope() { agentScope = null }
   // A command, from you (`forAgent` false: uber-notebook, a script's or a

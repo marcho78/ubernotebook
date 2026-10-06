@@ -440,6 +440,18 @@ function askOf(tool, toolInput, title, name) {
   return { action: "", target: "", text: "use \u201c" + visible(called).replace(/\n/g, " ") + "\u201d", detail: said, always: "" }
 }
 
+// Where Grok's image tool saves the pictures it makes for a conversation
+// whose folder is `dir`: its sessions for that folder, named by it
+// (`grokHome`: $GROK_HOME, or ~/.grok): "<grokHome>/sessions/<dir, encoded>",
+// its pictures in "<session>/images/". "" for a path that isn't plainly a
+// folder's.
+function grokPictures(grokHome, dir) {
+  var safe = /^\/[A-Za-z0-9._\/-]{1,400}$/
+  var h = String(grokHome || "").replace(/\/+$/, ""), d = String(dir || "")
+  if (!safe.test(h) || !safe.test(d) || /(^|\/)\.\.?(\/|$)/.test(h + "/" + d)) return ""
+  return h + "/sessions/" + encodeURIComponent(d)
+}
+
 // Grok's sandbox for the panel, kept in its working folder's
 // .grok/sandbox.toml: strict (it reads its folder and the system's, writes
 // there and in temp), and it may read where the shell's socket is
@@ -667,12 +679,18 @@ function stepText(name, input) {
   if (name === "Bash" || name === "run_terminal_command") return commandSteps(i.command || i.cmd).join("\n")
   if (name === "Skill") return "Reading the uber-notebook skill"
   if (name === "Read" || name === "read_file") return /SKILL\.md$/.test(String(file)) ? "Reading the uber-notebook skill" : "Reading " + baseName(file)
-  if (name === "Write" || name === "Edit" || name === "search_replace" || name === "write_file") return "Writing " + baseName(file)
+  if (name === "Write" || name === "Edit" || name === "search_replace" || name === "write_file" || name === "write" || name === "edit") return "Writing " + baseName(file)
+  if (name === "image_gen" || name === "generate_image") return "Making a picture"
   if (name === "Glob" || name === "Grep" || name === "grep" || name === "list_dir") return "Searching files"
   if (name === "TodoWrite" || name === "todo_write") return "Planning"
   if (name === "WebFetch") { var h = Permissions.hostOf(i.url); return h ? "Reading " + h : "Reading a web page" }
   if (name === "WebSearch") return i.query ? "Searching the web for \u201c" + clip(visible(String(i.query)).replace(/\s+/g, " "), 80) + "\u201d" : "Searching the web"
-  return String(name || "A step")
+  // (A tool not named here: by what it's given, else its name in words,
+  // never as the program spells it: "image_gen" says "Image gen".)
+  if (i.content !== undefined && file) return "Writing " + baseName(file)
+  if (file) return "Reading " + baseName(file)
+  var words = clip(visible(String(name || "")).replace(/[_]+/g, " ").replace(/\s*:\s*$/, "").replace(/\s+/g, " ").trim(), 60)
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "A step"
 }
 
 // One line of what an agent says, as what the panel shows: a list of

@@ -10,6 +10,12 @@ The first version.
 
 ### Changed
 
+- **A picture Grok makes goes on the page.** Grok's image tool saves what
+  it makes in its own session for the conversation; a picture from there
+  (only a real picture, through no link) is taken now. A file from
+  anywhere else is refused with where to save it instead, and the panel's
+  steps say what each tool does ("Writing mars-colony.md", "Making a
+  picture"), never its raw name.
 - **Grey text you can read.** Secondary text (dates, notes under a
   setting) and the faintest (hints, a model's description, placeholders)
   are set by how they read on the page, the sidebar, cards and popovers,

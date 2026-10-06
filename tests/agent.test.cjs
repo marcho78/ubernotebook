@@ -330,6 +330,19 @@ check("what an agent asks, in words; Always only for what can't run code on your
   assert.deepEqual(plain(Agent.fromLine("claude", JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "WebFetch", input: { url: "https://e.org/a" } }, { type: "tool_use", name: "WebSearch", input: {} }] } }))).map((e) => e.text), ["Reading e.org", "Searching the web"]);
   assert.ok(Agent.stepText("WebSearch", { query: "a\u202eb" }).indexOf("\u202e") < 0, "a direction mark shown, not obeyed");
   assert.ok(Agent.stepText("WebSearch", { query: "x".repeat(300) }).length < 110, "kept short");
+  // Grok's own names (from its sessions): never shown as the program spells them.
+  assert.equal(Agent.stepText("write", { file_path: "/x/mars-colony.md", content: "a" }), "Writing mars-colony.md");
+  assert.equal(Agent.stepText("image_gen", { prompt: "a colony" }), "Making a picture");
+  assert.equal(Agent.stepText("some_new_tool", {}), "Some new tool", "one not known yet: its name in words");
+  assert.equal(Agent.stepText("mystery", { file_path: "/a/b.txt", content: "x" }), "Writing b.txt", "by what it's given");
+  assert.equal(Agent.stepText("mystery", { file_path: "/a/b.txt" }), "Reading b.txt");
+  assert.equal(Agent.stepText("", {}), "A step");
+  // Where Grok's image tool saves pictures for a conversation's folder.
+  assert.equal(Agent.grokPictures("/home/me/.grok", "/run/user/1000/uber-notebook-agent/c-d45b4a6a60b9"), "/home/me/.grok/sessions/%2Frun%2Fuser%2F1000%2Fuber-notebook-agent%2Fc-d45b4a6a60b9");
+  assert.equal(Agent.grokPictures("/home/me/.grok/", "/run/x"), "/home/me/.grok/sessions/%2Frun%2Fx");
+  for (const [h, d] of [["relative", "/run/x"], ["/home/me/.grok", "run/x"], ["/home/me/../.grok", "/run/x"], ["/home/me/.grok", "/run/x\"]\nread"], ["/home/me/my grok", "/run/x"]]) {
+    assert.equal(Agent.grokPictures(h, d), "", h + " " + d);
+  }
 });
 
 check("Grok and Codex work here too: their commands, in their sandboxes", () => {

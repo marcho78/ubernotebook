@@ -403,6 +403,15 @@ try {
       assert.equal(r.there, false);
     }
     assert.equal(copy(path.join(src, "ok.png"), 0, "", "../escape.png").ok, false, "a name, not a path");
+    // Grok's pictures for a conversation (its session folder, named with %
+    // escapes): taken from there, through no link.
+    const grok = path.join(folder("pictures-grok"), "%2Frun%2Fuser%2F1000%2Fc-1");
+    fs.mkdirSync(path.join(grok, "01a1", "images"), { recursive: true });
+    fs.writeFileSync(path.join(grok, "01a1", "images", "1.png"), png(12, 8));
+    fs.symlinkSync(path.join(elsewhere, "private.png"), path.join(grok, "01a1", "images", "2.png"));
+    const made = copy(path.join(grok, "01a1", "images", "1.png"), 0, grok);
+    assert.deepEqual([made.ok, made.width, made.height], [true, 12, 8]);
+    assert.equal(copy(path.join(grok, "01a1", "images", "2.png"), 0, grok).ok, false, "a link there: refused");
   });
   check("any other file of an agent's (an email, a video, a PDF): only from its folder, through no link, as a new file", () => {
     const dest = folder("files-dest");

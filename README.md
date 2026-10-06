@@ -1196,7 +1196,10 @@ Notebook's commands: they read and change your notes, as you ask.
   backups; a file one takes comes only from the agent's folder: Markdown
   read by the files helper first (only a plain file, at most 2 MB), a
   picture or any other file (an email, a video, a PDF) copied in by it,
-  every step from the folder through no link; with no
+  every step from the folder through no link; a picture Grok made with its
+  image tool also from its own session for that conversation
+  (`~/.grok/sessions/<its folder>/`), only a real picture, the same way; a
+  file from anywhere else is refused with where to put it instead; with no
   agent working in the panel, they do nothing. Taking things away is asked
   in the panel, one question for each thing: pages to the trash (*Allow
   once*, *Always*, *No*), and a person, an event or a tag removed, a

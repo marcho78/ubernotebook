@@ -826,6 +826,22 @@ Item {
       tryVerify(function() { return files.filesIn.length >= filesBefore + 2 }, 2000)
       verify(files.filesIn.slice(filesBefore).every(function(c) { return c.within === "/tmp/in" }), JSON.stringify(files.filesIn.slice(filesBefore)))
       tryVerify(function() { return Workspace.flatten(fileOf(r.id)).some(function(b) { return b.type === "file" && b.data.name === "brief.pdf" }) }, 2000, "the PDF on the page")
+      // Grok's own pictures for this conversation (its image tool saves them
+      // in its session): taken from there; a gallery's from either folder,
+      // each from its own.
+      var pics = "/tmp/grok/sessions/%2Ftmp%2Fin"
+      api.agentScope = { agent: "Grok", id: "grok", dir: "/tmp/in", pictures: [pics], frozen: false }
+      api.caller = api.agentScope
+      files.disk[pics + "/s1/images/1.jpg"] = "JPG"
+      before = files.picturesIn.length
+      api.attach(r.id, pics + "/s1/images/1.jpg")
+      api.addGallery(r.id, pics + "/s1/images/1.jpg|/tmp/in/two.png", "2")
+      api.caller = null
+      api.agentScope = null
+      tryVerify(function() { return files.picturesIn.length >= before + 3 }, 2000)
+      var copied = files.picturesIn.slice(before)
+      verify(copied.some(function(c) { return c.from === pics + "/s1/images/1.jpg" && c.within === pics }), JSON.stringify(copied))
+      verify(copied.some(function(c) { return c.from === "/tmp/in/two.png" && c.within === "/tmp/in" }), JSON.stringify(copied))
     }
 
     function test_24_links_templates_boards_settings() {

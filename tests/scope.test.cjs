@@ -53,6 +53,29 @@ check("files: only from its own folder", () => {
   assert.ok(!ok("gallery", [A, "b1", "add", "/home/me/c.png", ""]));
 });
 
+check("a picture Grok made: from its own pictures for this conversation, and only a picture", () => {
+  const pics = "/home/me/.grok/sessions/%2Frun%2Fuser%2F1000%2Fuber-notebook-agent%2Fc-1";
+  const g = () => ({ agent: "Grok", dir: dir, pictures: [pics], frozen: false });
+  const img = pics + "/01a1/images/1.jpg";
+  assert.ok(ok("attach", [A, img], g()), "attached");
+  assert.ok(ok("addGallery", [A, img + "|" + dir + "/b.png", "2"], g()), "in a gallery, with one of its folder's");
+  assert.ok(ok("gallery", [A, "b1", "add", img, ""], g()));
+  assert.equal(Scope.within(g(), img), pics, "copied from there, through no link");
+  assert.equal(Scope.within(g(), dir + "/b.png"), dir);
+  assert.equal(Scope.within(g(), "/home/me/b.png"), "");
+  // Only a picture; only that folder; only for the commands that take pictures.
+  assert.ok(!ok("attach", [A, pics + "/01a1/notes.pdf"], g()), "not another kind of file");
+  assert.ok(!ok("attach", [A, pics + "/01a1/x.eml"], g()));
+  assert.ok(!ok("append", [A, pics + "/01a1/a.md"], g()), "not Markdown from there");
+  assert.ok(!ok("attach", [A, pics + "/../c-2/x/images/1.jpg"], g()), "not another conversation's");
+  assert.ok(!ok("attach", [A, "/home/me/.grok/sessions/%2Frun%2Fuser%2F1000%2Fuber-notebook-agent%2Fc-2/s/images/1.jpg"], g()));
+  assert.ok(!ok("attach", [A, pics + "x/s/images/1.jpg"], g()), "not a folder whose name starts the same");
+  assert.ok(!ok("attach", [A, img], scope()), "an agent with no folder of pictures: its own folder only");
+  // Refused: what to do instead.
+  assert.match(Scope.check(g(), "attach", [A, "/home/me/x.png"]), /save or copy the file there and give that path; a picture you made yourself is taken from .*c-1 too/);
+  assert.match(Scope.check(scope(), "attach", [A, "/home/me/x.png"]), /save or copy the file there and give that path$/);
+});
+
 check("Uber Notebook itself: not while it works", () => {
   for (const [cmd, args] of [["set", ["paper", "grid"]], ["mirror", []], ["profile", ["Work"]], ["addProfile", ["Work", ""]],
     ["renameProfile", ["Work", "Job"]], ["profileFolder", ["Work", "/x"]], ["removeProfile", ["Work"]], ["demo", []], ["restartDemo", []],
