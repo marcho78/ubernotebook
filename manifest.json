@@ -6,7 +6,7 @@
   "author": "marcho78",
   "license": "MIT",
   "homepage": "https://github.com/marcho78/ubernotebook",
-  "description": "Your notes in the Omarchy shell. Press Super+N (or click the notebook in the top bar) and Pages opens: a workspace of pages made of blocks, the Notion way, with headings, to-dos, toggles, tables, boards, mind maps, sketches, equations, diagrams, pictures and files, and your AI agent (Claude Code, Grok or Codex) working on a page in a panel. Or notebooks that look and feel like paper, on a desk, cover up, that move to Pages in a click. Quick notes from anywhere with Super+Alt+N, search across everything, and plain files in ~/Documents/Uber Notebook.",
+  "description": "Your notes in the Omarchy shell. Press Super+N (or click the notebook in the top bar) and Pages opens: a workspace of pages made of blocks, the Notion way, with to-dos, toggles, tables, boards, mind maps, sketches, equations, diagrams, pictures and files, and your AI agent (Claude Code, Grok or Codex) working on a page in a panel. Or paper notebooks that move to Pages in a click. Quick notes from anywhere with Super+Alt+N, search across everything, and plain files in ~/Documents/Uber Notebook.",
   "kinds": [
     "panel",
     "service",
