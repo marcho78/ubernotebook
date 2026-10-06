@@ -38,8 +38,12 @@ QtObject {
   readonly property color desk: background
   readonly property color deskLight: mix(background, foreground, dark ? 0.045 : 0.03)
   readonly property color text: foreground
-  readonly property color muted: mix(foreground, background, 0.42)
-  readonly property color faint: mix(foreground, background, 0.68)
+  // Grey text, still easy to read on the theme's background, whatever its
+  // colors: secondary text at least 8:1 against it, the faintest (hints,
+  // dates, a model's description) at least 6:1; never fainter than the
+  // 42% / 68% of the way to the background they once were.
+  readonly property color muted: mix(foreground, background, toward(foreground, background, 8, 0.42))
+  readonly property color faint: mix(foreground, background, toward(foreground, background, 6, 0.68))
   readonly property color line: Qt.alpha(foreground, dark ? 0.1 : 0.14)
   // Bars and popovers.
   readonly property color surface: cardsShown ? card : mix(background, foreground, dark ? 0.075 : 0.035)
@@ -79,6 +83,26 @@ QtObject {
 
   function luminance(c) {
     return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+  }
+
+  // WCAG's contrast between two colors (1 to 21).
+  function lit(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+  function relativeLuminance(c) { return 0.2126 * lit(c.r) + 0.7152 * lit(c.g) + 0.0722 * lit(c.b) }
+  function contrast(a, b) {
+    var x = relativeLuminance(a), y = relativeLuminance(b)
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+  }
+  // How far from `fg` toward `bg` (0 to `most`) a color can go and still have
+  // `ratio` against `bg`; 0 when even `fg` hasn't (the text's own color).
+  function toward(fg, bg, ratio, most) {
+    if (contrast(mix(fg, bg, most), bg) >= ratio) return most
+    var lo = 0, hi = most
+    for (var i = 0; i < 24; i++) {
+      var m = (lo + hi) / 2
+      if (contrast(mix(fg, bg, m), bg) >= ratio) lo = m
+      else hi = m
+    }
+    return lo
   }
 
   function mix(a, b, t) {
