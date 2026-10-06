@@ -27,9 +27,9 @@ check("versions compared", () => {
 });
 
 check("the repository, from the homepage", () => {
-  assert.equal(U.repoOf("https://github.com/marcho78/omanote"), "marcho78/omanote");
-  assert.equal(U.repoOf("https://github.com/marcho78/omanote.git"), "marcho78/omanote");
-  assert.equal(U.repoOf("https://github.com/marcho78/omanote/"), "marcho78/omanote");
+  assert.equal(U.repoOf("https://github.com/marcho78/ubernotebook"), "marcho78/ubernotebook");
+  assert.equal(U.repoOf("https://github.com/marcho78/ubernotebook.git"), "marcho78/ubernotebook");
+  assert.equal(U.repoOf("https://github.com/marcho78/ubernotebook/"), "marcho78/ubernotebook");
   assert.equal(U.repoOf("http://github.com/a/b"), "", "https only");
   assert.equal(U.repoOf("https://gitlab.com/a/b"), "");
   assert.equal(U.repoOf("https://github.com/a/b/../../x"), "");

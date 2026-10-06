@@ -31,7 +31,7 @@ Item {
     id: updates
     files: files
     current: "1.0.0"
-    homepage: "https://github.com/marcho78/omanote"
+    homepage: "https://github.com/marcho78/ubernotebook"
     pluginDir: "/tmp/uber-notebook-plugin"
     pluginId: "marcho78.uber-notebook"
     automatic: false
@@ -50,7 +50,7 @@ Item {
     accent: "#c05a36"
   }
 
-  readonly property string releases: "https://api.github.com/repos/marcho78/omanote/releases?per_page=30"
+  readonly property string releases: "https://api.github.com/repos/marcho78/ubernotebook/releases?per_page=30"
 
   TestCase {
     name: "Settings"
@@ -172,7 +172,7 @@ Item {
     function test_3_a_newer_version() {
       fresh()
       files.http[root.releases] = { code: 200, body: JSON.stringify([
-        { tag_name: "v1.1.0", name: "Spring", body: "Better **search**.\n\n![shot](https://x.example/a.png)", html_url: "https://github.com/marcho78/omanote/releases/tag/v1.1.0", published_at: "2026-11-01T10:00:00Z" },
+        { tag_name: "v1.1.0", name: "Spring", body: "Better **search**.\n\n![shot](https://x.example/a.png)", html_url: "https://github.com/marcho78/ubernotebook/releases/tag/v1.1.0", published_at: "2026-11-01T10:00:00Z" },
         { tag_name: "v1.0.0", body: "First" }
       ]) }
       updates.check()
@@ -199,7 +199,7 @@ Item {
         click(named(notes.contentItem, "releaseNotesCopy"))
         compare(files.copied, "omarchy plugin update marcho78.uber-notebook")
         click(named(notes.contentItem, "releaseNotesGitHub"))
-        verify(files.opened.indexOf("https://github.com/marcho78/omanote/releases/tag/v1.1.0") >= 0)
+        verify(files.opened.indexOf("https://github.com/marcho78/ubernotebook/releases/tag/v1.1.0") >= 0)
         keyClick(Qt.Key_Escape)
         tryVerify(function() { return !notes.opened }, 1000, "Esc closes it")
       }
@@ -504,7 +504,7 @@ Item {
       tryVerify(function() { return profiles.list.length === 3 }, 2000)
       compare(profiles.current.name, "Personal", "not opened unless asked")
       // Updates.
-      files.http[root.releases] = { code: 200, body: JSON.stringify([{ tag_name: "v1.2.0", body: "Faster.", html_url: "https://github.com/marcho78/omanote/releases/tag/v1.2.0" }]) }
+      files.http[root.releases] = { code: 200, body: JSON.stringify([{ tag_name: "v1.2.0", body: "Faster.", html_url: "https://github.com/marcho78/ubernotebook/releases/tag/v1.2.0" }]) }
       verify(JSON.parse(api.checkUpdate()).ok)
       tryCompare(updates, "status", "available", 1000)
       var v = JSON.parse(api.appVersion())
