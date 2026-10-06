@@ -1075,7 +1075,7 @@ cut between two pieces would come out wrong.
 | `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
 | `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -e`: plain text, never a pattern) |
 | `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders (its temporary ones new, never one that's there); save a picture, a PDF or a Word file where you say (the dialog asks before replacing one), and pictures into an export or the Markdown copy (new files only); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
-| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); copy in any other file an agent gives (the same way: only from its folder, through no link, at most 8 GB, as a new file); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
 | `/usr/lib/chromium/chromium` (or Chrome's or Brave's own program), `/usr/lib/libreoffice/program/soffice`, `/usr/bin/unshare` | a page made a PDF (Chromium, headless) or a Word file (LibreOffice, headless), each only a plain program owned by root that no one else can change (never the `chromium` launcher, which reads your flags and extensions), with a profile of its own, and no network at all (below) |
 | `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
@@ -1195,7 +1195,8 @@ Notebook's commands: they read and change your notes, as you ask.
   settings (the permissions you give agents among them), profiles or
   backups; a file one takes comes only from the agent's folder: Markdown
   read by the files helper first (only a plain file, at most 2 MB), a
-  picture copied in by it, every step from the folder through no link; with no
+  picture or any other file (an email, a video, a PDF) copied in by it,
+  every step from the folder through no link; with no
   agent working in the panel, they do nothing. Taking things away is asked
   in the panel, one question for each thing: pages to the trash (*Allow
   once*, *Always*, *No*), and a person, an event or a tag removed, a
@@ -1287,11 +1288,10 @@ to one is followed); the demo's old folder, moved to the Trash by its name
 (only "demo" folders in Uber Notebook's own data folder); and your notes
 themselves when the files helper can't run. Anything that can write in the
 Markdown copy's folder can also change its list of what it wrote
-(`.uber-notebook-mirror.json`). A file (not Markdown or a picture) the
-panel's agent takes is checked by its path, which a link in its folder could
-lead elsewhere. Codex in the panel can read any file you can (its sandbox
-reads everywhere), and its prompt is an argument on its command line, as it
-takes it there (Claude Code's and Grok's go on their input).
+(`.uber-notebook-mirror.json`). Codex in the panel can read any file you
+can (its sandbox reads everywhere), and its prompt is an argument on its
+command line, as it takes it there (Claude Code's and Grok's go on their
+input).
 
 ## Development
 

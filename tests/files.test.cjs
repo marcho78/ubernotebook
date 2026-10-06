@@ -404,6 +404,45 @@ try {
     }
     assert.equal(copy(path.join(src, "ok.png"), 0, "", "../escape.png").ok, false, "a name, not a path");
   });
+  check("any other file of an agent's (an email, a video, a PDF): only from its folder, through no link, as a new file", () => {
+    const dest = folder("files-dest");
+    const agent = folder("files-agent");
+    const elsewhere = folder("files-elsewhere");
+    fs.writeFileSync(path.join(agent, "notes.pdf"), "%PDF-1.7 mine");
+    fs.writeFileSync(path.join(elsewhere, "id_ed25519"), "PRIVATE KEY");
+    fs.symlinkSync(path.join(elsewhere, "id_ed25519"), path.join(agent, "key.eml"));
+    fs.symlinkSync(elsewhere, path.join(agent, "linked"));
+    execFileSync("/usr/bin/mkfifo", [path.join(agent, "pipe.mp4")]);
+    let n = 0;
+    const copy = (from, max, to) => {
+      const name = to || "f" + (n++) + ".bin";
+      const r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "copy-file", from, dest, name, String(max || 1000000), agent], { encoding: "utf8", timeout: 10000 });
+      assert.equal(r.error, undefined, "it doesn't wait on anything: " + from);
+      const out = JSON.parse(r.stdout.trim().split("\n").pop());
+      return Object.assign(out, { there: fs.existsSync(path.join(dest, name)), name });
+    };
+    const ok = copy(path.join(agent, "notes.pdf"));
+    assert.deepEqual([ok.ok, ok.size, ok.there], [true, 13, true]);
+    assert.equal(fs.readFileSync(path.join(dest, ok.name), "utf8"), "%PDF-1.7 mine", "the same bytes");
+    for (const [p, why] of [[path.join(agent, "key.eml"), /a link/], [path.join(agent, "linked", "id_ed25519"), /a link/],
+      [path.join(elsewhere, "id_ed25519"), /not in that folder/], [path.join(agent, "..", "files-elsewhere", "id_ed25519"), /not in that folder/],
+      [path.join(agent, "pipe.mp4"), /not a plain file/]]) {
+      const r = copy(p);
+      assert.equal(r.ok, false, p);
+      assert.match(r.error, why, p);
+      assert.equal(r.there, false, "nothing left: " + p);
+    }
+    const big = copy(path.join(agent, "notes.pdf"), 5);
+    assert.deepEqual([big.ok, big.there], [false, false], "at most its size");
+    fs.writeFileSync(path.join(dest, "taken.pdf"), "THEIRS");
+    assert.equal(copy(path.join(agent, "notes.pdf"), 0, "taken.pdf").ok, false, "never over a file");
+    assert.equal(fs.readFileSync(path.join(dest, "taken.pdf"), "utf8"), "THEIRS");
+    assert.equal(copy(path.join(agent, "notes.pdf"), 0, "../escape.pdf").ok, false, "a name, not a path");
+    // (Without the agent's folder, there's no copy-file.)
+    const bare = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "copy-file", path.join(agent, "notes.pdf"), dest, "x.pdf", "1000"], { encoding: "utf8" });
+    assert.notEqual(bare.status, 0);
+    assert.ok(!fs.existsSync(path.join(dest, "x.pdf")));
+  });
   check("a zip's folders count, every entry counts, and its directory's size is known before it's read", () => {
     const run = (zipFile, maxFiles) => {
       const to = folder("unzip-" + path.basename(zipFile));

@@ -1011,16 +1011,34 @@ Item {
     + "n=$(/usr/bin/stat -c %s -- \"$2\") || exit 1; if [ \"$n\" -gt \"$3\" ]; then /usr/bin/rm -f -- \"$2\"; echo 'too big' >&2; exit 1; fi; echo \"$n\""
   readonly property real fileMax: 8 * 1024 * 1024 * 1024
   readonly property real emailMax: 64 * 1024 * 1024
-  function importFile(path, done) {
+  // `path` copied into `dir` as `asset`, at most `max` bytes: done(ok, size).
+  // With `within` (the panel's agent's folder), only a file in that folder,
+  // through no link (the files helper's copy-file); else as above.
+  function copyIn(path, dir, asset, max, within, done) {
+    if (within) {
+      if (typeof files.helper !== "function") { done(false, 0); return }
+      files.helper(["copy-file", path, dir, asset, String(max), within], function(ok, out) {
+        var r = null
+        try { r = JSON.parse(String(out || "").trim().split("\n").pop()) } catch (e) { r = null }
+        var copied = ok && !!r && r.ok === true
+        done(copied, copied ? Number(r.size) || 0 : 0)
+      }, { timeoutMs: 120000, maxBytes: 4096 })
+      return
+    }
+    files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", path, dir + "/" + asset, String(max)], function(ok, out) {
+      done(ok, ok ? Number(String(out).trim()) || 0 : 0)
+    }, { timeoutMs: 120000, maxBytes: 4096 })
+  }
+  function importFile(path, done, within) {
     var p = String(path || "")
     var name = p.slice(p.lastIndexOf("/") + 1)
     if (!p || !name || !folder) { done(null); return }
     var asset = Files.assetName(name, new Date())
     var dest = Workspace.assetsDir(files.rootPath) + "/" + asset
     files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
-      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dest, String(ws.fileMax)], function(ok, out) {
+      ws.copyIn(p, Workspace.assetsDir(files.rootPath), asset, ws.fileMax, within, function(ok, size) {
         if (!ok) { done(null); return }
-        var f = { src: "assets/" + asset, name: name, size: Number(String(out).trim()) || 0, kind: Files.kindOf(name), poster: "" }
+        var f = { src: "assets/" + asset, name: name, size: size, kind: Files.kindOf(name), poster: "" }
         if (f.kind !== "video") { done(f); return }
         // A video's still: a frame from a second in (or its first).
         var still = asset.replace(/\.[A-Za-z0-9]+$/, "") + "-still.jpg"
@@ -1028,19 +1046,19 @@ Item {
           if (ok2) f.poster = "assets/" + still
           done(f)
         }, { timeoutMs: 30000, maxBytes: 4096 })
-      }, { timeoutMs: 120000, maxBytes: 4096 })
+      })
     })
   }
   // An .eml copied into Pages/assets and read: done({ src, name, size,
   // subject, from, to, cc, date, preview, attachments }), or done(null, why).
-  function importEmail(path, done) {
+  function importEmail(path, done, within) {
     var p = String(path || "")
     var name = p.slice(p.lastIndexOf("/") + 1)
     if (!p || !name || !folder) { done(null, "There's no file"); return }
     var asset = Email.assetName(name, new Date())
     var dir = Workspace.assetsDir(files.rootPath)
     files.mkdirs([dir], function() {
-      files.exec(["/usr/bin/bash", "-c", ws.importFileScript, "uber-notebook-import-file", p, dir + "/" + asset, String(ws.emailMax)], function(ok, out) {
+      ws.copyIn(p, dir, asset, ws.emailMax, within, function(ok, size) {
         if (!ok) { done(null, "It couldn't be copied in"); return }
         files.readFiles([dir + "/" + asset], function(got) {
           var m = Email.parse(got[dir + "/" + asset] || "")
@@ -1048,10 +1066,10 @@ Item {
           var s = Email.summary(m)
           s.src = "assets/" + asset
           s.name = name
-          s.size = Number(String(out).trim()) || 0
+          s.size = size
           done(s)
         }, 64 * 1024 * 1024)
-      }, { timeoutMs: 60000, maxBytes: 4096 })
+      })
     })
   }
 

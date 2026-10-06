@@ -814,10 +814,18 @@ Item {
       var before = files.picturesIn.length
       api.attach(r.id, "/tmp/in/two.png")
       api.addGallery(r.id, "/tmp/in/beach.png|/tmp/in/two.png", "2")
+      // Any other file of its too (an email, a PDF): through no link.
+      files.disk["/tmp/in/brief.pdf"] = "%PDF"
+      var filesBefore = files.filesIn.length
+      api.attach(r.id, "/tmp/in/brief.pdf")
+      api.attach(r.id, "/tmp/in/Hello.eml")
       api.caller = null
       api.agentScope = null
       tryVerify(function() { return files.picturesIn.length >= before + 3 }, 2000)
       verify(files.picturesIn.slice(before).every(function(c) { return c.within === "/tmp/in" }), JSON.stringify(files.picturesIn.slice(before)))
+      tryVerify(function() { return files.filesIn.length >= filesBefore + 2 }, 2000)
+      verify(files.filesIn.slice(filesBefore).every(function(c) { return c.within === "/tmp/in" }), JSON.stringify(files.filesIn.slice(filesBefore)))
+      tryVerify(function() { return Workspace.flatten(fileOf(r.id)).some(function(b) { return b.type === "file" && b.data.name === "brief.pdf" }) }, 2000, "the PDF on the page")
     }
 
     function test_24_links_templates_boards_settings() {

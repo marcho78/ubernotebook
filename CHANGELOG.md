@@ -468,6 +468,11 @@ The first version.
 
 ### Security
 
+- **Any file the panel's agent puts on a page comes from its folder, through
+  no link.** An email, a video or a PDF it attaches is copied in by the files
+  helper as pictures were: every step from its folder opened without
+  following a link, only a plain file, as a new file. A link in its folder
+  to a file elsewhere (a key, say) is refused.
 - **Your agent, in the panel, reads and changes your notes as you ask, and
   nothing contacts a site for it without your yes.** While one works, Uber
   Notebook's commands read and change your notes (pages, People, the

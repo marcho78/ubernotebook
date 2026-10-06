@@ -93,6 +93,12 @@
 #       folder), the picture must be in it, every step opened without
 #       following a link. Prints JSON: { ok, name, width, height } or
 #       { ok: false, error }.
+#   copy-file <file> <folder> <name> <max bytes> <within>
+#       Any file the panel's agent gives (not a picture: an email, a video,
+#       a PDF...) copied the same way, from its folder <within>, every step
+#       opened without following a link: only a plain file, at most
+#       <max bytes>, into a new file. Prints JSON: { ok, name, size } or
+#       { ok: false, error }.
 #   mirror-apply <copy folder> <plan file>
 #       The Markdown copy's changes (Mirror.qml writes the plan, a file of
 #       its own, JSON: { ops: [{ op: "write", path, expect, text } or
@@ -790,37 +796,63 @@ def cmd_copy_picture(source, folder, name, max_bytes, within=None):
         size = picture_size(head, kind)
         if kind != "image/svg+xml" and (not size or size[0] > PICTURE_SIDE or size[1] > PICTURE_SIDE or size[0] * size[1] > PICTURE_AREA):
             raise Refused("a picture too big to show (at most %d pixels a side)" % PICTURE_SIDE)
-        dfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
-        try:
-            if os.fstat(dfd).st_uid != os.getuid():
-                raise Refused("that folder isn't yours")
-            out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
-            copied = 0
-            try:
-                os.lseek(src, 0, os.SEEK_SET)
-                while True:
-                    chunk = os.read(src, CHUNK)
-                    if not chunk:
-                        break
-                    copied += len(chunk)
-                    if copied > limit:
-                        raise Refused("more than %d bytes" % limit)
-                    view = memoryview(chunk)
-                    while view:
-                        view = view[os.write(out, view):]
-            except BaseException:
-                os.close(out)
-                try:
-                    os.unlink(name, dir_fd=dfd)
-                except OSError:
-                    pass
-                raise
-            os.close(out)
-        finally:
-            os.close(dfd)
+        copy_into(src, folder, name, limit)
     finally:
         os.close(src)
     print(json.dumps({"ok": True, "name": name, "width": size[0] if size else 0, "height": size[1] if size else 0}))
+
+
+def copy_into(src, folder, name, limit):
+    """What `src` (open) holds, from its start, into a new file `name` in
+    `folder` (a folder of yours, not a link): never over one that's there,
+    at most `limit` bytes, counted as it's copied; taken away if it fails.
+    The number of bytes copied."""
+    dfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        if os.fstat(dfd).st_uid != os.getuid():
+            raise Refused("that folder isn't yours")
+        out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        copied = 0
+        try:
+            os.lseek(src, 0, os.SEEK_SET)
+            while True:
+                chunk = os.read(src, CHUNK)
+                if not chunk:
+                    break
+                copied += len(chunk)
+                if copied > limit:
+                    raise Refused("more than %d bytes" % limit)
+                view = memoryview(chunk)
+                while view:
+                    view = view[os.write(out, view):]
+        except BaseException:
+            os.close(out)
+            try:
+                os.unlink(name, dir_fd=dfd)
+            except OSError:
+                pass
+            raise
+        os.close(out)
+        return copied
+    finally:
+        os.close(dfd)
+
+
+def cmd_copy_file(source, folder, name, max_bytes, within):
+    limit = int(max_bytes)
+    if not parts_of(name) or "/" in name or name.startswith("."):
+        raise Refused("not a name for a file")
+    src = open_within(source, within)
+    try:
+        info = os.fstat(src)
+        if not stat.S_ISREG(info.st_mode):
+            raise Refused("not a plain file")
+        if info.st_size > limit:
+            raise Refused("more than %d bytes" % limit)
+        copied = copy_into(src, folder, name, limit)
+    finally:
+        os.close(src)
+    print(json.dumps({"ok": True, "name": name, "size": copied}))
 
 
 # ---- the Markdown copy --------------------------------------------------------------------------
@@ -1655,6 +1687,8 @@ def main(argv):
             cmd_inspect(argv[2])
         elif len(argv) in (6, 7) and argv[1] == "copy-picture":
             cmd_copy_picture(*argv[2:])
+        elif len(argv) == 7 and argv[1] == "copy-file":
+            cmd_copy_file(*argv[2:])
         elif len(argv) == 4 and argv[1] == "mirror-apply":
             cmd_mirror_apply(argv[2], argv[3])
         elif len(argv) == 4 and argv[1] == "read-files":
@@ -1675,7 +1709,7 @@ def main(argv):
             sys.stderr.write("usage: uber-notebook-files unzip|inspect-backup|restore-backup ...\n")
             return 2
     except (Refused, OSError, zipfile.BadZipFile, tarfile.TarError, EOFError, ValueError, zlib.error, MemoryError) as e:
-        if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"], ["read-files"], ["read-glob"]):
+        if argv[1:2] in (["unzip"], ["export-html"], ["copy-picture"], ["copy-file"], ["read-files"], ["read-glob"]):
             print(json.dumps({"ok": False, "error": (str(e) or ("it ran out of memory" if isinstance(e, MemoryError) else type(e).__name__))[:300]}))
             return 1
         sys.stderr.write(str(e)[:300] + "\n")

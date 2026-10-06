@@ -1234,8 +1234,9 @@ QtObject {
     var kind = files.isImagePath(p) ? "picture" : /\.eml$/i.test(name) ? "email" : Files.kindOf(name) === "video" ? "video" : "file"
     // (The panel's agent's picture only from its own folder, through no link.)
     if (kind === "picture") workspace.importPicture(p, inThisFolder(function(src) { if (src) api.appendNow(id, [{ type: "image", src: src, width: 1, align: "center", indent: 0 }]) }), caller ? caller.dir : "")
-    else if (kind === "email") workspace.importEmail(p, inThisFolder(function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) }))
-    else workspace.importFile(p, inThisFolder(function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) }))
+    // (Any other file of the panel's agent's too: the files helper's copy-file.)
+    else if (kind === "email") workspace.importEmail(p, inThisFolder(function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) }), caller ? caller.dir : "")
+    else workspace.importFile(p, inThisFolder(function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) }), caller ? caller.dir : "")
     return answer({ ok: true, id: id, file: name, kind: kind, note: "it's being copied in, and shows at the end of the page in a moment (blocks <id> lists it there; if it doesn't, the file couldn't be read)" })
   }
 

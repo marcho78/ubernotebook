@@ -416,6 +416,16 @@ QtObject {
       done(true, String(disk[argv[4]].length) + "\n")
       return
     }
+    // The panel's agent's file (the files helper's copy-file): only from
+    // its folder (`filesIn` keeps each one asked for).
+    if (argv[3] === filesHelper && argv[4] === "copy-file") {
+      filesIn = filesIn.concat([{ from: argv[5], folder: argv[6], name: argv[7], within: argv[9] }])
+      var inside = argv[5].indexOf(argv[9] + "/") === 0
+      if (!inside || disk[argv[5]] === undefined) { done(false, JSON.stringify({ ok: false, error: inside ? "No such file" : "not in that folder" })); return }
+      disk[argv[6] + "/" + argv[7]] = disk[argv[5]]
+      done(true, JSON.stringify({ ok: true, name: argv[7], size: String(disk[argv[5]]).length }) + "\n")
+      return
+    }
     // A page's picture: its host looked up (a public address, unless
     // privateHosts names it), then fetched from there into a file.
     if (argv[0] === "/usr/bin/getent" && argv[1] === "ahosts") {
@@ -467,6 +477,7 @@ QtObject {
   // A picture copied in (Store.qml: copy-picture): never over a file;
   // what it was asked, `within` too, for tests.
   property var picturesIn: []
+  property var filesIn: []
   function copyPictureIn(from, folder, name, done, within) {
     // (holdReads: copied when answerReads() is.)
     if (holdReads) { heldReads.push(function() { files.copyPictureInNow(from, folder, name, done, within) }); return }
