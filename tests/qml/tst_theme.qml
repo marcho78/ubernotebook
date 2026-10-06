@@ -31,6 +31,18 @@ Item {
         verify(muted >= th.contrast(th.mix(th.text, bg, 0.42), bg) - 0.01, name)
         verify(faint >= th.contrast(th.mix(th.text, bg, 0.68), bg) - 0.01, name)
       }
+      // Under a selected or hovered row, and an accent-tinted one (Codex's
+      // white-theme case: a selected sidebar row): each grey on the blend
+      // that shows, at its target or as near as the text itself gets.
+      th.baseBackground = "#ffffff"
+      th.baseForeground = "#000000"
+      var under = [th.mix(th.sidebar, th.foreground, th.pressed.a), th.mix(th.surface, th.foreground, th.hover.a), th.mix(th.surface, th.accent, th.accentSoft.a),
+        th.mix(th.surfaceHigh, th.foreground, th.pressed.a)]
+      for (var u = 0; u < under.length; u++) {
+        var best = th.contrast(th.text, under[u])
+        verify(th.contrast(th.muted, under[u]) >= Math.min(8, best) - 0.05, "muted on a row: " + th.contrast(th.muted, under[u]).toFixed(2))
+        verify(th.contrast(th.faint, under[u]) >= Math.min(6, best) - 0.05, "faint on a row: " + th.contrast(th.faint, under[u]).toFixed(2))
+      }
       // Hackerman: faint well up from 2.7:1, still below its muted and text.
       th.baseBackground = "#0B0C16"
       th.baseForeground = "#ddf7ff"

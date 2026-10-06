@@ -94,8 +94,18 @@ QtObject {
     var x = relativeLuminance(a), y = relativeLuminance(b)
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
   }
-  // The backgrounds grey text is drawn on.
-  readonly property var fills: [background, sidebar, surface, surfaceHigh]
+  // The backgrounds grey text is drawn on: the page, the sidebar, popovers
+  // and cards, a raised row; and each as it shows under a hovered, a pressed
+  // or selected, and an accent-tinted row (hover, pressed and accentSoft are
+  // see-through: what shows is the blend).
+  readonly property var fills: {
+    var out = []
+    var bases = [background, sidebar, surface, surfaceHigh]
+    for (var i = 0; i < bases.length; i++) {
+      out.push(bases[i], mix(bases[i], foreground, hover.a), mix(bases[i], foreground, pressed.a), mix(bases[i], accent, accentSoft.a))
+    }
+    return out
+  }
   // Its contrast on the one of them it reads least well on.
   function leastContrast(c) {
     var least = 21
