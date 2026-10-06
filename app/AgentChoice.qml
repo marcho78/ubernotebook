@@ -67,7 +67,7 @@ Row {
       color: ac.theme.muted
     }
     HoverHandler { id: dropHover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { onTapped: drop.clicked() }
+    TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: drop.clicked() }
   }
 
   DropButton {

@@ -213,6 +213,10 @@ Item {
 
   Rectangle { id: plate; anchors.fill: parent; radius: 12; color: panel.theme.surface; border.width: 1; border.color: panel.theme.line; visible: false }
   MultiEffect { source: plate; anchors.fill: plate; shadowEnabled: true; shadowColor: panel.theme.shadow; shadowBlur: 0.8; shadowVerticalOffset: 8; autoPaddingEnabled: true }
+  // (A click on the panel is the panel's: under what's in it, this takes any
+  // the panel's own buttons and text don't, so none reaches the page under
+  // it, a link or a bookmark's card there included.)
+  MouseArea { objectName: "agentPanelCatch"; anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; cursorShape: Qt.ArrowCursor }
 
   // Who's working, how it's going; Stop, or close.
   Item {

@@ -276,7 +276,7 @@ Pop {
             border.width: Colors.normalize(picker.hex) === modelData ? 2 : 1
             border.color: Colors.normalize(picker.hex) === modelData ? picker.theme.accent : picker.theme.line
             HoverHandler { id: swatchHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: picker.show(swatch.modelData, true) }
+            TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: picker.show(swatch.modelData, true) }
             ToolTip.visible: swatchHover.hovered
             ToolTip.delay: 400
             ToolTip.text: swatch.modelData
@@ -306,7 +306,7 @@ Pop {
           color: Colors.readableOn(String(picker.theme.accent), "#ffffff")
         }
         HoverHandler { id: applyHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: picker.apply() }
+        TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: picker.apply() }
       }
     }
   }

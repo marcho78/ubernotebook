@@ -55,7 +55,7 @@ Popup {
         color: actionTap.pressed ? Qt.darker(dialog.theme.urgent, 1.15) : dialog.theme.urgent
         Text { textFormat: Text.PlainText; id: actionLabel; anchors.centerIn: parent; text: dialog.action; font.family: dialog.theme.uiFont; font.pixelSize: 13; font.weight: Font.DemiBold; color: "white" }
         HoverHandler { cursorShape: Qt.PointingHandCursor }
-        TapHandler { id: actionTap; onTapped: { var f = dialog.confirmAction; dialog.close(); if (f) f() } }
+        TapHandler { id: actionTap; gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: { var f = dialog.confirmAction; dialog.close(); if (f) f() } }
       }
     }
   }

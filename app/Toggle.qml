@@ -31,5 +31,5 @@ Item {
   }
 
   HoverHandler { cursorShape: Qt.PointingHandCursor }
-  TapHandler { onTapped: toggle.toggled(!toggle.checked) }
+  TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: toggle.toggled(!toggle.checked) }
 }

@@ -72,6 +72,8 @@ Item {
   TapHandler {
     id: tap
     enabled: button.active
+    // (Its click is its own: never also on what's under it.)
+    gesturePolicy: TapHandler.ReleaseWithinBounds
     onTapped: button.clicked()
   }
 

@@ -50,5 +50,5 @@ Rectangle {
     }
   }
   HoverHandler { id: btnHover; cursorShape: Qt.PointingHandCursor }
-  TapHandler { id: btnTap; onTapped: btn.clicked() }
+  TapHandler { id: btnTap; gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: btn.clicked() }
 }

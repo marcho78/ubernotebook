@@ -179,7 +179,7 @@ Pop {
                 color: modeOption.on ? pop.theme.text : pop.theme.muted
               }
               HoverHandler { id: modeHover; cursorShape: Qt.PointingHandCursor }
-              TapHandler { onTapped: pop.pickMode(modeOption.modelData.id) }
+              TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pop.pickMode(modeOption.modelData.id) }
             }
           }
         }
@@ -311,7 +311,7 @@ Pop {
             }
           }
           HoverHandler { id: agentHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: chooser.opened ? chooser.close() : chooser.open() }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: chooser.opened ? chooser.close() : chooser.open() }
 
           // The agents installed here.
           Pop {

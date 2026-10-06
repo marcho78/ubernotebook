@@ -166,7 +166,7 @@ Pop {
       }
     }
     HoverHandler { id: tileHover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { onTapped: tile.picked() }
+    TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: tile.picked() }
     ToolTip.visible: tileHover.hovered
     ToolTip.delay: 500
     ToolTip.text: tile.plus ? "A color of your own\u2026" : tile.custom !== "" ? tile.custom + (back ? " background" : "")

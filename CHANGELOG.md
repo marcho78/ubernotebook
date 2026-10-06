@@ -471,6 +471,10 @@ The first version.
 
 ### Security
 
+- **A click on a button is the button's.** Clicking *Allow* in the agent
+  panel could also click what was under it on the page (a bookmark's card
+  opened its site); the app's buttons, toggles, its popups' choices and the
+  agent panel itself now take their clicks, so nothing under them gets one.
 - **Any file the panel's agent puts on a page comes from its folder, through
   no link.** An email, a video or a PDF it attaches is copied in by the files
   helper as pictures were: every step from its folder opened without
