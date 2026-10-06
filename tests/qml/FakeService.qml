@@ -10,6 +10,7 @@ QtObject {
   readonly property var settings: Settings.merge(Defaults.DEFAULTS, user, Defaults.SCHEMA)
   property string rootPath: "/tmp/uber-notebook-dev"
   property string version: "1.0.0"
+  property string skillDir: "/tmp/uber-notebook-dev-plugin/skills/uber-notebook"
   property string skillPath: "/tmp/uber-notebook-dev-plugin/skills/uber-notebook/SKILL.md"
   // (The skill for any AI: copied, saved where you say, shown.)
   property int skillCopied: 0

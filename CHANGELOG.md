@@ -33,7 +33,8 @@ The first version.
 - **Claude Code and Grok ask you, in the panel, for what's beyond their
   rules**: a web page, a web search, a command, one of your connectors'
   tools, a file elsewhere (Grok over its agent protocol, in its sandbox,
-  Always-approve off for these runs). What it is comes from the tool, never
+  which lets it read Uber Notebook's skill too, Always-approve off for these
+  runs). What it is comes from the tool, never
   from what it's given. A command is shown whole, every line in sight:
   *Allow this command*, *Allow shell for this conversation* or *No*
   (Settings → AI → Commands can allow every command for an agent, off

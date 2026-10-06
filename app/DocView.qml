@@ -1777,7 +1777,7 @@ FocusScope {
         function start() { if (view.agentRun) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
         // (Grok's sandbox profile, written by the files helper, never through
         // a link left there; it doesn't start without it.)
-        if (agent === "grok") files.putFile(dir, ".grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir), function(ok) {
+        if (agent === "grok") files.putFile(dir, ".grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir, where.skill), function(ok) {
           if (ok) { start(); return }
           if (!view.agentRun) return
           view.agentRun = null

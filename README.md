@@ -1175,9 +1175,10 @@ Notebook's commands: they read and change your notes, as you ask.
   all it was given shown, once only. Its request, and your answers, go on
   its input, not its command line.
 - Grok: over its agent protocol (ACP), in its sandbox (a profile in its
-  folder's `.grok/sandbox.toml`: it reads only its folder and the system's,
-  writes only there and in temp, and reaches the shell's socket for Uber
-  Notebook's commands), with Always-approve off for these runs whatever your
+  folder's `.grok/sandbox.toml`: it reads only its folder, the system's and
+  Uber Notebook's skill (the file its request tells it to read), writes only
+  there and in temp, and reaches the shell's socket for Uber Notebook's
+  commands), with Always-approve off for these runs whatever your
   Grok settings say: anything beyond what it allows by itself (its read-only
   commands, in the sandbox) it asks for, and you're asked in the panel, as
   for Claude Code. The commands it runs have the network (its sandbox

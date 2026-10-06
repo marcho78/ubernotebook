@@ -439,17 +439,24 @@ function askOf(tool, toolInput, title, name) {
 // Grok's sandbox for the panel, kept in its working folder's
 // .grok/sandbox.toml: strict (it reads its folder and the system's, writes
 // there and in temp), and it may read where the shell's socket is
-// (`runtime`: $XDG_RUNTIME_DIR), so Uber Notebook's commands reach it.
+// (`runtime`: $XDG_RUNTIME_DIR), so Uber Notebook's commands reach it, and
+// the uber-notebook skill's folder (`skill`), so it can read the skill the
+// prompt names (as Claude Code's --add-dir); nothing else of yours.
 var GROK_PROFILE = "uber-notebook"
-function grokSandbox(runtime) {
+function grokSandbox(runtime, skill) {
+  var safe = /^\/[A-Za-z0-9._\/-]{1,400}$/
   var r = String(runtime || "")
-  if (!/^\/[A-Za-z0-9._\/-]{1,400}$/.test(r)) return ""
-  return "# Uber Notebook's panel: Grok reads only its own folder and the system's,\n"
-    + "# writes only there and in temp, and reaches Uber Notebook's commands.\n"
+  if (!safe.test(r)) return ""
+  var reads = [r + "/quickshell"]
+  var k = String(skill || "")
+  if (safe.test(k) && !/(^|\/)\.\.?(\/|$)/.test(k)) reads.push(k)
+  return "# Uber Notebook's panel: Grok reads only its own folder, the system's and\n"
+    + "# Uber Notebook's skill, writes only there and in temp, and reaches Uber\n"
+    + "# Notebook's commands.\n"
     + "[profiles." + GROK_PROFILE + "]\n"
     + "extends = \"strict\"\n"
     + "restrict_network = false\n"
-    + "read_only = [\"" + r + "/quickshell\"]\n"
+    + "read_only = [" + reads.map(function(p) { return "\"" + p + "\"" }).join(", ") + "]\n"
 }
 
 // Where it may be installed: an agent's program found on the shell's PATH

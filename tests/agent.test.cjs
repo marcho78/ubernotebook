@@ -341,6 +341,14 @@ check("Grok and Codex work here too: their commands, in their sandboxes", () => 
   const box = Agent.grokSandbox("/run/user/1000");
   assert.ok(box.includes('[profiles.uber-notebook]\nextends = "strict"\nrestrict_network = false\nread_only = ["/run/user/1000/quickshell"]\n'), box);
   assert.equal(Agent.grokSandbox("/run/user/1000\"]\nread_write = [\"/"), "", "nothing but a folder's path in it");
+  // The skill the prompt names: its folder read too (only read), as Claude
+  // Code's --add-dir; a path that isn't plainly a folder's is left out.
+  const skill = "/home/me/.config/omarchy/plugins/marcho78.uber-notebook/skills/uber-notebook";
+  assert.ok(Agent.grokSandbox("/run/user/1000", skill).includes('read_only = ["/run/user/1000/quickshell", "' + skill + '"]\n'));
+  assert.ok(!/read_write/.test(Agent.grokSandbox("/run/user/1000", skill)), "never written");
+  for (const bad of ['/home/me/x"]\nread_write = ["/', "/home/me/../../", "relative/skills", "/home/me/my skills"]) {
+    assert.ok(Agent.grokSandbox("/run/user/1000", bad).includes('read_only = ["/run/user/1000/quickshell"]\n'), bad);
+  }
   const c = plain(Agent.command("codex", "-a prompt", undefined, undefined, W("codex")));
   assert.deepEqual(c.slice(4, 7), ["/usr/bin/codex", "exec", "--json"]);
   assert.ok(c.includes("--approve-for-me"), "as Omarchy starts Codex");

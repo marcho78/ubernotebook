@@ -516,6 +516,7 @@ Item {
       // In its sandbox (its agent mode takes it from its environment), written in its folder first.
       compare(run.env.GROK_SANDBOX, "uber-notebook")
       verify(String(files.disk[run.cwd + "/.grok/sandbox.toml"]).indexOf('extends = "strict"') >= 0, "its sandbox, in its conversation's folder (Store.putFile: never through a link)")
+      verify(String(files.disk[run.cwd + "/.grok/sandbox.toml"]).indexOf('"/tmp/uber-notebook-dev-plugin/skills/uber-notebook"]') >= 0, "the skill it's told to read, readable in its sandbox")
       verify(run.cwd !== files.streamed[0].cwd, "another conversation, another folder")
       compare(panel.agentLabel, "Grok")
       function acp(o) { files.streamFeed(JSON.stringify(Object.assign({ jsonrpc: "2.0" }, o))) }
