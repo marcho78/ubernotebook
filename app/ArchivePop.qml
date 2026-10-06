@@ -94,6 +94,7 @@ Pop {
         }
         HoverHandler { id: rowHover; cursorShape: Qt.PointingHandCursor }
         TapHandler {
+          gesturePolicy: TapHandler.ReleaseWithinBounds
           onTapped: function(point) {
             var p = back.mapFromItem(row, point.position.x, point.position.y)
             if (back.contains(p)) return

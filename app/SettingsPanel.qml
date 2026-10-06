@@ -367,7 +367,7 @@ Popup {
       }
     }
     HoverHandler { id: pickHover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { onTapped: pick.toggled(!pick.checked) }
+    TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pick.toggled(!pick.checked) }
   }
 
   // Chips, one of them chosen: [{ label, value }].
@@ -602,7 +602,7 @@ Popup {
               color: panel.theme.accent
             }
             HoverHandler { id: navHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: panel.section = navRow.modelData.id }
+            TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: panel.section = navRow.modelData.id }
           }
         }
       }
@@ -804,7 +804,7 @@ Popup {
                     color: panel.theme.text
                   }
                   HoverHandler { id: swatchHover; cursorShape: Qt.PointingHandCursor }
-                  TapHandler { onTapped: panel.pickColor(roleLine.modelData, swatch) }
+                  TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: panel.pickColor(roleLine.modelData, swatch) }
                   ToolTip.visible: swatchHover.hovered
                   ToolTip.delay: 500
                   ToolTip.text: "Pick a color"
@@ -820,7 +820,12 @@ Popup {
                   font.underline: resetHover.hovered
                   color: panel.theme.muted
                   HoverHandler { id: resetHover; cursorShape: Qt.PointingHandCursor }
-                  TapHandler { onTapped: panel.set(roleLine.modelData.key, "") }
+                  // (Its click is its own, on a box a little bigger than the word.)
+                  Item {
+                    anchors.fill: parent
+                    anchors.margins: -4
+                    TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: panel.set(roleLine.modelData.key, "") }
+                  }
                 }
               }
             }
@@ -1156,7 +1161,7 @@ Popup {
                 color: panel.theme.muted
               }
               HoverHandler { id: micHover; cursorShape: Qt.PointingHandCursor }
-              TapHandler { onTapped: { if (panel.recorder) panel.recorder.listSources(); micMenu.open() } }
+              TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: { if (panel.recorder) panel.recorder.listSources(); micMenu.open() } }
               Pop {
                 id: micMenu
                 theme: panel.theme

@@ -202,7 +202,7 @@ Popup {
             }
           }
           HoverHandler { id: rowHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: { list.forceActiveFocus(); panel.pick(row.index) } }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: { list.forceActiveFocus(); panel.pick(row.index) } }
         }
       }
 
@@ -291,7 +291,7 @@ Popup {
               color: panel.theme.accent.hslLightness > 0.6 ? "#14161c" : "white"
             }
             HoverHandler { cursorShape: restoreButton.can ? Qt.PointingHandCursor : Qt.ArrowCursor }
-            TapHandler { id: restoreTap; enabled: restoreButton.can; onTapped: panel.restore() }
+            TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; id: restoreTap; enabled: restoreButton.can; onTapped: panel.restore() }
           }
         }
         Rectangle { anchors.bottom: parent.bottom; x: -28; width: parent.width + 56; height: 1; color: panel.theme.line }

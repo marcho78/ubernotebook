@@ -68,7 +68,7 @@ Pop {
               layer.enabled: true
             }
             HoverHandler { id: patternHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: pop.pick({ pattern: modelData.id }) }
+            TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pop.pick({ pattern: modelData.id }) }
           }
           Text {
             textFormat: Text.PlainText

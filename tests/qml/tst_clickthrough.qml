@@ -30,6 +30,24 @@ Item {
   Toggle { id: toggle; x: 20; y: 140; theme: th; onToggled: function(on) { root.clicked++ } }
   Chip { id: chip; x: 20; y: 200; theme: th; text: "Chip"; onClicked: root.clicked++ }
 
+  // A popover's own choice, as the app's are made (its TapHandler takes its
+  // tap: tests/clickthrough.test.cjs checks every one does).
+  property int picked: 0
+  Pop {
+    id: pop
+    x: 20
+    y: 300
+    width: 200
+    theme: th
+    contentItem: Rectangle {
+      objectName: "popChoice"
+      implicitWidth: 180
+      implicitHeight: 40
+      color: "transparent"
+      TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: root.picked++ }
+    }
+  }
+
   AgentPanel {
     id: panel
     x: 300
@@ -61,6 +79,23 @@ Item {
         wait(50)
         compare(under.taps, 0, "nothing under " + buttons[i] + " clicked")
       }
+    }
+
+    function test_3_a_popover_takes_its_clicks() {
+      pop.open()
+      tryCompare(pop, "opened", true, 1000)
+      var choice = find(pop.contentItem, "popChoice") || pop.contentItem
+      under.taps = 0
+      mouseClick(choice)
+      tryCompare(root, "picked", 1, 1000)
+      wait(50)
+      compare(under.taps, 0, "its choice's click isn't the page's")
+      // Its edge (its padding, not a choice): not the page's either.
+      var edge = pop.contentItem.mapToItem(root, -4, 4)
+      mouseClick(root, edge.x, edge.y)
+      wait(50)
+      compare(under.taps, 0, "its edge isn't the page's")
+      pop.close()
     }
 
     function test_2_the_agent_panel_takes_its_clicks() {

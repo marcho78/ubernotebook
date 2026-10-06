@@ -317,7 +317,7 @@ Popup {
             color: viewer.theme.text
           }
           HoverHandler { id: zoomHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: viewer.actual() }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: viewer.actual() }
         }
         IconButton {
           objectName: "viewerZoomIn"

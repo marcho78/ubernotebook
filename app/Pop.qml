@@ -26,6 +26,10 @@ Popup {
   exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 90 } }
 
   background: Item {
+    // (A click on it is its own: under its contents, this takes any its
+    // choices don't take for themselves, so none reaches what's under it
+    // on the page, a link or a bookmark's card there included.)
+    MouseArea { objectName: "popCatch"; anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; cursorShape: Qt.ArrowCursor }
     Rectangle {
       id: plate
       anchors.fill: parent

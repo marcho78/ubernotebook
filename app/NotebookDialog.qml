@@ -375,7 +375,7 @@ Popup {
                 Text { textFormat: Text.PlainText; anchors.horizontalCenter: parent.horizontalCenter; text: modelData.label; font.family: dialog.theme.uiFont; font.pixelSize: 11; color: dialog.theme.muted }
               }
               HoverHandler { id: penHover; cursorShape: Qt.PointingHandCursor }
-              TapHandler { onTapped: dialog.pen = modelData.id }
+              TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: dialog.pen = modelData.id }
             }
           }
         }
@@ -406,7 +406,7 @@ Popup {
           color: dialog.theme.onAccent
         }
         HoverHandler { cursorShape: Qt.PointingHandCursor }
-        TapHandler { id: createTap; onTapped: dialog.finish() }
+        TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; id: createTap; onTapped: dialog.finish() }
       }
     }
     IconButton {

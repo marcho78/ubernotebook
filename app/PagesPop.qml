@@ -91,6 +91,7 @@ Pop {
         }
         HoverHandler { id: rowHover }
         TapHandler {
+          gesturePolicy: TapHandler.ReleaseWithinBounds
           onTapped: {
             pop.close()
             pop.view.turnTo(row.index)

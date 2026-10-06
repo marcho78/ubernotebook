@@ -211,7 +211,7 @@ Pop {
         border.width: dotHover.hovered ? 2 : 0
         border.color: Qt.alpha(pop.theme.text, 0.3)
         HoverHandler { id: dotHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: pop.view.openEventColors(pop.eventId, colorDot) }
+        TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pop.view.openEventColors(pop.eventId, colorDot) }
         ToolTip.visible: dotHover.hovered
         ToolTip.delay: 600
         ToolTip.text: "Its color"

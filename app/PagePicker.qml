@@ -134,7 +134,7 @@ Pop {
           color: pop.theme.muted
         }
         HoverHandler { cursorShape: Qt.PointingHandCursor; onHoveredChanged: if (hovered) pop.current = index }
-        TapHandler { onTapped: pop.take(index) }
+        TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pop.take(index) }
       }
       Text {
         textFormat: Text.PlainText

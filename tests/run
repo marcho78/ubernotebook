@@ -50,6 +50,7 @@ node tests/profiles.test.cjs
 node tests/backups.test.cjs
 node tests/updates.test.cjs
 node tests/manifest.test.cjs
+node tests/clickthrough.test.cjs
 node tests/legacy.test.cjs
 node tests/env.test.cjs
 node tests/scope.test.cjs

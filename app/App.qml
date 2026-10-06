@@ -522,6 +522,8 @@ FocusScope {
     opacity: 0
     visible: opacity > 0
     Behavior on opacity { NumberAnimation { duration: 180 } }
+    // (A click on it is its own, never the page's under it.)
+    MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons }
     Text {
       textFormat: Text.PlainText
       id: toastText
@@ -554,6 +556,7 @@ FocusScope {
       }
       HoverHandler { id: undoHover; cursorShape: Qt.PointingHandCursor }
       TapHandler {
+        gesturePolicy: TapHandler.ReleaseWithinBounds
         onTapped: {
           var f = root.toastUndoAction
           root.toastUndoAction = null

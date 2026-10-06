@@ -110,7 +110,7 @@ Pop {
       cursorShape: Qt.PointingHandCursor
       onHoveredChanged: if (hovered) pop.current = pop.all.indexOf(card.modelData)
     }
-    TapHandler { onTapped: pop.pick(card.modelData) }
+    TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: pop.pick(card.modelData) }
   }
 
   contentItem: Item {

@@ -77,7 +77,7 @@ Pop {
                     font.pixelSize: 20
                   }
                   HoverHandler { id: emojiHover; cursorShape: Qt.PointingHandCursor }
-                  TapHandler { onTapped: { pop.close(); pop.picked(modelData) } }
+                  TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: { pop.close(); pop.picked(modelData) } }
                 }
               }
             }

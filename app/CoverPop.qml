@@ -34,7 +34,7 @@ Pop {
             GradientStop { position: 1.0; color: modelData[modelData.length - 1] }
           }
           HoverHandler { id: coverHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: { pop.close(); pop.picked("gradient:" + index) } }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: { pop.close(); pop.picked("gradient:" + index) } }
         }
       }
     }

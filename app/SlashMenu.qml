@@ -109,7 +109,7 @@ Pop {
           cursorShape: Qt.PointingHandCursor
           onHoveredChanged: if (hovered && menu.editor) menu.editor.slashIndex = entry.index
         }
-        TapHandler { onTapped: menu.editor.applySlash(entry.modelData) }
+        TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: menu.editor.applySlash(entry.modelData) }
       }
     }
 

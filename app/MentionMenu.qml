@@ -139,7 +139,7 @@ Pop {
         cursorShape: Qt.PointingHandCursor
         onHoveredChanged: if (hovered && menu.editor) menu.editor.mentionIndex = entry.index
       }
-      TapHandler { onTapped: menu.editor.applyMention(entry.modelData) }
+      TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: menu.editor.applyMention(entry.modelData) }
     }
 
     Text {

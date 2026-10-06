@@ -52,7 +52,7 @@ Pop {
             }
           }
           HoverHandler { id: fontHover; cursorShape: Qt.PointingHandCursor }
-          TapHandler { onTapped: menu.view.setFormat("font", modelData.id) }
+          TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: menu.view.setFormat("font", modelData.id) }
         }
       }
     }
