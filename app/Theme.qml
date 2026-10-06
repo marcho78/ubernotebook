@@ -38,14 +38,16 @@ QtObject {
   readonly property color desk: background
   readonly property color deskLight: mix(background, foreground, dark ? 0.045 : 0.03)
   readonly property color text: foreground
-  // Grey text, still easy to read whatever the colors, on every background
-  // it's drawn on (the page, the sidebar, popovers and cards, a raised row:
-  // `fills`): secondary text at least 8:1 on each, the faintest (hints,
-  // dates, a model's description) at least 6:1; never fainter than the 42% /
-  // 68% of the way to the page they once were; the text's own color where
-  // even that hasn't.
-  readonly property color muted: mix(foreground, background, toward(foreground, background, 8, 0.42))
-  readonly property color faint: mix(foreground, background, toward(foreground, background, 6, 0.68))
+  // Grey text: easy to read, and still a step below the text, on every
+  // opaque background it's drawn on (the page, the sidebar, popovers and
+  // cards, a raised row: `fills`). Secondary text gets 80% of the contrast
+  // the text has there (at most 8:1), the faintest (hints, dates, a model's
+  // description) 62% (at most 6:1); never fainter than the 42% / 68% of the
+  // way to the page they once were. (A hovered or selected row's see-through
+  // tint lowers them a little, as it does the text.)
+  readonly property real textContrast: leastContrast(foreground)
+  readonly property color muted: mix(foreground, background, toward(foreground, background, Math.min(8, textContrast * 0.8), 0.42))
+  readonly property color faint: mix(foreground, background, toward(foreground, background, Math.min(6, textContrast * 0.62), 0.68))
   readonly property color line: Qt.alpha(foreground, dark ? 0.1 : 0.14)
   // Bars and popovers.
   readonly property color surface: cardsShown ? card : mix(background, foreground, dark ? 0.075 : 0.035)
@@ -94,18 +96,8 @@ QtObject {
     var x = relativeLuminance(a), y = relativeLuminance(b)
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
   }
-  // The backgrounds grey text is drawn on: the page, the sidebar, popovers
-  // and cards, a raised row; and each as it shows under a hovered, a pressed
-  // or selected, and an accent-tinted row (hover, pressed and accentSoft are
-  // see-through: what shows is the blend).
-  readonly property var fills: {
-    var out = []
-    var bases = [background, sidebar, surface, surfaceHigh]
-    for (var i = 0; i < bases.length; i++) {
-      out.push(bases[i], mix(bases[i], foreground, hover.a), mix(bases[i], foreground, pressed.a), mix(bases[i], accent, accentSoft.a))
-    }
-    return out
-  }
+  // The opaque backgrounds grey text is drawn on.
+  readonly property var fills: [background, sidebar, surface, surfaceHigh]
   // Its contrast on the one of them it reads least well on.
   function leastContrast(c) {
     var least = 21

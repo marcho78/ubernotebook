@@ -12,9 +12,11 @@ The first version.
 
 - **Grey text you can read.** Secondary text (dates, notes under a
   setting) and the faintest (hints, a model's description, placeholders)
-  are set by how they read on your theme's background, at least 8:1 and
-  6:1, not as a fixed share of the way to it: the faintest was about 2.5:1
-  on most themes. Your own page and text colors count too.
+  are set by how they read on the page, the sidebar, cards and popovers,
+  and raised rows: 80% and 62% of the text's own contrast there (at most
+  8:1 and 6:1), so each is a step below the text, not a fixed share of the
+  way to the page: the faintest was 1.5-2.8:1 on most themes. Your own
+  colors count too.
 - **A menu's hint stays beside its line.** A long one (a model's
   description in the model menu) is cut short in the room left beside what
   the line does, never over it, and shown whole on hover.
