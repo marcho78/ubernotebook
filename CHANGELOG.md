@@ -10,6 +10,14 @@ The first version.
 
 ### Changed
 
+- **Habits, meetings and agendas fit a narrow column.** Three or more
+  columns to a row, a habit's days ran over its name, a meeting's buttons
+  over its words, an agenda's day over its buttons (and past its edge).
+  Now, when there isn't room, each puts them on a line of their own: a
+  habit's days under its name (smaller circles if they must be), a
+  meeting's buttons under its words (its words under its badge, narrower
+  still), an agenda's buttons under a shorter day ("Wed 7 Oct"), each
+  event's time above its title. At full width they're as they were.
 - **A heading in a column stays in it.** Making a line a heading (`# `,
   `/h1`, Ctrl+Alt+1), a quote or a note in Pages took it to the top of the
   page, the notebook's rule: in a column the columns came apart, everything

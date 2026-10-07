@@ -57,6 +57,8 @@ Item {
   readonly property var today: { var n = new Date(nowMs); return new Date(n.getFullYear(), n.getMonth(), n.getDate()) }
   readonly property var shownDay: ref.day ? Dates.fromIso(ref.day).at : today
   readonly property bool isToday: !ref.day || Calendar.dayIso(shownDay) === Calendar.dayIso(today)
+  // Narrow (a column): an event's time on a line, its title on the next.
+  readonly property bool twoLines: width < 330
   readonly property var events: {
     var r = ws ? ws.calendarRevision : 0
     if (!ws || kind !== "agenda") return []
@@ -188,10 +190,14 @@ Item {
       width: parent.width - 28
       spacing: 4
       Item {
+        id: agendaHead
         width: parent.width
-        height: 30
+        // Narrow (a column): the day shorter, the buttons on a line of their own.
+        readonly property bool narrow: width < 16 + 8 + 190 + agendaTools.oneLine + 8
+        height: narrow ? 32 + agendaTools.height + 2 : 30
         Row {
-          anchors.verticalCenter: parent.verticalCenter
+          y: (30 - height) / 2
+          width: agendaHead.narrow ? agendaHead.width : agendaHead.width - agendaTools.implicitWidth - 8
           spacing: 8
           Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -204,17 +210,25 @@ Item {
           Text {
             objectName: "agendaDay"
             anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(0, parent.width - 24)
+            elide: Text.ElideRight
             textFormat: Text.PlainText
-            text: (cb.isToday ? "Today  \u00b7  " : "") + Qt.locale().dayName(cb.shownDay.getDay()) + " " + cb.shownDay.getDate() + " " + Qt.locale().monthName(cb.shownDay.getMonth())
+            readonly property int form: agendaHead.narrow ? Locale.ShortFormat : Locale.LongFormat
+            text: (cb.isToday ? "Today  \u00b7  " : "") + Qt.locale().dayName(cb.shownDay.getDay(), form) + " " + cb.shownDay.getDate() + " " + Qt.locale().monthName(cb.shownDay.getMonth(), form)
             font.family: cb.editor ? cb.editor.uiFamily : ""
             font.pixelSize: 14
             font.weight: Font.DemiBold
             color: cb.words
           }
         }
-        Row {
-          anchors.right: parent.right
-          anchors.verticalCenter: parent.verticalCenter
+        Flow {
+          id: agendaTools
+          objectName: "agendaTools"
+          // (On one line; narrow, as many lines as it takes.)
+          readonly property real oneLine: { var w = 0, n = 0; for (var i = 0; i < children.length; i++) if (children[i].visible) { w += children[i].width; n++ } return w + Math.max(0, n - 1) * spacing }
+          width: agendaHead.narrow ? Math.min(oneLine, agendaHead.width) : oneLine
+          x: agendaHead.narrow ? 0 : agendaHead.width - width
+          y: agendaHead.narrow ? 32 : (30 - height) / 2
           spacing: 2
           IconButton {
             id: agColors
@@ -244,13 +258,14 @@ Item {
           required property var modelData
           objectName: "agendaRow"
           width: agendaCol.width
-          height: 30
+          height: cb.twoLines ? 44 : 30
           radius: 6
           color: rowHover.hovered ? Qt.alpha(cb.words, 0.06) : "transparent"
           Text {
-            x: 6
-            width: 96
-            anchors.verticalCenter: parent.verticalCenter
+            x: cb.twoLines ? 16 : 6
+            y: cb.twoLines ? 4 : (30 - height) / 2
+            width: cb.twoLines ? parent.width - 22 : 96
+            elide: Text.ElideRight
             textFormat: Text.PlainText
             text: Calendar.span(row.modelData, cb.shownDay)
             font.family: cb.editor ? cb.editor.uiFamily : ""
@@ -258,10 +273,10 @@ Item {
             font.features: { "tnum": 1 }
             color: cb.faint
           }
-          Rectangle { x: 106; anchors.verticalCenter: parent.verticalCenter; width: 3; height: 18; radius: 1.5; color: cb.tintOf(row.modelData.color) }
+          Rectangle { x: cb.twoLines ? 6 : 106; anchors.verticalCenter: parent.verticalCenter; width: 3; height: cb.twoLines ? 34 : 18; radius: 1.5; color: cb.tintOf(row.modelData.color) }
           Text {
-            x: 118
-            anchors.verticalCenter: parent.verticalCenter
+            x: cb.twoLines ? 16 : 118
+            y: cb.twoLines ? 20 : (30 - height) / 2
             width: parent.width - x - 8
             elide: Text.ElideRight
             textFormat: Text.PlainText
@@ -281,13 +296,14 @@ Item {
           required property var modelData
           objectName: "agendaNote"
           width: agendaCol.width
-          height: 28
+          height: cb.twoLines ? 42 : 28
           radius: 6
           color: nHover.hovered ? Qt.alpha(cb.words, 0.06) : "transparent"
           Text {
             x: 6
-            width: 96
-            anchors.verticalCenter: parent.verticalCenter
+            y: cb.twoLines ? 4 : (28 - height) / 2
+            width: cb.twoLines ? parent.width - 12 : 96
+            elide: Text.ElideRight
             textFormat: Text.PlainText
             text: nrow.modelData.time ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
             font.family: cb.editor ? cb.editor.uiFamily : ""
@@ -295,8 +311,8 @@ Item {
             color: cb.faint
           }
           Text {
-            x: 118
-            anchors.verticalCenter: parent.verticalCenter
+            x: cb.twoLines ? 6 : 118
+            y: cb.twoLines ? 20 : (28 - height) / 2
             width: parent.width - x - 8
             elide: Text.ElideRight
             textFormat: Text.PlainText
@@ -311,7 +327,10 @@ Item {
         }
       }
       Text {
+        objectName: "agendaNothing"
         visible: cb.events.length === 0 && cb.dated.length === 0
+        width: agendaCol.width
+        wrapMode: Text.Wrap
         leftPadding: 6
         textFormat: Text.PlainText
         text: "Nothing on the calendar" + (cb.isToday ? " today" : " that day")

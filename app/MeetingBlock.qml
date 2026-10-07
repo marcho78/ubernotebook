@@ -163,12 +163,16 @@ Item {
     Item {
       id: head
       width: parent.width
-      height: 64
+      // Narrow (a column): the buttons on a line of their own, under the words.
+      readonly property bool narrow: width < 12 + 38 + 14 + 150 + tools.oneLine + 10
+      // Narrower still: the words under the badge too.
+      readonly property bool tiny: width < 12 + 38 + 14 + 120
+      height: !narrow ? 64 : (tiny ? 13 + 38 + 8 + headWords.implicitHeight : Math.max(64, headWords.implicitHeight + 24)) + tools.height + 10
 
       Rectangle {
         id: badge
         x: 12
-        anchors.verticalCenter: parent.verticalCenter
+        y: head.narrow ? 13 : (64 - height) / 2
         width: 38
         height: 38
         radius: 19
@@ -190,9 +194,11 @@ Item {
       }
 
       Column {
-        x: badge.x + badge.width + 14
-        anchors.verticalCenter: parent.verticalCenter
-        width: Math.max(60, tools.x - x - 10)
+        id: headWords
+        objectName: "meetingWords"
+        x: head.tiny ? 12 : badge.x + badge.width + 14
+        y: head.tiny ? badge.y + badge.height + 8 : head.narrow ? 12 : (64 - height) / 2
+        width: head.narrow ? head.width - x - 12 : Math.max(60, tools.x - x - 10)
         spacing: 2
         Text {
           objectName: "meetingHeadline"
@@ -242,18 +248,21 @@ Item {
         }
       }
 
-      Row {
+      Flow {
         id: tools
-        anchors.right: parent.right
-        anchors.rightMargin: 10
-        anchors.verticalCenter: parent.verticalCenter
+        objectName: "meetingTools"
+        // (On one line; narrow, as many lines as it takes.)
+        readonly property real oneLine: { var w = 0, n = 0; for (var i = 0; i < children.length; i++) if (children[i].visible) { w += children[i].width; n++ } return w + Math.max(0, n - 1) * spacing }
+        width: head.narrow ? Math.min(oneLine, head.width - 24) : oneLine
+        x: head.narrow ? 12 : head.width - width - 10
+        y: head.narrow ? head.height - height - 10 : (64 - height) / 2
         spacing: 4
 
         // Not started: bring one in, turn meeting mode on, start.
         IconButton {
           objectName: "meetingImport"
           visible: !mb.started && !mb.readOnly && mb.meetings !== null && mb.meetings.available
-          theme: mb.theme; icon: mb.theme ? mb.theme.icons.history : ""; label: "Bring one in"; size: 30; iconSize: 14; tint: mb.words
+          theme: mb.theme; icon: mb.theme ? mb.theme.icons.history : ""; label: head.tiny ? "" : "Bring one in"; size: 30; iconSize: 14; tint: mb.words
           tip: "A meeting voxtype recorded, put here"
           onClicked: mb.act("import")
         }
@@ -293,7 +302,7 @@ Item {
         IconButton {
           objectName: "meetingFetch"
           visible: mb.done && mb.meeting.segments.length === 0 && !mb.readOnly
-          theme: mb.theme; icon: mb.theme ? mb.theme.icons.restore : ""; label: "Get it again"; size: 30; iconSize: 14; tint: mb.words
+          theme: mb.theme; icon: mb.theme ? mb.theme.icons.restore : ""; label: head.tiny ? "" : "Get it again"; size: 30; iconSize: 14; tint: mb.words
           tip: "Ask voxtype for what it wrote out"
           onClicked: mb.act("fetch")
         }
@@ -411,7 +420,6 @@ Item {
     property color fillColor: "gray"
     property string tip: ""
     signal clicked()
-    anchors.verticalCenter: parent ? parent.verticalCenter : undefined
     width: pillText.implicitWidth + 26
     height: 32
     radius: 16

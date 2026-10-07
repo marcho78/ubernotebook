@@ -97,11 +97,16 @@ Item {
     : type === "code" ? 16 : type === "page" || type === "link" ? 30 : colors.background !== "" ? 6 : 0)
   readonly property real textW: Math.max(40, width - textX - boxRight - (type === "code" ? 16 : 0) - habitW)
 
-  // A habit's week: a circle for each day, at the end of its line.
-  readonly property real dot: Math.round(st.lineHeight * 0.9)
-  readonly property real dotGap: 6
+  // A habit's week: a circle for each day, at the end of its line; where
+  // there isn't room for both (a narrow column), on a line of its own under
+  // its name, the circles smaller if they have to be.
+  readonly property real roomForDays: width - textX - boxRight
+  readonly property bool daysBelow: type === "habit" && roomForDays - (7 * Math.round(st.lineHeight * 0.9) + 36 + 14) < 110
+  readonly property real dotGap: daysBelow ? (roomForDays < 130 ? 2 : 4) : 6
+  readonly property real dot: Math.max(8, Math.min(Math.round(st.lineHeight * 0.9), daysBelow ? Math.floor((roomForDays - 6 * dotGap) / 7) : 1e9))
   readonly property real daysW: 7 * dot + 6 * dotGap
-  readonly property real habitW: type === "habit" ? daysW + 14 : 0
+  readonly property real habitW: type === "habit" && !daysBelow ? daysW + 14 : 0
+  readonly property real habitRow: daysBelow ? dot + 8 : 0
 
   // A month's calendar: its name, the days of the week, a row a week.
   readonly property var cal: type === "calendar" ? Blocks.monthLayout(month) : ({ offset: 0, days: 0, weeks: 0 })
@@ -129,7 +134,7 @@ Item {
   readonly property real picRatio: ratio > 0 ? ratio : (picture.implicitHeight > 0 ? picture.implicitWidth / picture.implicitHeight : 1.5)
   readonly property real picH: picW / picRatio
   readonly property var tocList: { var s = editor.structure; return type === "toc" ? editor.headings() : [] }
-  readonly property real contentH: isText ? (drawnView ? drawnH : Math.max(lineHeight, textEdit.contentHeight) + (type === "code" ? codePad + 14 : 0) + emptyRow + (drawnCode ? drawnH : 0))
+  readonly property real contentH: isText ? (drawnView ? drawnH : Math.max(lineHeight, textEdit.contentHeight) + (type === "code" ? codePad + 14 : 0) + emptyRow + (drawnCode ? drawnH : 0) + habitRow)
     : type === "divider" ? 1
     : type === "image" ? picH
     : type === "page" || type === "link" ? st.lineHeight + 4
@@ -923,9 +928,10 @@ Item {
   // accent: click one to tick the day off, again to take the tick away.
   Row {
     id: habitDays
+    objectName: "habitDays"
     visible: block.type === "habit"
-    x: block.width - block.boxRight - block.daysW
-    y: block.markY - block.dot / 2
+    x: block.daysBelow ? block.textX : block.width - block.boxRight - block.daysW
+    y: block.daysBelow ? block.textTop + block.textShift + Math.max(block.lineHeight, textEdit.contentHeight) + 6 : block.markY - block.dot / 2
     spacing: block.dotGap
     Repeater {
       model: block.type === "habit" ? 7 : 0
@@ -947,7 +953,8 @@ Item {
         Text {
           textFormat: Text.PlainText
           anchors.centerIn: parent
-          visible: !day.done
+          // (Too small for its letter: just the circle.)
+          visible: !day.done && block.dot >= 14
           text: Qt.locale().dayName((day.index + 1) % 7, Locale.NarrowFormat)
           font.family: block.editor.uiFamily
           font.pixelSize: Math.max(9, Math.round(block.dot * 0.45))
