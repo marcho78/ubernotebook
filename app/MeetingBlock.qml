@@ -267,6 +267,7 @@ Item {
           onClicked: mb.act("import")
         }
         Pill {
+          most: head.narrow ? head.width - 24 : 1e9
           objectName: "meetingEnable"
           visible: !mb.started && !mb.readOnly && mb.meetings !== null && mb.meetings.available && mb.meetings.checked && !mb.meetings.enabled
           label: mb.meetings && mb.meetings.working === "enable" ? "Turning it on\u2026" : "Turn on meeting mode"
@@ -275,6 +276,7 @@ Item {
           onClicked: if (!mb.meetings.working) mb.act("enable")
         }
         Pill {
+          most: head.narrow ? head.width - 24 : 1e9
           objectName: "meetingStart"
           visible: !mb.started && !mb.readOnly && mb.meetings !== null && mb.meetings.enabled && !mb.meetings.waiting
           label: mb.meetings && mb.meetings.working === "start" ? "Starting\u2026" : "Start"
@@ -291,6 +293,7 @@ Item {
           onClicked: mb.act(mb.paused ? "resume" : "pause")
         }
         Pill {
+          most: head.narrow ? head.width - 24 : 1e9
           objectName: "meetingStop"
           visible: mb.live && !mb.readOnly
           label: "Stop"
@@ -309,7 +312,7 @@ Item {
         IconButton {
           objectName: "meetingSummarize"
           visible: mb.done && mb.meeting.segments.length > 0 && !mb.readOnly
-          theme: mb.theme; icon: mb.theme ? mb.theme.icons.agent : ""; label: "Summarize"; size: 30; iconSize: 15; tint: mb.words
+          theme: mb.theme; icon: mb.theme ? mb.theme.icons.agent : ""; label: head.tiny ? "" : "Summarize"; size: 30; iconSize: 15; tint: mb.words
           tip: "Your agent writes the summary, the decisions and the to-dos under it"
           onClicked: mb.act("summarize")
         }
@@ -420,7 +423,9 @@ Item {
     property color fillColor: "gray"
     property string tip: ""
     signal clicked()
-    width: pillText.implicitWidth + 26
+    // As wide as its words, or what there's room for (its words cut short).
+    property real most: 1e9
+    width: Math.min(pillText.implicitWidth + 26, most)
     height: 32
     radius: 16
     color: pillHover.hovered ? Qt.darker(fillColor, 1.08) : fillColor
@@ -429,6 +434,8 @@ Item {
     Text {
       id: pillText
       anchors.centerIn: parent
+      width: Math.min(implicitWidth, pill.width - 16)
+      elide: Text.ElideRight
       textFormat: Text.PlainText
       text: pill.label
       font.family: mb.editor ? mb.editor.uiFamily : ""

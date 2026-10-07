@@ -88,6 +88,20 @@ Item {
       compare(w.dot, Math.round(w.st.lineHeight * 0.9))
     }
 
+    // Every button showing in the meeting's row, inside its card.
+    function buttonsInside(b, what) {
+      var tools = named(b, "meetingTools")
+      var card = tools.parent
+      var shown = 0
+      for (var i = 0; i < tools.children.length; i++) {
+        var c = tools.children[i]
+        if (!c.visible || c.width <= 0) continue
+        shown++
+        inside(c, card, what + ": " + (c.objectName || "a button"))
+      }
+      return shown
+    }
+
     function test_2_a_meeting() {
       for (var per of [3, 6]) {
         load(per, ["meeting"])
@@ -101,6 +115,34 @@ Item {
         inside(words, card, per + " to a row: its words in the card")
         below(tools, words, per + " to a row: the buttons under the words")
         verify(words.width >= 40, "room for its words: " + words.width)
+        verify(buttonsInside(b, per + " to a row, ready") >= 2)
+        // Meeting mode off: its button too.
+        service.meetings.enabled = false
+        wait(50)
+        verify(named(b, "meetingEnable").visible)
+        buttonsInside(b, per + " to a row, meeting mode off")
+        service.meetings.enabled = true
+      }
+      // A meeting written out: Summarize and the rest.
+      for (var p of [3, 6]) {
+        files.reset()
+        ws.load()
+        tryCompare(ws, "ready", true, 2000)
+        view.activate()
+        tryVerify(function() { return view.page !== null }, 2000)
+        var list = [{ type: "columns" }]
+        for (var c = 0; c < p; c++) {
+          list.push({ type: "column", indent: 1 })
+          list.push({ type: "meeting", indent: 2, meeting: { id: "3f2a9c1e-7b4d-4e2a-9f1c-2b3c4d5e6f7" + c, title: "Weekly sync", startedAt: "2026-10-02T09:30:00Z", duration: 95,
+            segments: [{ start: 1000, end: 4000, speaker: "You", text: "Morning." }, { start: 5000, end: 9000, speaker: "Remote", text: "The release notes are done." }] } })
+        }
+        list.push({ type: "p", html: "" })
+        view.editor.load(list)
+        waitForRendering(view)
+        wait(300)
+        var done = blocksOf("meeting")[0]
+        verify(named(done, "meetingSummarize").visible, "Summarize, for one written out")
+        buttonsInside(done, p + " to a row, written out")
       }
       load(1, ["meeting"])
       var w = blocksOf("meeting")[0]
