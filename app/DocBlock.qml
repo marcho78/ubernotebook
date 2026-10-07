@@ -579,7 +579,8 @@ Item {
   Text {
     textFormat: Text.PlainText
     readonly property string words: block.hint !== "" ? block.hint : block.mathCode ? "An equation in LaTeX, like E = mc^2"
-      : block.diagramCode ? "A diagram in Mermaid: flowchart TD, then A --> B on the next line" : Docs.placeholder(block.type, textEdit.activeFocus)
+      : block.diagramCode ? "A diagram in Mermaid: flowchart TD, then A --> B on the next line"
+      : block.type === "p" && block.info.alone === true && !textEdit.activeFocus ? "Empty column" : Docs.placeholder(block.type, textEdit.activeFocus)
     visible: block.isText && words !== "" && textEdit.length === 0 && textEdit.preeditText === ""
     x: textEdit.x
     y: block.firstBaseline - baselineOffset

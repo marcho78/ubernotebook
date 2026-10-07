@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import "../Html.js" as Html
 import "../Blocks.js" as Blocks
 import "../Papers.js" as Papers
@@ -783,7 +784,10 @@ FocusScope {
         lists: stack.filter(function(a) { return a.list }).length }
       stack.forEach(function(a) { if (a.box) info.boxes.push(a.box) })
       var color = boxColor(r)
-      var me = { indent: r.indent, flow: flow, childX: x + childOffset(r), folded: Workspace.folds(rowBlock(r)) && r.collapsed, box: null, list: r.type === "bullet" || r.type === "number" }
+      var me = { uid: r.uid, indent: r.indent, flow: flow, childX: x + childOffset(r), folded: Workspace.folds(rowBlock(r)) && r.collapsed, box: null, list: r.type === "bullet" || r.type === "number",
+        column: r.type === "column" }
+      // All there is in its column (an empty one says so).
+      if (parent && parent.column && i > 0 && blocksModel.get(i - 1).uid === parent.uid && (!next || next.indent < r.indent)) info.alone = true
       if (color || r.type === "quote") {
         me.box = { uid: r.uid, x: x, color: color, bar: r.type === "quote", callout: r.type === "callout", last: r.uid }
         info.boxes.push(me.box)
@@ -822,6 +826,9 @@ FocusScope {
   readonly property real docHeight: blocksBottom + (doc && pageNotes.length > 0 ? notesList.implicitHeight + 40 : 0)
   // The gaps between columns: { columns, left, right (the columns' uids), top, height }.
   property var columnGaps: []
+  // Each set of columns: { uid (its columns block), top, height, cols (the
+  // columns' uids), uids (every block in it: true) }.
+  property var columnSets: []
 
   function schedulePosition() {
     if (doc) Qt.callLater(positionBlocks)
@@ -832,6 +839,7 @@ FocusScope {
     var n = blocksModel.count
     var y = 0
     var gaps = []
+    var sets = []
     var i = 0
     while (i < n) {
       var r = blocksModel.get(i)
@@ -854,6 +862,9 @@ FocusScope {
           cols.push(uidAt(j))
         }
         for (var g = 0; g + 1 < cols.length; g++) gaps.push({ columns: r.uid, left: cols[g], right: cols[g + 1], top: top, height: bottom - top })
+        var inSet = {}
+        for (var m = i + 1; m <= last; m++) inSet[uidAt(m)] = true
+        sets.push({ uid: r.uid, top: top, height: bottom - top, cols: cols, uids: inSet })
         y = bottom + 4
         i = last + 1
       } else {
@@ -866,6 +877,7 @@ FocusScope {
     }
     blocksBottom = y
     columnGaps = gaps
+    columnSets = sets
   }
 
   onContentWidthChanged: if (doc) refreshNumbers()
@@ -1762,16 +1774,46 @@ FocusScope {
       var f = docLayout[r.uid]
       var reach = Math.min(60, f.w * 0.15)
       if (x < f.left + f.w - reach || x > f.left + f.w + 16) continue
-      // Six columns at most.
+      // What it'll make: beside a block on the page, the two columns
+      // there'll be, the new one marked.
+      var preview
+      var set = ""
       if (inColumn(i)) {
-        var list = parentIndex(parentIndex(i))
-        var count = 0
-        for (var j = list + 1; j <= subtreeEnd(list); j = subtreeEnd(j) + 1) count++
-        if (count >= 6) return null
+        var column = parentIndex(i)
+        var list = parentIndex(column)
+        set = uidAt(list)
+        var cols = []
+        for (var j = list + 1; j <= subtreeEnd(list); j = subtreeEnd(j) + 1) {
+          // (The dragged block's own column goes, if it's all that's in it.)
+          if (j + 1 === from && subtreeEnd(j) === end) continue
+          cols.push(j)
+        }
+        // Six columns at most.
+        if (cols.length >= 6) return null
+        // The columns as they are, and a slot in the gap where it'll go.
+        var area = columnSets.filter(function(c) { return c.uid === set })[0] || { top: item.y, height: item.height }
+        preview = []
+        for (var c = list + 1; c <= subtreeEnd(list); c = subtreeEnd(c) + 1) {
+          var L = docLayout[uidAt(c)]
+          if (!L) continue
+          preview.push({ x: L.left, y: area.top, w: L.w, h: area.height, fresh: false })
+          if (c === column) preview.push({ x: L.left + L.w + 14, y: area.top, w: columnGap - 28, h: area.height, fresh: true })
+        }
+      } else {
+        var dragged = items[uidAt(from)]
+        preview = columnBoxes(f.left, f.w, 2, 1, item.y, Math.max(item.height, dragged ? dragged.height : 0))
       }
-      return { side: r.uid, vertical: true, x: f.left + f.w + 4, y: item.y, h: item.height }
+      return { side: r.uid, vertical: true, x: f.left + f.w + 4, y: item.y, h: item.height, set: set, preview: preview }
     }
     return null
+  }
+
+  // `n` columns sharing a width equally, the one at `fresh` new.
+  function columnBoxes(left, w, n, fresh, y, h) {
+    var each = (w - columnGap * (n - 1)) / n
+    var out = []
+    for (var k = 0; k < n; k++) out.push({ x: left + k * (each + columnGap), y: y, w: each, h: h, fresh: k === fresh })
+    return out
   }
 
   // Where a block at `depth` starts, right below `above`.
@@ -1849,8 +1891,19 @@ FocusScope {
       root.insertBlock(at + 1 + n, props, b.html || "")
     })
     endOp()
-    restoreFocus(keepFocus)
+    // What moved, picked, and the columns shown for a moment.
+    var now = indexOf(uid)
+    if (now < 0) { restoreFocus(keepFocus); return }
+    selectBlocks(uid, uid)
+    if (inColumn(now)) {
+      columnsFlash = uidAt(parentIndex(parentIndex(now)))
+      flashTimer.restart()
+    }
   }
+
+  // The columns a block was just dropped into (outlined a moment).
+  property string columnsFlash: ""
+  Timer { id: flashTimer; interval: 1600; onTriggered: root.columnsFlash = "" }
 
   // A block, and what's inside it, moved to `to` (its index in the list
   // without them) at `depth`.
@@ -4205,6 +4258,9 @@ FocusScope {
     width: root.contentWidth
     height: root.docHeight
 
+    // Where the pointer is over the page (for the columns' outlines).
+    HoverHandler { id: docHover }
+
     // The page's footnotes, numbered, after its last block (a click: the
     // first place it's used, its words there to change).
     Column {
@@ -4250,9 +4306,66 @@ FocusScope {
       }
     }
 
+    // Columns: an outline round each while the pointer's over them, you're
+    // writing in one (or have picked a block there), a block's being
+    // dragged, or one's just been dropped in. (Under the blocks, which keep
+    // their own hover, the + and the ⋮⋮; the pointer's place is the page's.)
+    Repeater {
+      model: root.doc ? root.columnSets : []
+      delegate: Item {
+        id: set
+        objectName: "columnSet"
+        required property var modelData
+        readonly property bool editing: {
+          var f = root.focusUid
+          var it = root.items[f]
+          if (modelData.uids[f] === true && it && it.edit && it.edit.activeFocus) return true
+          return root.selectedList.some(function(u) { return set.modelData.uids[u] === true })
+        }
+        // (Dragged beside a block in it: the columns it'll be instead.)
+        readonly property bool previewing: root.dropTarget !== null && root.dropTarget.set === modelData.uid
+        readonly property bool pointed: docHover.hovered && docHover.point.position.y >= y - 6 && docHover.point.position.y <= y + height + 6
+        readonly property bool shown: !root.readOnly && !previewing
+          && (pointed || editing || root.dragUid !== "" || root.columnsFlash === modelData.uid)
+        y: modelData.top
+        width: root.contentWidth
+        height: modelData.height
+        Repeater {
+          model: set.shown ? set.modelData.cols : []
+          delegate: ColumnOutline {
+            required property string modelData
+            readonly property var lay: root.docLayout[modelData] || ({ left: 0, w: 0 })
+            objectName: "columnOutline"
+            x: lay.left - 6
+            y: -4
+            width: lay.w + 12
+            height: set.height + 8
+            stroke: Qt.alpha(root.ink, 0.28)
+          }
+        }
+      }
+    }
+
     Repeater {
       model: root.doc ? blocksModel : null
       delegate: DocBlock { editor: root }
+    }
+
+    // A block dragged up the side of another: the columns there'll be, the
+    // new one marked.
+    Repeater {
+      model: root.dropTarget && root.dropTarget.preview ? root.dropTarget.preview : []
+      delegate: ColumnOutline {
+        required property var modelData
+        objectName: modelData.fresh ? "columnPreviewNew" : "columnPreview"
+        z: 19
+        x: modelData.x - 6
+        y: modelData.y - 4
+        width: modelData.w + 12
+        height: modelData.h + 8
+        stroke: modelData.fresh ? Qt.alpha(root.accent, 0.8) : Qt.alpha(root.ink, 0.28)
+        fill: modelData.fresh ? Qt.alpha(root.accent, 0.08) : "transparent"
+      }
     }
 
     // Between two columns: drag to share the width between them otherwise.
@@ -4295,7 +4408,7 @@ FocusScope {
   // side of one (to put them in columns).
   Rectangle {
     readonly property var t: root.dropTarget
-    visible: t !== null
+    visible: t !== null && !t.preview
     z: 20
     x: t ? t.x : 0
     y: t ? (t.vertical ? t.y : t.y - 2) : 0

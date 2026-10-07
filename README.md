@@ -379,7 +379,7 @@ takes them along.
 |---|---|
 | A new block of any kind | Type **/** (then a few letters of its name: `/todo`, `/h2`, `/toggle`, `/page`, `/red`), or **+** beside a block |
 | Move a block | Drag **⋮⋮** beside it (hover over the block); drag it right to put it inside the block above |
-| Columns | Drag a block up the right side of another: the two go side by side (drop more beside them for up to six). Or `/2 columns` … `/5 columns`. Drag the gap between two columns to share the width differently |
+| Columns | Drag a block up the right side of another: the two go side by side (drop more beside them for up to six). Or `/2 columns` … `/5 columns`. Drag the gap between two columns to share the width differently. While you work in them (the pointer over them, or writing in one) each column has a thin dashed outline, and an empty one says *Empty column*; dragging a block up the side of another shows the columns it'll make, the new one marked, and the block dropped stays picked |
 | Turn it into another kind, color it, duplicate it, move it to another page, delete it | Click **⋮⋮** |
 | Put a block inside the one above it, or take it out | **Tab**, **Shift+Tab** |
 | Get out of a list, a toggle or a callout | **Enter** on an empty line at the end of it (a level at a time; at the top, a list item becomes text), **Alt+Enter** for a new line below all of it, or click under the page's last block |

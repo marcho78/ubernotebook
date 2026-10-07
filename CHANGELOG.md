@@ -10,6 +10,17 @@ The first version.
 
 ### Changed
 
+- **Columns show where they are.** `/2 columns` showed one hint in the
+  first column and nothing in the others; a block dragged beside another
+  only drew a thin line at the page's edge; after the drop nothing showed
+  what had moved. Now each column has a thin dashed outline while you work
+  in them (the pointer over them, writing or a block picked in one, any
+  drag), and none while you read; an empty column says *Empty column*.
+  Dragging a block up the side of another shows the columns it'll make,
+  the new one marked (beside a block in columns, a slot where it'll go),
+  and the block dropped stays picked, its columns outlined a moment. A
+  column's only block can be dragged beside another in six columns, as its
+  own column goes.
 - **Getting out of a list or toggle.** In a toggle or a callout, Enter on an
   empty line only made another one inside it; the only ways out were
   Shift+Tab or Backspace. Now Enter on an empty line at the end of what's
