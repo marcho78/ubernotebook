@@ -10,6 +10,10 @@ The first version.
 
 ### Changed
 
+- **A diagram saved right after it's copied.** *Save as a picture* just
+  after *Copy as a picture* could say "The picture couldn't be saved": the
+  first picture's maker was still being put away. It's free before the
+  first is said to be made now.
 - **Colors of your own on words and blocks.** The toolbar over selected
   words, and a block's ⋮⋮ → *Color*, had only Pages' nine colors, where
   mind maps, tables and tags have yours too. Now both have the colors you

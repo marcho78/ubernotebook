@@ -526,10 +526,14 @@ FocusScope {
       var item = imageLoader.item
       if (item && !item.ready && root.imageTries++ < 30) { restart(); return }
       var done = root.imageDone
+      // (Free for the next picture before this one's said to be made: one
+      // asked for as soon as it's said, a Save after a Copy, found it busy.)
       function finish(result) {
         root.imageDone = null
-        Qt.callLater(function() { imageLoader.active = false })
-        if (done) done(result)
+        Qt.callLater(function() {
+          imageLoader.active = false
+          if (done) done(result)
+        })
       }
       if (item) item.take(finish)
       else finish(null)

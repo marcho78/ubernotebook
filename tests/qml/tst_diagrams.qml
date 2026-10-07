@@ -344,6 +344,22 @@ Item {
       tryVerify(function() { return files.disk["/tmp/out/energy.png"] === "PNG" }, 3000, "an equation saved")
     }
 
+    // A picture asked for as soon as the one before is made (a Save right
+    // after a Copy): made too, not refused as busy.
+    function test_8_one_picture_after_another() {
+      fresh()
+      var e = view.editor
+      var source = "flowchart LR\n  a[Start] --> b[Done]"
+      var first = null
+      var second = null
+      e.drawingImage("diagram", source, null, function(r1) {
+        first = r1
+        e.drawingImage("diagram", source, null, function(r2) { second = r2 })
+      })
+      tryVerify(function() { return first !== null }, 3000, "the first")
+      tryVerify(function() { return second !== null }, 3000, "and the one asked for as it was made")
+    }
+
     function test_5_an_equation_large() {
       fresh()
       var e = view.editor
