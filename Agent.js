@@ -673,7 +673,7 @@ function choiceLabel(list, model, effort) {
 
 // What a step is, said simply.
 var STEP_WORDS = {
-  help: "Reading Uber Notebook's commands", read: "Reading the page", blocks: "Reading the page",
+  help: "Reading Uber Notebook's commands", skill: "Reading the uber-notebook skill", read: "Reading the page", blocks: "Reading the page",
   find: "Searching your notes", list: "Looking through your pages", library: "Looking through the Library",
   tags: "Looking at your tags", tagged: "Looking at a tag", contacts: "Looking in People", contact: "Looking in People",
   events: "Looking at your calendar", templates: "Looking at your templates", projects: "Looking at your projects",
@@ -798,6 +798,8 @@ function fromCodex(line) {
   if (e.type === "thread.started") return [{ kind: "start", model: "", session: isSessionId(e.thread_id) ? String(e.thread_id) : "" }]
   if (e.type === "item.started" && item && item.type === "command_execution") return commandSteps(item.command).map(function(t) { return { kind: "step", text: t } })
   if (e.type === "item.completed" && item) {
+    // (A web search: what it looked for, once it's done.)
+    if (item.type === "web_search") return [{ kind: "step", text: stepText("WebSearch", { query: typeof item.query === "string" ? item.query : "" }) }]
     if (item.type === "agent_message" && String(item.text || "").trim()) return [{ kind: "answer", text: String(item.text).trim() }]
     if (item.type === "file_change") {
       var files = (Array.isArray(item.changes) ? item.changes : []).map(function(c) { return baseName(c && c.path) })

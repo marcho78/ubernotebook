@@ -27,6 +27,12 @@ check("the prompt says where you are and what you'd like", () => {
   assert.ok(here.includes("its skill excepted"), "the skill isn't one of the files it mayn't open");
   const term = Agent.prompt({ request: "x", page: { id: "p", title: "T" }, scope: "page", skill: "/s/SKILL.md", here: false, agent: "codex" });
   assert.ok(term.includes("`omarchy-shell uber-notebook skill`"), "in a terminal: the usual name");
+  assert.equal(Agent.commandStep("omarchy-shell uber-notebook-agent skill"), "Reading the uber-notebook skill", "its step said as reading the skill");
+  // Codex's web search: a step, with what it looked for.
+  assert.equal(JSON.stringify(Agent.fromLine("codex", JSON.stringify({ type: "item.completed", item: { id: "w1", type: "web_search", query: "honeybee genome" } }))),
+    JSON.stringify([{ kind: "step", text: "Searching the web for \u201choneybee genome\u201d" }]));
+  assert.equal(JSON.stringify(Agent.fromLine("codex", JSON.stringify({ type: "item.completed", item: { id: "w2", type: "web_search" } }))),
+    JSON.stringify([{ kind: "step", text: "Searching the web" }]));
   assert.ok(page.includes("  /plugins/uber-notebook/skills/uber-notebook/SKILL.md"), "and where it is, for harnesses without skills");
   assert.ok(page.includes("Read and change my notes only through those commands"), "the commands, not the files");
   const blocks = Agent.prompt(Object.assign({ scope: "blocks", blocks: ["b1", "b2"] }, base));
