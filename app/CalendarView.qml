@@ -725,7 +725,8 @@ Item {
               x: cv.gutter - width - 8
               y: -height / 2
               textFormat: Text.PlainText
-              text: index + ":00"
+              // On a 12-hour clock, "9 am", "1 pm".
+              text: cv.theme.twelveHour ? (index % 12 === 0 ? 12 : index % 12) + (index < 12 ? " am" : " pm") : index + ":00"
               font.family: cv.theme.uiFont
               font.pixelSize: 11
               color: cv.theme.faint
