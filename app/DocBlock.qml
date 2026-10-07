@@ -1546,13 +1546,17 @@ Item {
 
   Row {
     id: handles
-    visible: (zoneHover.hovered || grip.active || (block.ownHover && (block.contentHovered || plusHover.hovered || gripHover.hovered))) && !block.editor.readOnly && block.editor.dragUid === "" || block.dragged
+    objectName: "blockHandles"
+    // (On the + or the ⋮⋮ they stay, whatever the block: there the hover is
+    // theirs, not the zone's behind them, and they'd go as you reached them.)
+    visible: (zoneHover.hovered || plusHover.hovered || gripHover.hovered || grip.active || (block.ownHover && block.contentHovered)) && !block.editor.readOnly && block.editor.dragUid === "" || block.dragged
     x: block.bx - 48
     y: (block.isText ? block.markY : block.st.above + block.boxTop + Math.min(block.contentH, 30) / 2) - height / 2
     spacing: 0
     height: 24
 
     Rectangle {
+      objectName: "blockPlus"
       width: 22
       height: 24
       radius: 4
@@ -1566,7 +1570,7 @@ Item {
         color: Qt.alpha(block.editor.ink, 0.45)
       }
       HoverHandler { id: plusHover; cursorShape: Qt.PointingHandCursor }
-      TapHandler { onTapped: block.editor.addBelow(block.uid) }
+      TapHandler { gesturePolicy: TapHandler.ReleaseWithinBounds; onTapped: block.editor.addBelow(block.uid) }
     }
     Rectangle {
       id: gripBox

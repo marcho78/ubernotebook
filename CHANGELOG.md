@@ -10,6 +10,10 @@ The first version.
 
 ### Changed
 
+- **The + beside a block stays put.** On a to-do or a toggle, coming to
+  the + (or the ⋮⋮) from above, they went as you reached them and came back
+  as you moved, blinking: on them the hover is theirs, not the block's.
+  They stay while the pointer's on them now, on every kind of block.
 - **Every agent can read the skill in the panel.** The panel's prompt told
   agents "only Uber Notebook's commands run here (no mktemp, cat or rm)",
   meant for what they write; Codex, which reads files only with its shell,
