@@ -610,20 +610,6 @@ Item {
   // terminal's agent's too: as always) or from the panel's agent
   // (uber-notebook-agent: as Scope.js says while it works, none otherwise),
   // the Api told which while it runs.
-  // A command run once you've said yes to the files it takes (`scope`: the
-  // agent's, with them said yes to), even if the agent's done by then; a
-  // file still being read, it's run again a moment later (`tries` times).
-  function runAfterYes(scope, run, tries) {
-    var out = ""
-    apiItem.caller = scope
-    try { out = String(run() || "") } finally { apiItem.caller = null }
-    if (tries > 0 && /run the same command again in a moment/.test(out)) {
-      var t = Qt.createQmlObject("import QtQuick; Timer { interval: 400 }", root)
-      t.triggered.connect(function() { t.destroy(); root.runAfterYes(scope, run, tries - 1) })
-      t.start()
-    }
-    return out
-  }
   // (A file from outside its folders, and nothing else in the way: you're
   // asked in the panel, and it's done when you say yes: Api.askForFiles.)
   function scoped(forAgent, command, args, run) {
@@ -631,7 +617,7 @@ Item {
     if (why) {
       var outside = forAgent ? Scope.outsideFiles(agentScope, command, args) : null
       if (outside && outside.length && Scope.check(Scope.withApproved(agentScope, outside), command, args) === "") {
-        return apiItem.askForFiles(agentScope, outside, function(scope) { return root.runAfterYes(scope, run, 25) })
+        return apiItem.askForFiles(agentScope, outside, run)
       }
       return JSON.stringify({ ok: false, error: why })
     }

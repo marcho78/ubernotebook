@@ -61,20 +61,30 @@ function inPictures(scope, path) {
   }
   return ""
 }
-// A file you've said yes to (the very path): the folder it's in, or "".
+// A file you've said yes to (the very path): the folder it's read from,
+// every step below it through no link (the one you said Always to, or "/"
+// for a yes to that file alone: every step of it), or "".
 function approvedFolder(scope, path) {
   var p = String(path || "").trim()
   var list = scope && Array.isArray(scope.approved) ? scope.approved : []
-  if (list.indexOf(p) < 0 || !/^\/[^\u0000-\u001f]+$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p)) return ""
-  var i = p.lastIndexOf("/")
-  return i > 0 ? p.slice(0, i) : ""
+  if (!/^\/[^\u0000-\u001f]+$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p)) return ""
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i]
+    var path_ = typeof e === "string" ? e : e && e.path
+    if (path_ !== p) continue
+    var root = typeof e === "string" ? "/" : String(e.root || "/")
+    return root === "/" || p.indexOf(root + "/") === 0 ? root : ""
+  }
+  return ""
 }
-// The scope with those files said yes to.
-function withApproved(scope, paths) {
+// The scope with those files said yes to ([{ path, root }], or paths: "/").
+function withApproved(scope, entries) {
   if (!scope) return scope
   var out = {}
   for (var k in scope) out[k] = scope[k]
-  out.approved = (Array.isArray(scope.approved) ? scope.approved : []).concat(paths || [])
+  out.approved = (Array.isArray(scope.approved) ? scope.approved : []).concat((entries || []).map(function(e) {
+    return typeof e === "string" ? { path: e, root: "/" } : { path: String(e.path || ""), root: String(e.root || "/") }
+  }))
   return out
 }
 // The folder a file the agent gives is read from, every step through no
@@ -119,6 +129,9 @@ function outsideFiles(scope, command, args) {
       var p = String(list[k] || "").trim()
       if (inFolder(scope, p) || (PICTURE_FILES.indexOf(name) >= 0 && inPictures(scope, p)) || approvedFolder(scope, p)) continue
       if (!/^\/[^\u0000-\u001f\u007f]{1,4000}$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p) || /\/$/.test(p)) return null
+      // (A gallery's: each picture by its own path; a folder of them from
+      // outside isn't taken.)
+      if (PICTURE_FILES.indexOf(name) >= 0 && name !== "attach" && !PICTURE.test(p)) return null
       if (out.indexOf(p) < 0) out.push(p)
     }
   }
@@ -143,6 +156,7 @@ function check(scope, command, args) {
       if (inFolder(scope, list[k]) || (PICTURE_FILES.indexOf(name) >= 0 && inPictures(scope, list[k])) || approvedFolder(scope, list[k])) continue
       // (What to do instead, said: never a dead end.)
       var pics = Array.isArray(scope.pictures) && scope.pictures.length ? "; a picture you made yourself is taken from " + scope.pictures.join(" or ") + " too" : ""
+      if (PICTURE_FILES.indexOf(name) >= 0 && name !== "attach" && !PICTURE.test(String(list[k] || ""))) pics += "; for a gallery, give each picture's own path (a folder of them from outside it isn't taken)"
       return "not while " + who + " is working in Uber Notebook's panel: the files its commands read come only from its own folder (" + scope.dir + "): save or copy the file there and give that path" + pics
     }
   }

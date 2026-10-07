@@ -3,6 +3,7 @@ import QtTest
 import "../.." as UberNotebook
 import "../../app"
 import "../../Workspace.js" as Workspace
+import "../../Scope.js" as Scope
 import "../../Html.js" as Html
 
 // The commands agents and scripts use (Api.qml), on the real workspace store
@@ -1370,7 +1371,8 @@ Item {
       var scope = { agent: "Grok", id: "grok", dir: "/tmp/in", talk: "c-1", grants: {} }
       files.disk["/tmp/Pictures/bee.png"] = "PNG"
       var ran = 0
-      function rerun(s) { ran++; api.caller = s; try { return api.attach(home, "/tmp/Pictures/bee.png") } finally { api.caller = null } }
+      var callers = []
+      function rerun() { ran++; callers.push(api.caller); return api.attach(home, "/tmp/Pictures/bee.png") }
       var before = files.picturesIn.length
       var out = json(api.askForFiles(scope, ["/tmp/Pictures/bee.png"], rerun))
       compare(out.asked, true)
@@ -1382,9 +1384,10 @@ Item {
       compare(ran, 0, "not before you answer")
       q.run([])
       compare(ran, 1, "run once you say yes")
+      compare(api.caller, null, "the caller only while it runs")
       tryVerify(function() { return files.picturesIn.length > before }, 2000)
       var c = files.picturesIn[files.picturesIn.length - 1]
-      compare([c.from, c.within].join("|"), "/tmp/Pictures/bee.png|/tmp/Pictures", "from its folder, the file through no link")
+      compare([c.from, c.within].join("|"), "/tmp/Pictures/bee.png|/", "a yes to that file alone: every step of it through no link")
       // No: nothing done.
       askUi.asks = []
       ran = 0
@@ -1396,14 +1399,47 @@ Item {
       api.askForFiles(scope, ["/tmp/x.png"], rerun)
       api.askForFiles(scope, ["/tmp/.ssh/k.png"], rerun)
       compare(askUi.asks.map(function(r) { return r.always }).join("|"), "|", "no Always for them")
-      // A folder you've said Always to: at once, nothing asked.
+      // A folder you've said Always to: at once, nothing asked, read from it
+      // (every step below it through no link).
       askUi.asks = []
       api.settings = { agentPermissions: [{ agent: "grok", action: "files", target: "/tmp/Pictures" }] }
       ran = 0
-      api.askForFiles(scope, ["/tmp/Pictures/trip/moth.png"], rerun)
+      callers = []
+      api.askForFiles(scope, ["/tmp/Pictures/trip/moth.png"], function() { ran++; callers.push(api.caller); return "" })
       compare(ran, 1)
       compare(askUi.asks.length, 0)
+      compare(Scope.within(callers[0], "/tmp/Pictures/trip/moth.png"), "/tmp/Pictures")
       api.settings = null
+      // A Markdown file still being read after the yes: run again a moment
+      // later, and done; another profile opened meanwhile: not there.
+      files.disk["/tmp/Notes/plan.md"] = "Step one"
+      files.deferHelperReads = true
+      askUi.asks = []
+      api.askForFiles(scope, ["/tmp/Notes/plan.md"], function() { return api.add("Plan from outside", "/tmp/Notes/plan.md") })
+      askUi.asks[0].run([])
+      files.answerReads()
+      tryVerify(function() { return named("Plan from outside") !== "" }, 3000, "added once it's read")
+      files.disk["/tmp/Notes/other.md"] = "Other"
+      askUi.asks = []
+      api.askForFiles(scope, ["/tmp/Notes/other.md"], function() { return api.add("Other profile", "/tmp/Notes/other.md") })
+      askUi.asks[0].run([])
+      var root0 = files.rootPath
+      files.rootPath = root0 + "-other"
+      files.answerReads()
+      wait(1200)
+      files.rootPath = root0
+      tryCompare(ws, "ready", true, 3000)
+      compare(named("Other profile"), "", "never in the profile opened since")
+      files.deferHelperReads = false
+      // A yes after another profile's opened: nothing done there.
+      askUi.asks = []
+      ran = 0
+      api.askForFiles(scope, ["/tmp/Pictures/wasp.png"], rerun)
+      files.rootPath = root0 + "-other"
+      askUi.asks[0].run([])
+      compare(ran, 0, "not in another profile")
+      files.rootPath = root0
+      tryCompare(ws, "ready", true, 3000)
       api.ui = ui
     }
 

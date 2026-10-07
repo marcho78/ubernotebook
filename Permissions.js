@@ -56,19 +56,23 @@ function folderOf(path) {
   var i = p.lastIndexOf("/")
   return i > 0 ? p.slice(0, i) : ""
 }
-// Whether `agent` may give a command the file at `path` without asking: a
-// rule for its folder, or a folder it's in (no hidden folder between).
-function allowedFile(list, agent, path) {
+// The folder a rule lets `agent` take the file at `path` from without
+// asking (its own, or one it's in, no hidden folder between), or "". The
+// file's read from there, every step below it through no link.
+function allowedFileRoot(list, agent, path) {
   var folder = folderOf(path)
   var name = String(path || "").slice(folder.length + 1)
-  if (!folder || !name || name.charAt(0) === ".") return false
-  return clean(list).some(function(r) {
+  if (!folder || !name || name.charAt(0) === ".") return ""
+  var hit = clean(list).filter(function(r) {
     if (r.agent !== agent || r.action !== "files") return false
     if (folder === r.target) return true
     if (folder.indexOf(r.target + "/") !== 0) return false
     return folder.slice(r.target.length + 1).split("/").every(function(p) { return p !== "" && p.charAt(0) !== "." })
-  })
+  })[0]
+  return hit ? hit.target : ""
 }
+// Whether `agent` may give a command the file at `path` without asking.
+function allowedFile(list, agent, path) { return allowedFileRoot(list, agent, path) !== "" }
 
 function cleanTarget(action, target) {
   var t = String(target || "").trim()

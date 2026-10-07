@@ -752,9 +752,11 @@ def open_within(path, within):
     without following a link; Refused when it isn't in it."""
     base = os.path.normpath(within)
     full = os.path.normpath(path)
-    if not full.startswith(base + "/"):
+    # ("/": every step from the root, none through a link.)
+    prefix = base if base == "/" else base + "/"
+    if not full.startswith(prefix):
         raise Refused("not in that folder")
-    parts = parts_of(full[len(base) + 1:])
+    parts = parts_of(full[len(prefix):])
     if not parts:
         raise Refused("not in that folder")
     fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)

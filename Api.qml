@@ -164,14 +164,21 @@ QtObject {
   // (Settings → AI), else asked in the panel, one question a file (Allow
   // once; Always from its folder, but never your home folder itself or a
   // hidden one: Permissions.cleanFolder), and the command run when you've
-  // said yes to each (`rerun(scope)`, with them said yes to). What the
-  // command says meanwhile.
-  function askForFiles(scope, paths, rerun) {
+  // said yes to each (`run()`, while `scope` is the caller: `runAfterYes`).
+  // Each is read from the folder you said Always to, or every step from the
+  // root for a yes to that file alone, through no link. What the command
+  // says meanwhile.
+  function askForFiles(scope, paths, run) {
     var who = String(scope.id || "")
     var list = settings && settings.agentPermissions ? settings.agentPermissions : []
-    var yes = Scope.withApproved(scope, paths)
+    // (The profile it's for, by its notes folder (each has its own; its
+    // generation moves on a reload too): a yes after another's opened does
+    // nothing.)
+    var folder0 = workspace ? workspace.folder : ""
+    var entries = paths.map(function(p) { return { path: p, root: Permissions.allowedFileRoot(list, who, p) || "/" } })
+    var yes = Scope.withApproved(scope, entries)
     var need = paths.filter(function(p) { return !Permissions.allowedFile(list, who, p) })
-    if (!need.length) return rerun(yes)
+    if (!need.length) return runAfterYes(yes, run, 25, folder0)
     var left = need.length
     var said = false
     var asked = true
@@ -184,12 +191,28 @@ QtObject {
         key: "file " + (scope.talk || "") + " " + p, agent: who, text: "put a file from outside its folder on your page", detail: p,
         action: always ? "files" : "", target: always ? folder : "", always: always ? "Always from " + shown : "",
         talk: scope.talk || "", grants: scope.grants || null,
-        run: function() { if (--left === 0 && !said) rerun(yes) },
+        run: function() { if (--left === 0 && !said) api.runAfterYes(yes, run, 25, folder0) },
         no: function() { said = true }
       }) === true && asked
     })
     if (!asked) return fail("not without the user's yes, and they can't be asked now: save or copy the file into your folder (" + scope.dir + ") and give that path")
     return answer({ ok: true, asked: true, note: "the user is asked in the panel to let Uber Notebook take " + need.join(", ") + ": it's done when they say yes (no need to run it again)" })
+  }
+  // The command run, `scope` the caller, in the profile it was asked in
+  // (`folder`, its notes): never in another opened since. A file still
+  // being read: again a moment later (`tries` times).
+  function runAfterYes(scope, run, tries, folder) {
+    if (!workspace || !folder || workspace.folder !== folder) return fail("another profile is open: not done")
+    var out = ""
+    var was = caller
+    caller = scope
+    try { out = String(run() || "") } finally { caller = was }
+    if (tries > 0 && /run the same command again in a moment/.test(out)) {
+      var t = Qt.createQmlObject("import QtQuick; Timer { interval: 400 }", api)
+      t.triggered.connect(function() { t.destroy(); api.runAfterYes(scope, run, tries - 1, folder) })
+      t.start()
+    }
+    return out
   }
 
   function answer(o) { return JSON.stringify(o) }

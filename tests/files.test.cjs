@@ -409,6 +409,20 @@ try {
     fs.mkdirSync(path.join(grok, "01a1", "images"), { recursive: true });
     fs.writeFileSync(path.join(grok, "01a1", "images", "1.png"), png(12, 8));
     fs.symlinkSync(path.join(elsewhere, "private.png"), path.join(grok, "01a1", "images", "2.png"));
+    // A folder you said Always to, with a link in it to a hidden folder
+    // (Codex's case): a file through the link is refused, read from the
+    // folder you approved, every step below it through no link; and "/" for
+    // a yes to one file: every step of its path.
+    const approved = folder("pictures-approved");
+    const hidden = folder("pictures-hidden-config");
+    fs.mkdirSync(path.join(hidden, "app"));
+    fs.writeFileSync(path.join(hidden, "app", "token.png"), png(4, 4));
+    fs.symlinkSync(hidden, path.join(approved, "link"));
+    fs.writeFileSync(path.join(approved, "real.png"), png(4, 4));
+    assert.equal(copy(path.join(approved, "link", "app", "token.png"), 0, approved).ok, false, "through a link below the folder you approved: refused");
+    assert.equal(copy(path.join(approved, "real.png"), 0, approved).ok, true);
+    assert.equal(copy(path.join(approved, "link", "app", "token.png"), 0, "/").ok, false, "from the root: refused too");
+    assert.equal(copy(path.join(approved, "real.png"), 0, "/").ok, true, "a plain path from the root");
     const made = copy(path.join(grok, "01a1", "images", "1.png"), 0, grok);
     assert.deepEqual([made.ok, made.width, made.height], [true, 12, 8]);
     assert.equal(copy(path.join(grok, "01a1", "images", "2.png"), 0, grok).ok, false, "a link there: refused");

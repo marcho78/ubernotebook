@@ -87,7 +87,14 @@ check("a file from outside its folders: asked about, then taken once you've said
   const yes = Scope.withApproved(s, ["/usr/share/pixmaps/a.png"]);
   assert.equal(s.approved, undefined, "the scope itself as it was");
   assert.equal(Scope.check(yes, "attach", [A, "/usr/share/pixmaps/a.png"]), "", "said yes to: taken");
-  assert.equal(Scope.within(yes, "/usr/share/pixmaps/a.png"), "/usr/share/pixmaps", "from its folder, the file through no link");
+  assert.equal(Scope.within(yes, "/usr/share/pixmaps/a.png"), "/", "a yes to that file alone: every step of it through no link");
+  const always = Scope.withApproved(s, [{ path: "/home/me/Pictures/trip/a.png", root: "/home/me/Pictures" }]);
+  assert.equal(Scope.within(always, "/home/me/Pictures/trip/a.png"), "/home/me/Pictures", "from the folder you said Always to, every step below it through no link");
+  assert.equal(Scope.within(Scope.withApproved(s, [{ path: "/elsewhere/a.png", root: "/home/me/Pictures" }]), "/elsewhere/a.png"), "", "a root it isn't in: none");
+  // A gallery: each picture by its own path; a folder from outside: refused.
+  assert.equal(Scope.outsideFiles(s, "addGallery", [A, "/home/me/Pictures", "2"]), null);
+  assert.match(Scope.check(s, "addGallery", [A, "/home/me/Pictures", "2"]), /give each picture's own path/);
+  assert.equal(JSON.stringify(Scope.outsideFiles(s, "attach", [A, "/home/me/report.pdf"])), JSON.stringify(["/home/me/report.pdf"]), "attach: any file");
   assert.ok(Scope.check(yes, "attach", [A, "/usr/share/pixmaps/b.png"]) !== "", "not another file there");
   assert.equal(Scope.check(yes, "append", [A, "/usr/share/pixmaps/a.png"]), "", "any command that takes it");
 });

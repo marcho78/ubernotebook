@@ -51,23 +51,12 @@ ShellRoot {
     if (why) {
       var outside = Scope.outsideFiles(smoke.scope, command, args)
       if (outside && outside.length && Scope.check(Scope.withApproved(smoke.scope, outside), command, args) === "") {
-        return api.askForFiles(smoke.scope, outside, function(scope) { return smoke.runAfterYes(scope, run, 25) })
+        return api.askForFiles(smoke.scope, outside, run)
       }
       return JSON.stringify({ ok: false, error: why })
     }
     api.caller = smoke.scope
     try { return run() } finally { api.caller = null }
-  }
-  function runAfterYes(scope, run, tries) {
-    var out = ""
-    api.caller = scope
-    try { out = String(run() || "") } finally { api.caller = null }
-    if (tries > 0 && /run the same command again in a moment/.test(out)) {
-      var t = Qt.createQmlObject("import QtQuick; Timer { interval: 400 }", smoke)
-      t.triggered.connect(function() { t.destroy(); smoke.runAfterYes(scope, run, tries - 1) })
-      t.start()
-    }
-    return out
   }
 
   // What the run in progress did: { agent, done, code, failure, steps, answer, asks }.
