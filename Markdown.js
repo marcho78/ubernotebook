@@ -262,7 +262,9 @@ function fromDocPage(page, lookup, options) {
     var p = typeof opts.syncedPage === "function" ? opts.syncedPage(id) : null
     if (!p) return "*(A synced block)*"
     syncedCount++
-    var inner = fromDocPage(p, lookup, { assetPrefix: opts.assetPrefix, calendar: opts.calendar }).replace(/^# .*\n\n?/, "")
+    // (Its columns one after another, as ever; for an agent, its lines that
+    // would read as their markers escaped all the same.)
+    var inner = fromDocPage(p, lookup, { assetPrefix: opts.assetPrefix, calendar: opts.calendar, markers: opts.fences === true || opts.markers === true }).replace(/^# .*\n\n?/, "")
     syncedChars += inner.length
     if (pass) pass.chars += inner.length
     if (pass && pass.chars > pass.max) return pastPass
@@ -397,7 +399,7 @@ function fromDocPage(page, lookup, options) {
     else line = text
     // For an agent, a line of text that would read as a column's marker
     // says so: "\::next" (read back as the words, not columns).
-    if (opts.fences && b.type === "p") line = line.replace(/^(::(?:columns|next|end)(?=[ \t]|$))/gm, "\\$1")
+    if ((opts.fences || opts.markers) && b.type === "p") line = line.replace(/^(::(?:columns|next|end)(?=[ \t]|$))/gm, "\\$1")
     if (!kids) return line
     var listy = b.type === "bullet" || b.type === "toggle" || b.type === "check" || b.type === "number"
     return (line ? line + (listy ? "\n" : "\n\n") : "") + indent(kids, b.type === "number" ? "   " : "  ")
