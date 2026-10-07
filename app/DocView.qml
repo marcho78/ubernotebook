@@ -1652,6 +1652,9 @@ FocusScope {
     // (One of Uber Notebook's own commands, alone: not asked, as Claude
     // Code's aren't; Uber Notebook says what it may do.)
     if (a.action === "shell" && ev.input && Agent.ownCommand(ev.input.command)) { reply(true); return }
+    // (A file of its own, in its conversation's folder: not asked either.)
+    var ownDir = agentTalk && Agent.isConversationFolder(agentTalk.folder) ? agentBase() + "/" + agentTalk.folder : ""
+    if (ownDir && Agent.ownFile(ev.tool, ev.input, ownDir)) { reply(true); return }
     if (a.action && Permissions.allowed(settings.agentPermissions || [], agent, a.action, a.target)) { reply(true); return }
     if (a.grant && agentTalk && agentTalk.grants && agentTalk.grants[a.grant] === true) { reply(true); return }
     if (agentTalk && !agentTalk.grants) agentTalk.grants = {}

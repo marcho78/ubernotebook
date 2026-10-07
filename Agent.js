@@ -463,6 +463,26 @@ function ownCommand(command) {
   return /^omarchy-shell\s+uber-notebook-agent\s+[A-Za-z]+(\s|$)/.test(c)
 }
 
+// A file tool's use wholly inside the agent's own conversation folder
+// (`dir`): reading, writing or editing a file there, every path it names
+// in it (a move's destination too): not asked, as Claude Code's writes there
+// aren't (its --allowedTools). (Grok's sandbox lets it write nowhere else
+// anyway, links included: the kernel checks where a write lands.)
+function ownFile(tool, toolInput, dir) {
+  var d = String(dir || "")
+  if (!/^\/[^\u0000-\u001f]{1,4000}$/.test(d) || /(^|\/)\.\.?(\/|$)/.test(d)) return false
+  if (READ_TOOLS.indexOf(String(tool || "")) < 0 && CHANGE_TOOLS.indexOf(String(tool || "")) < 0) return false
+  var i = toolInput && typeof toolInput === "object" ? toolInput : {}
+  var paths = []
+  for (var k in i) {
+    if (/path|file|source|destination|target/i.test(k) && typeof i[k] === "string" && i[k] !== "") paths.push(i[k])
+  }
+  if (!paths.length) return false
+  return paths.every(function(p) {
+    return p.indexOf(d + "/") === 0 && !/(^|\/)\.\.?(\/|$)/.test(p) && !/[\u0000-\u001f]/.test(p)
+  })
+}
+
 // Grok's sandbox for the panel, kept in its working folder's
 // .grok/sandbox.toml: strict (it reads its folder and the system's, writes
 // there and in temp), and it may read where the shell's socket is

@@ -545,6 +545,16 @@ Item {
         rawInput: { variant: "Bash", command: "omarchy-shell uber-notebook-agent read x; cat ~/.ssh/id_ed25519" } }, options: [{ optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })
       compare(view.agentAsks.length, 1, "anything chained to it: asked")
       view.answerAgentAsk(view.agentAsks[0].key, "no")
+      // A file of its own, in its conversation's folder: not asked; one
+      // elsewhere: asked.
+      acp({ id: 42, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "write", kind: "edit",
+        rawInput: { file_path: run.cwd + "/notes.md", content: "Hi" } }, options: [{ optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })
+      compare(view.agentAsks.length, 0, "its own folder: not asked")
+      compare(JSON.stringify(sentAt(run.sent.length - 1)), JSON.stringify({ jsonrpc: "2.0", id: 42, result: { outcome: { outcome: "selected", optionId: "allow-once" } } }))
+      acp({ id: 43, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "write", kind: "edit",
+        rawInput: { file_path: "/tmp/elsewhere.md", content: "Hi" } }, options: [{ optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })
+      compare(view.agentAsks.length, 1, "elsewhere: asked")
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
       // It asks: you're asked; No, its reject option.
       acp({ id: 5, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "Execute `curl -sI https://e.org`", kind: "execute",
         rawInput: { variant: "Bash", command: "curl -sI https://e.org" } }, options: [{ optionId: "always-allow", kind: "allow_always" }, { optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })

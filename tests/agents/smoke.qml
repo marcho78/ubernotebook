@@ -101,6 +101,7 @@ ShellRoot {
             var a = Agent.askOf(ev.tool, ev.input, ev.title, ev.name)
             // (As the panel: Uber Notebook's own commands, alone, not asked.)
             if (a.action === "shell" && ev.input && Agent.ownCommand(ev.input.command)) { if (run && run.send) run.send(Agent.answerFor(agent, ev, true)); return }
+            if (Agent.ownFile(ev.tool, ev.input, dir)) { if (run && run.send) run.send(Agent.answerFor(agent, ev, true)); return }
             st.asks.push(String(a.text || ev.tool || "a tool") + (a.detail ? ": " + String(a.detail).slice(0, 160) : ""))
             if (run && run.send) run.send(Agent.answerFor(agent, ev, true))
             return

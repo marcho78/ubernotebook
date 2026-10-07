@@ -1182,8 +1182,9 @@ Notebook's commands: they read and change your notes, as you ask.
   Grok settings say: anything beyond what it allows by itself (its read-only
   commands, in the sandbox) it asks for, and you're asked in the panel, as
   for Claude Code; Uber Notebook's own commands, each alone
-  (`omarchy-shell uber-notebook-agent …` with nothing chained to it), aren't
-  asked about, as Claude Code's aren't. The commands it runs have the network (its sandbox
+  (`omarchy-shell uber-notebook-agent …` with nothing chained to it), and
+  its own files in its conversation's folder aren't asked about, as Claude
+  Code's aren't. The commands it runs have the network (its sandbox
   profile leaves it on). Allow rules saved in your own Grok settings still
   apply. Its profile is written by the files helper: a link put there is
   replaced, never written through.

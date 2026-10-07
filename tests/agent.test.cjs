@@ -347,6 +347,17 @@ check("what an agent asks, in words; Always only for what can't run code on your
     "omarchy-shell uber-notebook-agent read x\nrm y", "omarchy-shell uber-notebook-agent read x && ls", "omarchy-shell uber-notebook-agent read x\\", "cp /a /b", ""]) {
     assert.equal(Agent.ownCommand(c), false, c);
   }
+  // A file of its own, in its conversation's folder: not asked; anything
+  // naming a path outside it (a move's destination too), or another tool: asked.
+  const own = "/run/user/1000/uber-notebook-agent/c-1";
+  assert.ok(Agent.ownFile("Edit", { file_path: own + "/bees.md", content: "x" }, own));
+  assert.ok(Agent.ownFile("Read", { target_file: own + "/x.md" }, own));
+  for (const [t, i] of [["Edit", { file_path: "/home/me/.bashrc" }], ["Edit", { file_path: own + "/../c-2/x.md" }],
+    ["Edit", { source: own + "/a.md", destination: "/home/me/a.md" }], ["Bash", { command: "ls", path: own }], ["Edit", {}],
+    ["Read", { file_path: own + "x/a.md" }]]) {
+    assert.equal(Agent.ownFile(t, i, own), false, t + " " + JSON.stringify(i));
+  }
+  assert.equal(Agent.ownFile("Edit", { file_path: own + "/a.md" }, "relative"), false);
   // Where Grok's image tool saves pictures for a conversation's folder.
   assert.equal(Agent.grokPictures("/home/me/.grok", "/run/user/1000/uber-notebook-agent/c-d45b4a6a60b9"), "/home/me/.grok/sessions/%2Frun%2Fuser%2F1000%2Fuber-notebook-agent%2Fc-d45b4a6a60b9");
   assert.equal(Agent.grokPictures("/home/me/.grok/", "/run/x"), "/home/me/.grok/sessions/%2Frun%2Fx");
