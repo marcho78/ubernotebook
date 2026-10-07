@@ -18,6 +18,8 @@ Rectangle {
   // ↑ and ↓ (a list under the field picks with them).
   signal upPressed()
   signal downPressed()
+  // Clicked (as well as the cursor put where it was clicked).
+  signal tapped()
 
   implicitWidth: 240
   implicitHeight: 34
@@ -59,6 +61,7 @@ Rectangle {
     Keys.onEscapePressed: function(e) { e.accepted = true; field.escaped() }
     Keys.onUpPressed: function(e) { e.accepted = true; field.upPressed() }
     Keys.onDownPressed: function(e) { e.accepted = true; field.downPressed() }
+    TapHandler { onTapped: field.tapped() }
 
     Text {
       textFormat: Text.PlainText

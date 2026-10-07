@@ -404,9 +404,9 @@ function alerts(cal, from, to) {
     var base = o.allDay ? new Date(o.start.getFullYear(), o.start.getMonth(), o.start.getDate(), Dates.MORNING, 0) : o.start
     var at = new Date(base.getTime() - mins * 60000)
     if (at < from || at >= to) return
-    var when = o.allDay ? "Today" : (mins === 0 ? "Now" : mins >= 1440 ? "Tomorrow at " + o.start.getHours() + ":" + pad(o.start.getMinutes()) : "In " + (mins >= 60 ? mins / 60 + (mins === 60 ? " hour" : " hours") : mins + " min"))
+    var when = o.allDay ? "Today" : (mins === 0 ? "Now" : mins >= 1440 ? "Tomorrow at " + Dates.clockOf(o.start) : "In " + (mins >= 60 ? mins / 60 + (mins === 60 ? " hour" : " hours") : mins + " min"))
     if (o.allDay && mins >= 1440) when = "Tomorrow"
-    out.push({ key: "cal|" + o.key + "|" + mins, at: at, title: o.title || "An event", text: when + (o.allDay ? "" : ", " + o.start.getHours() + ":" + pad(o.start.getMinutes())) + (o.place ? "  \u00b7  " + o.place : ""),
+    out.push({ key: "cal|" + o.key + "|" + mins, at: at, title: o.title || "An event", text: when + (o.allDay ? "" : ", " + Dates.clockOf(o.start)) + (o.place ? "  \u00b7  " + o.place : ""),
       page: o.page, day: o.day })
   })
   return out.sort(function(a, b) { return a.at - b.at })
@@ -565,7 +565,8 @@ function line(o, now) {
 
 // ---- how it's said ---------------------------------------------------------------------------
 
-function timeLabel(d) { return d.getHours() + ":" + pad(d.getMinutes()) }
+// A time as it's shown, on the clock you chose ("1:30 pm", "13:30").
+function timeLabel(d) { return Dates.clockOf(d) }
 
 // "9:30 - 10:00", "All day", "Until 10:00" (one that began the day before).
 function span(o, onDayDate) {

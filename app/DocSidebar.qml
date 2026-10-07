@@ -883,7 +883,7 @@ Rectangle {
               anchors.verticalCenter: parent.verticalCenter
               width: 44
               textFormat: Text.PlainText
-              text: trow.modelData.allDay ? "All day" : trow.now ? "Now" : Calendar.timeLabel(trow.modelData.start)
+              text: (bar.theme.twelveHour, trow.modelData.allDay) ? "All day" : trow.now ? "Now" : Calendar.timeLabel(trow.modelData.start)
               font.family: bar.theme.uiFont
               font.pixelSize: 11
               font.weight: trow.now || trow.soon <= 15 && !trow.modelData.allDay ? Font.DemiBold : Font.Normal

@@ -6,6 +6,8 @@ const assert = require("node:assert/strict");
 const { load, plain } = require("./load.cjs");
 
 const W = load("Workspace.js");
+// (Its times on a 24-hour clock here; the 12-hour one is checked below.)
+load("Dates.js").setTwelveHour(false);
 let passed = 0;
 function check(name, fn) { fn(); passed++; }
 
@@ -23,13 +25,16 @@ check("names and dates", () => {
 
 check("when, as the history says it", () => {
   const now = new Date(2026, 9, 2, 12, 0);
-  assert.equal(W.versionLabel(new Date(2026, 9, 2, 9, 5), now), "Today 09:05");
+  assert.equal(W.versionLabel(new Date(2026, 9, 2, 9, 5), now), "Today 9:05");
   assert.equal(W.versionLabel(new Date(2026, 9, 1, 18, 2), now), "Yesterday 18:02");
   assert.equal(W.versionLabel(new Date(2026, 8, 28, 14, 3), now), "Mon 28 Sep 14:03");
-  assert.equal(W.versionLabel(new Date(2026, 7, 3, 7, 0), now), "3 Aug 07:00");
-  assert.equal(W.versionLabel(new Date(2025, 7, 3, 7, 0), now), "3 Aug 2025 07:00");
+  assert.equal(W.versionLabel(new Date(2026, 7, 3, 7, 0), now), "3 Aug 7:00");
+  assert.equal(W.versionLabel(new Date(2025, 7, 3, 7, 0), now), "3 Aug 2025 7:00");
+  load("Dates.js").setTwelveHour(true);
+  assert.equal(W.versionLabel(new Date(2026, 9, 1, 18, 2), now), "Yesterday 6:02 pm", "on a 12-hour clock");
+  load("Dates.js").setTwelveHour(false);
   const list = [{ date: new Date(2026, 9, 2, 9, 5, 40) }, { date: new Date(2026, 9, 2, 9, 5, 10) }, { date: new Date(2026, 9, 2, 8, 0, 0) }];
-  assert.deepEqual(plain(W.versionLabels(list, now)), ["Today 09:05:40", "Today 09:05:10", "Today 08:00"], "seconds only where they're needed");
+  assert.deepEqual(plain(W.versionLabels(list, now)), ["Today 9:05:40", "Today 9:05:10", "Today 8:00"], "seconds only where they're needed");
   assert.equal(W.versionWhy("command"), "Before an agent or command changed it");
   assert.equal(W.versionWhy("edit"), "");
 });

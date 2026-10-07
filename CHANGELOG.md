@@ -10,6 +10,18 @@ The first version.
 
 ### Changed
 
+- **Times on a 12-hour clock, or 24.** Times were only ever 13:00. Now
+  Settings → Writing → Times has a Clock: **1:30 pm** (the default) or
+  **13:30**, for every time Uber Notebook shows: the calendar, events,
+  agendas, reminders, "Edited", page history, backups, meetings, emails,
+  and a template's `{{time}}`. Typed either way, a time is read. An event's
+  time boxes have a list to pick from (every 15 minutes, on your clock)
+  when you click them, and ↑ ↓ move them a quarter of an hour.
+- **A new event shows where it went.** One made for a day out of sight
+  (typed "next friday", or the agenda's +) left the calendar where it was,
+  so it looked as if nothing was added. Now the calendar goes to it (and
+  its time, in a week) and marks it a moment. **New event** in a week or an
+  agenda you've gone to puts it there, not on today.
 - **Habits, meetings and agendas fit a narrow column.** Three or more
   columns to a row, a habit's days ran over its name, a meeting's buttons
   over its words, an agenda's day over its buttons (and past its edge).

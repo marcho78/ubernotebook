@@ -7,6 +7,8 @@ const assert = require("node:assert/strict");
 const { load, plain } = require("./load.cjs");
 
 const C = load("Calendar.js");
+// (Written for a 24-hour clock: its labels are checked in tests/dates.test.cjs.)
+load("Dates.js").setTwelveHour(false);
 let passed = 0;
 function check(name, fn) { fn(); passed++; }
 

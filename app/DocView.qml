@@ -488,7 +488,7 @@ FocusScope {
     var en = Dates.fromIso(e.end)
     if (!s) return ""
     if (e.allDay) return Dates.label(s.at, false, new Date()) + (en && e.end !== e.start ? " \u2013 " + Dates.label(en.at, false, new Date()) : "") + "  \u00b7  all day"
-    var t = function(d) { return d.getHours() + ":" + (d.getMinutes() < 10 ? "0" : "") + d.getMinutes() }
+    var t = function(d) { return Dates.clockOf(d) }
     return Dates.label(s.at, false, new Date()) + ", " + t(s.at) + (en ? "\u2013" + t(en.at) : "")
   }
 
@@ -2842,7 +2842,7 @@ FocusScope {
           anchors.verticalCenter: parent.verticalCenter
           visible: view.page !== null
           rightPadding: 10
-          text: { var r = view.revision; return view.page ? "Edited " + Qt.formatDateTime(new Date(view.page.modified), "d MMM, HH:mm") : "" }
+          text: { var r = view.revision; var c = view.theme.twelveHour; var m = view.page ? new Date(view.page.modified) : null; return m ? "Edited " + Qt.formatDate(m, "d MMM") + ", " + Dates.clockOf(m) : "" }
           font.family: view.theme.uiFont
           font.pixelSize: 12
           color: view.theme.faint
@@ -4585,7 +4585,7 @@ FocusScope {
               width: parent.width
               elide: Text.ElideRight
               textFormat: Text.PlainText
-              text: view.eventWhen(parent.parent.modelData) + (parent.parent.modelData.place ? "  \u00b7  " + parent.parent.modelData.place : "") + (parent.parent.there ? "  \u00b7  on your calendar" : "")
+              text: (view.theme.twelveHour, view.eventWhen(parent.parent.modelData)) + (parent.parent.modelData.place ? "  \u00b7  " + parent.parent.modelData.place : "") + (parent.parent.there ? "  \u00b7  on your calendar" : "")
               font.family: view.theme.uiFont
               font.pixelSize: 12
               color: view.theme.muted

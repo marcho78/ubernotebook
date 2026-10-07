@@ -63,6 +63,7 @@ FocusScope {
     textColor: root.settings.colorText || ""
     sidebarColor: root.settings.colorSidebar || ""
     cardColor: root.settings.colorCards || ""
+    clockSetting: root.settings.clock || "12"
   }
 
   // The fonts Uber Notebook brings with it (the notebook window loads them once

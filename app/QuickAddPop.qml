@@ -53,6 +53,7 @@ Pop {
     var s = Dates.fromIso(g.start).at
     if (g.allDay) return Dates.label(s, false, new Date()) + (g.end !== g.start ? " \u2013 " + Dates.label(Dates.fromIso(g.end).at, false, new Date()) : "") + ", all day"
     var e = Dates.fromIso(g.end).at
+    var clock = pop.theme.twelveHour
     return Dates.label(s, false, new Date()) + ", " + Calendar.timeLabel(s) + " \u2013 " + Calendar.timeLabel(e)
   }
 
@@ -66,6 +67,8 @@ Pop {
     var done = made
     close()
     if (done) done(e.id)
+    // In the calendar: where it went, shown.
+    if (view && view.calendarView && view.calendarView.visible) view.calendarView.reveal(e.id)
     if (e.title) view.toastUndo("\u201c" + e.title + "\u201d is on the calendar: " + when, function() { pop.workspace.undoCalendar() })
     return e.id
   }

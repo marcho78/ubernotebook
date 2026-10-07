@@ -1261,7 +1261,7 @@ function versionLabel(date, now, seconds) {
   var d = date
   var n = now || new Date()
   function pad(x) { return (x < 10 ? "0" : "") + x }
-  var time = pad(d.getHours()) + ":" + pad(d.getMinutes()) + (seconds ? ":" + pad(d.getSeconds()) : "")
+  var time = Dates.clockOf(d, seconds)
   var day = new Date(d.getFullYear(), d.getMonth(), d.getDate())
   var today = new Date(n.getFullYear(), n.getMonth(), n.getDate())
   var diff = Math.round((today.getTime() - day.getTime()) / 86400000)

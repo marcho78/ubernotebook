@@ -6,6 +6,7 @@ import "../Permissions.js" as Permissions
 import "../Audio.js" as Audio
 import "../Backups.js" as Backups
 import "../Colors.js" as Colors
+import "../Dates.js" as Dates
 import "../Sidebar.js" as Sidebar
 
 // Uber Notebook's settings, in sections (the list at the left): General,
@@ -201,7 +202,7 @@ Popup {
     var d = new Date(ms)
     var today = new Date()
     var same = d.toDateString() === today.toDateString()
-    return (same ? "Today" : Qt.formatDate(d, d.getFullYear() === today.getFullYear() ? "d MMM" : "d MMM yyyy")) + ", " + Qt.formatTime(d, "HH:mm")
+    return (same ? "Today" : Qt.formatDate(d, d.getFullYear() === today.getFullYear() ? "d MMM" : "d MMM yyyy")) + ", " + Dates.clockOf(d)
   }
 
   // ---- your agent ----
@@ -232,7 +233,7 @@ Popup {
   readonly property string updateNote: {
     var u = updates
     if (!u) return ""
-    var when = u.checkedAt ? " · checked " + Qt.formatTime(u.checkedAt, "HH:mm") : ""
+    var when = u.checkedAt ? " · checked " + Dates.clockOf(new Date(u.checkedAt)) : ""
     if (u.status === "checking") return "Checking…"
     if (u.status === "available") return "Version " + u.latest.version + " is available" + when
     if (u.status === "current") return "You have the newest version" + when
@@ -911,6 +912,22 @@ Popup {
 
         Group {
           visible: panel.section === "writing"
+          title: "Times"
+          Line {
+            label: "Clock"
+            note: "How times are shown: in the calendar, on events and reminders, in what's dated. You can type either way."
+            Choice {
+              objectName: "clockChoice"
+              prefix: "clock_"
+              options: [{ label: "1:30 pm", value: "12" }, { label: "13:30", value: "24" }]
+              value: panel.s.clock === "24" ? "24" : "12"
+              onPicked: function(v) { panel.set("clock", v) }
+            }
+          }
+        }
+
+        Group {
+          visible: panel.section === "writing"
           title: "Exports"
           Line {
             label: "Exports go to"
@@ -930,7 +947,7 @@ Popup {
             label: "Keep a Markdown copy"
             note: panel.s.mirror === true && panel.service
               ? panel.service.mirror.status + (panel.service.mirror.status === "Up to date" && panel.service.mirror.lastSync
-                ? " · " + panel.service.mirror.files + " files · " + Qt.formatTime(panel.service.mirror.lastSync, "HH:mm") : "")
+                ? " · " + panel.service.mirror.files + " files · " + Dates.clockOf(new Date(panel.service.mirror.lastSync)) : "")
               : "A Markdown file of every page, kept up to date in a folder, for Obsidian, git or any editor."
             Toggle { theme: panel.theme; checked: panel.s.mirror === true; onToggled: function(on) { panel.set("mirror", on) } }
           }
@@ -1447,7 +1464,7 @@ Popup {
               required property var modelData
               objectName: "backupRow"
               label: modelData.name.replace(/\.tar\.gz$/, "")
-              note: panel.whenLabel(modelData.time) + " · " + Backups.sizeLabel(modelData.size) + (modelData.automatic ? " · automatic" : "")
+              note: (panel.theme.twelveHour, panel.whenLabel(modelData.time)) + " · " + Backups.sizeLabel(modelData.size) + (modelData.automatic ? " · automatic" : "")
               TextButton {
                 objectName: "backupRestore"
                 theme: panel.theme

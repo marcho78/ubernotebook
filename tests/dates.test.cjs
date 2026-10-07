@@ -5,6 +5,8 @@ const assert = require("node:assert/strict");
 const { load, plain } = require("./load.cjs");
 
 const Dates = load("Dates.js");
+// (These were written for a 24-hour clock; the 12-hour one has its own check.)
+Dates.setTwelveHour(false);
 let passed = 0;
 function check(name, fn) { fn(); passed++; }
 
@@ -100,6 +102,24 @@ check("the @ menu", () => {
   assert.deepEqual(typed.map((s) => s.label), ["Fri 2 Oct 15:00", "Remind me Fri 2 Oct 15:00"]);
   assert.equal(typed[1].remind, true);
   assert.deepEqual(plain(Dates.suggestions("banana", now)), []);
+});
+
+check("the clock times are shown with: 12-hour, or 24-hour", () => {
+  Dates.setTwelveHour(true);
+  try {
+    assert.equal(Dates.clock(0, 5), "12:05 am");
+    assert.equal(Dates.clock(9, 30), "9:30 am");
+    assert.equal(Dates.clock(12, 0), "12:00 pm");
+    assert.equal(Dates.clock(13, 45), "1:45 pm");
+    assert.equal(Dates.clock(23, 59, 7), "11:59:07 pm");
+    assert.equal(Dates.label(new Date(2026, 9, 1, 13, 5), true, new Date(2026, 9, 1)), "Thu 1 Oct 1:05 pm");
+    // What it shows, typed back, is the same time.
+    for (const [h, m] of [[0, 0], [9, 5], [12, 30], [13, 0], [23, 45]]) assert.equal(Dates.parseTime(Dates.clock(h, m)), h * 60 + m, Dates.clock(h, m));
+  } finally {
+    Dates.setTwelveHour(false);
+  }
+  assert.equal(Dates.clock(13, 45), "13:45");
+  assert.equal(Dates.clock(9, 5), "9:05");
 });
 
 console.log(`dates: ${passed} checks passed`);

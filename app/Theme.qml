@@ -1,4 +1,5 @@
 import QtQuick
+import "../Dates.js" as Dates
 
 // The colors and fonts of everything around the notebook: the desk it lies
 // on, the bars, the popovers. They come from the Omarchy theme (its
@@ -8,6 +9,12 @@ import QtQuick
 // the sections and cards, and the text ("" follows the theme).
 QtObject {
   id: theme
+
+  // The clock times are shown with (Settings: Clock, "12" or "24"). What
+  // shows a time reads twelveHour, so it's drawn again when it changes; the
+  // shared Dates.js is told first.
+  property string clockSetting: "12"
+  readonly property bool twelveHour: { var t = clockSetting !== "24"; Dates.setTwelveHour(t); return t }
 
   // The Omarchy theme's.
   property color baseBackground: "#1a1b26"

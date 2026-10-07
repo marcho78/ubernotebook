@@ -4,6 +4,7 @@ import "../Meeting.js" as Meeting
 import "../Audio.js" as Audio
 import "../Docs.js" as Docs
 import "../Colors.js" as Colors
+import "../Dates.js" as Dates
 
 // A meeting on a page in Pages, recorded by voxtype's meeting mode: your
 // microphone and what the computer plays (the other side of a call). Before
@@ -133,9 +134,10 @@ Item {
   function act(what) { editor.meetingAction(uid, what, null) }
 
   readonly property string whenText: {
+    var clock = mb.theme ? mb.theme.twelveHour : true
     if (!meeting.startedAt) return ""
     var d = new Date(meeting.startedAt)
-    return Qt.formatDateTime(d, "ddd d MMM, HH:mm")
+    return Qt.formatDate(d, "ddd d MMM") + ", " + Dates.clockOf(d)
   }
   readonly property string whoText: {
     var names = speakerList.map(function(s) { return Meeting.speakerName(mb.meeting, s) })

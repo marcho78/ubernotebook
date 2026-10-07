@@ -151,7 +151,7 @@ Item {
           width: parent.width
           elide: Text.ElideRight
           textFormat: Text.PlainText
-          text: cb.next ? Dates.label(cb.next.start, false, new Date(cb.nowMs)) + ", " + Calendar.span(cb.next) + (cb.ev.repeat ? "  \u00b7  " + Calendar.repeatLabel(cb.ev.repeat).toLowerCase() : "") + (cb.ev.place ? "  \u00b7  " + cb.ev.place : "") : ""
+          text: (cb.theme && cb.theme.twelveHour, cb.next) ? Dates.label(cb.next.start, false, new Date(cb.nowMs)) + ", " + Calendar.span(cb.next) + (cb.ev.repeat ? "  \u00b7  " + Calendar.repeatLabel(cb.ev.repeat).toLowerCase() : "") + (cb.ev.place ? "  \u00b7  " + cb.ev.place : "") : ""
           font.family: cb.editor ? cb.editor.uiFamily : ""
           font.pixelSize: 12
           color: cb.faint
@@ -267,7 +267,7 @@ Item {
             width: cb.twoLines ? parent.width - 22 : 96
             elide: Text.ElideRight
             textFormat: Text.PlainText
-            text: Calendar.span(row.modelData, cb.shownDay)
+            text: (cb.theme && cb.theme.twelveHour, Calendar.span(row.modelData, cb.shownDay))
             font.family: cb.editor ? cb.editor.uiFamily : ""
             font.pixelSize: 12
             font.features: { "tnum": 1 }
@@ -305,7 +305,7 @@ Item {
             width: cb.twoLines ? parent.width - 12 : 96
             elide: Text.ElideRight
             textFormat: Text.PlainText
-            text: nrow.modelData.time ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
+            text: (cb.theme && cb.theme.twelveHour, nrow.modelData.time) ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
             font.family: cb.editor ? cb.editor.uiFamily : ""
             font.pixelSize: 12
             color: cb.faint

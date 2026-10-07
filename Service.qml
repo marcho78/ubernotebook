@@ -8,6 +8,7 @@ import "Settings.js" as Settings
 import "Scope.js" as Scope
 import "Agent.js" as Agent
 import "QuickQueue.js" as QuickQueue
+import "Dates.js" as Dates
 
 // Uber Notebook: notebooks that look and feel like paper, and pages made of
 // blocks (Pages), on Omarchy.
@@ -75,6 +76,9 @@ Item {
   readonly property var schema: Defaults.SCHEMA
   property var user: ({})
   readonly property var settings: Settings.merge(defaults, user, schema)
+  // Times on the clock you chose (reminders' notifications too).
+  readonly property bool twelveHour: settings.clock !== "24"
+  onTwelveHourChanged: Dates.setTwelveHour(twelveHour)
 
   // While the shell saves an entry it hands plugins a copy of its
   // configuration from just before the save; a copy that still shows the
@@ -796,6 +800,7 @@ Item {
   }
 
   Component.onCompleted: {
+    Dates.setTwelveHour(twelveHour)
     try { ownManifest = JSON.parse(storeItem.readNow(pluginDir + "/manifest.json", 64 * 1024) || "null") } catch (e) { ownManifest = null }
     helperText = storeItem.readNow(storeItem.filesHelper, 512 * 1024) || ""
     hyprText = storeItem.readNow(pluginDir + "/hypr/uber-notebook.lua", 256 * 1024) || ""

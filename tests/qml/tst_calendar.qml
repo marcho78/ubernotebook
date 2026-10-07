@@ -4,6 +4,7 @@ import "../.." as UberNotebook
 import "../../app"
 import "../../Workspace.js" as Workspace
 import "../../Calendar.js" as Calendar
+import "../../Dates.js" as Dates
 
 // The calendar in Pages: kept in Pages/calendar.json; opened from the
 // sidebar; an event added by a click on a day and typing; changed in its
@@ -18,7 +19,7 @@ Item {
 
   FakeFiles { id: files }
   FakeService { id: service; user: ({ sounds: false }) }
-  Theme { id: th }
+  Theme { id: th; clockSetting: service.settings.clock || "12" }
   UberNotebook.Workspace { id: ws; files: files }
   property string lastToast: ""
   property var lastUndo: null
@@ -52,6 +53,8 @@ Item {
       // (An event's editor left open by the test before: closed.)
       view.closeEvent()
       tryVerify(function() { return !view.eventEditorOpen }, 1000)
+      // (On a 12-hour clock, whatever the test before left.)
+      if (service.settings.clock !== "12") service.setSetting("clock", "12")
       files.reset()
       view.page = null
       view.calendarShown = false
@@ -366,7 +369,7 @@ Item {
       tryVerify(function() { return find(ag, function(it) { return it.objectName === "agendaRow" && it.modelData.title === "Call Sam" }) !== null }, 1000)
       // As Markdown: the day's events.
       view.copyMarkdown()
-      verify(files.copied.indexOf("9:30 \u2013 9:45: Standup") > 0, files.copied)
+      verify(files.copied.indexOf("9:30 am \u2013 9:45 am: Standup") > 0, files.copied)
       // "/event": typed, put on the calendar and on the page.
       e.focusBlock(e.uidAt(e.model.count - 1), 0)
       type("/event")
@@ -492,6 +495,96 @@ Item {
       var gone = JSON.parse(api.removeEvent(made.id))
       verify(gone.ok)
       compare(Calendar.byId(ws.calendar, made.id), null)
+    }
+
+    // Times on the clock you chose (Settings: Clock): 12-hour by default.
+    function test_10_times_on_your_clock() {
+      fresh()
+      add({ title: "Standup", start: iso(today(), 13, 30), end: iso(today(), 14) })
+      view.openCalendar("")
+      cv().setMode("month")
+      var en = null
+      tryVerify(function() { en = entry("Standup"); return en !== null }, 1000)
+      verify(find(en, function(it) { return typeof it.text === "string" && it.text === "1:30 pm Standup" }) !== null, "1:30 pm")
+      service.setSetting("clock", "24")
+      tryVerify(function() { var e = entry("Standup"); return e && find(e, function(it) { return it.text === "13:30 Standup" }) !== null }, 1000, "13:30, on a 24-hour clock")
+      service.setSetting("clock", "12")
+      tryVerify(function() { var e = entry("Standup"); return e && find(e, function(it) { return it.text === "1:30 pm Standup" }) !== null }, 1000)
+    }
+
+    // A new event out of sight: the calendar goes to it, and marks it.
+    function test_11_a_new_event_shows_where_it_went() {
+      fresh()
+      view.openCalendar("")
+      cv().setMode("week")
+      wait(100)
+      var later = plus(today(), 15)
+      cv().addAt(cv().newDay(), -1, null)
+      tryVerify(function() { return named(win(), "quickAdd") !== null }, 1000)
+      wait(200)
+      type("Dentist " + Qt.locale("en_US").monthName(later.getMonth(), Locale.ShortFormat).toLowerCase() + " " + later.getDate() + " 3pm")
+      keyClick(Qt.Key_Return)
+      var made = null
+      tryVerify(function() { made = ws.calendar.events.filter(function(x) { return x.title === "Dentist" })[0]; return !!made }, 1000)
+      compare(made.start, iso(later, 15))
+      compare(Calendar.dayIso(cv().weekFirst), Calendar.dayIso(Calendar.startOfWeek(later)), "its week, shown")
+      compare(cv().flashId, made.id)
+      tryVerify(function() { return named(cv(), "calFlash") !== null }, 1000, "marked")
+      tryCompare(cv(), "flashId", "", 4000, "a moment")
+    }
+
+    // New event: on the week or the days shown, not today when they're not.
+    function test_12_new_event_on_what_is_shown() {
+      fresh()
+      view.openCalendar("")
+      cv().setMode("week")
+      compare(Calendar.dayIso(cv().newDay()), Calendar.dayIso(today()), "this week: today")
+      cv().go(2)
+      compare(Calendar.dayIso(cv().newDay()), Calendar.dayIso(cv().weekFirst), "another week: its Monday")
+      cv().setMode("agenda")
+      cv().show(plus(today(), 40), "")
+      compare(Calendar.dayIso(cv().newDay()), Calendar.dayIso(plus(today(), 40)), "the agenda: the day it's from")
+    }
+
+    // An event's times: a list to pick from (on your clock), up and down a
+    // quarter of an hour; typing still works.
+    function test_13_times_to_pick() {
+      fresh()
+      add({ title: "Review", start: iso(today(), 10), end: iso(today(), 11) })
+      view.openCalendar("")
+      cv().setMode("month")
+      var en = null
+      tryVerify(function() { en = entry("Review"); return en !== null }, 1000)
+      click(en)
+      var st = null
+      tryVerify(function() { st = named(win(), "eventStartTime"); return st !== null }, 1000)
+      tryCompare(st, "text", "10:00 am", 1000)
+      verify(named(win(), "timeList") === null, "no list till it's clicked")
+      click(st)
+      var list = null
+      tryVerify(function() { list = named(win(), "timeList"); return list !== null }, 1000, "the times, while it's written in")
+      var eleven = null
+      tryVerify(function() { eleven = find(list, function(it) { return it.objectName === "timeOption" && it.at === 11 * 60 }); return eleven !== null }, 1000, "scrolled near its time")
+      verify(find(eleven, function(it) { return it.text === "11:00 am" }) !== null)
+      click(eleven)
+      tryVerify(function() { return ws.calendar.events[0].start === iso(today(), 11) && ws.calendar.events[0].end === iso(today(), 12) }, 1000, "picked, as long as it was")
+      var et = named(win(), "eventEndTime")
+      et.input.forceActiveFocus()
+      wait(100)
+      keyClick(Qt.Key_Down)
+      tryVerify(function() { return ws.calendar.events[0].end === iso(today(), 12, 15) }, 1000, "down: a quarter of an hour later")
+      keyClick(Qt.Key_Up)
+      keyClick(Qt.Key_Up)
+      tryVerify(function() { return ws.calendar.events[0].end === iso(today(), 11, 45) }, 1000)
+      // Typed, either way.
+      st = named(win(), "eventStartTime")
+      st.text = "1:30 pm"
+      st.accepted()
+      tryVerify(function() { return ws.calendar.events[0].start === iso(today(), 13, 30) }, 1000)
+      st.text = "15:00"
+      st.accepted()
+      tryVerify(function() { return ws.calendar.events[0].start === iso(today(), 15) }, 1000)
+      view.closeEvent()
     }
   }
 }

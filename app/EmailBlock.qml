@@ -49,7 +49,7 @@ DataCard {
     if (!d || isNaN(d.getTime())) return ""
     var now = new Date()
     var day = Dates.SHORT_MONTHS[d.getMonth()] + " " + d.getDate() + (d.getFullYear() !== now.getFullYear() ? ", " + d.getFullYear() : "")
-    return full ? Dates.SHORT_DAYS[d.getDay()] + " " + day + ", " + Qt.formatTime(d, "HH:mm") : day
+    return full ? Dates.SHORT_DAYS[d.getDay()] + " " + day + ", " + Dates.clockOf(d) : day
   }
 
   width: available
@@ -195,7 +195,7 @@ DataCard {
         topPadding: 10
         spacing: 2
         Repeater {
-          model: [{ k: "From", v: eb.info.from }, { k: "To", v: eb.info.to }, { k: "Cc", v: eb.info.cc }, { k: "Date", v: eb.when(eb.info.date, true) }].filter(function(r) { return r.v })
+          model: [{ k: "From", v: eb.info.from }, { k: "To", v: eb.info.to }, { k: "Cc", v: eb.info.cc }, { k: "Date", v: (eb.theme && eb.theme.twelveHour, eb.when(eb.info.date, true)) }].filter(function(r) { return r.v })
           delegate: Row {
             required property var modelData
             width: parent.width

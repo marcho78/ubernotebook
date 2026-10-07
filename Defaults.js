@@ -68,6 +68,8 @@ var DEFAULTS = {
   // The calendar's view, as it was last: month, week, agenda or compact (a
   // small month and the days from the one picked).
   calendarView: "month",
+  // The clock times are shown with: "12" (1:30 pm) or "24" (13:30).
+  clock: "12",
   // How People shows everyone: a list beside the one picked ("list"), or cards.
   peopleLayout: "list",
   // As cards, how People groups everyone: A to Z ("letter") or by company.
@@ -135,6 +137,7 @@ var SCHEMA = {
     reduceMotion: "bool",
     scrollSpeed: "string",
     strikeDone: "bool",
+    clock: "string",
     lastNotebook: "id",
     zoom: "int",
     space: "string",
@@ -183,6 +186,7 @@ var SCHEMA = {
     quickTo: ["notebook", "pages"],
     tagSort: ["name", "color"],
     calendarView: ["month", "week", "agenda", "compact"],
+    clock: ["12", "24"],
     peopleLayout: ["list", "cards"],
     peopleGroup: ["letter", "company"],
     scrollSpeed: ["slower", "normal", "faster"],

@@ -13,6 +13,7 @@
 // Shared by the notebook (app/*.qml), the library and tests/templates.test.cjs,
 // so keep it plain JavaScript with no QML or Node APIs.
 .pragma library
+.import "Dates.js" as Dates
 
 // date: what a page of it is dated by: "day", "week" (its Monday) or
 // "month" (its 1st), each one after the last; "today" (the day it's made);
@@ -467,7 +468,7 @@ function fill(text, html, now, fmt) {
     var n = name.toLowerCase()
     if (n === "date") return html ? "<a href=\"uber-notebook://date/" + day + "\">@" + esc(f(day, "ddd d MMM")) + "</a>" : f(day, "ddd d MMM")
     if (n === "weekday") return out(f(day, "dddd"))
-    if (n === "time") return pad(d.getHours()) + ":" + pad(d.getMinutes())
+    if (n === "time") return Dates.clockOf(d)
     if (n === "month") return out(f(day, "MMMM yyyy"))
     if (n === "year") return String(d.getFullYear())
     return "Week " + isoWeek(day)

@@ -72,8 +72,18 @@ Pop {
     var d = Dates.parse(text, new Date())
     return d ? Calendar.dayIso(d.at) : ""
   }
-  // A time typed ("9:30", "2pm") in minutes, or -1.
+  // A time typed ("9:30", "2pm", "1:30 pm", "13:30") in minutes, or -1.
   function timeOf(text) { return Dates.parseTime(text) }
+  // An event's time ("2026-10-07T13:30") in minutes.
+  function minutesIn(iso) { var a = Dates.fromIso(iso); return a && a.time ? a.at.getHours() * 60 + a.at.getMinutes() : -1 }
+  // A time box a quarter of an hour on (or back), kept.
+  function stepTime(box, delta, keep) {
+    var m = timeOf(box.text)
+    if (m < 0) return
+    m = ((Math.round(m / 15) * 15 + delta) % 1440 + 1440) % 1440
+    box.text = Dates.clock(Math.floor(m / 60), m % 60)
+    keep()
+  }
 
   // The start, from what's typed: the event as long as it was.
   function setStart() {
@@ -264,13 +274,58 @@ Pop {
       spacing: 6
       Label2 { anchors.verticalCenter: parent.verticalCenter; text: "Starts"; width: 64 }
       Field { id: startDay; objectName: "eventStartDay"; theme: pop.theme; width: 130; height: 32; placeholder: "fri, oct 12"; onAccepted: pop.setStart(); input.onActiveFocusChanged: if (!input.activeFocus && pop.opened && text !== pop.dayLabel(pop.ev.start)) pop.setStart() }
-      Field { id: startTime; objectName: "eventStartTime"; visible: pop.ev && !pop.ev.allDay; theme: pop.theme; width: 80; height: 32; placeholder: "9:30"; onAccepted: pop.setStart(); input.onActiveFocusChanged: if (!input.activeFocus && pop.opened && !pop.ev.allDay && text !== Calendar.timeLabel(Dates.fromIso(pop.ev.start).at)) pop.setStart() }
+      Field {
+        id: startTime
+        objectName: "eventStartTime"
+        visible: pop.ev && !pop.ev.allDay
+        theme: pop.theme; width: 96; height: 32; placeholder: "9:30 am"
+        onAccepted: pop.setStart()
+        // (Up and down step 15 minutes.)
+        onUpPressed: { startTimes.open(); pop.stepTime(startTime, -15, pop.setStart) }
+        onDownPressed: { startTimes.open(); pop.stepTime(startTime, 15, pop.setStart) }
+        // (Clicked: the times to pick from. Only clicked: the box can have the
+        // keyboard without its list over what's below it.)
+        onTapped: startTimes.open()
+        input.onActiveFocusChanged: {
+          if (!input.activeFocus) startTimes.close()
+          if (!input.activeFocus && pop.opened && !pop.ev.allDay && text !== Calendar.timeLabel(Dates.fromIso(pop.ev.start).at)) pop.setStart()
+        }
+        TimeList {
+          id: startTimes
+          theme: pop.theme
+          y: startTime.height + 4
+          minutes: pop.ev && !pop.ev.allDay ? pop.minutesIn(pop.ev.start) : -1
+          onPicked: function(m) { startTime.text = Dates.clock(Math.floor(m / 60), m % 60); pop.setStart(); close() }
+        }
+      }
     }
     Row {
       spacing: 6
       Label2 { anchors.verticalCenter: parent.verticalCenter; text: "Ends"; width: 64 }
       Field { id: endDay; objectName: "eventEndDay"; theme: pop.theme; width: 130; height: 32; placeholder: "the same day"; onAccepted: pop.setEnd(); input.onActiveFocusChanged: if (!input.activeFocus && pop.opened && text !== pop.dayLabel(pop.ev.end)) pop.setEnd() }
-      Field { id: endTime; objectName: "eventEndTime"; visible: pop.ev && !pop.ev.allDay; theme: pop.theme; width: 80; height: 32; placeholder: "10:30"; onAccepted: pop.setEnd(); input.onActiveFocusChanged: if (!input.activeFocus && pop.opened && !pop.ev.allDay && text !== Calendar.timeLabel(Dates.fromIso(pop.ev.end).at)) pop.setEnd() }
+      Field {
+        id: endTime
+        objectName: "eventEndTime"
+        visible: pop.ev && !pop.ev.allDay
+        theme: pop.theme; width: 96; height: 32; placeholder: "10:30 am"
+        onAccepted: pop.setEnd()
+        onUpPressed: { endTimes.open(); pop.stepTime(endTime, -15, pop.setEnd) }
+        onDownPressed: { endTimes.open(); pop.stepTime(endTime, 15, pop.setEnd) }
+        // (Clicked: the times to pick from. Only clicked: the box can have the
+        // keyboard without its list over what's below it.)
+        onTapped: endTimes.open()
+        input.onActiveFocusChanged: {
+          if (!input.activeFocus) endTimes.close()
+          if (!input.activeFocus && pop.opened && !pop.ev.allDay && text !== Calendar.timeLabel(Dates.fromIso(pop.ev.end).at)) pop.setEnd()
+        }
+        TimeList {
+          id: endTimes
+          theme: pop.theme
+          y: endTime.height + 4
+          minutes: pop.ev && !pop.ev.allDay ? pop.minutesIn(pop.ev.end) : -1
+          onPicked: function(m) { endTime.text = Dates.clock(Math.floor(m / 60), m % 60); pop.setEnd(); close() }
+        }
+      }
     }
 
     // How it repeats.

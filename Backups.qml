@@ -2,6 +2,7 @@ import QtQuick
 import "Backups.js" as Backups
 import "Profiles.js" as Profiles
 import "Settings.js" as Settings
+import "Dates.js" as Dates
 
 // Backups (Backups.js): a profile's notes, or every profile's, kept in one
 // .tar.gz in the backup folder; the ones there, listed; one put back, each
@@ -66,7 +67,7 @@ Item {
     function finish(r) {
       bk.working = ""
       bk.failed = !r.ok
-      bk.note = r.ok ? (automatic ? "Automatic backup made " : "Backed up ") + Qt.formatDateTime(new Date(), "d MMM, HH:mm") + ": " + r.name : r.error
+      bk.note = r.ok ? (automatic ? "Automatic backup made " : "Backed up ") + Qt.formatDate(new Date(), "d MMM") + ", " + Dates.clockOf(new Date()) + ": " + r.name : r.error
       if (done) done(r)
     }
     if (working) { if (done) done({ ok: false, error: "A backup is being " + (working === "backup" ? "made" : "put back") + " already." }); return }

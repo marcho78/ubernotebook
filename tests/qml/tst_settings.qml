@@ -136,6 +136,12 @@ Item {
       verify(named(win(), "appearanceSwatch_colorPage") !== null)
       compare(named(win(), "scrollSpeed_faster"), null)
       section("writing")
+      // Times: 12-hour unless you say.
+      verify(named(win(), "clock_12").checked, "12-hour, to begin with")
+      click(named(win(), "clock_24"))
+      compare(service.settings.clock, "24")
+      click(named(win(), "clock_12"))
+      compare(service.settings.clock, "12")
       section("audio")
       verify(named(win(), "micPicker") !== null)
       section("profiles")

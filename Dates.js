@@ -174,13 +174,27 @@ function fromIso(text) {
   return { at: at, time: !!m[4] }
 }
 
-// How a date is written on the page: "Thu 1 Oct", "Thu 1 Oct 9:30", with
+// The clock times are shown with (Settings: "clock"): 12-hour ("1:30 pm"),
+// or 24-hour ("13:30"). Set once for everything (the app sets it).
+var clock12 = true
+function twelveHour() { return clock12 }
+function setTwelveHour(on) { clock12 = on !== false }
+
+// A time of day as it's shown: "1:30 pm" or "13:30" (with its seconds, `seconds`).
+function clock(h, m, s) {
+  var tail = s === undefined ? "" : ":" + pad(s)
+  if (!clock12) return h + ":" + pad(m) + tail
+  return (h % 12 === 0 ? 12 : h % 12) + ":" + pad(m) + tail + (h < 12 ? " am" : " pm")
+}
+function clockOf(d, seconds) { return clock(d.getHours(), d.getMinutes(), seconds ? d.getSeconds() : undefined) }
+
+// How a date is written on the page: "Thu 1 Oct", "Thu 1 Oct 9:30 am", with
 // the year when it isn't this year's.
 function label(at, time, now) {
   var n = now || new Date()
   var s = SHORT_DAYS[at.getDay()] + " " + at.getDate() + " " + SHORT_MONTHS[at.getMonth()]
   if (at.getFullYear() !== n.getFullYear()) s += " " + at.getFullYear()
-  if (time) s += " " + at.getHours() + ":" + pad(at.getMinutes())
+  if (time) s += " " + clockOf(at)
   return s
 }
 

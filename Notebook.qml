@@ -293,6 +293,7 @@ Item {
     pageColor: root.service && root.service.settings ? (root.service.settings.colorPage || "") : ""
     textColor: root.service && root.service.settings ? (root.service.settings.colorText || "") : ""
     cardColor: root.service && root.service.settings ? (root.service.settings.colorCards || "") : ""
+    clockSetting: root.service && root.service.settings ? (root.service.settings.clock || "12") : "12"
     accent: Color.accent
     urgent: Color.urgent
     fontsVersion: fonts.loaded

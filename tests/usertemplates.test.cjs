@@ -17,7 +17,10 @@ const now = new Date(2026, 9, 2, 9, 5);
 
 check("filled in as it's used", () => {
   assert.equal(T.fill("Standup {{date}}", false, now, fmt), "Standup Fri 2 Oct");
-  assert.equal(T.fill("{{weekday}}, {{ time }}, {{month}}, {{year}}, {{week}}", false, now, fmt), "Friday, 09:05, October 2026, 2026, Week 40");
+  assert.equal(T.fill("{{weekday}}, {{ time }}, {{month}}, {{year}}, {{week}}", false, now, fmt), "Friday, 9:05 am, October 2026, 2026, Week 40", "the time on your clock");
+  load("Dates.js").setTwelveHour(false);
+  assert.equal(T.fill("{{time}}", false, now, fmt), "9:05", "or a 24-hour one");
+  load("Dates.js").setTwelveHour(true);
   assert.equal(T.fill("<b>{{date}}</b>", true, now, fmt), '<b><a href="uber-notebook://date/2026-10-02">@Fri 2 Oct</a></b>', "in a line, a date in Pages");
   assert.equal(T.fill("{{nope}} and {{", false, now, fmt), "{{nope}} and {{", "only what it knows");
   assert.equal(T.fill("no braces", true, now, fmt), "no braces");
@@ -79,7 +82,7 @@ check("copied when it's used", () => {
   assert.equal(made.top.icon, "\u{1f5d3}");
   assert.equal(made.top.blocks[0].html, "Friday");
   assert.equal(made.top.blocks[1].checked, true, "as it is in the template");
-  assert.deepEqual(made.top.blocks[3].table.rows[0], ["When", "09:05"]);
+  assert.deepEqual(made.top.blocks[3].table.rows[0], ["When", "9:05 am"]);
   assert.deepEqual(made.top.blocks[4].meeting, { color: "blue", background: "" }, "a meeting to record, each time");
   assert.equal(made.pages.length, 2, "the pages in it");
   assert.deepEqual(made.pages.map((p) => p.title), ["Notes", "Deep"], "parents first");

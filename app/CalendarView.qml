@@ -109,7 +109,45 @@ Item {
   // the month gone to, else today.
   function newDay() {
     if (mode === "compact") return pickedDay
+    // A week: today, if it's in it, else its Monday; the agenda: the day it's from.
+    if (mode === "week") return todayDay >= weekFirst && todayDay < addDays(weekFirst, 7) ? todayDay : weekFirst
+    if (mode === "agenda") return anchorDay
     return mode === "month" && !same(anchorDay, todayDay) ? anchorDay : todayDay
+  }
+
+  // An event just made: its day gone to when it's out of sight, its time
+  // scrolled to in a week, and it marked a moment, so you see where it went.
+  property string flashId: ""
+  Timer { id: flashTimer; interval: 2400; onTriggered: cv.flashId = "" }
+  function reveal(id) {
+    var ev = workspace ? Calendar.byId(workspace.calendar, id) : null
+    var at = ev ? Dates.fromIso(ev.start) : null
+    if (!at) return
+    var day = new Date(at.at.getFullYear(), at.at.getMonth(), at.at.getDate())
+    if (mode === "compact") { if (!same(day, pickedDay)) pick(day) }
+    else if (day < range[0] || day >= range[1]) show(day, "")
+    if (mode === "week" && !ev.allDay) Qt.callLater(function() {
+      var y = Math.max(0, (at.at.getHours() + at.at.getMinutes() / 60) * hourH - weekFlick.height / 3)
+      weekFlick.contentY = Math.min(y, Math.max(0, weekFlick.contentHeight - weekFlick.height))
+    })
+    if (mode === "agenda") Qt.callLater(function() {
+      for (var i = 0; i < agendaDays.length; i++) if (same(agendaDays[i].day, day)) { agenda.positionViewAtIndex(i, ListView.Contain); break }
+    })
+    flashId = id
+    flashTimer.restart()
+  }
+
+  // The mark round an event just made.
+  component Flash: Rectangle {
+    property string eventId: ""
+    anchors.fill: parent
+    anchors.margins: -2
+    radius: 6
+    color: "transparent"
+    border.width: 2
+    border.color: cv.theme.accent
+    visible: eventId !== "" && cv.flashId === eventId
+    z: 5
   }
 
   // ---- colors ------------------------------------------------------------------------------
@@ -359,6 +397,7 @@ Item {
     radius: 4
     color: occ && allDay ? cv.fillOf(color_) : entryHover.hovered ? Qt.alpha(cv.theme.text, 0.06) : "transparent"
     opacity: cv.dragOcc && occ && cv.dragOcc.key === occ.key ? 0.4 : 1
+    Flash { objectName: "calFlash"; eventId: entry.occ ? entry.occ.id : "" }
     Rectangle {
       visible: !entry.allDay || entry.note !== null
       x: 4
@@ -376,7 +415,7 @@ Item {
       width: parent.width - x - 4
       elide: Text.ElideRight
       textFormat: Text.PlainText
-      text: entry.occ ? (entry.allDay ? "" : Calendar.timeLabel(entry.occ.start) + " ") + (entry.occ.title || "Untitled")
+      text: (cv.theme.twelveHour, entry.occ) ? (entry.allDay ? "" : Calendar.timeLabel(entry.occ.start) + " ") + (entry.occ.title || "Untitled")
         : entry.note ? (entry.note.kind === "due" ? "\u2691 " : "\u23f0 ") + entry.note.title + (entry.note.text && entry.note.kind !== "due" ? ": " + entry.note.text : " due") : ""
       font.family: cv.theme.uiFont
       font.pixelSize: entry.fontPx
@@ -773,6 +812,7 @@ Item {
                 z: 2
                 opacity: dragging ? 0.35 : 1
                 color: cv.fillOf(o.color)
+                Flash { objectName: "calFlash"; eventId: block.o.id }
                 Rectangle { width: 3; height: parent.height; radius: 1.5; color: cv.tintOf(block.o.color) }
                 Column {
                   x: 8
@@ -793,7 +833,7 @@ Item {
                     width: parent.width
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
-                    text: Calendar.span(block.o, dayCol.day) + (block.o.place ? "  \u00b7  " + block.o.place : "")
+                    text: (cv.theme.twelveHour, Calendar.span(block.o, dayCol.day)) + (block.o.place ? "  \u00b7  " + block.o.place : "")
                     font.family: cv.theme.uiFont
                     font.pixelSize: 11
                     color: Qt.alpha(cv.inkOn(block.o.color), 0.75)
@@ -873,7 +913,7 @@ Item {
             elide: Text.ElideRight
             textFormat: Text.PlainText
             readonly property var w: parent.w
-            text: w ? Calendar.timeLabel(new Date(0, 0, 1, Math.floor(w.minutes / 60), w.minutes % 60)) + " \u2013 " + Calendar.timeLabel(new Date(0, 0, 1, Math.floor((w.minutes + w.length) / 60), (w.minutes + w.length) % 60)) : ""
+            text: (cv.theme.twelveHour, w) ? Calendar.timeLabel(new Date(0, 0, 1, Math.floor(w.minutes / 60), w.minutes % 60)) + " \u2013 " + Calendar.timeLabel(new Date(0, 0, 1, Math.floor((w.minutes + w.length) / 60), (w.minutes + w.length) % 60)) : ""
             font.family: cv.theme.uiFont
             font.pixelSize: 11
             font.weight: Font.DemiBold
@@ -1099,12 +1139,13 @@ Item {
           height: 36
           radius: 7
           color: arowHover.hovered ? Qt.alpha(cv.theme.text, 0.05) : "transparent"
+          Flash { objectName: "calFlash"; eventId: arow.modelData && arow.modelData.id ? arow.modelData.id : "" }
           Text {
             x: 10
             width: 110
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: Calendar.span(arow.modelData, dayBlock.modelData.day)
+            text: (cv.theme.twelveHour, Calendar.span(arow.modelData, dayBlock.modelData.day))
             font.family: cv.theme.uiFont
             font.pixelSize: 12
             font.features: { "tnum": 1 }
@@ -1141,7 +1182,7 @@ Item {
             width: 110
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
-            text: nrow.modelData.time ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
+            text: (cv.theme.twelveHour, nrow.modelData.time) ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
             font.family: cv.theme.uiFont
             font.pixelSize: 12
             color: cv.theme.faint
