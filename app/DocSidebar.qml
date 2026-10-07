@@ -879,9 +879,11 @@ Rectangle {
             Rectangle { x: 12; anchors.verticalCenter: parent.verticalCenter; width: 3; height: 16; radius: 1.5; color: bar.eventTint(trow.modelData.color) }
             Text {
               id: tWhen
+              objectName: "todayWhen"
               x: 22
               anchors.verticalCenter: parent.verticalCenter
-              width: 44
+              // (Room for "12:00 pm" on a 12-hour clock.)
+              width: bar.theme.twelveHour ? 54 : 44
               textFormat: Text.PlainText
               text: (bar.theme.twelveHour, trow.modelData.allDay) ? "All day" : trow.now ? "Now" : Calendar.timeLabel(trow.modelData.start)
               font.family: bar.theme.uiFont

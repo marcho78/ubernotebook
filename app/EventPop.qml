@@ -286,6 +286,8 @@ Pop {
         // (Clicked: the times to pick from. Only clicked: the box can have the
         // keyboard without its list over what's below it.)
         onTapped: startTimes.open()
+        // (Esc: the list first, then the editor.)
+        onEscaped: { if (startTimes.opened) startTimes.close(); else pop.close() }
         input.onActiveFocusChanged: {
           if (!input.activeFocus) startTimes.close()
           if (!input.activeFocus && pop.opened && !pop.ev.allDay && text !== Calendar.timeLabel(Dates.fromIso(pop.ev.start).at)) pop.setStart()
@@ -314,6 +316,8 @@ Pop {
         // (Clicked: the times to pick from. Only clicked: the box can have the
         // keyboard without its list over what's below it.)
         onTapped: endTimes.open()
+        // (Esc: the list first, then the editor.)
+        onEscaped: { if (endTimes.opened) endTimes.close(); else pop.close() }
         input.onActiveFocusChanged: {
           if (!input.activeFocus) endTimes.close()
           if (!input.activeFocus && pop.opened && !pop.ev.allDay && text !== Calendar.timeLabel(Dates.fromIso(pop.ev.end).at)) pop.setEnd()

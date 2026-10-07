@@ -59,6 +59,8 @@ Item {
   readonly property bool isToday: !ref.day || Calendar.dayIso(shownDay) === Calendar.dayIso(today)
   // Narrow (a column): an event's time on a line, its title on the next.
   readonly property bool twoLines: width < 330
+  // Its time column: room for "11:30 am – 12:30 pm" on a 12-hour clock.
+  readonly property real spanW: theme && theme.twelveHour ? 124 : 96
   readonly property var events: {
     var r = ws ? ws.calendarRevision : 0
     if (!ws || kind !== "agenda") return []
@@ -264,7 +266,8 @@ Item {
           Text {
             x: cb.twoLines ? 16 : 6
             y: cb.twoLines ? 4 : (30 - height) / 2
-            width: cb.twoLines ? parent.width - 22 : 96
+            objectName: "agendaSpan"
+            width: cb.twoLines ? parent.width - 22 : cb.spanW
             elide: Text.ElideRight
             textFormat: Text.PlainText
             text: (cb.theme && cb.theme.twelveHour, Calendar.span(row.modelData, cb.shownDay))
@@ -273,9 +276,9 @@ Item {
             font.features: { "tnum": 1 }
             color: cb.faint
           }
-          Rectangle { x: cb.twoLines ? 6 : 106; anchors.verticalCenter: parent.verticalCenter; width: 3; height: cb.twoLines ? 34 : 18; radius: 1.5; color: cb.tintOf(row.modelData.color) }
+          Rectangle { x: cb.twoLines ? 6 : cb.spanW + 10; anchors.verticalCenter: parent.verticalCenter; width: 3; height: cb.twoLines ? 34 : 18; radius: 1.5; color: cb.tintOf(row.modelData.color) }
           Text {
-            x: cb.twoLines ? 16 : 118
+            x: cb.twoLines ? 16 : cb.spanW + 22
             y: cb.twoLines ? 20 : (30 - height) / 2
             width: parent.width - x - 8
             elide: Text.ElideRight
@@ -302,7 +305,7 @@ Item {
           Text {
             x: 6
             y: cb.twoLines ? 4 : (28 - height) / 2
-            width: cb.twoLines ? parent.width - 12 : 96
+            width: cb.twoLines ? parent.width - 12 : cb.spanW
             elide: Text.ElideRight
             textFormat: Text.PlainText
             text: (cb.theme && cb.theme.twelveHour, nrow.modelData.time) ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
@@ -311,7 +314,7 @@ Item {
             color: cb.faint
           }
           Text {
-            x: cb.twoLines ? 6 : 118
+            x: cb.twoLines ? 6 : cb.spanW + 22
             y: cb.twoLines ? 20 : (28 - height) / 2
             width: parent.width - x - 8
             elide: Text.ElideRight

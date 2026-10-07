@@ -53,8 +53,9 @@ Item {
       // (An event's editor left open by the test before: closed.)
       view.closeEvent()
       tryVerify(function() { return !view.eventEditorOpen }, 1000)
-      // (On a 12-hour clock, whatever the test before left.)
+      // (On a 12-hour clock, in the month, whatever the test before left.)
       if (service.settings.clock !== "12") service.setSetting("clock", "12")
+      if (service.settings.calendarView !== "month") service.setSetting("calendarView", "month")
       files.reset()
       view.page = null
       view.calendarShown = false
@@ -248,7 +249,10 @@ Item {
       for (var i = 1; i <= 10; i++) mouseMove(root, p0.x + (p1.x - p0.x) * i / 10, p0.y + (p1.y - p0.y) * i / 10)
       wait(30)
       mouseRelease(root, p1.x, p1.y)
-      tryVerify(function() { return ws.calendar.events[0].start === iso(to, 10) }, 1000, "moved, at its time: " + ws.calendar.events[0].start)
+      // (A moment for the drop to land: with more tests before it, this one
+      // ran at times when it hadn't, though it does.)
+      wait(300)
+      tryVerify(function() { return ws.calendar.events[0].start === iso(to, 10) }, 1000, "moved, at its time")
       compare(ws.calendar.events[0].end, iso(to, 11))
       // In a week: an hour later, by dragging.
       cv().show(to, "week")
@@ -370,6 +374,10 @@ Item {
       // As Markdown: the day's events.
       view.copyMarkdown()
       verify(files.copied.indexOf("9:30 am \u2013 9:45 am: Standup") > 0, files.copied)
+      // Its times fit their column on a 12-hour clock.
+      var aspan = find(ag, function(it) { return it.objectName === "agendaSpan" && it.text === "9:30 am \u2013 9:45 am" })
+      verify(aspan !== null, "the agenda's time")
+      verify(aspan.implicitWidth <= aspan.width, aspan.implicitWidth + " in " + aspan.width)
       // "/event": typed, put on the calendar and on the page.
       e.focusBlock(e.uidAt(e.model.count - 1), 0)
       type("/event")
@@ -510,6 +518,19 @@ Item {
       tryVerify(function() { var e = entry("Standup"); return e && find(e, function(it) { return it.text === "13:30 Standup" }) !== null }, 1000, "13:30, on a 24-hour clock")
       service.setSetting("clock", "12")
       tryVerify(function() { var e = entry("Standup"); return e && find(e, function(it) { return it.text === "1:30 pm Standup" }) !== null }, 1000)
+      // The longest of them fit where they go: in the agenda, and in the sidebar's Today.
+      add({ title: "Brunch", start: iso(plus(today(), 1), 11, 30), end: iso(plus(today(), 1), 12, 30) })
+      cv().setMode("agenda")
+      var span = null
+      tryVerify(function() { span = find(cv(), function(it) { return it.objectName === "calAgendaSpan" && it.text.indexOf("11:30 am") === 0 }); return span !== null }, 1000)
+      compare(span.text, "11:30 am \u2013 12:30 pm")
+      verify(span.implicitWidth <= span.width, "the agenda's: " + span.implicitWidth + " in " + span.width)
+      if (new Date().getHours() < 23) {
+        add({ title: "Late one", start: iso(today(), 23, 45), end: iso(plus(today(), 1), 0, 15) })
+        var when = null
+        tryVerify(function() { when = find(win(), function(it) { return it.objectName === "todayWhen" && it.text === "11:45 pm" }); return when !== null }, 2000, "Today in the sidebar")
+        verify(when.implicitWidth <= when.width, "the sidebar's: " + when.implicitWidth + " in " + when.width)
+      }
     }
 
     // A new event out of sight: the calendar goes to it, and marks it.
@@ -584,7 +605,15 @@ Item {
       st.text = "15:00"
       st.accepted()
       tryVerify(function() { return ws.calendar.events[0].start === iso(today(), 15) }, 1000)
-      view.closeEvent()
+      // Esc: the list first, then the editor.
+      st = named(win(), "eventStartTime")
+      click(st)
+      tryVerify(function() { return named(win(), "timeList") !== null }, 1000)
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return named(win(), "timeList") === null }, 1000, "the list closed")
+      verify(view.eventEditorOpen, "the editor still open")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return !view.eventEditorOpen }, 1000, "then the editor")
     }
   }
 }

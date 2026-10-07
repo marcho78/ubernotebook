@@ -115,6 +115,9 @@ Item {
     return mode === "month" && !same(anchorDay, todayDay) ? anchorDay : todayDay
   }
 
+  // An agenda's time column: room for "11:30 am – 12:30 pm" on a 12-hour clock.
+  readonly property real spanW: theme && theme.twelveHour ? 130 : 110
+
   // An event just made: its day gone to when it's out of sight, its time
   // scrolled to in a week, and it marked a moment, so you see where it went.
   property string flashId: ""
@@ -1142,8 +1145,10 @@ Item {
           color: arowHover.hovered ? Qt.alpha(cv.theme.text, 0.05) : "transparent"
           Flash { objectName: "calFlash"; eventId: arow.modelData && arow.modelData.id ? arow.modelData.id : "" }
           Text {
+            objectName: "calAgendaSpan"
             x: 10
-            width: 110
+            width: cv.spanW
+            elide: Text.ElideRight
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
             text: (cv.theme.twelveHour, Calendar.span(arow.modelData, dayBlock.modelData.day))
@@ -1152,9 +1157,9 @@ Item {
             font.features: { "tnum": 1 }
             color: cv.theme.muted
           }
-          Rectangle { x: 124; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 20; radius: 2; color: cv.tintOf(arow.modelData.color) }
+          Rectangle { x: cv.spanW + 14; anchors.verticalCenter: parent.verticalCenter; width: 4; height: 20; radius: 2; color: cv.tintOf(arow.modelData.color) }
           Text {
-            x: 138
+            x: cv.spanW + 28
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - x - 12
             elide: Text.ElideRight
@@ -1180,7 +1185,7 @@ Item {
           color: nrowHover.hovered ? Qt.alpha(cv.theme.text, 0.05) : "transparent"
           Text {
             x: 10
-            width: 110
+            width: cv.spanW
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
             text: (cv.theme.twelveHour, nrow.modelData.time) ? Calendar.timeLabel(nrow.modelData.at) : nrow.modelData.kind === "due" ? "Due" : "All day"
@@ -1189,7 +1194,7 @@ Item {
             color: cv.theme.faint
           }
           Text {
-            x: 138
+            x: cv.spanW + 28
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - x - 12
             elide: Text.ElideRight

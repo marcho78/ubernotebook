@@ -233,6 +233,7 @@ Popup {
   readonly property string updateNote: {
     var u = updates
     if (!u) return ""
+    var clock = panel.theme.twelveHour
     var when = u.checkedAt ? " · checked " + Dates.clockOf(new Date(u.checkedAt)) : ""
     if (u.status === "checking") return "Checking…"
     if (u.status === "available") return "Version " + u.latest.version + " is available" + when
@@ -947,7 +948,7 @@ Popup {
             label: "Keep a Markdown copy"
             note: panel.s.mirror === true && panel.service
               ? panel.service.mirror.status + (panel.service.mirror.status === "Up to date" && panel.service.mirror.lastSync
-                ? " · " + panel.service.mirror.files + " files · " + Dates.clockOf(new Date(panel.service.mirror.lastSync)) : "")
+                ? " · " + panel.service.mirror.files + " files · " + (panel.theme.twelveHour, Dates.clockOf(new Date(panel.service.mirror.lastSync))) : "")
               : "A Markdown file of every page, kept up to date in a folder, for Obsidian, git or any editor."
             Toggle { theme: panel.theme; checked: panel.s.mirror === true; onToggled: function(on) { panel.set("mirror", on) } }
           }

@@ -138,10 +138,25 @@ Item {
       section("writing")
       // Times: 12-hour unless you say.
       verify(named(win(), "clock_12").checked, "12-hour, to begin with")
+      // What Settings says with a time in it, said again on the clock chosen.
+      updates.status = "current"
+      updates.checkedAt = new Date(2026, 9, 7, 13, 30)
+      var said = function(t) { return find(win(), function(it) { return typeof it.text === "string" && it.text.indexOf("checked " + t) >= 0 }) !== null }
+      section("about")
+      tryVerify(function() { return said("1:30 pm") }, 1000, "checked 1:30 pm")
+      section("writing")
       click(named(win(), "clock_24"))
       compare(service.settings.clock, "24")
+      section("about")
+      tryVerify(function() { return said("13:30") }, 1000, "checked 13:30, on a 24-hour clock")
+      section("writing")
       click(named(win(), "clock_12"))
       compare(service.settings.clock, "12")
+      section("about")
+      tryVerify(function() { return said("1:30 pm") }, 1000)
+      section("writing")
+      updates.checkedAt = null
+      updates.status = "idle"
       section("audio")
       verify(named(win(), "micPicker") !== null)
       section("profiles")
