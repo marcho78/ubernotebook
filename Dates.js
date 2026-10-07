@@ -26,6 +26,9 @@ var SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 // When a reminder with no time of its own comes: 9 in the morning.
 var MORNING = 9
+// The clock times are shown with (Settings: "clock"): 12-hour ("1:30 pm"),
+// or 24-hour ("13:30"); a typed "3:30" is read on it too. Set once for
+// everything (the theme and the service set it).
 var clock12 = true
 function twelveHour() { return clock12 }
 function setTwelveHour(on) { clock12 = !!on }
@@ -173,12 +176,6 @@ function fromIso(text) {
   if (m[4] && (Number(m[4]) > 23 || Number(m[5]) > 59)) return null
   return { at: at, time: !!m[4] }
 }
-
-// The clock times are shown with (Settings: "clock"): 12-hour ("1:30 pm"),
-// or 24-hour ("13:30"). Set once for everything (the app sets it).
-var clock12 = true
-function twelveHour() { return clock12 }
-function setTwelveHour(on) { clock12 = on !== false }
 
 // A time of day as it's shown: "1:30 pm" or "13:30" (with its seconds, `seconds`).
 function clock(h, m, s) {

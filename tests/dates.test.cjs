@@ -77,6 +77,7 @@ check("times", () => {
   assert.equal(read("tomorrow 25:00"), null);
   assert.equal(read("tomorrow 13pm"), null);
   for (const nope of ["", "banana", "in five days", "next banana", "tomorrow banana"]) assert.equal(read(nope), null, nope);
+  Dates.setTwelveHour(false);
 });
 
 check("written on the page, and in links", () => {
