@@ -138,6 +138,8 @@ check("time slots", () => {
   assert.equal(Blocks.nextLabel("12:00", "07:00"), "13:00", "big gaps aren't steps");
   assert.equal(Blocks.nextLabel("Mon 3", "Sun 2"), "");
   assert.deepEqual(plain(Blocks.shortcut("9:30")), { type: "time", label: "09:30" });
+  assert.deepEqual(plain(Blocks.shortcut("3:30")), { type: "time", label: "03:30" }, "time slots stay 24-hour");
+  assert.equal(Blocks.shortcut("3"), null, "a bare hour is not a time-slot shortcut");
   assert.equal(Blocks.shortcut("24:00"), null);
   assert.equal(Blocks.shortcut("9:5"), null);
   assert.equal(Blocks.kindAfterEnter("habit", true), "habit");

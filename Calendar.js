@@ -293,7 +293,9 @@ function quick(text, now, onDay) {
   // The longest day and time at the end ("... fri 12:30"), else at the start.
   for (var k = 1; k < words.length && !found; k++) {
     var p = Dates.parse(words.slice(k).join(" "), n)
-    if (p) { found = p; cut = k }
+    // A day name straight after "with" is someone's name; a later time can
+    // still be when ("Meeting with Wednesday 1pm").
+    if (p && words[k - 1].toLowerCase() !== "with") { found = p; cut = k }
   }
   var title = ""
   if (found) title = words.slice(0, cut).join(" ")

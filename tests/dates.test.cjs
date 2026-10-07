@@ -20,13 +20,23 @@ check("days", () => {
   assert.equal(read("tomorrow"), "2026-10-01");
   assert.equal(read("yesterday"), "2026-09-29");
   assert.equal(read("fri"), "2026-10-02");
-  assert.equal(read("wednesday"), "2026-10-07", "a weekday is the next one, not today");
+  assert.equal(read("wednesday"), "2026-09-30", "a weekday can mean today");
+  assert.equal(read("wednesday 3pm"), "2026-09-30T15:00", "today when its time is still to come");
+  assert.equal(read("wednesday 1pm"), "2026-10-07T13:00", "next week when its time has gone by");
   assert.equal(read("next monday"), "2026-10-05");
+  assert.equal(read("next wednesday"), "2026-10-07");
+  assert.equal(read("this wednesday 1pm"), "2026-09-30T13:00", "this Wednesday stays today");
   assert.equal(read("this friday"), "2026-10-02");
   assert.equal(read("next week"), "2026-10-05", "next week starts on Monday");
   assert.equal(read("next month"), "2026-10-01");
   assert.equal(read("in 3 days"), "2026-10-03");
   assert.equal(read("in 2 weeks"), "2026-10-14");
+  const names = ["sunday", "sun", "monday", "mon", "tuesday", "tue", "tues", "wednesday", "wed", "weds",
+    "thursday", "thu", "thur", "thurs", "friday", "fri", "saturday", "sat"];
+  for (const name of names) assert.notEqual(Dates.dayIndex(name), -1, name);
+  for (const name of ["Frida", "Mona", "Sunny", "Wedge"]) assert.equal(Dates.dayIndex(name), -1, name + " stays a name");
+  assert.equal(read("tom 3pm"), null, "Tom stays a name");
+  assert.equal(read("tmrw 3pm"), "2026-10-01T15:00", "tmrw is tomorrow");
 });
 
 check("dates", () => {
@@ -41,6 +51,18 @@ check("dates", () => {
 });
 
 check("times", () => {
+  Dates.setTwelveHour(true);
+  assert.equal(Dates.parseTime("1"), 13 * 60, "a bare early hour is in the afternoon");
+  assert.equal(Dates.parseTime("6"), 18 * 60);
+  assert.equal(Dates.parseTime("7"), 7 * 60);
+  assert.equal(Dates.parseTime("12"), 12 * 60);
+  assert.equal(Dates.parseTime("01"), 1 * 60, "a leading zero says 24-hour time");
+  assert.equal(Dates.parseTime("06:30"), 6 * 60 + 30);
+  assert.equal(Dates.parseTime("13:00"), 13 * 60);
+  assert.equal(Dates.parseTime("3:30"), 15 * 60 + 30, "minutes follow a 12-hour clock");
+  Dates.setTwelveHour(false);
+  assert.equal(Dates.parseTime("3:30"), 3 * 60 + 30, "minutes follow a 24-hour clock when selected");
+  Dates.setTwelveHour(true);
   assert.equal(read("tomorrow 9am"), "2026-10-01T09:00");
   assert.equal(read("tomorrow at 9:30pm"), "2026-10-01T21:30");
   assert.equal(read("fri noon"), "2026-10-02T12:00");

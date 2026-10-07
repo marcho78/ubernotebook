@@ -306,7 +306,8 @@ Item {
     function test_14_dates_with_at() {
       page([""])
       focusAt(0, 0)
-      type("due @tom")
+      // "Tom" stays a person's name; "tmrw" is the short form for tomorrow.
+      type("due @tmrw")
       wait(0)
       verify(editor.mention !== null)
       compare(editor.mention.kind, "date")

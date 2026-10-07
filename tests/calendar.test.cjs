@@ -83,7 +83,7 @@ check("side by side", () => {
 
 check("what's typed", () => {
   const now = D(2026, 10, 2, 8, 0); // a Friday
-  assert.deepEqual(plain(C.quick("Lunch with Sam fri 12:30", now)), { title: "Lunch with Sam", start: "2026-10-09T12:30", end: "2026-10-09T13:30", allDay: false });
+  assert.deepEqual(plain(C.quick("Lunch with Sam fri 12:30", now)), { title: "Lunch with Sam", start: "2026-10-02T12:30", end: "2026-10-02T13:30", allDay: false }, "this Friday, while lunch is still to come");
   assert.deepEqual(plain(C.quick("Standup tomorrow 9:30-9:45", now)), { title: "Standup", start: "2026-10-03T09:30", end: "2026-10-03T09:45", allDay: false });
   assert.deepEqual(plain(C.quick("Dentist oct 12 3pm for 30 min", now)), { title: "Dentist", start: "2026-10-12T15:00", end: "2026-10-12T15:30", allDay: false });
   assert.deepEqual(plain(C.quick("Review 9-10am", now)), { title: "Review", start: "2026-10-02T09:00", end: "2026-10-02T10:00", allDay: false }, "9-10am: 9 in the morning");
@@ -98,6 +98,25 @@ check("what's typed", () => {
   assert.deepEqual(plain(C.quick("Review 9-10am", now, oct20)), { title: "Review", start: "2026-10-20T09:00", end: "2026-10-20T10:00", allDay: false });
   assert.equal(plain(C.quick("Dentist oct 12 3pm", now, oct20)).start, "2026-10-12T15:00");
   assert.equal(plain(C.quick("Wake 7:00", now)).start, "2026-10-03T07:00", "no day asked for: today's gone by, tomorrow");
+
+  // A weekday immediately after "with" is a name, not the start of when.
+  const wed = D(2026, 10, 7, 12, 39);
+  const wedDay = D(2026, 10, 7);
+  assert.equal(C.quick("Meeting with Wednesday", wed, wedDay), null, "Quick Add keeps the whole title on the day asked for");
+  assert.deepEqual(plain(C.quick("Meeting with Wednesday 1pm", wed, wedDay)),
+    { title: "Meeting with Wednesday", start: "2026-10-07T13:00", end: "2026-10-07T14:00", allDay: false });
+  assert.equal(C.quick("Meeting with Tom", wed, wedDay), null, "Tom stays in the title");
+  assert.deepEqual(plain(C.quick("Meeting with Tom 3pm", wed, wedDay)),
+    { title: "Meeting with Tom", start: "2026-10-07T15:00", end: "2026-10-07T16:00", allDay: false });
+  assert.equal(C.quick("Lunch with Monday crew", wed, wedDay), null);
+  assert.deepEqual(plain(C.quick("Meeting at 1", wed, wedDay)),
+    { title: "Meeting", start: "2026-10-07T13:00", end: "2026-10-07T14:00", allDay: false });
+  assert.deepEqual(plain(C.quick("Meeting 3", wed, wedDay)),
+    { title: "Meeting", start: "2026-10-07T15:00", end: "2026-10-07T16:00", allDay: false });
+  assert.deepEqual(plain(C.quick("Breakfast 06:30", wed, wedDay)),
+    { title: "Breakfast", start: "2026-10-07T06:30", end: "2026-10-07T07:30", allDay: false });
+  assert.deepEqual(plain(C.quick("Sync 13:00", wed, wedDay)),
+    { title: "Sync", start: "2026-10-07T13:00", end: "2026-10-07T14:00", allDay: false });
 });
 
 check("changing it", () => {

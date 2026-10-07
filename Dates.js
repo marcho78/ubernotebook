@@ -12,11 +12,23 @@
 .pragma library
 
 var DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+var DAY_WORDS = [
+  ["sunday", "sun"],
+  ["monday", "mon"],
+  ["tuesday", "tue", "tues"],
+  ["wednesday", "wed", "weds"],
+  ["thursday", "thu", "thur", "thurs"],
+  ["friday", "fri"],
+  ["saturday", "sat"]
+]
 var MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
 var SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 var SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 // When a reminder with no time of its own comes: 9 in the morning.
 var MORNING = 9
+var clock12 = true
+function twelveHour() { return clock12 }
+function setTwelveHour(on) { clock12 = !!on }
 
 function pad(n) { return (n < 10 ? "0" : "") + n }
 
@@ -24,11 +36,10 @@ function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDat
 
 function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, d.getHours(), d.getMinutes()) }
 
-// A day's name (or the start of it: "wed", "thurs") -> 0..6, or -1.
+// A day's full name or its usual short form ("wed", "thurs") -> 0..6, or -1.
 function dayIndex(word) {
   var w = String(word || "").toLowerCase()
-  if (w.length < 2) return -1
-  for (var i = 0; i < DAYS.length; i++) if (DAYS[i].indexOf(w) === 0) return i
+  for (var i = 0; i < DAY_WORDS.length; i++) if (DAY_WORDS[i].indexOf(w) >= 0) return i
   return -1
 }
 
@@ -56,6 +67,8 @@ function parseTime(text) {
     if (m[3].charAt(0) === "a" && h === 12) h = 0
   } else if (h > 23) {
     return -1
+  } else if (h >= 1 && h <= 6 && !/^0\d/.test(m[1]) && (!m[2] || twelveHour())) {
+    h += 12
   }
   return h * 60 + min
 }
@@ -68,6 +81,7 @@ function parse(text, now) {
   if (words.length === 0) return null
   var day = null
   var minutes = -1
+  var sameBareWeekday = false
   var i = 0
   function rest() { return words.slice(i).join(" ") }
 
@@ -84,7 +98,7 @@ function parse(text, now) {
     i = 3
   } else if (words[0] === "today" || words[0] === "tod") { day = startOfDay(n); i = 1 }
   else if (words[0] === "tonight") { day = startOfDay(n); minutes = 20 * 60; i = 1 }
-  else if (words[0] === "tomorrow" || words[0] === "tmr" || words[0] === "tom") { day = addDays(startOfDay(n), 1); i = 1 }
+  else if (words[0] === "tomorrow" || words[0] === "tmr" || words[0] === "tmrw") { day = addDays(startOfDay(n), 1); i = 1 }
   else if (words[0] === "yesterday") { day = addDays(startOfDay(n), -1); i = 1 }
   else if (words[0] === "next" && words[1] === "week") { day = addDays(startOfDay(n), 7 - (n.getDay() + 6) % 7); i = 2 }
   else if (words[0] === "next" && words[1] === "month") { day = new Date(n.getFullYear(), n.getMonth() + 1, 1); i = 2 }
@@ -97,7 +111,8 @@ function parse(text, now) {
   } else if (dayIndex(words[0]) >= 0 && monthIndex(words[0]) < 0) {
     var d0 = dayIndex(words[0])
     var diff = (d0 - n.getDay() + 7) % 7
-    day = addDays(startOfDay(n), diff === 0 ? 7 : diff)
+    day = addDays(startOfDay(n), diff)
+    sameBareWeekday = diff === 0
     i = 1
   } else if (/^\d{4}-\d{2}-\d{2}(t\d{2}:\d{2})?$/.test(words[0])) {
     var iso = fromIso(words[0].replace("t", "T"))
@@ -134,7 +149,11 @@ function parse(text, now) {
     if (tm < 0) return null
     minutes = tm
   }
-  if (minutes >= 0) return { at: new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(minutes / 60), minutes % 60), time: true }
+  if (minutes >= 0) {
+    var timed = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(minutes / 60), minutes % 60)
+    if (sameBareWeekday && timed < n) timed = addDays(timed, 7)
+    return { at: timed, time: true }
+  }
   return { at: day, time: false }
 }
 
