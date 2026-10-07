@@ -10,6 +10,14 @@ The first version.
 
 ### Changed
 
+- **Dates and times read the way you mean them.** On a Wednesday,
+  "Meeting with Wednesday" was saved as "Meeting with" on *next*
+  Wednesday, so it seemed nothing was added. Now a day's name on that
+  day is today (unless its time has gone by); nothing right after "with"
+  is taken for a date; only full day names and their usual short forms
+  are days ("Frida", "Mona" are names; "tom" is no longer tomorrow:
+  "tmr", "tmrw"); and an hour from 1 to 6 with no am/pm is the afternoon
+  ("at 1" is 1 pm, not 1 am tomorrow). In the calendar and in `@` dates.
 - **Times on a 12-hour clock, or 24.** Times were only ever 13:00. Now
   Settings → Writing → Times has a Clock: **1:30 pm** (the default) or
   **13:30**, for every time Uber Notebook shows: the calendar, events,
