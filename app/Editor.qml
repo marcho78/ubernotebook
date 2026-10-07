@@ -3153,7 +3153,9 @@ FocusScope {
     var r = blocksModel.get(index)
     if (!Blocks.isText(type) || !Blocks.isText(r.type)) return
     blocksModel.setProperty(index, "type", type)
-    if (!Blocks.canIndent(type)) blocksModel.setProperty(index, "indent", 0)
+    // (In a notebook a heading, a quote or a note isn't indented. In Pages
+    // a block stays where it is: in a column, a toggle, a callout.)
+    if (!doc && !Blocks.canIndent(type)) blocksModel.setProperty(index, "indent", 0)
     blocksModel.setProperty(index, "checked", type === "check" && checked === true)
     if (type === "callout" && !r.tone) blocksModel.setProperty(index, "tone", "yellow")
     if (type === "habit" && !/^[01]{7}$/.test(r.days)) blocksModel.setProperty(index, "days", Blocks.NO_DAYS)

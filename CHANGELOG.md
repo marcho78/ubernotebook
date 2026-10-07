@@ -10,6 +10,11 @@ The first version.
 
 ### Changed
 
+- **A heading in a column stays in it.** Making a line a heading (`# `,
+  `/h1`, Ctrl+Alt+1), a quote or a note in Pages took it to the top of the
+  page, the notebook's rule: in a column the columns came apart, everything
+  in them one after another; in a toggle or a callout it came out of it.
+  It stays where it is now.
 - **A diagram saved right after it's copied.** *Save as a picture* just
   after *Copy as a picture* could say "The picture couldn't be saved": the
   first picture's maker was still being put away. It's free before the

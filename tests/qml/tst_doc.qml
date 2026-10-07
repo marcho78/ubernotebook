@@ -730,6 +730,44 @@ Item {
       compare(locked, 1, "a locked page: nothing")
     }
 
+    // A line made a heading (or a quote) stays where it is: in a column, a
+    // toggle. It used to go to the page's top, and columns came apart.
+    function test_26_a_heading_stays_where_it_is() {
+      var cols = [{ type: "columns" }, { type: "column", indent: 1 }, { type: "p", html: "", indent: 2 }, { type: "p", html: "under", indent: 2 },
+        { type: "column", indent: 1 }, { type: "p", html: "right", indent: 2 }, ""]
+      page(cols)
+      focusAt(2, 0)
+      type("# ")
+      compare(types(), "columns,column,h1,p,column,p,p", "typed #: a heading, in its column")
+      compare(depths(), "0,1,2,2,1,2,0")
+      type("Plan")
+      compare(texts(), "||Plan|under||right|")
+      page(cols)
+      focusAt(2, 0)
+      keyClick(Qt.Key_2, Qt.ControlModifier | Qt.AltModifier)
+      compare(types(), "columns,column,h2,p,column,p,p", "Ctrl+Alt+2")
+      compare(depths(), "0,1,2,2,1,2,0")
+      page(cols)
+      focusAt(2, 0)
+      type("\" ")
+      compare(types(), "columns,column,quote,p,column,p,p", "a quote")
+      compare(depths(), "0,1,2,2,1,2,0")
+      page(cols)
+      focusAt(2, 0)
+      type("/h3")
+      keyClick(Qt.Key_Return)
+      compare(types(), "columns,column,h3,p,column,p,p", "/h3")
+      compare(depths(), "0,1,2,2,1,2,0")
+      // In a toggle: inside it still.
+      page([{ type: "toggle", html: "Plan" }, { type: "p", html: "", indent: 1 }, { type: "p", html: "more", indent: 1 }, "after"])
+      focusAt(1, 0)
+      type("## ")
+      compare(types(), "toggle,h2,p,p")
+      compare(depths(), "0,1,1,0", "in the toggle")
+      editor.undo()
+      compare(types(), "toggle,p,p,p")
+    }
+
     function test_10_placeholders_and_empty_toggles() {
       page([{ type: "h1", html: "" }, { type: "toggle", html: "Empty" }])
       verify(item(1).emptyToggle, "an open toggle with nothing in it says so")
