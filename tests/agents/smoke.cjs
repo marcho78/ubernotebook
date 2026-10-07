@@ -151,8 +151,10 @@ function cleanUp() {
   if (keep) { console.log(`kept: ${work} and ${base}`); return; }
   // (What the agents kept of these runs, and only that: their sessions for
   // these folders.)
-  // (Codex keeps its sessions by date, not by folder: the run's are found by
-  // the folder they name, and taken away with them.)
+  // (Codex keeps its sessions by date, not by folder: a run's is the one
+  // whose first record, its session_meta, says it worked in one of the run's
+  // folders (made for it, with a random name); nothing that only mentions
+  // one.)
   const codexRoot = path.join(os.homedir(), ".codex", "sessions");
   const started = new Date(t0run);
   for (const day of [started, new Date()].map((d) => path.join(codexRoot, String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")))) {
@@ -160,7 +162,11 @@ function cleanUp() {
     try { names = fs.readdirSync(day); } catch {}
     for (const n of names) {
       const f = path.join(day, n);
-      try { if (fs.statSync(f).mtimeMs >= t0run && dirs.some((d) => fs.readFileSync(f, "utf8").slice(0, 200000).includes(`"cwd":"${d}"`) || fs.readFileSync(f, "utf8").slice(0, 200000).includes(`<cwd>${d}</cwd>`))) fs.rmSync(f, { force: true }); } catch {}
+      try {
+        if (!n.endsWith(".jsonl") || fs.statSync(f).mtimeMs < t0run) continue;
+        const first = JSON.parse(fs.readFileSync(f, "utf8").split("\n", 1)[0]);
+        if (first && first.type === "session_meta" && first.payload && dirs.includes(first.payload.cwd)) fs.rmSync(f, { force: true });
+      } catch {}
     }
   }
   for (const d of dirs) {
