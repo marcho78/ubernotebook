@@ -382,6 +382,7 @@ takes them along.
 | Columns | Drag a block up the right side of another: the two go side by side (drop more beside them for up to six). Or `/2 columns` … `/5 columns`. Drag the gap between two columns to share the width differently |
 | Turn it into another kind, color it, duplicate it, move it to another page, delete it | Click **⋮⋮** |
 | Put a block inside the one above it, or take it out | **Tab**, **Shift+Tab** |
+| Get out of a list, a toggle or a callout | **Enter** on an empty line (a level at a time; at the top, a list item becomes text), **Alt+Enter** for a new line below all of it, or click under the page's last block |
 | Fold a toggle, or unfold it | Click its arrow, or **Ctrl+Enter** |
 | Bold, italic, underline, strikethrough, code, a link, a color | Select the words: a toolbar comes up over them (or the notebook's shortcuts: Ctrl+B, Ctrl+I…) |
 | Markdown as you type | `**bold**`, `*italic*`, `` `code` ``, `~~struck~~`; at the start of a line `# `, `- `, `1. `, `[] `, `> ` (a toggle), `" ` (a quote), ```` ``` ```` |

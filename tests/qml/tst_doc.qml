@@ -585,6 +585,132 @@ Item {
       compare(texts(), "|two")
     }
 
+    // Getting out of whatever a line is in: Enter on an empty line, a level
+    // at a time; Alt+Enter, below all of it; a click under the last block.
+    function test_23_enter_on_an_empty_line_steps_out() {
+      page([{ type: "toggle", html: "Plan" }, { type: "p", html: "inside", indent: 1 }, "after"])
+      focusAt(1, -1)
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,1,0", "Enter at the end of a line in a toggle: another in it")
+      keyClick(Qt.Key_Return)
+      compare(types(), "toggle,p,p,p")
+      compare(depths(), "0,1,0,0", "Enter on that empty line: out of the toggle")
+      compare(editor.focusUid, editor.uidAt(2))
+      type("next")
+      compare(texts(), "Plan|inside|next|after")
+      // In a callout, the same.
+      page([{ type: "callout", html: "Note" }, "after"])
+      focusAt(0, -1)
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,0")
+      keyClick(Qt.Key_Return)
+      compare(types(), "callout,p,p")
+      compare(depths(), "0,0,0", "out of the callout")
+      // Lists: a level at a time, then text.
+      page([{ type: "bullet", html: "a" }, { type: "bullet", html: "b", indent: 1 }, { type: "check", html: "c", indent: 2 }])
+      focusAt(2, -1)
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,2,2")
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,2,1")
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,2,0")
+      compare(types(), "bullet,bullet,check,check", "a to-do stays one as it comes out")
+      keyClick(Qt.Key_Return)
+      compare(types(), "bullet,bullet,check,p", "at the top, text")
+      compare(depths(), "0,1,2,0")
+      // An empty toggle inside another: out, a toggle still, with what's in it.
+      page([{ type: "toggle", html: "Outer" }, { type: "toggle", html: "", indent: 1 }, { type: "p", html: "kept", indent: 2 }])
+      focusAt(1, 0)
+      keyClick(Qt.Key_Return)
+      compare(types(), "toggle,toggle,p")
+      compare(depths(), "0,0,1")
+      // Text under a bullet.
+      page([{ type: "bullet", html: "a" }, { type: "p", html: "", indent: 1 }])
+      focusAt(1, 0)
+      keyClick(Qt.Key_Return)
+      compare(types(), "bullet,p")
+      compare(depths(), "0,0")
+      // Not out of a column: an empty line there is just another line.
+      page([{ type: "columns" }, { type: "column", indent: 1 }, { type: "toggle", html: "T", indent: 2 }, { type: "p", html: "", indent: 3 },
+        { type: "column", indent: 1 }, { type: "p", html: "right", indent: 2 }, ""])
+      focusAt(3, 0)
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,2,2,1,2,0", "out of the toggle, into its column")
+      keyClick(Qt.Key_Return)
+      compare(types(), "columns,column,toggle,p,p,column,p,p")
+      compare(depths(), "0,1,2,2,2,1,2,0", "still in the column")
+      editor.undo()
+      compare(depths(), "0,1,2,2,1,2,0", "a step to undo")
+    }
+
+    function test_24_alt_enter_below_all_of_it() {
+      page([{ type: "bullet", html: "a" }, { type: "bullet", html: "b", indent: 1 }, { type: "check", html: "c", indent: 2 },
+        { type: "bullet", html: "d", indent: 1 }, "after"])
+      focusAt(2, 1)
+      keyClick(Qt.Key_Return, Qt.AltModifier)
+      compare(types(), "bullet,bullet,check,bullet,p,p")
+      compare(depths(), "0,1,2,1,0,0", "a line after the whole list, at the top")
+      compare(texts(), "a|b|c|d||after", "and nothing split off")
+      compare(editor.focusUid, editor.uidAt(4))
+      editor.undo()
+      compare(texts(), "a|b|c|d|after", "a step to undo")
+      // From inside a toggle, open or not.
+      page([{ type: "toggle", html: "T" }, { type: "p", html: "in", indent: 1 }, { type: "p", html: "deeper", indent: 2 }])
+      focusAt(2, -1)
+      keyClick(Qt.Key_Return, Qt.AltModifier)
+      compare(depths(), "0,1,2,0")
+      editor.setCollapsed(editor.uidAt(0), true)
+      focusAt(0, -1)
+      keyClick(Qt.Key_Return, Qt.AltModifier)
+      compare(depths(), "0,1,2,0,0", "after everything folded in it")
+      compare(editor.focusUid, editor.uidAt(3))
+      // A line at the top with lines in it: after them.
+      page(["top", { type: "p", html: "in", indent: 1 }, "after"])
+      focusAt(0, -1)
+      keyClick(Qt.Key_Return, Qt.AltModifier)
+      compare(texts(), "top|in||after")
+      compare(depths(), "0,1,0,0")
+      // In a column: out to the column's level, not out of the columns.
+      page([{ type: "columns" }, { type: "column", indent: 1 }, { type: "toggle", html: "T", indent: 2 }, { type: "p", html: "in", indent: 3 },
+        { type: "column", indent: 1 }, { type: "p", html: "right", indent: 2 }, ""])
+      focusAt(3, -1)
+      keyClick(Qt.Key_Return, Qt.AltModifier)
+      compare(types(), "columns,column,toggle,p,p,column,p,p")
+      compare(depths(), "0,1,2,3,2,1,2,0")
+      // Shift+Enter is still a new line in the same block.
+      page([{ type: "check", html: "one", indent: 0 }])
+      focusAt(0, -1)
+      keyClick(Qt.Key_Return, Qt.ShiftModifier)
+      compare(types(), "check")
+    }
+
+    function test_25_a_click_under_the_last_block() {
+      page(["intro", { type: "bullet", html: "a" }, { type: "bullet", html: "b", indent: 1 }])
+      editor.clickBelow()
+      compare(types(), "p,bullet,bullet,p", "a new line, not back in the list")
+      compare(depths(), "0,0,1,0")
+      compare(editor.focusUid, editor.uidAt(3))
+      editor.clickBelow()
+      compare(blocks().length, 4, "the empty line already there, not another")
+      compare(editor.focusUid, editor.uidAt(3))
+      page([{ type: "toggle", html: "T" }, { type: "p", html: "in", indent: 1 }])
+      editor.clickBelow()
+      compare(depths(), "0,1,0", "out of a toggle it ends with")
+      page(["last words"])
+      editor.clickBelow()
+      compare(texts(), "last words|", "after text, a new line too")
+      page([{ type: "toggle", html: "T" }, { type: "p", html: "", indent: 1 }])
+      editor.clickBelow()
+      compare(depths(), "0,1,0", "an empty line inside a toggle isn't the page's own")
+      editor.readOnly = true
+      page(["x"])
+      editor.clickBelow()
+      var locked = blocks().length
+      editor.readOnly = false
+      compare(locked, 1, "a locked page: nothing")
+    }
+
     function test_10_placeholders_and_empty_toggles() {
       page([{ type: "h1", html: "" }, { type: "toggle", html: "Empty" }])
       verify(item(1).emptyToggle, "an open toggle with nothing in it says so")

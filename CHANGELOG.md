@@ -10,6 +10,14 @@ The first version.
 
 ### Changed
 
+- **Getting out of a list or toggle.** In a toggle or a callout, Enter on an
+  empty line only made another one inside it; the only ways out were
+  Shift+Tab or Backspace. Now Enter on an empty line takes it out a level,
+  in anything (lists already did), but not out of a column. **Alt+Enter**
+  starts a new line below the whole list or toggle you're in, from any
+  depth. A click under the page's last block starts a new line at the
+  page's own level, not back at the end of a list or toggle the page ends
+  with.
 - **The + beside a block stays put.** On a to-do or a toggle, coming to
   the + (or the ⋮⋮) from above, they went as you reached them and came back
   as you moved, blinking: on them the hover is theirs, not the block's.

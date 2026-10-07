@@ -1099,6 +1099,19 @@ FocusScope {
     if (item) item.edit.insert(0, "/")
   }
 
+  // Alt+Enter: a new line after the outermost block this one is in (the
+  // whole list or toggle), at the page's own level, or its column's.
+  function breakOut(uid) {
+    var i = indexOf(uid)
+    if (i < 0 || readOnly) return
+    var top = i
+    for (var p = parentIndex(i); p >= 0 && !Workspace.isStructure(blocksModel.get(p).type); p = parentIndex(p)) top = p
+    beginOp()
+    var line = insertBlock(subtreeEnd(top) + 1, { type: "p", indent: blocksModel.get(top).indent }, "")
+    endOp()
+    focusBlock(line, 0)
+  }
+
   // The first block inside a toggle (or any block that can hold one).
   function addChild(uid) {
     var i = indexOf(uid)
@@ -2555,11 +2568,16 @@ FocusScope {
     focusEnd()
   }
 
-  // A click on empty paper under the last block: write there.
+  // A click on empty paper under the last block: write there. In Pages, on a
+  // new line at the page's own level, out of a list or toggle it ends with
+  // (or on the empty line already there).
   function clickBelow() {
     if (readOnly) return
     var last = blocksModel.count - 1
-    if (last >= 0 && Blocks.isText(blocksModel.get(last).type)) { focusBlock(uidAt(last), -1); return }
+    if (doc) {
+      var r = last >= 0 ? blocksModel.get(last) : null
+      if (r && r.type === "p" && r.indent === 0 && Html.plainText(htmls[r.uid] || "") === "" && !(items[r.uid] && items[r.uid].edit.length > 0)) { focusBlock(r.uid, 0); return }
+    } else if (last >= 0 && Blocks.isText(blocksModel.get(last).type)) { focusBlock(uidAt(last), -1); return }
     beginOp()
     var uid = insertBlock(blocksModel.count, { type: "p" }, "")
     endOp()
@@ -2712,6 +2730,12 @@ FocusScope {
         else if (doc && Workspace.folds(rowBlock(blocksModel.get(indexOf(item.uid))))) toggleFold(item.uid)
         return
       }
+      if (doc && alt && !shift && !ctrl) {
+        e.accepted = true
+        autoEmail(item, true)
+        breakOut(item.uid)
+        return
+      }
       if (shift || alt) return
       e.accepted = true
       // (An email just typed at the end: a link first.)
@@ -2847,8 +2871,11 @@ FocusScope {
     }
 
     // An empty list item, quote, note, habit or toggle: the list ends here.
-    if (len === 0 && (Blocks.isList(type) || type === "quote" || (type === "callout" && !doc) || type === "habit" || type === "toggle")) {
-      if (r.indent > 0 && Blocks.isList(type) && !(doc && inColumn(index))) {
+    // In Pages any empty block inside another steps out of it, a level at a
+    // time (not out of a column), so Enter on empty lines always gets out.
+    var nested = doc && r.indent > 0 && !inColumn(index)
+    if (len === 0 && (nested || Blocks.isList(type) || type === "quote" || (type === "callout" && !doc) || type === "habit" || type === "toggle")) {
+      if (doc ? nested : r.indent > 0 && Blocks.isList(type)) {
         var last = doc ? subtreeEnd(index) : index
         for (var k = index; k <= last; k++) blocksModel.setProperty(k, "indent", blocksModel.get(k).indent - 1)
       }

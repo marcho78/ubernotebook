@@ -17,6 +17,7 @@ Everything on a page is a **block**: a line of text, a heading, a to-do, a pictu
 - [ ] Start a line with `# `, `- `, `1. ` or `[] ` for a heading, a list or a to-do
 - [ ] Type **:** and a name for an emoji: `:rocket` gives 🚀
 - [ ] **Tab** puts a block inside the one above it, **Shift+Tab** takes it out
+- [ ] **Enter** on an empty line takes it out of a list or toggle, a level at a time; **Alt+Enter** starts a new line below all of it
 
 ## Text
 
