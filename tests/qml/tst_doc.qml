@@ -598,6 +598,25 @@ Item {
       compare(editor.focusUid, editor.uidAt(2))
       type("next")
       compare(texts(), "Plan|inside|next|after")
+      // In the middle of what's in it: another line there, nothing after it
+      // taken out of the toggle with it.
+      page([{ type: "toggle", html: "Plan" }, { type: "p", html: "first", indent: 1 }, { type: "p", html: "", indent: 1 },
+        { type: "p", html: "later", indent: 1 }, "after"])
+      focusAt(2, 0)
+      keyClick(Qt.Key_Return)
+      compare(types(), "toggle,p,p,p,p,p")
+      compare(depths(), "0,1,1,1,1,0", "still in the toggle, and what's after it too")
+      page([{ type: "toggle", html: "Plan" }, { type: "h2", html: "", indent: 1 }, { type: "p", html: "later", indent: 1 },
+        { type: "p", html: "too", indent: 1 }, "after"])
+      focusAt(1, 0)
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,1,1,1,0", "an empty heading in the middle: nothing comes out")
+      page([{ type: "toggle", html: "Plan" }, { type: "toggle", html: "", indent: 1 }, { type: "p", html: "kept", indent: 2 },
+        { type: "p", html: "later", indent: 1 }])
+      focusAt(1, 0)
+      keyClick(Qt.Key_Return)
+      compare(depths(), "0,1,2,1", "an empty toggle in the middle stays in, with what's in it")
+      compare(texts(), "Plan||kept|later")
       // In a callout, the same.
       page([{ type: "callout", html: "Note" }, "after"])
       focusAt(0, -1)

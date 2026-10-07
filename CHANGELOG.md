@@ -12,8 +12,10 @@ The first version.
 
 - **Getting out of a list or toggle.** In a toggle or a callout, Enter on an
   empty line only made another one inside it; the only ways out were
-  Shift+Tab or Backspace. Now Enter on an empty line takes it out a level,
-  in anything (lists already did), but not out of a column. **Alt+Enter**
+  Shift+Tab or Backspace. Now Enter on an empty line at the end of what's
+  in a block takes it out a level (a list item, from anywhere, as before),
+  but not out of a column; in the middle it's another line there, so
+  nothing after it comes out with it. **Alt+Enter**
   starts a new line below the whole list or toggle you're in, from any
   depth. A click under the page's last block starts a new line at the
   page's own level, not back at the end of a list or toggle the page ends

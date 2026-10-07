@@ -2871,9 +2871,13 @@ FocusScope {
     }
 
     // An empty list item, quote, note, habit or toggle: the list ends here.
-    // In Pages any empty block inside another steps out of it, a level at a
-    // time (not out of a column), so Enter on empty lines always gets out.
-    var nested = doc && r.indent > 0 && !inColumn(index)
+    // In Pages an empty block that's the last inside another steps out of
+    // it, a level at a time (not out of a column), so Enter on empty lines
+    // always gets out; in the middle, it's another line there (out, it'd take
+    // what's after it along). A list item steps out from anywhere, as ever.
+    var after = doc ? subtreeEnd(index) + 1 : -1
+    var lastInside = after >= blocksModel.count || (after >= 0 && blocksModel.get(after).indent < r.indent)
+    var nested = doc && r.indent > 0 && !inColumn(index) && (Blocks.isList(type) || lastInside)
     if (len === 0 && (nested || Blocks.isList(type) || type === "quote" || (type === "callout" && !doc) || type === "habit" || type === "toggle")) {
       if (doc ? nested : r.indent > 0 && Blocks.isList(type)) {
         var last = doc ? subtreeEnd(index) : index
