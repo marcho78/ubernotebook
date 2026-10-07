@@ -56,6 +56,9 @@ Item {
       // (On a 12-hour clock, in the month, whatever the test before left.)
       if (service.settings.clock !== "12") service.setSetting("clock", "12")
       if (service.settings.calendarView !== "month") service.setSetting("calendarView", "month")
+      // (And the calendar open since, which read it only once.)
+      if (view.calendarView.mode !== "month") view.calendarView.mode = "month"
+      compare(view.calendarView.mode, "month")
       files.reset()
       view.page = null
       view.calendarShown = false
@@ -247,11 +250,9 @@ Item {
       var p1 = dst.mapToItem(root, dst.width / 2, dst.height - 10)
       mousePress(root, p0.x, p0.y)
       for (var i = 1; i <= 10; i++) mouseMove(root, p0.x + (p1.x - p0.x) * i / 10, p0.y + (p1.y - p0.y) * i / 10)
-      wait(30)
+      // (Over the day before it's let go: the pointer's moves can arrive late.)
+      tryVerify(function() { return cv().dragDay && Calendar.dayIso(cv().dragDay) === Calendar.dayIso(to) }, 1000, "dragged over the day")
       mouseRelease(root, p1.x, p1.y)
-      // (A moment for the drop to land: with more tests before it, this one
-      // ran at times when it hadn't, though it does.)
-      wait(300)
       tryVerify(function() { return ws.calendar.events[0].start === iso(to, 10) }, 1000, "moved, at its time")
       compare(ws.calendar.events[0].end, iso(to, 11))
       // In a week: an hour later, by dragging.
