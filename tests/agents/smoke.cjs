@@ -9,11 +9,12 @@
 // page is checked through Uber Notebook's commands; a pass/fail table, and
 // a report (JSON) in /tmp.
 //
-// It makes real requests on your accounts (a few cents a run). Not part of
+// Each with the model and effort you chose for it (Settings → AI). It makes
+// real requests on your accounts (a few cents a run). Not part of
 // ./tests/run: run it before a release.
 //
 // Usage (from the plugin directory):
-//   node tests/agents/smoke.cjs [grok] [claude] [--only <task>[,<task>...]] [--keep]
+//   node tests/agents/smoke.cjs [grok] [claude] [codex] [--only <task>[,<task>...]] [--keep]
 
 const fs = require("node:fs");
 const os = require("node:os");
@@ -25,7 +26,8 @@ const root = path.resolve(__dirname, "..", "..");
 const argv = process.argv.slice(2);
 const keep = argv.includes("--keep");
 const only = argv.includes("--only") ? String(argv[argv.indexOf("--only") + 1] || "").split(",") : [];
-const agents = ["grok", "claude"].filter((a) => !argv.some((x) => ["grok", "claude"].includes(x)) || argv.includes(a));
+const ALL = ["grok", "claude", "codex"];
+const agents = ALL.filter((a) => !argv.some((x) => ALL.includes(x)) || argv.includes(a));
 const runtime = process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`;
 const rand = () => crypto.randomBytes(6).toString("hex");
 
@@ -68,9 +70,19 @@ const tasks = [
 // Its commands: Service.qml's uber-notebook-agent ones, as they are there.
 function handlers() {
   const lines = fs.readFileSync(path.join(root, "Service.qml"), "utf8").split("\n")
-    .filter((l) => /^\s*function \w+\(.*\): string \{ return root\.scoped\(commands\.agent, "\w+", \[.*\], function\(\) \{ return apiItem\.\w+\(.*\) \}\) \}\s*$/.test(l));
-  if (lines.length < 50) throw new Error("Service.qml's commands weren't found");
-  return lines.map((l) => "    " + l.trim().replace("root.scoped(commands.agent, ", "smoke.scoped(").replace(/apiItem\./g, "api.")).join("\n");
+    .filter((l) => /^\s*function \w+\(.*\): string \{ return root\.scoped\(commands\.agent, "\w+", \[.*\], function\(\) \{ return (apiItem|root)\.\w+\(.*\}\) \}\s*$/.test(l));
+  if (lines.length < 50 || !lines.some((l) => /function skill\(/.test(l))) throw new Error("Service.qml's commands weren't found");
+  return lines.map((l) => "    " + l.trim().replace("root.scoped(commands.agent, ", "smoke.scoped(").replace(/apiItem\./g, "api.").replace(/root\./g, "smoke.")).join("\n");
+}
+
+// The models and efforts you chose for each (Settings → AI: shell.json),
+// so each runs as it does for you.
+function choices() {
+  try {
+    const find = (o) => !o || typeof o !== "object" ? null : o.id === "marcho78.uber-notebook" ? o : Object.values(o).map(find).find(Boolean) || null;
+    const e = find(JSON.parse(fs.readFileSync(path.join(os.homedir(), ".config", "omarchy", "shell.json"), "utf8"))) || {};
+    return Object.fromEntries(ALL.map((a) => [a, { model: String(e[a + "Model"] || ""), effort: String(e[a + "Effort"] || "") }]));
+  } catch { return {}; }
 }
 
 // Your shell's PATH: agents found where Uber Notebook finds them.
@@ -92,7 +104,7 @@ fs.writeFileSync(path.join(work, "shell", "shell.qml"), fs.readFileSync(path.joi
 const log = fs.openSync(path.join(work, "shell.log"), "w");
 const shell = spawn("/usr/bin/quickshell", ["-p", path.join(work, "shell", "shell.qml")], {
   env: { ...process.env, PATH: shellPath(), QT_QPA_PLATFORM: "offscreen", SMOKE_NOTES: path.join(work, "notes"), SMOKE_RUNTIME: base,
-    SMOKE_SKILL: path.join(root, "skills", "uber-notebook") },
+    SMOKE_SKILL: path.join(root, "skills", "uber-notebook"), SMOKE_CHOICES: JSON.stringify(choices()) },
   stdio: ["ignore", log, log], detached: true,
 });
 
@@ -112,6 +124,7 @@ async function until(test, ms, every = 500) {
 // ---- a run --------------------------------------------------------------------------------------
 
 const dirs = [];
+const t0run = Date.now();
 async function run(agent, task) {
   const page = call("smoke", "newPage", task.title);
   if (!/^[0-9a-f-]{36}$/.test(page)) return { ok: false, why: ["no page made: " + page] };
@@ -138,6 +151,18 @@ function cleanUp() {
   if (keep) { console.log(`kept: ${work} and ${base}`); return; }
   // (What the agents kept of these runs, and only that: their sessions for
   // these folders.)
+  // (Codex keeps its sessions by date, not by folder: the run's are found by
+  // the folder they name, and taken away with them.)
+  const codexRoot = path.join(os.homedir(), ".codex", "sessions");
+  const started = new Date(t0run);
+  for (const day of [started, new Date()].map((d) => path.join(codexRoot, String(d.getFullYear()), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")))) {
+    let names = [];
+    try { names = fs.readdirSync(day); } catch {}
+    for (const n of names) {
+      const f = path.join(day, n);
+      try { if (fs.statSync(f).mtimeMs >= t0run && dirs.some((d) => fs.readFileSync(f, "utf8").slice(0, 200000).includes(`"cwd":"${d}"`) || fs.readFileSync(f, "utf8").slice(0, 200000).includes(`<cwd>${d}</cwd>`))) fs.rmSync(f, { force: true }); } catch {}
+    }
+  }
   for (const d of dirs) {
     fs.rmSync(path.join(os.homedir(), ".grok", "sessions", encodeURIComponent(d)), { recursive: true, force: true });
     fs.rmSync(path.join(os.homedir(), ".claude", "projects", d.replace(/[^A-Za-z0-9]/g, "-")), { recursive: true, force: true });

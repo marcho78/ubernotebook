@@ -21,6 +21,10 @@ ShellRoot {
   readonly property string notes: Quickshell.env("SMOKE_NOTES") || ""
   readonly property string base: Quickshell.env("SMOKE_RUNTIME") || ""
   readonly property string skillDir: Quickshell.env("SMOKE_SKILL") || ""
+  // The model and effort you chose for each agent (smoke.cjs, from your settings).
+  readonly property var choices: { try { return JSON.parse(Quickshell.env("SMOKE_CHOICES") || "{}") } catch (e) { return {} } }
+  // (Service.skillText's: the skill, for its skill command.)
+  function skillText() { return store.readNow(skillDir + "/SKILL.md", 1024 * 1024) || "" }
   readonly property string grokHome: /^\//.test(String(Quickshell.env("GROK_HOME") || "")) ? String(Quickshell.env("GROK_HOME")) : String(Quickshell.env("HOME")) + "/.grok"
 
   UN.Store { id: store; folder: smoke.notes; active: smoke.notes !== ""; welcome: false }
@@ -78,7 +82,7 @@ ShellRoot {
     var prompt = Agent.prompt({ request: request, page: { id: pageId, title: page.title || "Untitled" }, scope: "page",
       skill: smoke.skillDir + "/SKILL.md", here: true, dir: dir, agent: agent })
     var session = { id: Agent.newSessionId(agent), resume: false }
-    var choice = { model: "", effort: "" }
+    var choice = smoke.choices[agent] || { model: "", effort: "" }
     var where = null
     function finish(code, failure) {
       st.done = true

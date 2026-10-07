@@ -19,6 +19,14 @@ check("the prompt says where you are and what you'd like", () => {
   assert.ok(page.includes("\u201cLisbon\u201d (page id p1)"));
   assert.ok(page.includes("What I'd like: Turn this into to-dos"));
   assert.ok(page.includes("Use the uber-notebook skill"), "it names the skill");
+  // A way to the skill that works in any sandbox, with no file tool: its
+  // command; reading isn't held back (Codex has no file tool but its shell).
+  const here = Agent.prompt({ request: "x", page: { id: "p", title: "T" }, scope: "page", skill: "/s/SKILL.md", here: true, dir: "/run/x/c-1", agent: "codex" });
+  assert.ok(here.includes("`omarchy-shell uber-notebook-agent skill`") && here.includes("`omarchy-shell uber-notebook-agent help`"), "in the panel: its commands' panel name");
+  assert.ok(!/no mktemp, cat or rm/.test(here) && !/only Uber Notebook's commands run/.test(here), "nothing that holds back reading");
+  assert.ok(here.includes("its skill excepted"), "the skill isn't one of the files it mayn't open");
+  const term = Agent.prompt({ request: "x", page: { id: "p", title: "T" }, scope: "page", skill: "/s/SKILL.md", here: false, agent: "codex" });
+  assert.ok(term.includes("`omarchy-shell uber-notebook skill`"), "in a terminal: the usual name");
   assert.ok(page.includes("  /plugins/uber-notebook/skills/uber-notebook/SKILL.md"), "and where it is, for harnesses without skills");
   assert.ok(page.includes("Read and change my notes only through those commands"), "the commands, not the files");
   const blocks = Agent.prompt(Object.assign({ scope: "blocks", blocks: ["b1", "b2"] }, base));

@@ -10,6 +10,12 @@ The first version.
 
 ### Changed
 
+- **Every agent can read the skill in the panel.** The panel's prompt told
+  agents "only Uber Notebook's commands run here (no mktemp, cat or rm)",
+  meant for what they write; Codex, which reads files only with its shell,
+  took it as no reading at all and stopped. It now names a way that works
+  in any sandbox, `omarchy-shell uber-notebook-agent skill` (and `help`),
+  besides the file, and says only how to write what a command takes.
 - **A file from outside the agent's folder: asked, not refused.** When the
   panel's agent gives a command a file from elsewhere, you're asked in the
   panel (*Allow once*, or *Always from* its folder, which Settings → AI

@@ -106,8 +106,10 @@ function prompt(o) {
     out.push("Here Uber Notebook's commands go under their panel name: run each as omarchy-shell uber-notebook-agent <command> ... "
       + "(the skill's omarchy-shell uber-notebook <command> ..., the same commands and arguments), and only so: if one's refused, "
       + "say why rather than trying it another way.")
-    if (o.dir) out.push("Here only Uber Notebook's commands run (no mktemp, cat or rm): write the Markdown a command takes with your "
-      + "file-writing tool, as a file in " + o.dir + " (your working folder), and give the command that file's full path.")
+    // (What it writes for a command: a file of its own, not one made in a
+    // shell; reading, the skill included, isn't held back.)
+    if (o.dir) out.push("Write the Markdown a command takes with your file-writing tool (not mktemp or a here-document), as a file in "
+      + o.dir + " (your working folder), and give the command that file's full path.")
     // (Codex's sandbox has no network here, which keeps its commands from
     // the shell's socket too: they go outside it, each reviewed by Codex.)
     if (o.agent === "codex") out.push("Your sandbox has no network here, and that keeps Uber Notebook's commands from reaching it "
@@ -115,15 +117,18 @@ function prompt(o) {
       + "permissions, outside the sandbox.")
     out.push("")
   }
+  // (One way to it that works in any sandbox and needs no file tool: the
+  // skill command, one of Uber Notebook's own; else the file.)
+  var name = o.here ? "omarchy-shell uber-notebook-agent" : "omarchy-shell uber-notebook"
   out.push("Use the uber-notebook skill: it explains the omarchy-shell uber-notebook commands that read and change my notes "
-    + "(blocks, read, replace, insertAfter, append, add, find). If your harness has no skill mechanism, "
-    + "read the skill file directly and follow it instead:")
+    + "(blocks, read, replace, insertAfter, append, add, find). Get it with `" + name + " skill`, which prints it (and `"
+    + name + " help` lists every command), or with your skill mechanism, or read the file directly:")
   out.push("")
   out.push("  " + o.skill)
   out.push("")
   out.push("Read and change my notes only through those commands: don't open the files my notes are kept in, or Uber Notebook's own "
-    + "files and code (the skill says what its commands and its Markdown can do). Change only what my request is about. "
-    + "When you're done, tell me what you changed.")
+    + "files and code, its skill excepted (the skill says what its commands and its Markdown can do). Change only what my request "
+    + "is about. When you're done, tell me what you changed.")
   return out.join("\n")
 }
 
