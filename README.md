@@ -1181,7 +1181,9 @@ Notebook's commands: they read and change your notes, as you ask.
   commands), with Always-approve off for these runs whatever your
   Grok settings say: anything beyond what it allows by itself (its read-only
   commands, in the sandbox) it asks for, and you're asked in the panel, as
-  for Claude Code. The commands it runs have the network (its sandbox
+  for Claude Code; Uber Notebook's own commands, each alone
+  (`omarchy-shell uber-notebook-agent …` with nothing chained to it), aren't
+  asked about, as Claude Code's aren't. The commands it runs have the network (its sandbox
   profile leaves it on). Allow rules saved in your own Grok settings still
   apply. Its profile is written by the files helper: a link put there is
   replaced, never written through.
@@ -1199,7 +1201,10 @@ Notebook's commands: they read and change your notes, as you ask.
   every step from the folder through no link; a picture Grok made with its
   image tool also from its own session for that conversation
   (`~/.grok/sessions/<its folder>/`), only a real picture, the same way; a
-  file from anywhere else is refused with where to put it instead; with no
+  file from anywhere else only once you say yes in the panel (*Allow once*,
+  or *Always from* its folder, kept in Settings → AI; never offered for your
+  home folder itself or a hidden one like `~/.ssh`), the command done then,
+  the file itself through no link; with no
   agent working in the panel, they do nothing. Taking things away is asked
   in the panel, one question for each thing: pages to the trash (*Allow
   once*, *Always*, *No*), and a person, an event or a tag removed, a

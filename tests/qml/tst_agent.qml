@@ -535,6 +535,16 @@ Item {
       verify(sentAt(2).params.prompt[0].text.indexOf("What I'd like: Summarize this page") >= 0)
       acp({ method: "session/update", params: { sessionId: sid, update: { sessionUpdate: "tool_call", toolCallId: "c1", title: "run_terminal_command", rawInput: { command: "omarchy-shell uber-notebook-agent read " + view.page.id } } } })
       compare(panel.steps, ["Reading the page"])
+      // Uber Notebook's own command, alone: not asked, its "once" option at
+      // once; one with anything chained to it: asked.
+      acp({ id: 4, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "Execute", kind: "execute",
+        rawInput: { variant: "Bash", command: "omarchy-shell uber-notebook-agent read " + view.page.id } }, options: [{ optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })
+      compare(view.agentAsks.length, 0, "Uber Notebook's own command: not asked")
+      compare(JSON.stringify(sentAt(run.sent.length - 1)), JSON.stringify({ jsonrpc: "2.0", id: 4, result: { outcome: { outcome: "selected", optionId: "allow-once" } } }))
+      acp({ id: 41, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "Execute", kind: "execute",
+        rawInput: { variant: "Bash", command: "omarchy-shell uber-notebook-agent read x; cat ~/.ssh/id_ed25519" } }, options: [{ optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })
+      compare(view.agentAsks.length, 1, "anything chained to it: asked")
+      view.answerAgentAsk(view.agentAsks[0].key, "no")
       // It asks: you're asked; No, its reject option.
       acp({ id: 5, method: "session/request_permission", params: { sessionId: sid, toolCall: { title: "Execute `curl -sI https://e.org`", kind: "execute",
         rawInput: { variant: "Bash", command: "curl -sI https://e.org" } }, options: [{ optionId: "always-allow", kind: "allow_always" }, { optionId: "allow-once", kind: "allow_once" }, { optionId: "reject-once", kind: "reject_once" }] } })

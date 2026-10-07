@@ -10,6 +10,13 @@ The first version.
 
 ### Changed
 
+- **A file from outside the agent's folder: asked, not refused.** When the
+  panel's agent gives a command a file from elsewhere, you're asked in the
+  panel (*Allow once*, or *Always from* its folder, which Settings → AI
+  lists and takes back; never your home folder itself or a hidden one), and
+  it's done when you say yes. Grok no longer asks you about each of Uber
+  Notebook's own commands it runs (one alone, nothing chained to it), as
+  Claude Code doesn't.
 - **A picture Grok makes goes on the page.** Grok's image tool saves what
   it makes in its own session for the conversation; a picture from there
   (only a real picture, through no link) is taken now. A file from

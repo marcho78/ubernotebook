@@ -1357,6 +1357,56 @@ Item {
       }
     }
 
+    // A file from outside the panel's agent's folders: asked about in the
+    // panel (Allow once; Always from its folder, never your home folder or a
+    // hidden one), the command run once you say yes; at once from a folder
+    // you've said Always to.
+    function test_33_a_file_from_outside_asked_about() {
+      fresh()
+      var home = named("Getting started")
+      var asks = []
+      var askUi = Qt.createQmlObject("import QtQuick; QtObject { property var asks: []; function askAgentPermission(req) { asks = asks.concat([req]); return true } }", root)
+      api.ui = askUi
+      var scope = { agent: "Grok", id: "grok", dir: "/tmp/in", talk: "c-1", grants: {} }
+      files.disk["/tmp/Pictures/bee.png"] = "PNG"
+      var ran = 0
+      function rerun(s) { ran++; api.caller = s; try { return api.attach(home, "/tmp/Pictures/bee.png") } finally { api.caller = null } }
+      var before = files.picturesIn.length
+      var out = json(api.askForFiles(scope, ["/tmp/Pictures/bee.png"], rerun))
+      compare(out.asked, true)
+      verify(/asked in the panel/.test(out.note) && /no need to run it again/.test(out.note), out.note)
+      compare(askUi.asks.length, 1)
+      var q = askUi.asks[0]
+      compare(q.detail, "/tmp/Pictures/bee.png")
+      compare([q.action, q.target, q.always].join("|"), "files|/tmp/Pictures|Always from ~/Pictures")
+      compare(ran, 0, "not before you answer")
+      q.run([])
+      compare(ran, 1, "run once you say yes")
+      tryVerify(function() { return files.picturesIn.length > before }, 2000)
+      var c = files.picturesIn[files.picturesIn.length - 1]
+      compare([c.from, c.within].join("|"), "/tmp/Pictures/bee.png|/tmp/Pictures", "from its folder, the file through no link")
+      // No: nothing done.
+      askUi.asks = []
+      ran = 0
+      api.askForFiles(scope, ["/tmp/Pictures/wasp.png"], rerun)
+      askUi.asks[0].no()
+      compare(ran, 0)
+      // Your home folder itself, or a hidden one: Allow once only.
+      askUi.asks = []
+      api.askForFiles(scope, ["/tmp/x.png"], rerun)
+      api.askForFiles(scope, ["/tmp/.ssh/k.png"], rerun)
+      compare(askUi.asks.map(function(r) { return r.always }).join("|"), "|", "no Always for them")
+      // A folder you've said Always to: at once, nothing asked.
+      askUi.asks = []
+      api.settings = { agentPermissions: [{ agent: "grok", action: "files", target: "/tmp/Pictures" }] }
+      ran = 0
+      api.askForFiles(scope, ["/tmp/Pictures/trip/moth.png"], rerun)
+      compare(ran, 1)
+      compare(askUi.asks.length, 0)
+      api.settings = null
+      api.ui = ui
+    }
+
     function test_8_without_the_window() {
       fresh()
       api.ui = null

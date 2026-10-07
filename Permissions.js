@@ -11,6 +11,10 @@
 //            it can read any file you can and reach any site, so no program
 //            is safe to allow by its name: git or make run what their
 //            folder says)
+//   files    a folder, by its full path: Uber Notebook takes a file from it
+//            (or a folder in it) that the agent gives a command, as if from
+//            its own folder; never a hidden folder (.ssh, .config...) or one
+//            in one, and never the root (Api offers it for no home folder)
 // Anything not here is asked (a command once, or for the conversation). A
 // rule for a program by its name ("command", from before) is no longer
 // kept: it's dropped as the list is read.
@@ -20,7 +24,7 @@
 .pragma library
 
 var AGENTS = ["claude", "grok", "codex"]
-var ACTIONS = ["contact", "search", "tool", "trash", "shell"]
+var ACTIONS = ["contact", "search", "tool", "trash", "shell", "files"]
 var MAX = 300
 
 // A site's exact name ("example.com", "docs.example.com"), lowercase, or "".
@@ -36,8 +40,39 @@ function hostOf(url) {
   return m ? cleanHost(m[1]) : ""
 }
 
+// A folder files may be taken from without asking: a full path, no hidden
+// folder in it (a name starting with "."), not the root, or "".
+function cleanFolder(value) {
+  var f = String(value || "")
+  if (!/^\/[^\u0000-\u001f\u007f]{1,1000}$/.test(f) || /\/$/.test(f)) return ""
+  var parts = f.split("/").slice(1)
+  if (parts.length < 2 || parts.some(function(p) { return p === "" || p.charAt(0) === "." })) return ""
+  return f
+}
+// The folder a file's in ("" for a path that isn't a plain full one).
+function folderOf(path) {
+  var p = String(path || "")
+  if (!/^\/[^\u0000-\u001f\u007f]{1,4000}$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p)) return ""
+  var i = p.lastIndexOf("/")
+  return i > 0 ? p.slice(0, i) : ""
+}
+// Whether `agent` may give a command the file at `path` without asking: a
+// rule for its folder, or a folder it's in (no hidden folder between).
+function allowedFile(list, agent, path) {
+  var folder = folderOf(path)
+  var name = String(path || "").slice(folder.length + 1)
+  if (!folder || !name || name.charAt(0) === ".") return false
+  return clean(list).some(function(r) {
+    if (r.agent !== agent || r.action !== "files") return false
+    if (folder === r.target) return true
+    if (folder.indexOf(r.target + "/") !== 0) return false
+    return folder.slice(r.target.length + 1).split("/").every(function(p) { return p !== "" && p.charAt(0) !== "." })
+  })
+}
+
 function cleanTarget(action, target) {
   var t = String(target || "").trim()
+  if (action === "files") return cleanFolder(String(target || ""))
   if (action === "contact") return cleanHost(t)
   if (action === "search") return t === "web" ? t : ""
   if (action === "trash") return t === "pages" ? t : ""
@@ -97,6 +132,7 @@ function describe(r) {
   if (r.action === "search") return { label: "Web search", note: who + " may search the web without asking" }
   if (r.action === "trash") return { label: "Trashing pages", note: who + " may move pages to the trash without asking (they can be put back from it)" }
   if (r.action === "shell") return { label: "Any command", note: who + " may run any command without asking: through one, it can read any file you can and reach any site" }
+  if (r.action === "files") return { label: r.target, note: who + " may put files from this folder on a page without asking" }
   if (r.action === "tool") {
     var parts = r.target.split("__")
     return { label: (parts[1] || "A connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), note: who + " may use it without asking" }

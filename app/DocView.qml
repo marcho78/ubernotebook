@@ -1649,6 +1649,9 @@ FocusScope {
   function agentAsked(agent, ev, run) {
     var a = Agent.askOf(ev.tool, ev.input, ev.title, ev.name)
     function reply(allow) { if (run && typeof run.send === "function") run.send(Agent.answerFor(agent, ev, allow)) }
+    // (One of Uber Notebook's own commands, alone: not asked, as Claude
+    // Code's aren't; Uber Notebook says what it may do.)
+    if (a.action === "shell" && ev.input && Agent.ownCommand(ev.input.command)) { reply(true); return }
     if (a.action && Permissions.allowed(settings.agentPermissions || [], agent, a.action, a.target)) { reply(true); return }
     if (a.grant && agentTalk && agentTalk.grants && agentTalk.grants[a.grant] === true) { reply(true); return }
     if (agentTalk && !agentTalk.grants) agentTalk.grants = {}

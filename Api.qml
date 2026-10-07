@@ -159,6 +159,39 @@ QtObject {
     return answer({ ok: true, asked: true, note: "the user is asked in the panel first: it's done when they say yes (no need to run it again)" })
   }
 
+  // Files from outside the panel's agent's folders, that a command of its
+  // gives (`paths`): taken at once from a folder you've said Always to
+  // (Settings → AI), else asked in the panel, one question a file (Allow
+  // once; Always from its folder, but never your home folder itself or a
+  // hidden one: Permissions.cleanFolder), and the command run when you've
+  // said yes to each (`rerun(scope)`, with them said yes to). What the
+  // command says meanwhile.
+  function askForFiles(scope, paths, rerun) {
+    var who = String(scope.id || "")
+    var list = settings && settings.agentPermissions ? settings.agentPermissions : []
+    var yes = Scope.withApproved(scope, paths)
+    var need = paths.filter(function(p) { return !Permissions.allowedFile(list, who, p) })
+    if (!need.length) return rerun(yes)
+    var left = need.length
+    var said = false
+    var asked = true
+    need.forEach(function(p) {
+      var folder = Permissions.folderOf(p)
+      var home = String(files && files.home ? files.home : "")
+      var always = Permissions.cleanFolder(folder) !== "" && folder !== home && folder !== home.replace(/\/[^\/]*$/, "")
+      var shown = home && folder.indexOf(home + "/") === 0 ? "~" + folder.slice(home.length) : folder
+      asked = viewDoes("askAgentPermission", {
+        key: "file " + (scope.talk || "") + " " + p, agent: who, text: "put a file from outside its folder on your page", detail: p,
+        action: always ? "files" : "", target: always ? folder : "", always: always ? "Always from " + shown : "",
+        talk: scope.talk || "", grants: scope.grants || null,
+        run: function() { if (--left === 0 && !said) rerun(yes) },
+        no: function() { said = true }
+      }) === true && asked
+    })
+    if (!asked) return fail("not without the user's yes, and they can't be asked now: save or copy the file into your folder (" + scope.dir + ") and give that path")
+    return answer({ ok: true, asked: true, note: "the user is asked in the panel to let Uber Notebook take " + need.join(", ") + ": it's done when they say yes (no need to run it again)" })
+  }
+
   function answer(o) { return JSON.stringify(o) }
   function fail(message) { return JSON.stringify({ ok: false, error: message }) }
 
@@ -215,7 +248,7 @@ QtObject {
     if (!p || p.charAt(0) !== "/" || /[\u0000-\u001f]/.test(p)) return { error: needed }
     if (!files || typeof files.helper !== "function") return { error: "couldn't read " + p }
     // (The panel's agent's: only from its folder, every step through no link.)
-    var within = caller && caller.dir ? String(caller.dir) : ""
+    var within = caller ? Scope.within(caller, p) || String(caller.dir || "") : ""
     var key = max + ":" + within + ":" + p
     var got = keptRead(key)
     // (A helper that answers at once, as in the tests, has it already.)
@@ -1237,8 +1270,8 @@ QtObject {
     // pictures it made, through no link: Scope.within.)
     if (kind === "picture") workspace.importPicture(p, inThisFolder(function(src) { if (src) api.appendNow(id, [{ type: "image", src: src, width: 1, align: "center", indent: 0 }]) }), caller ? Scope.within(caller, p) : "")
     // (Any other file of the panel's agent's too: the files helper's copy-file.)
-    else if (kind === "email") workspace.importEmail(p, inThisFolder(function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) }), caller ? caller.dir : "")
-    else workspace.importFile(p, inThisFolder(function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) }), caller ? caller.dir : "")
+    else if (kind === "email") workspace.importEmail(p, inThisFolder(function(sum) { if (sum) api.appendNow(id, [{ type: "email", indent: 0, data: sum }]) }), caller ? Scope.within(caller, p) || String(caller.dir || "") : "")
+    else workspace.importFile(p, inThisFolder(function(f) { if (f) api.appendNow(id, [{ type: f.kind === "video" ? "video" : "file", indent: 0, data: f }]) }), caller ? Scope.within(caller, p) || String(caller.dir || "") : "")
     return answer({ ok: true, id: id, file: name, kind: kind, note: "it's being copied in, and shows at the end of the page in a moment (blocks <id> lists it there; if it doesn't, the file couldn't be read)" })
   }
 

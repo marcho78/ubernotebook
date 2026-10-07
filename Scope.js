@@ -10,11 +10,12 @@
 // agents among them), profiles, backups. A file a command reads comes only
 // from the agent's own folder; a picture it puts on a page, from there or
 // from a folder of pictures it makes itself (`pictures`: Grok's image tool
-// saves them in its session for this conversation), and only a picture. A
-// command not named here isn't one an agent may use (one added later is
-// refused until it's put here). Stopping (`frozen`), it may change nothing.
-// The scope: { agent (its name), dir (its folder), pictures, frozen }; null
-// when no agent is working.
+// saves them in its session for this conversation), and only a picture; a
+// file from anywhere else, once you've said yes to it (`approved`: Service
+// asks you, Api.askForFiles). A command not named here isn't one an agent
+// may use (one added later is refused until it's put here). Stopping
+// (`frozen`), it may change nothing. The scope: { agent (its name), dir (its
+// folder), pictures, approved, frozen }; null when no agent is working.
 //
 // Shared by Service.qml and tests/scope.test.cjs, so keep it plain
 // JavaScript with no QML or Node APIs.
@@ -60,11 +61,29 @@ function inPictures(scope, path) {
   }
   return ""
 }
+// A file you've said yes to (the very path): the folder it's in, or "".
+function approvedFolder(scope, path) {
+  var p = String(path || "").trim()
+  var list = scope && Array.isArray(scope.approved) ? scope.approved : []
+  if (list.indexOf(p) < 0 || !/^\/[^\u0000-\u001f]+$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p)) return ""
+  var i = p.lastIndexOf("/")
+  return i > 0 ? p.slice(0, i) : ""
+}
+// The scope with those files said yes to.
+function withApproved(scope, paths) {
+  if (!scope) return scope
+  var out = {}
+  for (var k in scope) out[k] = scope[k]
+  out.approved = (Array.isArray(scope.approved) ? scope.approved : []).concat(paths || [])
+  return out
+}
 // The folder a file the agent gives is read from, every step through no
-// link: its own, or (a picture) a folder of pictures it made; "" if neither.
+// link: its own, a folder of pictures it made (a picture), or the folder a
+// file you've said yes to is in (the file itself through no link); "" if
+// none.
 function within(scope, path) {
   if (!scope) return ""
-  return inFolder(scope, path) ? String(scope.dir) : inPictures(scope, path)
+  return inFolder(scope, path) ? String(scope.dir) : inPictures(scope, path) || approvedFolder(scope, path)
 }
 // The commands whose files are pictures (a picture attached, a gallery's).
 var PICTURE_FILES = ["attach", "addGallery", "gallery"]
@@ -83,6 +102,29 @@ function forCaller(forAgent, scope, command, args) {
   return check(scope, command, args)
 }
 
+// The files a command gives that are from outside the agent's folders, to
+// ask you about: [paths], [] when there are none, null when one can't be
+// asked about (not a full path, or with .. or a control character in it).
+function outsideFiles(scope, command, args) {
+  var name = String(command || "")
+  if (!scope || CHANGES.indexOf(name) < 0 || !Object.prototype.hasOwnProperty.call(FILES, name)) return []
+  var a = args || []
+  var out = []
+  var files = FILES[name]
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i]
+    if (typeof f === "string" && name === "gallery" && String(a[2] || "") !== "add") continue
+    var list = typeof f === "string" ? paths(a[Number(f.slice(5))]) : [a[f]]
+    for (var k = 0; k < list.length; k++) {
+      var p = String(list[k] || "").trim()
+      if (inFolder(scope, p) || (PICTURE_FILES.indexOf(name) >= 0 && inPictures(scope, p)) || approvedFolder(scope, p)) continue
+      if (!/^\/[^\u0000-\u001f\u007f]{1,4000}$/.test(p) || /(^|\/)\.\.?(\/|$)/.test(p) || /\/$/.test(p)) return null
+      if (out.indexOf(p) < 0) out.push(p)
+    }
+  }
+  return out
+}
+
 // "" when `command` with `args` may go ahead, else why not.
 function check(scope, command, args) {
   if (!scope) return ""
@@ -98,7 +140,7 @@ function check(scope, command, args) {
     var list = typeof f === "string" ? paths(a[Number(f.slice(5))]) : [a[f]]
     if (typeof f === "string" && name === "gallery" && String(a[2] || "") !== "add") continue
     for (var k = 0; k < list.length; k++) {
-      if (inFolder(scope, list[k]) || (PICTURE_FILES.indexOf(name) >= 0 && inPictures(scope, list[k]))) continue
+      if (inFolder(scope, list[k]) || (PICTURE_FILES.indexOf(name) >= 0 && inPictures(scope, list[k])) || approvedFolder(scope, list[k])) continue
       // (What to do instead, said: never a dead end.)
       var pics = Array.isArray(scope.pictures) && scope.pictures.length ? "; a picture you made yourself is taken from " + scope.pictures.join(" or ") + " too" : ""
       return "not while " + who + " is working in Uber Notebook's panel: the files its commands read come only from its own folder (" + scope.dir + "): save or copy the file there and give that path" + pics

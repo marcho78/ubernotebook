@@ -452,6 +452,17 @@ function grokPictures(grokHome, dir) {
   return h + "/sessions/" + encodeURIComponent(d)
 }
 
+// One of Uber Notebook's own commands, alone: `omarchy-shell
+// uber-notebook-agent <command> ...` with nothing chained or put in it (no
+// ; & | $ ` < > \ or a line break): run without asking you, as Claude
+// Code's are (its --allowedTools); what it may do is Uber Notebook's to say
+// (Scope.js). Anything else an agent runs is asked about.
+function ownCommand(command) {
+  var c = String(command || "").trim()
+  if (c.length > 20000 || /[;&|$`<>\\\n\r\u0000]/.test(c)) return false
+  return /^omarchy-shell\s+uber-notebook-agent\s+[A-Za-z]+(\s|$)/.test(c)
+}
+
 // Grok's sandbox for the panel, kept in its working folder's
 // .grok/sandbox.toml: strict (it reads its folder and the system's, writes
 // there and in temp), and it may read where the shell's socket is

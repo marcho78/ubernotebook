@@ -76,6 +76,22 @@ check("a picture Grok made: from its own pictures for this conversation, and onl
   assert.match(Scope.check(scope(), "attach", [A, "/home/me/x.png"]), /save or copy the file there and give that path$/);
 });
 
+check("a file from outside its folders: asked about, then taken once you've said yes", () => {
+  const s = scope();
+  assert.equal(JSON.stringify(Scope.outsideFiles(s, "attach", [A, "/usr/share/pixmaps/a.png"])), JSON.stringify(["/usr/share/pixmaps/a.png"]));
+  assert.equal(JSON.stringify(Scope.outsideFiles(s, "addGallery", [A, dir + "/a.png|/home/me/b.png|/home/me/b.png", "2"])), JSON.stringify(["/home/me/b.png"]), "only those outside, each once");
+  assert.equal(Scope.outsideFiles(s, "attach", [A, dir + "/a.png"]).length, 0, "none outside");
+  assert.equal(Scope.outsideFiles(s, "attach", [A, "relative.png"]), null, "one that can't be asked about: refused");
+  assert.equal(Scope.outsideFiles(s, "attach", [A, "/home/me/../x.png"]), null);
+  assert.equal(Scope.outsideFiles(s, "read", [A]).length, 0, "a command that takes no file");
+  const yes = Scope.withApproved(s, ["/usr/share/pixmaps/a.png"]);
+  assert.equal(s.approved, undefined, "the scope itself as it was");
+  assert.equal(Scope.check(yes, "attach", [A, "/usr/share/pixmaps/a.png"]), "", "said yes to: taken");
+  assert.equal(Scope.within(yes, "/usr/share/pixmaps/a.png"), "/usr/share/pixmaps", "from its folder, the file through no link");
+  assert.ok(Scope.check(yes, "attach", [A, "/usr/share/pixmaps/b.png"]) !== "", "not another file there");
+  assert.equal(Scope.check(yes, "append", [A, "/usr/share/pixmaps/a.png"]), "", "any command that takes it");
+});
+
 check("Uber Notebook itself: not while it works", () => {
   for (const [cmd, args] of [["set", ["paper", "grid"]], ["mirror", []], ["profile", ["Work"]], ["addProfile", ["Work", ""]],
     ["renameProfile", ["Work", "Job"]], ["profileFolder", ["Work", "/x"]], ["removeProfile", ["Work"]], ["demo", []], ["restartDemo", []],

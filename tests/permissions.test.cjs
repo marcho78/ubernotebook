@@ -69,4 +69,25 @@ check("in settings: a list of them, anything else dropped", () => {
   assert.deepEqual(plain(Settings.merge(Defaults.DEFAULTS, {}, Defaults.SCHEMA).agentPermissions), [], "none at first: everything asked");
 });
 
+check("files from a folder you've said Always to: that folder and the ones in it, never a hidden one", () => {
+  assert.equal(P.cleanFolder("/home/me/Pictures"), "/home/me/Pictures");
+  for (const f of ["/", "/home", "/home/me/.ssh", "/home/me/.config/x", "/home/me/Pictures/", "relative/x", "/home/me/a\u0000b", "/home//me"]) {
+    assert.equal(P.cleanFolder(f), "", f);
+  }
+  assert.equal(P.folderOf("/home/me/Pictures/a.png"), "/home/me/Pictures");
+  assert.equal(P.folderOf("/home/me/../.ssh/id"), "", "no ..");
+  const list = P.withAllowed([], "grok", "files", "/home/me/Pictures");
+  assert.equal(JSON.stringify(list.map((r) => [r.agent, r.action, r.target])), JSON.stringify([["grok", "files", "/home/me/Pictures"]]));
+  assert.equal(P.withAllowed([], "grok", "files", "/home/me/.ssh").length, 0, "never a hidden folder");
+  assert.ok(P.allowedFile(list, "grok", "/home/me/Pictures/a.png"));
+  assert.ok(P.allowedFile(list, "grok", "/home/me/Pictures/trip/b.png"), "a folder in it");
+  assert.ok(!P.allowedFile(list, "grok", "/home/me/Pictures/.private/c.png"), "not a hidden folder in it");
+  assert.ok(!P.allowedFile(list, "grok", "/home/me/Pictures/.d.png"), "not a hidden file");
+  assert.ok(!P.allowedFile(list, "grok", "/home/me/PicturesX/a.png"), "not a folder whose name starts the same");
+  assert.ok(!P.allowedFile(list, "claude", "/home/me/Pictures/a.png"), "another agent: asked");
+  assert.ok(!P.allowedFile(list, "grok", "/home/me/Pictures/../.ssh/id"));
+  assert.match(P.describe(list[0]).note, /Grok may put files from this folder on a page without asking/);
+  assert.equal(P.without(list, "grok", "files", "/home/me/Pictures").length, 0, "taken back");
+});
+
 console.log(`permissions: ${passed} checks passed`);
