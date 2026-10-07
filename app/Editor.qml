@@ -672,6 +672,7 @@ FocusScope {
   property int loads: 0
   function load(blocks) {
     loads++
+    colorPreview = null
     burstTimer.stop()
     burstOpen = false
     inOp = false
@@ -759,7 +760,7 @@ FocusScope {
 
   // The background a block (and what's inside it) has, or "".
   function boxColor(r) {
-    var c = Docs.blockColors(r.color, dark).background
+    var c = Docs.blockColors(shownColor(r), dark).background
     if (r.type === "callout") return c || Docs.calloutBackground(dark)
     return c
   }
@@ -1055,22 +1056,24 @@ FocusScope {
     restoreFocus(keepFocus)
   }
 
-  // A color shown on blocks as it's picked (not a step to undo), until
-  // endBlockColorPreview puts back what they had.
-  property var colorBefore: null
+  // A color shown on blocks as it's picked: only shown, never in the
+  // blocks themselves (so nothing saves it), until endBlockColorPreview.
+  // { uids: { uid: true }, color }, or null.
+  property var colorPreview: null
   function previewBlockColor(uids, color) {
-    if (!colorBefore) {
-      var before = {}
-      uids.forEach(function(u) { var i = indexOf(u); if (i >= 0) before[u] = blocksModel.get(i).color })
-      colorBefore = before
-    }
-    uids.forEach(function(u) { var i = indexOf(u); if (i >= 0) blocksModel.setProperty(i, "color", color) })
+    var map = {}
+    uids.forEach(function(u) { map[u] = true })
+    colorPreview = { uids: map, color: color }
+    refreshNumbers()
   }
   function endBlockColorPreview() {
-    if (!colorBefore) return
-    var before = colorBefore
-    colorBefore = null
-    for (var u in before) { var i = indexOf(u); if (i >= 0) blocksModel.setProperty(i, "color", before[u]) }
+    if (!colorPreview) return
+    colorPreview = null
+    refreshNumbers()
+  }
+  // A block's color as shown (a color being picked for it, else its own).
+  function shownColor(r) {
+    return colorPreview && colorPreview.uids[r.uid] === true ? colorPreview.color : r.color
   }
 
   function setProp(uid, key, value) {

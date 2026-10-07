@@ -997,6 +997,10 @@ FocusScope {
   }
 
   function show(p) {
+    // (A color being picked is for the page as it was: not for this one.)
+    if (wordsCustom.opened) wordsCustom.close()
+    if (blockCustom.opened) blockCustom.close()
+    if (blockColors.opened) blockColors.close()
     page = p
     settingTitle = true
     titleEdit.text = p.title
@@ -3829,7 +3833,8 @@ FocusScope {
   }
 
   // Words' color of your own (Custom… over the words you picked): kept on
-  // those words with Apply. { uid, start, end } while the picker's open.
+  // those words with Apply, if they're still there as they were.
+  // { page, loads, uid, start, end, words } while the picker's open.
   property var wordsColorAt: null
   function openWordsCustom(kind) {
     var item = editor.items[editor.focusUid]
@@ -3837,7 +3842,8 @@ FocusScope {
     var e = item.edit
     if (e.selectionStart === e.selectionEnd) return
     var st = editor.formatState.inline || {}
-    wordsColorAt = { uid: editor.focusUid, start: e.selectionStart, end: e.selectionEnd }
+    wordsColorAt = { page: page ? page.id : "", loads: editor.loads, uid: editor.focusUid, start: e.selectionStart, end: e.selectionEnd,
+      words: e.getText(e.selectionStart, e.selectionEnd) }
     var ink = String(theme.text)
     var paper = String(theme.background)
     var p = bubble.mapToItem(view, 0, bubble.height + 6)
@@ -4128,9 +4134,14 @@ FocusScope {
     parent: view
     onPicked: function(hex) {
       var at = view.wordsColorAt
-      if (at && editor.items[at.uid]) {
+      var item = at ? editor.items[at.uid] : null
+      var same = item && item.edit && view.page && view.page.id === at.page && editor.loads === at.loads
+        && item.edit.length >= at.end && item.edit.getText(at.start, at.end) === at.words
+      if (same) {
         editor.focusBlock(at.uid, at.end, at.start)
         editor.formatInline(kind === "color" ? "color" : "highlight", hex)
+      } else {
+        view.toast("Those words changed while you picked: select them again")
       }
       view.rememberColor(hex)
     }

@@ -114,6 +114,18 @@ Item {
       keyClick(Qt.Key_Escape)
       tryVerify(function() { return findText(win(), "Text color of your own") === null }, 1000)
       compare(html(0), before, "put back as it was")
+      // The words changed while you picked (an agent, another window): not
+      // painted where they were, and you're told.
+      wait(250)
+      mouseClick(select(0, 6, 11))
+      mouseClick(tile(function(it) { return it.plus === true && it.back === false }))
+      tryVerify(function() { return findText(win(), "Text color of your own") !== null }, 1000)
+      var e = view.editor
+      e.items[e.uidAt(0)].edit.insert(0, "Now ")
+      typeHex("#00aa00")
+      keyClick(Qt.Key_Return)
+      tryVerify(function() { return findText(win(), "Text color of your own") === null }, 1000)
+      verify(html(0).indexOf("#00aa00") < 0, "nothing painted: " + html(0))
     }
 
     function test_2_blocks_take_a_color_of_your_own() {
@@ -132,9 +144,17 @@ Item {
       mouseClick(tile(function(it) { return it.plus === true && it.back === true }))
       tryVerify(function() { return findText(win(), "Background of your own") !== null }, 1000)
       typeHex("#14213d")
-      tryCompare(e.serialize()[0], "color", "#14213d_background", 1000, "shown as you pick it")
+      tryVerify(function() { return e.colorPreview !== null && e.colorPreview.color === "#14213d_background" }, 1000, "shown as you pick it")
+      tryVerify(function() { var bs = e.docLayout[e.uidAt(0)].boxes || []; return bs.some(function(b) { return b.color === "#14213d" }) }, 1000, "its background drawn")
+      compare(colorOf(0), "red_background", "only shown: not its color yet")
       var item = e.items[e.uidAt(0)]
       compare(String(item.inkColor), String(Qt.color(Colors.readableOn("#14213d", String(th.text)))), "its text reads on it")
+      // Saved while you pick (another change made the page wait to be
+      // saved): what it had, not what's shown.
+      view.markDirty()
+      view.commit()
+      var mid = ws.readPageNow(view.page.id)
+      verify(Object.keys(mid.blocks).every(function(k) { return mid.blocks[k].color !== "#14213d_background" }), "nothing shown is saved")
       keyClick(Qt.Key_Return)
       tryVerify(function() { return findText(win(), "Background of your own") === null }, 1000)
       compare(colorOf(0), "#14213d_background")
@@ -150,10 +170,24 @@ Item {
       mouseClick(tile(function(it) { return it.plus === true && it.back === false }))
       tryVerify(function() { return findText(win(), "Text color of your own") !== null }, 1000)
       typeHex("#ff0000")
-      tryCompare(e.serialize()[1], "color", "#ff0000", 1000)
+      tryVerify(function() { return e.colorPreview !== null && e.colorPreview.color === "#ff0000" }, 1000)
       keyClick(Qt.Key_Escape)
       tryVerify(function() { return findText(win(), "Text color of your own") === null }, 1000)
       compare(colorOf(1), "", "put back")
+      compare(e.colorPreview, null)
+      // The page loaded again while you pick (an agent changed it): the
+      // picker goes, and nothing's left shown.
+      wait(250)
+      e.blockMenuRequested(e.uidAt(1))
+      clickText("Color")
+      mouseClick(tile(function(it) { return it.plus === true && it.back === true }))
+      tryVerify(function() { return findText(win(), "Background of your own") !== null }, 1000)
+      typeHex("#00ff00")
+      tryVerify(function() { return e.colorPreview !== null }, 1000)
+      view.show(ws.readPageNow(view.page.id))
+      tryVerify(function() { return findText(win(), "Background of your own") === null }, 1000, "closed")
+      compare(e.colorPreview, null)
+      compare(colorOf(1), "")
       // A recent one, from the grid; and saved and read back as it is.
       wait(250)
       e.blockMenuRequested(e.uidAt(1))

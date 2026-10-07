@@ -22,6 +22,7 @@
 .import "Html.js" as Html
 .import "Blocks.js" as Blocks
 .import "Docs.js" as Docs
+.import "Colors.js" as Colors
 .import "Highlight.js" as Highlight
 .import "Equations.js" as Equations
 .import "Diagram.js" as Diagram
@@ -77,11 +78,19 @@ function colorOf(value, background) {
   return /^[a-z]{3,20}$/.test(v) ? v : ""
 }
 
-// A block's color ("blue", "blue_background") as a style.
+// Text that reads on a background: the page's ink, unless it wouldn't (a
+// dark background of your own).
+function inkOn(back) {
+  var ink = Colors.readableOn(back, INK)
+  return ink === Colors.normalize(INK) ? INK : ink
+}
+
+// A block's color ("blue", "blue_background", or one of your own) as a style.
 function blockStyle(b) {
   var c = Docs.blockColors(b.color, false)
   var out = ""
   if (c.text) out += "color:" + c.text + ";"
+  else if (c.background && inkOn(c.background) !== INK) out += "color:" + inkOn(c.background) + ";"
   if (c.background) out += "background:" + c.background + ";padding:2px 4px;"
   if (b.align === "center" || b.align === "right" || b.align === "justify") out += "text-align:" + b.align + ";"
   return out
@@ -264,7 +273,7 @@ function block(b, ctx) {
     return "<blockquote" + id + attrStyle("border-left:3px solid " + INK + ";padding-left:14px;" + blockStyle(b)) + "><p>" + text + "</p>" + kids + "</blockquote>"
   case "callout":
     var back = Docs.blockColors(b.color, false).background || Docs.calloutBackground(false)
-    var fore = Docs.blockColors(b.color, false).text
+    var fore = Docs.blockColors(b.color, false).text || (inkOn(back) !== INK ? inkOn(back) : "")
     return "<table class=\"callout\"" + id + " style=\"" + TABLE + "\"><tr><td class=\"icon\" style=\"width:1.6em;vertical-align:top;padding:10px 0 10px 12px;background:" + back + ";\">" + esc(b.icon || "\u{1f4a1}") + "</td><td style=\"vertical-align:top;padding:10px 12px;background:" + back + ";" + (fore ? "color:" + fore + ";" : "") + "\">"
       + "<p>" + text + "</p>" + kids + "</td></tr></table>"
   case "code":

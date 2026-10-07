@@ -63,7 +63,8 @@ Item {
   readonly property bool structure: type === "columns" || type === "column"
   readonly property real bx: info.x
   readonly property var st: Docs.typeStyle(type, editor.smallText)
-  readonly property var colors: Docs.blockColors(color, editor.dark)
+  // (A color being picked for it shows, not yet its own.)
+  readonly property var colors: Docs.blockColors(editor.colorPreview && editor.colorPreview.uids[uid] === true ? editor.colorPreview.color : color, editor.dark)
   readonly property bool isText: Blocks.isText(type)
   readonly property bool folding: Workspace.folds({ type: type, toggle: toggle })
   readonly property bool listy: type === "bullet" || type === "number" || type === "check" || type === "toggle"

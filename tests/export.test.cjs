@@ -131,4 +131,21 @@ check("synced blocks: never a page inside itself, and only so many in a document
   assert.ok(html.includes('id="b-self">(A synced block)'), "the page itself: said, not expanded");
 });
 
+check("a block's color of your own: its text reads on it", () => {
+  const html = doc([page(A, "Colors", [
+    { type: "p", html: "On black", color: "#000000_background" },
+    { type: "p", html: "On pale", color: "#fff8e1_background" },
+    { type: "p", html: "Orange words", color: "#ff8800" },
+    { type: "p", html: "Pages' blue", color: "blue_background" },
+    { type: "callout", html: "Dark note", color: "#14213d_background" },
+    { type: "callout", html: "Plain note" }
+  ])]);
+  assert.ok(/<p id="b-b0" style="color:#ffffff;background:#000000;padding:2px 4px;"/.test(html), "light text on black");
+  assert.ok(/<p id="b-b1" style="background:#fff8e1;padding:2px 4px;"/.test(html), "the page's ink where it reads");
+  assert.ok(/<p id="b-b2" style="color:#ff8800;"/.test(html));
+  assert.ok(/<p id="b-b3" style="background:#e7f3f8;padding:2px 4px;"/.test(html), "Pages' own: as before");
+  assert.ok(/background:#14213d;color:#ffffff;/.test(html), "a dark callout: light text");
+  assert.ok(!/background:#f1f1ef;color:/.test(html), "a plain one: as before");
+});
+
 console.log(`export: ${passed} checks passed`);
