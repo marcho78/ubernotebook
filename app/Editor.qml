@@ -1800,8 +1800,10 @@ FocusScope {
           if (c === column) preview.push({ x: L.left + L.w + 14, y: area.top, w: columnGap - 28, h: area.height, fresh: true })
         }
       } else {
-        var dragged = items[uidAt(from)]
-        preview = columnBoxes(f.left, f.w, 2, 1, item.y, Math.max(item.height, dragged ? dragged.height : 0))
+        // (Each with what's inside it: they go together.)
+        var mine = unitBox(i, subtreeEnd(i))
+        var theirs = unitBox(from, end)
+        preview = columnBoxes(f.left, f.w, 2, 1, mine.top, Math.max(mine.bottom - mine.top, theirs.bottom - theirs.top))
       }
       return { side: r.uid, vertical: true, x: f.left + f.w + 4, y: item.y, h: item.height, set: set, preview: preview }
     }
@@ -1903,6 +1905,16 @@ FocusScope {
 
   // The columns a block was just dropped into (outlined a moment).
   property string columnsFlash: ""
+
+  // The block the keyboard's in (its text, or a field of its own: a table's
+  // cell, an idea, a card, a caption), or "".
+  readonly property string focusedBlock: {
+    for (var it = root.Window.activeFocusItem; it; it = it.parent) {
+      if (it.editor === root && typeof it.uid === "string" && it.structure !== undefined) return it.uid
+      if (it === root) break
+    }
+    return ""
+  }
   Timer { id: flashTimer; interval: 1600; onTriggered: root.columnsFlash = "" }
 
   // A block, and what's inside it, moved to `to` (its index in the list
@@ -4316,12 +4328,8 @@ FocusScope {
         id: set
         objectName: "columnSet"
         required property var modelData
-        readonly property bool editing: {
-          var f = root.focusUid
-          var it = root.items[f]
-          if (modelData.uids[f] === true && it && it.edit && it.edit.activeFocus) return true
-          return root.selectedList.some(function(u) { return set.modelData.uids[u] === true })
-        }
+        readonly property bool editing: modelData.uids[root.focusedBlock] === true
+          || root.selectedList.some(function(u) { return set.modelData.uids[u] === true })
         // (Dragged beside a block in it: the columns it'll be instead.)
         readonly property bool previewing: root.dropTarget !== null && root.dropTarget.set === modelData.uid
         readonly property bool pointed: docHover.hovered && docHover.point.position.y >= y - 6 && docHover.point.position.y <= y + height + 6

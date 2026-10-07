@@ -12,9 +12,12 @@ Item {
   width: 900
   height: 900
 
+  Theme { id: th }
+
   Editor {
     id: editor
     layout: "doc"
+    theme: th
     x: 60
     width: 720
     contentWidth: 720
@@ -161,6 +164,46 @@ Item {
       editor.dragStart(editor.uidAt(5))
       editor.dragMove(a.x + a.width - 10, a.y + a.height / 2)
       compare(editor.dropTarget.preview.map(function(p) { return p.fresh }).join(","), "false,true,false")
+      editor.dragEnd(false)
+    }
+
+    // Writing in a block's own field in a column (a table's cell, a board's
+    // card): still working in the columns, the pointer elsewhere or not.
+    function test_6_a_field_of_its_own_in_a_column() {
+      page(["intro", { type: "columns" }, { type: "column", indent: 1 }, { type: "table", table: { rows: [["a", "b"], ["c", "d"]] }, indent: 2 },
+        { type: "column", indent: 1 }, { type: "board", indent: 2 }, "after"])
+      editor.focusBlock(editor.uidAt(0), -1)
+      away()
+      compare(outlines(), 0)
+      item(3).enter(1, 10)
+      wait(30)
+      compare(editor.focusedBlock, editor.uidAt(3), "in a cell")
+      compare(outlines(), 2, "a table's cell")
+      editor.focusBlock(editor.uidAt(6), -1)
+      wait(30)
+      compare(outlines(), 0)
+      // A column's name, being renamed: its own field.
+      var bd = find(item(5), function(it) { return typeof it.startEdit === "function" && it.naming !== undefined }, [])[0]
+      verify(bd, "the board")
+      bd.naming = bd.info.columns[0].id
+      wait(50)
+      var field = named("boardColumnName")[0]
+      verify(field && field.activeFocus, "renaming a column")
+      compare(editor.focusedBlock, editor.uidAt(5))
+      compare(outlines(), 2, "a board's field")
+    }
+
+    // Beside a block with blocks in it: the preview's as tall as all of it.
+    function test_7_the_preview_takes_what_is_inside() {
+      page([{ type: "toggle", html: "Plan" }, { type: "p", html: "one", indent: 1 }, { type: "p", html: "two", indent: 1 },
+        { type: "p", html: "three", indent: 1 }, "dragged", "after"])
+      var t = item(0)
+      editor.dragStart(editor.uidAt(4))
+      editor.dragMove(t.x + t.width - 10, t.y + t.height / 2)
+      var p = editor.dropTarget.preview
+      verify(p && p.length === 2)
+      compare(Math.round(p[0].y), Math.round(t.y))
+      compare(Math.round(p[0].h), Math.round(item(3).y + item(3).height - t.y), "the toggle and what's in it")
       editor.dragEnd(false)
     }
 
