@@ -358,6 +358,9 @@ check("what an agent asks, in words; Always only for what can't run code on your
     assert.equal(Agent.ownFile(t, i, own), false, t + " " + JSON.stringify(i));
   }
   assert.equal(Agent.ownFile("Edit", { file_path: own + "/a.md" }, "relative"), false);
+  assert.equal(Agent.ownFile("Grep", { pattern: "secret" }, own), false, "a search with no path: asked");
+  assert.ok(Agent.ownFile("Grep", { pattern: "x", path: own }, own) === false, "the folder itself isn't a path in it");
+  assert.ok(Agent.ownFile("Grep", { pattern: "x", path: own + "/notes" }, own), "a search inside it");
   // Where Grok's image tool saves pictures for a conversation's folder.
   assert.equal(Agent.grokPictures("/home/me/.grok", "/run/user/1000/uber-notebook-agent/c-d45b4a6a60b9"), "/home/me/.grok/sessions/%2Frun%2Fuser%2F1000%2Fuber-notebook-agent%2Fc-d45b4a6a60b9");
   assert.equal(Agent.grokPictures("/home/me/.grok/", "/run/x"), "/home/me/.grok/sessions/%2Frun%2Fx");
