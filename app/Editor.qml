@@ -1055,6 +1055,24 @@ FocusScope {
     restoreFocus(keepFocus)
   }
 
+  // A color shown on blocks as it's picked (not a step to undo), until
+  // endBlockColorPreview puts back what they had.
+  property var colorBefore: null
+  function previewBlockColor(uids, color) {
+    if (!colorBefore) {
+      var before = {}
+      uids.forEach(function(u) { var i = indexOf(u); if (i >= 0) before[u] = blocksModel.get(i).color })
+      colorBefore = before
+    }
+    uids.forEach(function(u) { var i = indexOf(u); if (i >= 0) blocksModel.setProperty(i, "color", color) })
+  }
+  function endBlockColorPreview() {
+    if (!colorBefore) return
+    var before = colorBefore
+    colorBefore = null
+    for (var u in before) { var i = indexOf(u); if (i >= 0) blocksModel.setProperty(i, "color", before[u]) }
+  }
+
   function setProp(uid, key, value) {
     var i = indexOf(uid)
     if (i < 0) return

@@ -180,4 +180,18 @@ check("numbers in Pages go by the lists they're in, not by columns", () => {
   assert.equal(paper.a, "i.", "a notebook's lists still go by depth");
 });
 
+check("a block's color: Pages' or one of your own", () => {
+  const Docs = load("Docs.js");
+  assert.equal(b("p", { color: "blue" }).color, "blue");
+  assert.equal(b("p", { color: "blue_background" }).color, "blue_background");
+  assert.equal(b("p", { color: "#ff8800" }).color, "#ff8800", "a hex of your own");
+  assert.equal(b("p", { color: "#ff8800_background" }).color, "#ff8800_background");
+  for (const bad of ["#FF8800", "#f80", "#ff8800_back", "ff8800", "chartreuse", "#ff8800_background_background", "url(x)"]) {
+    assert.equal(b("p", { color: bad }).color, undefined, bad);
+  }
+  assert.deepEqual(plain(Docs.blockColors("#ff8800", true)), { text: "#ff8800", background: "" }, "the same on a dark page");
+  assert.deepEqual(plain(Docs.blockColors("#3366cc_background", false)), { text: "", background: "#3366cc" });
+  assert.deepEqual(plain(Docs.blockColors("blue", true)), { text: "#5e87c9", background: "" }, "Pages' follow the theme");
+});
+
 console.log(`blocks: ${passed} checks passed`);

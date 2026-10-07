@@ -99,12 +99,16 @@ function colorEntry(name) {
   return null
 }
 
-// A block's color ("blue", "blue_background"), resolved for a light or dark
-// page: { text, background } ("" where it has none).
+// A block's color ("blue", "blue_background", or one of your own:
+// "#ff8800", "#ff8800_background"), resolved for a light or dark page:
+// { text, background } ("" where it has none). One of your own is the same
+// on both.
 function blockColors(value, dark) {
   var v = String(value || "")
   var bg = /_background$/.test(v)
-  var c = colorEntry(v.replace(/_background$/, ""))
+  var name = v.replace(/_background$/, "")
+  if (/^#[0-9a-f]{6}$/.test(name)) return bg ? { text: "", background: name } : { text: name, background: "" }
+  var c = colorEntry(name)
   if (!c) return { text: "", background: "" }
   return bg ? { text: "", background: c.background[dark ? 1 : 0] } : { text: c.text[dark ? 1 : 0], background: "" }
 }

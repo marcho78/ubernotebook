@@ -385,6 +385,7 @@ takes them along.
 | Get out of a list, a toggle or a callout | **Enter** on an empty line at the end of it (a level at a time; at the top, a list item becomes text), **Alt+Enter** for a new line below all of it, or click under the page's last block |
 | Fold a toggle, or unfold it | Click its arrow, or **Ctrl+Enter** |
 | Bold, italic, underline, strikethrough, code, a link, a color | Select the words: a toolbar comes up over them (or the notebook's shortcuts: Ctrl+B, Ctrl+I…) |
+| Colors | For words (the toolbar's color button) and whole blocks (**⋮⋮** → *Color*), their text or behind it: one of Pages' nine (which follow your light or dark theme), one you picked recently, or **Custom…**, the color picker (saturation and brightness, hue, a hex to type or paste, and how well the text reads on it; a block shows it as you pick). **Enter** or *Apply* keeps it, **Esc** or *Cancel* puts back what was there. A color of your own stays as you picked it in either theme, and text on a background of your own is made readable |
 | Markdown as you type | `**bold**`, `*italic*`, `` `code` ``, `~~struck~~`; at the start of a line `# `, `- `, `1. `, `[] `, `> ` (a toggle), `" ` (a quote), ```` ``` ```` |
 | Text, headings, to-do, bulleted, numbered, toggle, code | **Ctrl+Alt+0**…**3**, **4**, **5**, **6**, **7**, **8** |
 | Move a block up or down | **Alt+Shift+↑/↓** |

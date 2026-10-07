@@ -89,10 +89,12 @@ var KINDS = {
 // "blue_background" a blue background. Docs.js has what they look like.
 var COLORS = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]
 
+// One of Pages' colors ("blue", "blue_background"), or one of your own
+// ("#ff8800", "#ff8800_background").
 function isColor(value) {
   if (typeof value !== "string") return false
   var name = value.replace(/_background$/, "")
-  return COLORS.indexOf(name) >= 0
+  return COLORS.indexOf(name) >= 0 || /^#[0-9a-f]{6}$/.test(name)
 }
 
 var TONES = ["yellow", "blue", "green", "pink", "purple", "gray"]

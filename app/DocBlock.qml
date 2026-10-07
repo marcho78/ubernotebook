@@ -4,6 +4,7 @@ import QtQuick.Shapes
 import "../Html.js" as Html
 import "../Blocks.js" as Blocks
 import "../Docs.js" as Docs
+import "../Colors.js" as Colors
 import "../Workspace.js" as Workspace
 import "../Equations.js" as Equations
 import "../Diagram.js" as Diagram
@@ -70,7 +71,16 @@ Item {
   readonly property bool selected: editor.selectedMap[uid] === true
   readonly property bool dragged: editor.dragUid === uid
   readonly property var matches: editor.findMatches[uid] || []
-  readonly property color inkColor: colors.text !== "" ? colors.text : editor.ink
+  // Its text: its own color, else the page's, made readable on a background
+  // of your own it's on (Pages' own backgrounds always read).
+  readonly property string backUnder: {
+    var bs = info.boxes || []
+    for (var i = bs.length - 1; i >= 0; i--) if (bs[i].color) return String(bs[i].color)
+    return ""
+  }
+  readonly property color inkColor: colors.text !== "" ? colors.text
+    : /^#[0-9a-f]{6}$/.test(backUnder) && Docs.lightMap()[backUnder] === undefined && Docs.darkMap()[backUnder] === undefined
+      ? Colors.readableOn(backUnder, String(editor.ink)) : editor.ink
 
   // The boxes it's in (outermost first), and how much room each takes at the
   // top (its own block) and bottom (the last block showing in it).

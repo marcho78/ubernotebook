@@ -7,9 +7,9 @@ import "../Sketch.js" as Sketch
 // Colors in Pages: for text, or behind it. On the words selected ("words"),
 // on whole blocks ("blocks": their text, or their background), on a mind
 // map's idea or a table's cells ("idea": ideaPicked says which), or for a
-// sketch's pen ("pen": one color, as dots of ink). An idea can also have a color
-// of its own: the colors you picked last are there, and Custom… opens the
-// color picker (customRequested); the idea's colors now are marked.
+// sketch's pen ("pen": one color, as dots of ink). Any of them can also have
+// a color of your own: the colors you picked last are there, and Custom…
+// opens the color picker (customRequested); the colors it has now are marked.
 Pop {
   id: pop
 
@@ -42,7 +42,10 @@ Pop {
 
   function pickCustom(kind, hex) {
     close()
-    ideaPicked(kind, hex)
+    var h = Colors.normalize(hex)
+    if (mode === "words") editor.formatInline(kind === "color" ? "color" : "highlight", h)
+    else if (mode === "blocks") editor.setBlockColor(uids, kind === "color" ? h : h + "_background")
+    else ideaPicked(kind, h)
   }
 
   function openCustom(kind) {
@@ -59,6 +62,9 @@ Pop {
   // The pen is a highlighter: its colors are a highlighter's.
   property bool marker: false
   readonly property bool own: mode === "idea" || mode === "pen" || mode === "tag"
+  // Colors of your own: for text (or ink), and behind it.
+  readonly property bool ownText: own || mode === "words" || mode === "blocks"
+  readonly property bool ownBack: mode === "idea" || mode === "words" || mode === "blocks"
 
   function pickText(c) {
     close()
@@ -197,12 +203,12 @@ Pop {
         delegate: Tile {
           required property var modelData
           entry: modelData
-          chosen: pop.own && pop.currentText === modelData.id
+          chosen: (pop.own || pop.mode === "blocks") && pop.currentText === modelData.id
           onPicked: pop.pickText(modelData)
         }
       }
       Repeater {
-        model: pop.own ? pop.customsFor(pop.currentText) : []
+        model: pop.ownText ? pop.customsFor(pop.currentText) : []
         delegate: Tile {
           required property var modelData
           custom: modelData
@@ -210,7 +216,7 @@ Pop {
           onPicked: pop.pickCustom("color", modelData)
         }
       }
-      Tile { visible: pop.own; plus: true; onPicked: pop.openCustom("color") }
+      Tile { visible: pop.ownText; plus: true; onPicked: pop.openCustom("color") }
     }
     Heading { visible: !pop.pen; text: "Background" }
     Flow {
@@ -224,12 +230,12 @@ Pop {
           required property var modelData
           entry: modelData
           back: true
-          chosen: pop.mode === "idea" && pop.currentBack === modelData.id
+          chosen: (pop.mode === "idea" || pop.mode === "blocks") && pop.currentBack === modelData.id
           onPicked: pop.pickBackground(modelData)
         }
       }
       Repeater {
-        model: pop.mode === "idea" ? pop.customsFor(pop.currentBack) : []
+        model: pop.ownBack ? pop.customsFor(pop.currentBack) : []
         delegate: Tile {
           required property var modelData
           custom: modelData
@@ -238,7 +244,7 @@ Pop {
           onPicked: pop.pickCustom("background", modelData)
         }
       }
-      Tile { visible: pop.mode === "idea"; plus: true; back: true; onPicked: pop.openCustom("background") }
+      Tile { visible: pop.ownBack; plus: true; back: true; onPicked: pop.openCustom("background") }
     }
   }
 }

@@ -11,7 +11,8 @@ Pop {
 
   property var editor: null
   property var uids: []
-  // What's shown: the actions, the kinds, or the colors.
+  // What's shown: the actions, or the kinds. (Its colors are the same
+  // ones as everywhere in Pages: colorRequested.)
   property string panel: "main"
 
   signal moveRequested(var uids)
@@ -19,6 +20,8 @@ Pop {
   signal mindMapRequested(var uids)
   signal agentRequested(var uids)
   signal syncedRequested(var uids)
+  // Color: Pages' colors and your own, beside where the menu was.
+  signal colorRequested(var uids, Item anchor, real x, real y)
 
   focus: false
   width: 250
@@ -74,7 +77,7 @@ Pop {
       visible: menu.panel === "main"
       theme: menu.theme; icon: menu.theme.icons.palette; text: "Color"; hint: "\u203a"
       width: parent.width
-      onClicked: menu.panel = "color"
+      onClicked: { var u = menu.uids; var a = menu.parent; var x = menu.x; var y = menu.y; menu.close(); menu.colorRequested(u, a, x, y) }
     }
     MenuRow {
       visible: menu.panel === "main" && menu.text && menu.uids.length > 0
@@ -124,7 +127,7 @@ Pop {
     // Turn into...
     MenuRow {
       visible: menu.panel !== "main"
-      theme: menu.theme; icon: menu.theme.icons.left; text: menu.panel === "turn" ? "Turn into" : "Color"
+      theme: menu.theme; icon: menu.theme.icons.left; text: "Turn into"
       width: parent.width
       onClicked: menu.panel = "main"
     }
@@ -138,44 +141,6 @@ Pop {
         width: parent.width
         checked: menu.first !== null && menu.first.type === modelData.type && !!menu.first.toggle === !!modelData.toggle
         onClicked: { menu.close(); menu.editor.turnInto(menu.uids, modelData.type, modelData.toggle === true) }
-      }
-    }
-
-    // Colors: the text, or the background.
-    Flow {
-      visible: menu.panel === "color"
-      width: parent.width
-      spacing: 2
-      Repeater {
-        model: menu.panel === "color" ? [{ id: "", label: "Default" }].concat(Docs.COLORS) : []
-        delegate: MenuRow {
-          required property var modelData
-          readonly property var shade: Docs.blockColors(modelData.id, menu.theme.dark)
-          theme: menu.theme
-          width: parent.width
-          icon: ""
-          text: modelData.label
-          checked: menu.first !== null && menu.first.color === modelData.id
-          onClicked: { menu.close(); menu.editor.setBlockColor(menu.uids, modelData.id) }
-          Rectangle { x: 10; y: 8; width: 18; height: 16; radius: 3; color: menu.theme.surface; visible: !parent.checked
-            Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "A"; font.pixelSize: 12; font.weight: Font.DemiBold; color: parent.parent.shade.text || menu.theme.text } }
-        }
-      }
-      Repeater {
-        model: menu.panel === "color" ? Docs.COLORS : []
-        delegate: MenuRow {
-          required property var modelData
-          readonly property string value: modelData.id + "_background"
-          readonly property var shade: Docs.blockColors(value, menu.theme.dark)
-          theme: menu.theme
-          width: parent.width
-          icon: ""
-          text: modelData.label + " background"
-          checked: menu.first !== null && menu.first.color === value
-          onClicked: { menu.close(); menu.editor.setBlockColor(menu.uids, value) }
-          Rectangle { x: 10; y: 8; width: 18; height: 16; radius: 3; color: parent.shade.background; visible: !parent.checked; border.width: 1; border.color: menu.theme.line
-            Text { textFormat: Text.PlainText; anchors.centerIn: parent; text: "A"; font.pixelSize: 12; font.weight: Font.DemiBold; color: menu.theme.text } }
-        }
       }
     }
   }

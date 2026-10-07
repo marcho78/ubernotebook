@@ -381,7 +381,7 @@ QtObject {
         { use: "version <id> <name>", does: "one kept version, as Markdown" },
         { use: "restoreVersion <id> <name>", does: "the page as that version was (the page as it is now kept in its history first)" },
         { use: "check <page id> <block id> <true|false>", does: "ticks a to-do, or unticks it" },
-        { use: "color <page id> <block id> <color>", does: "a block's color: gray, brown, orange, yellow, green, blue, purple, pink or red (its text), with _background for behind it (\"blue_background\"), \"\" for none" },
+        { use: "color <page id> <block id> <color>", does: "a block's color: gray, brown, orange, yellow, green, blue, purple, pink or red (its text), or a hex of your own (\"#ff8800\"), with _background for behind it (\"blue_background\"), \"\" for none" },
         { use: "removeBlock <page id> <block id>", does: "takes the block (and the blocks inside it) off the page; the page before is kept in its history" },
         { use: "board <page id> <block id> <action> <a> <b>", does: "changes a board: add <text> <column> (\"\" the first), move <card> <column>, edit <card> <text>, remove <card>, addColumn <name>, renameColumn <column> <name>, removeColumn <column>, height <px, 0 as tall as its cards>, columnWidth <column> <px, 0 as fits>, cardColor <card> <color>, columnColor <column> <color> (blue, #ff8800, either with _background, \"\" none); a card or column by its id or its text (blocks gives them)" },
         { use: "picture <page id> <block id> <width> <align>", does: "a picture's size (width, a percent of the page's: 15 to 100) and where it sits (left, center, right); \"\" keeps either" },
@@ -1132,7 +1132,7 @@ QtObject {
     var v = String(value || "").trim().toLowerCase()
     var name = v.replace(/_background$/, "")
     var hex = /^#[0-9a-f]{6}$/.test(name)
-    if (v && !Blocks.isColor(v) && !hex) return fail("a color is gray, brown, orange, yellow, green, blue, purple, pink or red, with _background for behind it (\"blue_background\"), or \"\" for none")
+    if (v && !Blocks.isColor(v) && !hex) return fail("a color is gray, brown, orange, yellow, green, blue, purple, pink or red, or a hex (\"#ff8800\"), with _background for behind it (\"blue_background\"), or \"\" for none")
     var err = editPageNow(id, function(p) {
       var lockedNow = lockedNote(p)
       if (lockedNow) return lockedNow
@@ -1144,8 +1144,7 @@ QtObject {
         else if (v !== name) d.background = name
         else d.color = name
         b.data = Blocks.cleanData(b.type, d)
-      } else if (hex) return "a hex color is for a card (a board, file, video, bookmark, button, person or email); text takes one of Pages' colors"
-      else if (v) b.color = v
+      } else if (v) b.color = v
       else delete b.color
     }, true)
     return err ? fail(err) : answer({ ok: true, id: id, block: block, color: v })

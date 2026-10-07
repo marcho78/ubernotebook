@@ -528,7 +528,12 @@ Item {
       compare(json(api.color(r.id, list[2].id, "blue_background")).ok, true)
       compare(fileOf(r.id).blocks[list[2].id].color, "blue_background")
       compare(json(api.color(r.id, list[2].id, "chartreuse")).ok, false)
-      compare(json(api.color(r.id, list[2].id, "#ff8800")).ok, false, "text takes Pages' colors")
+      compare(json(api.color(r.id, list[2].id, "#FF8800")).ok, true, "a hex of your own")
+      compare(fileOf(r.id).blocks[list[2].id].color, "#ff8800")
+      compare(json(api.color(r.id, list[2].id, "#3366cc_background")).ok, true)
+      compare(fileOf(r.id).blocks[list[2].id].color, "#3366cc_background")
+      compare(json(api.color(r.id, list[2].id, "#ff88")).ok, false, "not a hex")
+      compare(json(api.color(r.id, list[2].id, "blue_background")).ok, true)
       // A block's id is one of the page's: never what every object has.
       for (var bad of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
         compare(json(api.color(r.id, bad, "blue")).ok, false, bad)

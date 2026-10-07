@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import "../Docs.js" as Docs
+import "../Colors.js" as Colors
 
 // Over words you select in Pages: turn the block into another kind, bold,
 // italic, underline, strikethrough, code, a link, and colors. It never takes
@@ -11,8 +12,19 @@ Item {
   property var theme: null
   property var editor: null
 
+  // The colors you picked last (for words, as for everything in Pages).
+  property var recent: []
+
   signal linkRequested(Item anchor)
   signal agentRequested()
+  // Custom…: a color of your own for the words ("color" or "background").
+  signal customColorRequested(string kind)
+
+  // The words' color, if it's one of your own ("" for none, or Pages').
+  function ownColor(value) {
+    var h = Colors.normalize(value || "")
+    return h && Docs.darkMap()[h] === undefined && Docs.lightMap()[h] === undefined ? h : ""
+  }
 
   readonly property var st: editor ? editor.formatState : ({})
   readonly property var words: st && st.inline ? st.inline : ({})
@@ -108,11 +120,18 @@ Item {
       id: colorButton
       theme: bubble.theme; size: 30; icon: bubble.theme.icons.textColor; tip: "Color"
       swatch: bubble.words.color ? bubble.words.color : "transparent"
-      onClicked: { colorPop.mode = "words"; colorPop.open() }
+      onClicked: {
+        colorPop.mode = "words"
+        colorPop.currentText = bubble.ownColor(bubble.words.color)
+        colorPop.currentBack = bubble.ownColor(bubble.words.highlight)
+        colorPop.open()
+      }
       ColorPop {
         id: colorPop
         theme: bubble.theme
         editor: bubble.editor
+        recent: bubble.recent
+        onCustomRequested: function(kind) { bubble.customColorRequested(kind) }
         x: colorButton.width - width
         y: colorButton.height + 6
       }

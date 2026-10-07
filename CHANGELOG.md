@@ -10,6 +10,14 @@ The first version.
 
 ### Changed
 
+- **Colors of your own on words and blocks.** The toolbar over selected
+  words, and a block's ⋮⋮ → *Color*, had only Pages' nine colors, where
+  mind maps, tables and tags have yours too. Now both have the colors you
+  picked last and **Custom…**, the same color picker (a block shows the
+  color as you pick it; Esc puts back what was there), for the text and
+  behind it; ⋮⋮ → *Color* is the same grid as everywhere else. Text on a
+  background of your own is made readable, and an agent's `color` takes a
+  hex for any block.
 - **Columns show where they are.** `/2 columns` showed one hint in the
   first column and nothing in the others; a block dragged beside another
   only drew a thin line at the page's edge; after the drop nothing showed

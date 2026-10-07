@@ -3612,6 +3612,8 @@ FocusScope {
       id: bubble
       z: 6
       theme: view.theme
+      recent: view.recentColors
+      onCustomColorRequested: function(kind) { view.openWordsCustom(kind) }
       editor: editor
       readonly property rect sel: {
         var s = editor.formatState
@@ -3733,6 +3735,7 @@ FocusScope {
       if (!editor.toMindMap(uids)) view.toast("A page or a sketch is among those blocks, and it would be lost: move it out first")
     }
     onAgentRequested: function(uids) { view.openAgent("blocks", uids) }
+    onColorRequested: function(uids, anchor, x, y) { view.openBlockColors(uids, anchor, x, y) }
     onMoveRequested: function(uids) {
       view.movingBlocks = uids
       picker.purpose = "moveBlocks"
@@ -3823,6 +3826,55 @@ FocusScope {
     customColor.x = colorAt.x
     customColor.y = colorAt.y
     customColor.start(kind, kind === "color" ? m.current.color : m.current.background, m.colorInfo())
+  }
+
+  // Words' color of your own (Custom… over the words you picked): kept on
+  // those words with Apply. { uid, start, end } while the picker's open.
+  property var wordsColorAt: null
+  function openWordsCustom(kind) {
+    var item = editor.items[editor.focusUid]
+    if (!item || !item.edit) return
+    var e = item.edit
+    if (e.selectionStart === e.selectionEnd) return
+    var st = editor.formatState.inline || {}
+    wordsColorAt = { uid: editor.focusUid, start: e.selectionStart, end: e.selectionEnd }
+    var ink = String(theme.text)
+    var paper = String(theme.background)
+    var p = bubble.mapToItem(view, 0, bubble.height + 6)
+    wordsCustom.recent = recentColors
+    wordsCustom.x = Math.max(8, Math.min(view.width - wordsCustom.width - 8, p.x))
+    wordsCustom.y = Math.max(8, Math.min(view.height - 420, p.y))
+    wordsCustom.start(kind, kind === "color" ? (st.color || "") : (st.highlight || ""), {
+      text: e.selectedText.replace(/\s+/g, " ").slice(0, 40) || "Text",
+      fill: Colors.normalize(st.highlight) || paper, ownInk: Colors.normalize(st.color), pageInk: ink })
+  }
+
+  // Blocks' colors (⋮⋮ → Color): Pages' and your own, where the menu was.
+  property var blockColorUids: []
+  function openBlockColors(uids, anchor, ax, ay) {
+    blockColorUids = uids
+    var i = editor.indexOf(uids[0])
+    var v = i >= 0 ? String(editor.model.get(i).color || "") : ""
+    var back = /_background$/.test(v)
+    blockColors.uids = uids
+    blockColors.currentText = back ? "" : v
+    blockColors.currentBack = back ? v.replace(/_background$/, "") : ""
+    var p = anchor ? anchor.mapToItem(view, ax || 0, ay || 0) : Qt.point(view.width / 2, 120)
+    blockColors.x = Math.max(8, Math.min(view.width - blockColors.width - 8, p.x))
+    blockColors.y = Math.max(8, Math.min(view.height - 300, p.y))
+    blockColors.open()
+  }
+  function openBlockCustom(kind) {
+    var i = editor.indexOf(blockColorUids[0])
+    if (i < 0) return
+    var r = editor.model.get(i)
+    var look = Docs.blockColors(r.color, theme.dark)
+    blockCustom.recent = recentColors
+    blockCustom.x = blockColors.x
+    blockCustom.y = Math.max(8, Math.min(view.height - 420, blockColors.y))
+    blockCustom.start(kind, kind === "color" ? look.text : look.background, {
+      text: Html.plainText(editor.htmls[r.uid] || "").slice(0, 40) || "Text",
+      fill: look.background || String(theme.background), ownInk: look.text, pageInk: String(theme.text) })
   }
 
   // The table whose cells are being colored (its colorScope says which).
@@ -4066,6 +4118,50 @@ FocusScope {
     onCopied: function(what) { view.copyText(what) }
     onEmailRequested: function(email) { view.mailTo(email) }
     onPeopleRequested: function(id) { view.openPeople(id) }
+  }
+
+  // A color of your own for the words picked: kept on them with Apply.
+  ColorPicker {
+    id: wordsCustom
+    objectName: "wordsCustom"
+    theme: view.theme
+    parent: view
+    onPicked: function(hex) {
+      var at = view.wordsColorAt
+      if (at && editor.items[at.uid]) {
+        editor.focusBlock(at.uid, at.end, at.start)
+        editor.formatInline(kind === "color" ? "color" : "highlight", hex)
+      }
+      view.rememberColor(hex)
+    }
+    onClosed: view.wordsColorAt = null
+  }
+
+  // Blocks' colors, and one of your own for them: shown on the blocks as you
+  // pick, kept with Apply (a step to undo), put back with Cancel.
+  ColorPop {
+    id: blockColors
+    objectName: "blockColors"
+    theme: view.theme
+    editor: editor
+    mode: "blocks"
+    parent: view
+    recent: view.recentColors
+    onCustomRequested: function(kind) { view.openBlockCustom(kind) }
+  }
+  ColorPicker {
+    id: blockCustom
+    objectName: "blockCustom"
+    theme: view.theme
+    parent: view
+    onPreview: function(hex) { editor.previewBlockColor(view.blockColorUids, kind === "color" ? hex : hex + "_background") }
+    onPicked: function(hex) {
+      editor.endBlockColorPreview()
+      editor.setBlockColor(view.blockColorUids, kind === "color" ? hex : hex + "_background")
+      view.rememberColor(hex)
+    }
+    onCanceled: editor.endBlockColorPreview()
+    onClosed: editor.endBlockColorPreview()
   }
 
   // A color of your own for them: shown in the table as you pick, kept with
