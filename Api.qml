@@ -311,15 +311,23 @@ QtObject {
     }, { timeoutMs: 20000, maxBytes: 6 * max + 4096 })
   }
 
-  // Markdown as blocks, "[[Page title]]" a link to the page called that.
-  function blocksOf(text, titleFromHeading) {
+  // Markdown as blocks, "[[Page title]]" a link to the page called that;
+  // "::columns" lines as columns when they're for a page (`columns`: not a
+  // quick note's, or a notebook's).
+  function blocksOf(text, titleFromHeading, columns) {
     return Import.fromMarkdown(text, {
       wiki: function(name) { return Workspace.pageNamed(api.workspace.index, name) },
       // ```contact: a person by id, else the best match for a name, an email, a number.
       contact: function(q) { var c = api.workspace.contactById(q) || Contacts.find(api.workspace.contacts, q, 1)[0]; return c ? c.id : "" },
       // ```event: one that's on the calendar.
       event: function(id) { return !!Calendar.byId(api.workspace.calendar, id) }
-    }, { titleFromHeading: titleFromHeading, columns: true })
+    }, { titleFromHeading: titleFromHeading, columns: columns === true })
+  }
+
+  // Pages keep so many blocks: a write past that is refused, not cut short
+  // (somewhere in it, a column even).
+  function tooLong(count) {
+    return count > Workspace.MAX_BLOCKS ? "that's more than a page holds (" + Workspace.MAX_BLOCKS + " blocks): split it over more pages" : ""
   }
 
   // ---- the commands ---------------------------------------------------------------------------
@@ -684,7 +692,9 @@ QtObject {
     var md = readMarkdown(path)
     if (md.error) return fail(md.error)
     var name = String(title || "").trim()
-    var got = blocksOf(md.text, name === "")
+    var got = blocksOf(md.text, name === "", true)
+    var long = tooLong(got.blocks.length + 1)
+    if (long) return fail(long)
     writeOpen()
     var page = workspace.createPage({ parent: into, title: Workspace.cleanTitle(name || got.title || ""), icon: got.icon || "", project: got.project,
       blocks: got.blocks.length ? got.blocks.concat([{ type: "p", html: "", indent: 0 }]) : undefined })
@@ -783,8 +793,12 @@ QtObject {
     if (!live(id)) return fail("there's no page with that id (list or find gives them)")
     var md = readMarkdown(path)
     if (md.error) return fail(md.error)
-    var blocks = blocksOf(md.text, false).blocks
+    var blocks = blocksOf(md.text, false, true).blocks
     if (blocks.length === 0) return fail("there's nothing in that file to add")
+    writeOpen()
+    var now = workspace.readPageNow(id)
+    var long = tooLong((now ? Workspace.flatten(now).length : 0) + blocks.length)
+    if (long) return fail(long)
     keep(id)
     // Open in the window: it adds them itself.
     var took = viewDoes("appendToOpenPage", id, blocks)
@@ -827,7 +841,7 @@ QtObject {
     if (!live(id)) return fail("there's no page with that id (list or find gives them)")
     var md = readMarkdown(path)
     if (md.error) return fail(md.error)
-    var list = blocksOf(md.text, false).blocks
+    var list = blocksOf(md.text, false, true).blocks
     if (list.length === 0) return fail("there's nothing in that file to put in")
     writeOpen()
     var page = workspace.readPageNow(id)
@@ -844,6 +858,8 @@ QtObject {
         if (spot.list[k].type === "page") return fail("there's a page inside that block, which would go with it: change the blocks around it instead")
       }
     }
+    var long = tooLong(spot.list.length - (how === "replace" ? spot.end - spot.at + 1 : 0) + list.length)
+    if (long) return fail(long)
     keep(id)
     // Open in the window: it changes the page itself, as a step you can undo.
     var took = viewDoes(how === "replace" ? "replaceInOpenPage" : "insertInOpenPage", id, { block: spot.block.uid, blocks: list })
@@ -1540,7 +1556,9 @@ QtObject {
     var md = readMarkdown(path)
     if (md.error) return fail(md.error)
     var name = String(title || "").trim()
-    var got = blocksOf(md.text, name === "")
+    var got = blocksOf(md.text, name === "", true)
+    var long = tooLong(got.blocks.length + 1)
+    if (long) return fail(long)
     writeOpen()
     var page = workspace.createPage({ parent: "", title: Workspace.cleanTitle(name || got.title || ""), icon: got.icon || "",
       blocks: got.blocks.concat([{ type: "p", html: "", indent: 0 }]) })

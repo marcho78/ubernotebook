@@ -395,6 +395,9 @@ function fromDocPage(page, lookup, options) {
     else if (b.type === "email") line = Email.toMarkdown(b.data, opts.assetPrefix)
     else if (b.type === "calendar") line = calendarTable(b)
     else line = text
+    // For an agent, a line of text that would read as a column's marker
+    // says so: "\::next" (read back as the words, not columns).
+    if (opts.fences && b.type === "p") line = line.replace(/^(::(?:columns|next|end)(?=[ \t]|$))/gm, "\\$1")
     if (!kids) return line
     var listy = b.type === "bullet" || b.type === "toggle" || b.type === "check" || b.type === "number"
     return (line ? line + (listy ? "\n" : "\n\n") : "") + indent(kids, b.type === "number" ? "   " : "  ")

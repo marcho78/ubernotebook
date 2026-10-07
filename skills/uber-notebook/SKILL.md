@@ -217,7 +217,8 @@ of its own, with blank lines around it:
   `depth` 0 in `blocks`). Inside a toggle, a list or a callout, they're
   refused.
 - `read` gives a page's columns the same way, so what it gives can be
-  written back. In `blocks`, a `columns` block holds `column` blocks, and
+  written back. A line of text that's just `::next` (or `::columns`,
+  `::end`) is written `\::next`: the words, not a marker. In `blocks`, a `columns` block holds `column` blocks, and
   they hold the blocks in them (two deeper): change those, not the columns.
 - Use them for what belongs side by side (pros and cons, before and after,
   a list beside the note it goes with), not for ordinary text, which reads

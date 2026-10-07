@@ -720,6 +720,12 @@ Item {
       verify(api.readNotebook("journal-ab12", added.id).indexOf("- [ ] Pack") >= 0)
       compare(json(api.notebook("nope")).ok, false)
       compare(json(api.readNotebook("journal-ab12", "nope")).ok, false)
+      // Columns are Pages': in a notebook, the lines are words.
+      var cols = json(api.addToNotebook("journal-ab12", file("c.md", "Saturday\n\n::columns\n\nleft\n\n::next\n\nright\n\n::end")))
+      verify(cols.ok, JSON.stringify(cols))
+      var page = files.written["journal-ab12"][cols.id]
+      compare(page.blocks.map(function(b) { return b.type }).join(","), "p,p,p,p,p,p")
+      compare(page.blocks.map(function(b) { return Html.plainText(b.html) }).join("|"), "Saturday|::columns|left|::next|right|::end")
     }
 
     // What read gives as fenced blocks is what add takes.
@@ -1485,6 +1491,31 @@ Item {
       verify(json(api.blocks(t.id)).some(function(b) { return b.type === "columns" }))
       // Markdown for anything else (the Markdown copy of Pages): one after the other.
       verify(Markdown.fromDocPage(fileOf(r.id), null, {}).indexOf("::columns") < 0)
+      // The words "::next" (and the others) on a line: written \::next, read as words.
+      var lit = json(api.add("Literal", file("l.md", "\\::columns\n\n\\::next\n\n::columns\n\nleft\n\n\\::end\n\n::next\n\nright\n\n::end")))
+      verify(lit.ok, JSON.stringify(lit))
+      compare(shape(lit.id), "p:0:::columns|p:0:::next|columns:0:|column:1:|p:2:left|p:2:::end|column:1:|p:2:right|p:0:")
+      var litMd = api.read(lit.id)
+      verify(litMd.indexOf("\\::columns\n\n\\::next\n\n::columns\n\nleft\n\n\\::end\n\n::next") >= 0, litMd)
+      var litBack = json(api.add("Literal again", file("l2.md", litMd.replace(/^# .*\n\n/, ""))))
+      compare(shape(litBack.id), shape(lit.id), "back the same")
+      // A quick note's lines are words too.
+      var quick = json(api.quickPage("Shopping\n::columns\nmilk\n::next\neggs\n::end"))
+      verify(quick.ok, JSON.stringify(quick))
+      verify(json(api.blocks(quick.id)).every(function(b) { return b.type !== "columns" && b.type !== "column" }))
+      // More than a page holds: refused, not cut short (in a column, even).
+      var many = []
+      for (var n = 0; n < 4997; n++) many.push("- item " + n)
+      var big = "::columns\n\n" + many.join("\n") + "\n\n::next\n\nright\n\n::end"
+      var no2 = json(api.add("Too long", file("big.md", big)))
+      compare(no2.ok, false)
+      verify(no2.error.indexOf("more than a page holds") >= 0, no2.error)
+      var half = []
+      for (var h = 0; h < 2600; h++) half.push("- item " + h)
+      var p1 = json(api.add("Half", file("h1.md", half.join("\n"))))
+      verify(p1.ok)
+      compare(json(api.append(p1.id, file("h2.md", half.join("\n")))).ok, false, "appended past it")
+      compare(json(api.insertAfter(p1.id, json(api.blocks(p1.id))[0].id, file("h3.md", half.join("\n")))).ok, false, "put in past it")
     }
 
     function test_8_without_the_window() {
