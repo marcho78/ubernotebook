@@ -5,6 +5,7 @@ import "../../app"
 import "../../Workspace.js" as Workspace
 import "../../Scope.js" as Scope
 import "../../Html.js" as Html
+import "../../Markdown.js" as Markdown
 
 // The commands agents and scripts use (Api.qml), on the real workspace store
 // with files in memory, and the Pages view beside them as the window has it.
@@ -1441,6 +1442,49 @@ Item {
       files.rootPath = root0
       tryCompare(ws, "ready", true, 3000)
       api.ui = ui
+    }
+
+    // Columns an agent writes (::columns, ::next, ::end), as read gives them back.
+    function test_34_an_agent_makes_columns() {
+      fresh()
+      var md = "intro\n\n::columns 60 40\n\n## Pros\n\n- fast\n\n::next\n\n## Cons\n\n- loud\n\n::end\n\nafter"
+      var r = json(api.add("Compare", file("c.md", md)))
+      verify(r.ok, JSON.stringify(r))
+      var shape = function(id) { return json(api.blocks(id)).map(function(b) { return b.type + ":" + b.depth + ":" + (b.text || "") }).join("|") }
+      compare(shape(r.id), "p:0:intro|columns:0:|column:1:|h2:2:Pros|bullet:2:fast|column:1:|h2:2:Cons|bullet:2:loud|p:0:after|p:0:")
+      var page = fileOf(r.id)
+      var widths = Workspace.flatten(page).filter(function(b) { return b.type === "column" }).map(function(b) { return b.width })
+      compare(widths.join(","), "0.6,0.4", "each one's share")
+      var back = api.read(r.id)
+      verify(back.indexOf("::columns 60 40\n\n## Pros\n\n- fast\n\n::next\n\n## Cons\n\n- loud\n\n::end") >= 0, back)
+      verify(json(api.help()).columns.indexOf("::columns") >= 0)
+      // What read gives, written again: the same.
+      var again = json(api.add("Again", file("a.md", back.replace(/^# .*\n\n/, ""))))
+      compare(shape(again.id), shape(r.id))
+      // On the page open in the window: three, equal.
+      view.open(r.id)
+      tryVerify(function() { return view.page && view.page.id === r.id }, 2000)
+      var added = json(api.append(r.id, file("t.md", "::columns\n\none\n\n::next\n\ntwo\n\n::next\n\nthree\n\n::end")))
+      verify(added.ok, JSON.stringify(added))
+      var types = []
+      for (var i = 0; i < view.editor.model.count; i++) types.push(view.editor.typeOf(view.editor.uidAt(i)))
+      compare(types.filter(function(t) { return t === "columns" }).length, 2)
+      compare(types.filter(function(t) { return t === "column" }).length, 5)
+      view.commit()
+      verify(api.read(r.id).indexOf("::columns\n\none\n\n::next\n\ntwo\n\n::next\n\nthree\n\n::end") >= 0, "no shares said: equal")
+      // Inside another block: no, with what to do instead.
+      var t = json(api.add("Folded", file("f.md", "<details><summary>Toggle</summary>\n\ninside\n\n</details>\n\nout")))
+      var list = json(api.blocks(t.id))
+      var inside = list.filter(function(b) { return b.text === "inside" })[0]
+      compare(inside.depth, 1)
+      var no = json(api.insertAfter(t.id, inside.id, file("x.md", "::columns\na\n::next\nb\n::end")))
+      compare(no.ok, false)
+      verify(no.error.indexOf("page's own level") >= 0, no.error)
+      var out = list.filter(function(b) { return b.text === "out" })[0]
+      verify(json(api.insertAfter(t.id, out.id, file("x.md", "::columns\na\n::next\nb\n::end"))).ok)
+      verify(json(api.blocks(t.id)).some(function(b) { return b.type === "columns" }))
+      // Markdown for anything else (the Markdown copy of Pages): one after the other.
+      verify(Markdown.fromDocPage(fileOf(r.id), null, {}).indexOf("::columns") < 0)
     }
 
     function test_8_without_the_window() {

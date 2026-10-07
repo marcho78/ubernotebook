@@ -315,4 +315,26 @@ check("a notebook's page: blank, titled, drawn on only, drawn on a lot", () => {
   assert.ok(tall.blocks[0].sketch.strokes[0].points[3] <= Sketch.MAX_HEIGHT - 20);
 });
 
+check("an agent's columns: ::columns, ::next, ::end", () => {
+  const cols = (text) => shape(md(text, null, { columns: true }).blocks).join("|");
+  assert.equal(cols("intro\n\n::columns\n## Pros\n- fast\n::next\n## Cons\n- loud\n::end\nafter"),
+    "p:0:intro|columns:0:|column:1:|h2:2:Pros|bullet:2:fast|column:1:|h2:2:Cons|bullet:2:loud|p:0:after");
+  const shared = md("::columns 60 40\na\n::next\nb\n::end", null, { columns: true }).blocks;
+  assert.deepEqual(shared.filter((b) => b.type === "column").map((b) => b.width), [0.6, 0.4], "each one's share");
+  const odd = md("::columns 60\na\n::next\nb\n::end", null, { columns: true }).blocks;
+  assert.ok(odd.every((b) => b.width === undefined), "shares that don't fit: equal");
+  assert.equal(cols("::columns\na\n::next\n::end"), "columns:0:|column:1:|p:2:a|column:1:|p:2:", "an empty column: an empty line");
+  assert.equal(cols("::columns\n- a\n  - inside\n::next\nb"), "columns:0:|column:1:|bullet:2:a|bullet:3:inside|column:1:|p:2:b", "nested lists keep their depth; no ::end, to the end");
+  assert.equal(cols("::columns\n```\n::next\n```\n::next\nb\n::end"), "columns:0:|column:1:|code:2:::next|column:1:|p:2:b", "in code, a line is code");
+  assert.equal(cols("```\n::columns\n```\nx"), "code:0:::columns|p:0:x", "and outside columns too");
+  assert.equal(cols("::next\na\n::end"), "p:0:a", "markers outside columns just go");
+  assert.equal(cols("::columns\na\n::columns\nb\n::next\nc\n::end\n::next\nd\n::end"),
+    "columns:0:|column:1:|p:2:a|p:2:b|p:2:c|column:1:|p:2:d", "columns inside columns: their markers just go");
+  const seven = md("::columns\n1\n::next\n2\n::next\n3\n::next\n4\n::next\n5\n::next\n6\n::next\n7\n::end", null, { columns: true }).blocks;
+  assert.equal(seven.filter((b) => b.type === "column").length, 6, "six at most");
+  assert.equal(shape(seven).slice(-2).join("|"), "p:2:6|p:2:7", "the seventh's in the sixth");
+  assert.equal(shape(md("::columns\na\n::next\nb\n::end").blocks).join("|"), "p:0:::columns a ::next b ::end",
+    "without the option (a file being imported), they're text");
+});
+
 console.log(`import: ${passed} checks passed`);

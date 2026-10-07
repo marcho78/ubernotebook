@@ -21,6 +21,16 @@ The first version.
   and the block dropped stays picked, its columns outlined a moment. A
   column's only block can be dragged beside another in six columns, as its
   own column goes.
+- **Agents make columns.** The skill said "there is no Markdown for
+  columns", and `read` gave a page's columns one after another, so an agent
+  could neither make them nor see them. Now the Markdown an agent writes
+  takes `::columns` (or `::columns 60 40`, each one's share), a column's
+  blocks, `::next`, the next one's, `::end` (as the starter pages always
+  have), and `read` gives columns back that way. Columns inside another
+  block are refused with what to do instead. The skill and `help` say how;
+  the real-agent smoke test has a columns task that each agent works out
+  from the skill alone. (Markdown for anything else, the Markdown copy of
+  Pages, still has columns one after another.)
 - **Getting out of a list or toggle.** In a toggle or a callout, Enter on an
   empty line only made another one inside it; the only ways out were
   Shift+Tab or Backspace. Now Enter on an empty line at the end of what's

@@ -1235,8 +1235,77 @@ function frontMatter(line) {
   return TERMINATOR.test(v) ? null : { key: m[1].toLowerCase(), value: v }
 }
 
+// Columns, in an agent's Markdown (options.columns; as `read` gives them):
+// "::columns" (each one's share, if you like: "::columns 60 40"), a column's
+// blocks, "::next" and the next one's, "::end". Six at most: what's past the
+// sixth goes in it. Columns don't go in columns: markers inside them just go,
+// and so do a "::next" or "::end" outside any. (Not in code: a fence's lines
+// are its own.)
+var COLUMN_MARK = /^::(columns|next|end)(?:[ \t]+(.*?))?[ \t]*$/
+
+function readColumns(lines, c, refs, blocks) {
+  var run = []
+  var cols = null
+  var depth = 0
+  var widths = ""
+  var fence = null
+  function into() { return cols ? cols[cols.length - 1] : run }
+  function flush() {
+    if (run.length) readBlocks(run, c, refs, 0, blocks)
+    run = []
+  }
+  function close() {
+    var shares = widths ? widths.split(/\s+/).map(Number) : []
+    var fits = shares.length === cols.length && shares.every(function(w) { return isFinite(w) && w > 0 })
+    var total = fits ? shares.reduce(function(a, w) { return a + w }, 0) : 0
+    c.read.blocks++
+    blocks.push({ type: "columns", indent: 0 })
+    cols.forEach(function(list, k) {
+      var col = { type: "column", indent: 1 }
+      if (fits) col.width = Math.round(shares[k] / total * 100) / 100
+      c.read.blocks++
+      blocks.push(col)
+      var inner = readBlocks(list, c, refs, 0)
+      if (!inner.length) inner.push({ type: "p", html: "", indent: 0 })
+      inner.forEach(function(b) { b.indent += 2; blocks.push(b) })
+    })
+    cols = null
+  }
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i]
+    if (fence) {
+      into().push(line)
+      if (fenceEnd(line, fence)) fence = null
+      continue
+    }
+    fence = fenceStart(line)
+    var m = fence ? null : COLUMN_MARK.exec(line)
+    if (!m) { into().push(line); continue }
+    // (A marker that goes leaves a blank line: what's either side stays apart.)
+    if (m[1] === "columns") {
+      if (cols) { depth++; into().push(""); continue }
+      flush()
+      cols = [[]]
+      depth = 0
+      widths = (m[2] || "").trim()
+    } else if (!cols) {
+      run.push("")
+    } else if (m[1] === "end") {
+      if (depth > 0) { depth--; into().push("") }
+      else close()
+    } else if (depth === 0 && cols.length < 6) {
+      cols.push([])
+    } else {
+      into().push("")
+    }
+  }
+  if (cols) close()
+  flush()
+}
+
 // Markdown -> { title, icon, blocks }. The title comes from front matter
-// ("title: ..."), or a first "# Title" when options.titleFromHeading.
+// ("title: ..."), or a first "# Title" when options.titleFromHeading;
+// options.columns reads "::columns" (see readColumns).
 function fromMarkdown(text, ctx, options) {
   var o = options || {}
   var c = context(ctx)
@@ -1270,7 +1339,8 @@ function fromMarkdown(text, ctx, options) {
     var defs = Notes.definitions(lines)
     c.notes = defs.notes
     var r = collectRefs(defs.lines)
-    readBlocks(r.lines, c, r.refs, 0, blocks)
+    if (o.columns) readColumns(r.lines, c, r.refs, blocks)
+    else readBlocks(r.lines, c, r.refs, 0, blocks)
     if (blocks.length > MAX_BLOCKS) blocks.length = MAX_BLOCKS
     if (o.titleFromHeading && !title) {
       var firstText = -1

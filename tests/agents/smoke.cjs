@@ -5,7 +5,8 @@
 // protocol), on notes in a folder made for the run, never yours, each
 // question it asks answered "Allow once". The same tasks for each: read the
 // skill, write a page, edit a block, put a picture on the page, search the
-// web, a command that asks, a file from outside its folder. What's on the
+// web, a command that asks, columns side by side (from the skill alone), a
+// file from outside its folder. What's on the
 // page is checked through Uber Notebook's commands; a pass/fail table, and
 // a report (JSON) in /tmp.
 //
@@ -24,6 +25,12 @@ const { execFileSync, spawn } = require("node:child_process");
 
 const root = path.resolve(__dirname, "..", "..");
 const argv = process.argv.slice(2);
+// (Anything it doesn't know: the usage, not a run, which costs.)
+const KNOWN = ["grok", "claude", "codex", "--only", "--keep"];
+if (argv.some((x, i) => !KNOWN.includes(x) && argv[i - 1] !== "--only")) {
+  console.log("usage: node tests/agents/smoke.cjs [grok] [claude] [codex] [--only <task>[,<task>...]] [--keep]");
+  process.exit(argv.includes("--help") || argv.includes("-h") ? 0 : 2);
+}
 const keep = argv.includes("--keep");
 const only = argv.includes("--only") ? String(argv[argv.indexOf("--only") + 1] || "").split(",") : [];
 const ALL = ["grok", "claude", "codex"];
@@ -60,6 +67,10 @@ const tasks = [
   { id: "command", title: "Year",
     ask: () => "Run the shell command `date +%Y` and write the year it prints on this page.",
     check: (b) => [new RegExp(`\\b${year}\\b`).test(text(b)) || `no ${year} on the page`] },
+  { id: "columns", title: "Pros and cons",
+    ask: () => "Put two columns side by side on this page: Pros on the left with two bullet points, Cons on the right with two bullet points.",
+    check: (b) => [b.some((x) => x.type === "columns") || "no columns", b.filter((x) => x.type === "column").length === 2 || "not two columns",
+      b.filter((x) => x.type === "bullet").length >= 4 || "fewer than four bullets"] },
   { id: "outside", title: "Outside",
     ask: () => `Put the picture ${picture} on this page.`,
     check: (b) => [b.some((x) => x.type === "image" || x.type === "gallery") || "no picture on the page: refused, and no way found round it"] },

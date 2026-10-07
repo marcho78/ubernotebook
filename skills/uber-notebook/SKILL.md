@@ -153,6 +153,8 @@ quotes, `> [!NOTE]` callouts, **bold**, *italic*, ~~struck~~, `code`, links, and
   equation of its own (see Equations below)
 - `[^1]` with `[^1]: its words` at the end of the file, or `^[its words]`: a
   footnote (see Footnotes below)
+- `::columns`, `::next`, `::end` lines: blocks side by side (see Columns
+  below)
 
 ## Making a page look good
 
@@ -172,6 +174,7 @@ you `replace`, `insertAfter` or `append`, or is one command:
 - In a line: **bold**, *italic*, ~~struck~~, `==highlighted==`, `code`,
   `<u>underlined</u>`, `<span style="color: #d44c47">colored words</span>` and
   `<span style="background-color: #fbecdd">a colored background</span>`.
+- Columns (blocks side by side): see Columns below.
 - Tables (`| a | b |`), mind maps (```` ```mindmap ````), diagrams
   (```` ```mermaid ````), equations (`$$`), footnotes, boards, galleries
   and bookmarks: see their sections below.
@@ -179,8 +182,46 @@ you `replace`, `insertAfter` or `append`, or is one command:
   for its text, `blue_background` behind it); `icon <page id> <emoji>` and
   `cover <page id> gradient:0` (0 to 11) give the page an icon and a cover.
 
-There is no Markdown for columns. Keep it restrained: a few headings, one or
-two callouts, color where it means something, not on every block.
+Keep it restrained: a few headings, one or two callouts, color where it
+means something, not on every block.
+
+## Columns
+
+Blocks side by side: a line `::columns`, the first column's Markdown,
+`::next`, the next column's, and so on, then `::end`. Each marker is a line
+of its own, with blank lines around it:
+
+```markdown
+::columns
+
+## Pros
+
+- Quick to set up
+
+::next
+
+## Cons
+
+- Costs more
+
+::end
+```
+
+- Two to six columns (past the sixth, what's left goes in the sixth). They
+  share the width equally; `::columns 60 40` gives each its share instead
+  (one number a column).
+- In a column: any Markdown (headings, lists, to-dos, callouts, toggles,
+  code, a table), but not more columns.
+- Columns go at the page's own level: in `add` and `append`, or in
+  `insertAfter` or `replace` a block that isn't inside another (one at
+  `depth` 0 in `blocks`). Inside a toggle, a list or a callout, they're
+  refused.
+- `read` gives a page's columns the same way, so what it gives can be
+  written back. In `blocks`, a `columns` block holds `column` blocks, and
+  they hold the blocks in them (two deeper): change those, not the columns.
+- Use them for what belongs side by side (pros and cons, before and after,
+  a list beside the note it goes with), not for ordinary text, which reads
+  better one block under another.
 
 ## Boards, bookmarks, links, galleries, people, agendas and events in Markdown
 
@@ -514,7 +555,8 @@ tags with `tagColor` only when the user asks.
 `blocks <id>` gives each block's id. `replace` puts your Markdown in place of a
 block and everything inside it; `insertAfter` puts it after them. Both keep the
 block's depth. Neither works on columns themselves (change the blocks inside
-them), and `replace` won't take a block with pages inside it.
+them), and `replace` won't take a block with pages inside it. Markdown with
+columns goes only after or in place of a block at depth 0 (see Columns).
 
 ## Pages, the trash and history
 

@@ -230,7 +230,8 @@ function fileName(page, index) {
 // a list item or toggle indented under it, inside a quote or callout quoted
 // with it. Toggles are list items (as Notion exports them); callouts quotes
 // with their icon; pages on it and links links to their files; columns one
-// after the other.
+// after the other (for an agent, `options.fences`, between "::columns",
+// "::next" and "::end" lines).
 // `lookup(id)` -> { title, icon, file } for pages it has or points to.
 // `options.sketchFile(blockId)` -> where a sketch's SVG is (written beside
 // the Markdown), or "" (it's said to be there); `options.assetPrefix` is put
@@ -335,8 +336,19 @@ function fromDocPage(page, lookup, options) {
   function one(b, n) {
     var text = Blocks.isText(b.type) ? inline(b.html || "", notes) : ""
     var kids = b.content ? list(b.content) : ""
-    // Markdown has no columns: one after the other.
-    if (b.type === "columns" || b.type === "column") return kids
+    // Markdown has no columns: one after the other. For an agent (fences),
+    // between "::columns", "::next" and "::end" lines, as it writes them.
+    if (b.type === "column" || (b.type === "columns" && !opts.fences)) return kids
+    if (b.type === "columns") {
+      var cols = (b.content || []).map(function(id) { return blocks[id] }).filter(function(x) { return x && x.type === "column" })
+      // Each one's share of them all, said only when they aren't equal.
+      var raw = cols.map(function(x) { return x.width > 0 ? x.width : 0 })
+      var sum = raw.reduce(function(a, w) { return a + w }, 0)
+      var shares = raw.every(function(w) { return w > 0 }) ? raw.map(function(w) { return Math.round(w / sum * 100) }) : []
+      var equal = shares.every(function(w) { return w === shares[0] })
+      var head = "::columns" + (shares.length && !equal ? " " + shares.join(" ") : "")
+      return head + "\n\n" + cols.map(function(x) { return x.content ? list(x.content) : "" }).join("\n\n::next\n\n") + "\n\n::end"
+    }
     var line
     if (b.type === "h1" || b.type === "h2" || b.type === "h3") line = new Array(Number(b.type.charAt(1)) + 1).join("#") + " " + text
     else if (b.type === "bullet" || b.type === "toggle") line = "- " + text

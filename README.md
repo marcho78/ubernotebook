@@ -1313,17 +1313,18 @@ tests/run          # settings, HTML, blocks, papers, library, Markdown,
                    # driven with keys and the mouse, offscreen (qmltestrunner)
 shaders/build      # recompile the shaders (needs qt6-shadertools)
 sounds/make        # make the sounds again
-node tests/agents/smoke.cjs [grok] [claude] [--only <task>,...]
+node tests/agents/smoke.cjs [grok] [claude] [codex] [--only <task>,...]
                    # the agents for real, before a release (below)
 ```
 
 Before a release, `tests/agents/smoke.cjs` runs each installed agent (Grok,
-Claude Code) for real, as the panel runs it: the real Store, Workspace, Api
+Claude Code, Codex) for real, as the panel runs it: the real Store, Workspace, Api
 and Agent.js in a Quickshell of its own (offscreen), on notes in a folder
 made for the run (never yours), the same command, sandbox, folders and
 protocol, each question answered *Allow once*. The same tasks for each:
 read the skill, write a page, edit a block, put a picture on the page,
-search the web, run a command, a file from outside its folder; the page is
+search the web, run a command, two columns side by side (worked out from
+the skill alone), a file from outside its folder; the page is
 checked through Uber Notebook's commands, and a pass/fail table printed. It
 makes real requests on your accounts (a few cents a run), and takes away
 what it made, the agents' sessions for its folders included. A release

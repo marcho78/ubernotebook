@@ -319,7 +319,7 @@ QtObject {
       contact: function(q) { var c = api.workspace.contactById(q) || Contacts.find(api.workspace.contacts, q, 1)[0]; return c ? c.id : "" },
       // ```event: one that's on the calendar.
       event: function(id) { return !!Calendar.byId(api.workspace.calendar, id) }
-    }, { titleFromHeading: titleFromHeading })
+    }, { titleFromHeading: titleFromHeading, columns: true })
   }
 
   // ---- the commands ---------------------------------------------------------------------------
@@ -412,6 +412,9 @@ QtObject {
         + "```board (## a column, - a card under it), ```bookmark (a link), ```contact (someone in People: their name, email or id), "
         + "```agenda (a day's events: 2026-10-05 or today), ```event (an event's id), ```link (a link to a page: its id or title), "
         + "```gallery (columns: 3, height: 240, then ![caption](assets/...) a picture a line, pictures already in Pages/assets)",
+      columns: "Blocks side by side: a line ::columns (or ::columns 60 40, each one's share), the first column's Markdown, "
+        + "::next, the next one's, ::end; two to six, at the page's own level (add, append, or insertAfter or replace a block "
+        + "that isn't inside another). read gives them so",
       markdown: "Headings, lists, - [ ] to-dos, code blocks with their language, > [!NOTE] callouts, "
         + "[[Page title]] (a link to that page), #tag (a tag), [@Fri 2 Oct](uber-notebook://date/2026-10-02) (a date) and "
         + "[\u23f0 Fri 2 Oct 9:30](uber-notebook://remind/2026-10-02T09:30) (a reminder: a notification then)"
@@ -833,6 +836,9 @@ QtObject {
     var spot = Workspace.locate(page, String(block || ""))
     if (!spot) return fail("there's no block with that id on the page (blocks <page id> gives them)")
     if (Workspace.isStructure(spot.block.type)) return fail("that block holds columns: change the blocks inside them instead")
+    // (Inside another block they'd be undone, their columns one after another.)
+    if (spot.depth > 0 && list.some(function(b) { return b.type === "columns" }))
+      return fail("columns go at the page's own level, not inside another block: insertAfter or replace a block that isn't inside one, or append them")
     if (how === "replace") {
       for (var k = spot.at; k <= spot.end; k++) {
         if (spot.list[k].type === "page") return fail("there's a page inside that block, which would go with it: change the blocks around it instead")
