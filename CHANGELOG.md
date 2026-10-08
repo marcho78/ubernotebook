@@ -10,6 +10,14 @@ The first version.
 
 ### Changed
 
+- **Ctrl+Z after a block's own buttons.** Changing a block with its own
+  buttons (an agenda's day, a board's card) was a step to undo, but Ctrl+Z
+  did nothing unless you'd clicked into a line first: the keyboard stayed
+  where it was, even in a view put away (People). Now a change on the page
+  brings the keyboard back to it (unless you're typing in something you
+  can see), Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y work with nothing picked, and
+  coming back to a page from People, the Library, the Calendar, Templates
+  or a tag gives it the keyboard.
 - **Dates and times read the way you mean them.** On a Wednesday,
   "Meeting with Wednesday" was saved as "Meeting with" on *next*
   Wednesday, so it seemed nothing was added. Now a day's name on that

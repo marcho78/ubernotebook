@@ -1025,6 +1025,30 @@ FocusScope {
 
   function pageTitleText() { return titleEdit.text }
 
+  // A page is what's shown (not the calendar, People, the Library...).
+  function pageShown() { return page !== null && !calendarShown && !libraryShown && !peopleShown && !templatesShown && tagShown === "" }
+  // Back on a page from another view: the keyboard to it, if it was left in
+  // the view put away (or somewhere you can't see). (That view may still be
+  // fading out: it's asked whether it holds the keyboard, not whether it shows.)
+  function keyboardBack(away) {
+    Qt.callLater(function() {
+      if (!pageShown()) return
+      var f = view.Window.activeFocusItem
+      var inAway = false
+      for (var it = f; it && away; it = it.parent) if (it === away) { inAway = true; break }
+      if (!inAway && f && f.visible) return
+      // (To the page's own: focusing the view would leave it where it was,
+      // inside it.)
+      if (!page.title && Blocks.isBlank(editor.serialize())) focusPage(true)
+      else editor.keyboardHere()
+    })
+  }
+  onCalendarShownChanged: if (!calendarShown) keyboardBack(calendarView)
+  onLibraryShownChanged: if (!libraryShown) keyboardBack(libraryView)
+  onPeopleShownChanged: if (!peopleShown) keyboardBack(peopleView)
+  onTemplatesShownChanged: if (!templatesShown) keyboardBack(templatesView)
+  onTagShownChanged: if (tagShown === "") keyboardBack(tagView)
+
   function focusPage(title) {
     if (!page) { view.forceActiveFocus(); return }
     if (title || (!page.title && Blocks.isBlank(editor.serialize()))) {
@@ -4785,6 +4809,11 @@ FocusScope {
     if (ctrl && shift && !alt && e.key === Qt.Key_D) { dictate(); return true }
     if (ctrl && shift && !alt && e.key === Qt.Key_R) { newAudioNote(); return true }
     if (ctrl && shift && !alt && e.key === Qt.Key_C) { openCalendar("", false); return true }
+    // Undo and redo on the page shown, with the keyboard on the page itself.
+    if (ctrl && !alt && (e.key === Qt.Key_Z || e.key === Qt.Key_Y) && pageShown() && !locked) {
+      if (e.key === Qt.Key_Y || shift) editor.redo(); else editor.undo()
+      return true
+    }
     if (alt && !ctrl && e.key === Qt.Key_Left) { back(); return true }
     if (alt && !ctrl && e.key === Qt.Key_Right) { forward(); return true }
     return false

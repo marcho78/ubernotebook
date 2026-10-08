@@ -1378,6 +1378,18 @@ FocusScope {
     keyCatcher.forceActiveFocus()
   }
 
+  // A change made on the page (a block's button clicked, its card written):
+  // the keyboard to the page, so Ctrl+Z and the rest reach it, when it's in
+  // something you can't see (a view put away, like People). One you can see
+  // (a box, a popup's field, a block's own field) keeps it.
+  function takeKeyboard() {
+    var f = root.Window.activeFocusItem
+    if (f && f.visible) return
+    keyCatcher.forceActiveFocus()
+  }
+  // The keyboard to the page, whatever had it (nothing picked, no text).
+  function keyboardHere() { keyCatcher.forceActiveFocus() }
+
   // ---- Pages: tables ---------------------------------------------------------------------
 
   // A table's cells as they're being written, into the page.
@@ -2029,6 +2041,7 @@ FocusScope {
 
   function endOp() {
     inOp = false
+    if (doc && !restoring) Qt.callLater(takeKeyboard)
     if (doc) {
       normalizeColumns()
       normalizeModel()
@@ -3781,6 +3794,13 @@ FocusScope {
   }
 
   function blockKey(e) {
+    // Undo and redo with the page's keyboard, whether blocks are picked or not.
+    if ((e.modifiers & Qt.ControlModifier) && !(e.modifiers & Qt.AltModifier) && (e.key === Qt.Key_Z || e.key === Qt.Key_Y)) {
+      e.accepted = true
+      if (readOnly) return
+      if (e.key === Qt.Key_Y || (e.modifiers & Qt.ShiftModifier)) redo(); else undo()
+      return
+    }
     if (selectedList.length === 0) { e.accepted = false; return }
     // A locked page: only moving around and copying.
     if (readOnly && !((e.modifiers & Qt.ControlModifier) && (e.key === Qt.Key_C || e.key === Qt.Key_A))
