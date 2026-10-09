@@ -156,25 +156,31 @@ Item {
   property var madePrivate: ({})
   property bool notPrivate: false
   function makeOwnPrivate(dir, done) {
-    if (madePrivate[dir]) { done(true); return }
     if (!store || typeof store.helper !== "function") { done(false); return }
     var names = ["Pages", "Notebooks", "sketches", "assets", Mirror.MANIFEST, Mirror.LEGACY_MANIFEST]
+    function said(good) { if (dir === mirror.folder) mirror.notPrivate = !good; done(good) }
+    function parsed(out) { try { return JSON.parse(String(out || "").trim().split("\n").pop()) } catch (e) { return null } }
     // (The folder made first if it isn't there yet: yours alone.)
     store.mkdirs([dir], function(made) {
-    if (!made) { done(false); return }
-    store.helper(["make-private", dir], function(ok, out) {
-      var r = null
-      try { r = JSON.parse(String(out || "").trim().split("\n").pop()) } catch (e) { r = null }
-      var good = ok && r !== null && r.ok === true && r.left === 0 && r.keeps === true
-      if (dir === mirror.folder) mirror.notPrivate = !good
-      if (good) {
-        var made = {}
-        for (var k in mirror.madePrivate) made[k] = true
-        made[dir] = true
-        mirror.madePrivate = made
-      }
-      done(good)
-    }, { input: JSON.stringify(names), timeoutMs: 120000, maxBytes: 4096 })
+      if (!made) { said(false); return }
+      // (Every copy: the drive looked at, cheaply (another drive mounted
+      // there since is another id); its own made yours alone once a drive.)
+      store.helper(["probe", dir], function(okP, outP) {
+        var p = okP ? parsed(outP) : null
+        if (!p || p.keeps !== true || typeof p.id !== "string") { said(false); return }
+        if (mirror.madePrivate[dir] === p.id) { said(true); return }
+        store.helper(["make-private", dir], function(ok, out) {
+          var r = ok ? parsed(out) : null
+          var good = r !== null && r.ok === true && r.left === 0 && r.keeps === true
+          if (good) {
+            var made2 = {}
+            for (var k in mirror.madePrivate) made2[k] = mirror.madePrivate[k]
+            made2[dir] = p.id
+            mirror.madePrivate = made2
+          }
+          said(good)
+        }, { input: JSON.stringify(names), timeoutMs: 120000, maxBytes: 4096 })
+      }, { timeoutMs: 20000, maxBytes: 4096 })
     })
   }
 

@@ -9,6 +9,9 @@ QtObject {
   id: store
 
   property bool ready: true
+  // A notes folder that can't be used (Store.qml: not opened, said over the notes).
+  property string blockedFolder: ""
+  property string blockedWhy: ""
   property string rootPath: "/tmp/uber-notebook-dev"
   property var notebooks: []
   // Store.readClipboard(done, primary), when a test sets one (null: Qt's paste).

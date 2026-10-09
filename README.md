@@ -1111,8 +1111,11 @@ pictures, its folders) are made so too; the folder you chose for it, and
 anything else in it, are left as you made them. On a drive that can't keep
 files private (an exFAT stick, some network shares), or in a folder that
 isn't yours, your notes, backups and Markdown copy aren't kept: a profile
-there isn't opened (a strip at the top says so, with where to pick another
-folder), a backup isn't made, the copy isn't written, and you're told. A
+there isn't opened (nor one whose folder can't be reached: a drive that's
+gone), nothing of the profile before is shown or changed, and a notice over
+the notes says so, with where to pick another folder; a backup isn't made,
+the copy isn't written (each time it copies, the drive is looked at again),
+and you're told. A
 file you save there yourself (a PDF for a stick) is still saved, and you're
 told that drive can't keep it private. Its working files are in your
 runtime folder (`$XDG_RUNTIME_DIR`, yours alone; without one, a folder of

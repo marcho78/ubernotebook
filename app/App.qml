@@ -111,7 +111,7 @@ FocusScope {
   Shelf {
     id: shelf
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height + privateStrip.height
+    anchors.topMargin: demoStrip.height
     theme: themeObject
     store: root.store
     service: root.service
@@ -170,41 +170,46 @@ FocusScope {
     }
   }
 
-  // ---- notes that can't be kept private ----------------------------------------------------
+  // ---- notes that can't be kept, or reached --------------------------------------------------
   // A profile's notes folder on a drive that can't keep files private (an
-  // exFAT stick, some network shares), or a folder that isn't yours: not
-  // opened (Store.notPrivateFolder), said here as long as it is, with where
-  // to pick another folder.
+  // exFAT stick, some network shares), a folder that isn't yours, or one
+  // that couldn't be made (a drive that's gone): not opened (Store.block),
+  // and nothing of the one before shown or changed. Said over the notes as
+  // long as it is, with where to pick another folder (Settings, above it).
   Rectangle {
     id: privateStrip
     objectName: "privateStrip"
-    readonly property string blocked: root.service !== null && root.service.store !== undefined && root.service.store !== null
-      && typeof root.service.store.notPrivateFolder === "string" ? root.service.store.notPrivateFolder : ""
+    readonly property var store: root.service !== null && root.service.store !== undefined ? root.service.store : null
+    readonly property string blocked: store !== null && typeof store.blockedFolder === "string" ? store.blockedFolder : ""
     readonly property bool shown: blocked !== ""
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.top: demoStrip.bottom
-    height: shown ? 40 : 0
+    anchors.bottom: parent.bottom
     visible: shown
-    z: 40
-    color: themeObject.sidebar
-    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: themeObject.line }
-    Row {
+    z: 45
+    color: themeObject.background
+    // (Nothing under it is reached.)
+    MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; hoverEnabled: true; onWheel: function(w) { w.accepted = true } }
+    Column {
       anchors.centerIn: parent
+      width: Math.min(parent.width - 64, 520)
       spacing: 14
       Text {
-        anchors.verticalCenter: parent.verticalCenter
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.Wrap
         textFormat: Text.PlainText
-        text: "Your notes in " + privateStrip.blocked.replace(/^\/home\/[^\/]+/, "~") + " can't be kept private there: another account on this computer could read them."
+        text: (privateStrip.store && privateStrip.store.blockedWhy === "made" ? "Your notes folder " + privateStrip.blocked.replace(/^\/home\/[^\/]+/, "~") + " can't be reached or made."
+          : "Your notes in " + privateStrip.blocked.replace(/^\/home\/[^\/]+/, "~") + " can't be kept private there: another account on this computer could read them.")
+          + " Nothing of this profile is open until it has a folder that works."
         font.family: themeObject.uiFont
-        font.pixelSize: 13
-        color: themeObject.muted
-        elide: Text.ElideMiddle
-        width: Math.min(implicitWidth, root.width - 220)
+        font.pixelSize: 14
+        color: themeObject.text
       }
       TextButton {
         objectName: "privateStripProfiles"
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.horizontalCenter: parent.horizontalCenter
         theme: themeObject
         text: "Pick another folder"
         onClicked: root.openSettings("profiles")
@@ -217,7 +222,7 @@ FocusScope {
   NotebookView {
     id: view
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height + privateStrip.height
+    anchors.topMargin: demoStrip.height
     theme: themeObject
     store: root.store
     settings: root.settings
@@ -239,7 +244,7 @@ FocusScope {
   DocView {
     id: docs
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height + privateStrip.height
+    anchors.topMargin: demoStrip.height
     theme: themeObject
     workspace: root.workspace
     service: root.service

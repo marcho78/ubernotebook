@@ -65,7 +65,15 @@ Item {
     indexRoot = ""
     welcomed = false
     startingPeople = null
-    if (folder) loadTimer.restart()
+    if (folder) { loadTimer.restart(); return }
+    // (No folder (none yet, or one that can't be used): nothing of the one
+    // before is shown, or can be changed.)
+    loadTimer.stop()
+    index = Workspace.emptyIndex()
+    texts = ({})
+    written = ({})
+    readJson = ({})
+    unreadable = ({})
   }
   Timer {
     id: loadTimer
@@ -853,6 +861,8 @@ Item {
   // A new page (written straight away): { parent, at, title, icon, cover,
   // format, blocks }. Returns it.
   function createPage(options) {
+    // (No folder open (none yet, or one that can't be used): none made.)
+    if (!folder) return null
     var o = options || {}
     var page = Workspace.newPage({ id: o.id, parent: o.parent, title: o.title, icon: o.icon, cover: o.cover, format: o.format, project: o.project, blocks: o.blocks || [{ type: "p", html: "", indent: 0 }] })
     if (!page) return null

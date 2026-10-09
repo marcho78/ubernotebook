@@ -701,10 +701,27 @@ Item {
 
   // ---- the library -------------------------------------------------------------------------
 
-  // A notes folder that couldn't be made yours alone (a drive that can't
-  // keep files private, a folder that isn't yours): not opened; the window
-  // says so, with where to pick another. "" when the one open is fine.
-  property string notPrivateFolder: ""
+  // A notes folder that couldn't be used: one that couldn't be made yours
+  // alone (a drive that can't keep files private, a folder that isn't
+  // yours: "private"), or made at all (a drive that's gone: "made"). Not
+  // opened, nothing of the one before shown or written to; the window says
+  // so, with where to pick another. "" when the one open is fine.
+  property string blockedFolder: ""
+  property string blockedWhy: ""
+  // Nothing of a folder on the shelf (one left, or none to open).
+  function clearShelf() {
+    index = ({})
+    order = []
+    publish()
+  }
+  function block(folder, why) {
+    if (rootPath) leaveRoot()
+    rootPath = ""
+    notesRoot = ""
+    clearShelf()
+    blockedFolder = folder
+    blockedWhy = why
+  }
   function locate() {
     if (!home || !active) return
     ready = false
@@ -712,21 +729,29 @@ Item {
     exec(["/usr/bin/test", "-d", home + "/Documents"], function(ok) {
       if (gen !== store.generation) return
       var next = Settings.resolveFolder(store.folder, store.home, ok)
+      // (Another folder: the one before left at once (what's waiting written
+      // there), and nothing of it shown or changed from now, whatever comes
+      // of the next.)
+      if (next !== store.rootPath) {
+        if (store.rootPath) store.leaveRoot()
+        store.rootPath = ""
+        store.notesRoot = ""
+        store.clearShelf()
+      }
+      store.blockedFolder = ""
+      store.blockedWhy = ""
       // (Made, made yours alone and checked before anything of it's opened:
       // your notes aren't kept where another account could read them.)
       store.mkdirsAsBefore([next], function(made) {
-        if (!made || gen !== store.generation) return
+        if (gen !== store.generation) return
+        if (!made) { store.block(next, "made"); return }
         function opened(isPrivate) {
           if (gen !== store.generation) return
-          if (store.rootPath && next !== store.rootPath) store.leaveRoot()
           if (!isPrivate) {
-            store.rootPath = ""
-            store.notesRoot = ""
-            store.notPrivateFolder = next
+            store.block(next, "private")
             store.failed("Your notes can't be kept in " + next.replace(store.home, "~") + ": another account on this computer could read them there. Pick another folder for this profile")
             return
           }
-          store.notPrivateFolder = ""
           store.rootPath = next
           store.notesRoot = next
           store.loadLibrary()
@@ -823,6 +848,8 @@ Item {
   // A new notebook, with the given first pages (null: one blank page). Returns
   // what the shelf shows of it; its folder is made and its files written next.
   function createNotebook(choice, firstPages) {
+    // (No folder open (none yet, or one that can't be used): none made.)
+    if (!rootPath || !ready) return null
     var taken = {}
     order.forEach(function(id) { taken[id] = true })
     var nb = Library.newNotebook(choice, new Date(), taken)
@@ -924,7 +951,7 @@ Item {
   // Opens a notebook: done(notebook with every page), or done(null).
   function openNotebook(id, done) {
     var nb = index[id]
-    if (!nb) { done(null); return }
+    if (!nb || !rootPath) { done(null); return }
     whenReady(id, function() { store.readPages(id, done) })
   }
 
@@ -1110,6 +1137,7 @@ Item {
     order.forEach(function(nid) { if (index[nid] && index[nid].role === "quick") id = nid })
     if (!id) {
       var made = createNotebook({ title: "Quick notes", cover: { color: "mustard", material: "plain" }, binding: "spiral", paper: { pattern: "legal", color: "yellow", spacing: "regular" }, pen: "print", role: "quick" }, [])
+      if (!made) return
       id = made.id
     }
     var title = lines[0].trim().slice(0, 120)

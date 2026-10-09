@@ -180,6 +180,38 @@ Item {
       compare(profiles.list.filter(function(p) { return p.demo }).length, 1)
     }
 
+    // A profile's notes folder that can't be used (a drive that can't keep
+    // files private, or one that's gone): said over the notes, nothing under
+    // it reached, with the way to pick another folder (Settings, Profiles).
+    function test_3c_notes_that_cant_be_kept() {
+      fresh()
+      click(named(named(win(), "firstRun"), "firstRunDemo"))
+      tryVerify(function() { return profiles.inDemo && named(win(), "firstRun") === null }, 2000)
+      tryCompare(ws, "ready", true, 3000)
+      wait(200)
+      // (Where a control is that would make a page, before it's covered.)
+      var row = named(win(), "newPageRow") || named(win(), "newPageButton")
+      verify(row !== null, "a control that makes a page")
+      var at = row.mapToItem(win(), row.width / 2, row.height / 2)
+      var pages = Object.keys(ws.index.pages).length
+      store.blockedWhy = "private"
+      store.blockedFolder = "/run/media/me/STICK/Notes"
+      var cover = null
+      tryVerify(function() { cover = named(win(), "privateStrip"); return cover !== null }, 1000, "said")
+      verify(cover.height > app.height / 2, "over the notes, not a line above them")
+      // (A click on it, where that control is under it: nothing happens there.)
+      mouseClick(win(), at.x, at.y)
+      wait(300)
+      compare(Object.keys(ws.index.pages).length, pages, "nothing made under it")
+      click(named(cover, "privateStripProfiles"))
+      tryVerify(function() { return named(win(), "settingsFlick") !== null }, 1000, "Settings, at Profiles")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return named(win(), "settingsFlick") === null }, 1000)
+      store.blockedFolder = ""
+      store.blockedWhy = ""
+      tryVerify(function() { return named(win(), "privateStrip") === null }, 1000, "gone once it can be used")
+    }
+
     // In the demo: a strip says so, with the welcome screen a click away (and
     // in the profile menu); closed again (Back to the demo, Esc); gone once
     // there's a profile of your own.

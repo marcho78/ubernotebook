@@ -137,6 +137,11 @@
 #   place <from> <file> replace|keep
 #       The same for a copy of the plain file <from> (a PDF or a Word file
 #       made of a page, a picture): "keep" never over a file that's there.
+#   probe <folder>
+#       Whether the drive <folder> is on keeps files private (a new file of
+#       its own, 600, looked at, then taken away), and which folder it is:
+#       JSON { keeps, id: "<device>:<inode>" } (another drive mounted at the
+#       same path is another id).
 #   make-private <folder>
 #       The files and folders named on its input (a JSON list of paths in
 #       <folder>: the Markdown copy's own, from before), and everything in
@@ -1926,6 +1931,29 @@ def cmd_place(source, dest, how):
         os.close(src)
 
 
+def _keeps_private(root_fd):
+    probe = ".uber-notebook-probe-%s" % os.urandom(6).hex()
+    pfd = os.open(probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=root_fd)
+    try:
+        os.fchmod(pfd, 0o600)
+        return not os.fstat(pfd).st_mode & 0o077
+    finally:
+        os.close(pfd)
+        os.unlink(probe, dir_fd=root_fd)
+
+
+def cmd_probe(folder):
+    root_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        st = os.fstat(root_fd)
+        if st.st_uid != os.getuid():
+            raise Refused("not a folder of yours")
+        keeps = _keeps_private(root_fd)
+        print(json.dumps({"keeps": keeps, "id": "%d:%d" % (st.st_dev, st.st_ino)}))
+    finally:
+        os.close(root_fd)
+
+
 def cmd_make_private(folder):
     data = sys.stdin.buffer.read(16 * 1024 * 1024 + 1)
     if len(data) > 16 * 1024 * 1024:
@@ -1984,14 +2012,7 @@ def cmd_make_private(folder):
         # (Whether the drive keeps files private at all: a new file of its
         # own, 600, looked at, then taken away. An empty folder on an exFAT
         # stick would otherwise pass.)
-        probe = ".uber-notebook-probe-%s" % os.urandom(6).hex()
-        pfd = os.open(probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=root_fd)
-        try:
-            os.fchmod(pfd, 0o600)
-            keeps = not os.fstat(pfd).st_mode & 0o077
-        finally:
-            os.close(pfd)
-            os.unlink(probe, dir_fd=root_fd)
+        keeps = _keeps_private(root_fd)
         if not keeps:
             count["left"] += 1
         for name in names[:100000]:
@@ -2151,6 +2172,8 @@ def main(argv):
             cmd_save(argv[2])
         elif len(argv) == 5 and argv[1] == "place":
             cmd_place(argv[2], argv[3], argv[4])
+        elif len(argv) == 3 and argv[1] == "probe":
+            cmd_probe(argv[2])
         elif len(argv) == 3 and argv[1] == "make-private":
             cmd_make_private(argv[2])
         elif len(argv) == 2 and argv[1] == "lookup":

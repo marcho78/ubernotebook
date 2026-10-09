@@ -59,6 +59,7 @@ QtObject {
     ran = []
     inputs = []
     makePrivateLeft = 0
+    probeId = "1:1"
     links = ({})
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
@@ -197,6 +198,7 @@ QtObject {
   property var ran: []
   property var inputs: []
   property int makePrivateLeft: 0
+  property string probeId: "1:1"
   // The archive helper (Store.qml), as its commands' first words.
   readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
   function helper(args, done, options) { exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options) }
@@ -458,6 +460,12 @@ QtObject {
     }
     // A page's picture: its host looked up (a public address, unless
     // privateHosts names it), then fetched from there into a file.
+    // (The files helper's probe: the drive keeps files private unless
+    // `makePrivateLeft`; `probeId` which folder it is.)
+    if (argv[3] === filesHelper && argv[4] === "probe") {
+      done(true, JSON.stringify({ keeps: makePrivateLeft === 0, id: probeId }) + "\n")
+      return
+    }
     // (The files helper's make-private: `makePrivateLeft` files it couldn't change.)
     if (argv[3] === filesHelper && argv[4] === "make-private") {
       done(true, JSON.stringify({ ok: true, changed: 0, left: makePrivateLeft, keeps: makePrivateLeft === 0 }) + "\n")

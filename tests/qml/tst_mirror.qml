@@ -257,27 +257,36 @@ Item {
     // again until it goes.
     function test_5d_its_own_made_private() {
       fresh()
-      function asked() {
+      function asked(cmd) {
         var n = []
-        files.ran.forEach(function(a, i) { if (a[4] === "make-private") n.push({ folder: a[5], names: JSON.parse(files.inputs[i]) }) })
+        files.ran.forEach(function(a, i) { if (a[4] === cmd) n.push({ folder: a[5], names: files.inputs[i] ? JSON.parse(files.inputs[i]) : null }) })
         return n
       }
+      // A drive that can't keep files private: nothing written, said.
       files.makePrivateLeft = 2
       mirror.on = true
-      tryVerify(function() { return asked().length === 1 && !mirror.busy && mirror.status.indexOf("Not copying") === 0 }, 2000, mirror.status)
+      tryVerify(function() { return asked("probe").length >= 1 && !mirror.busy && mirror.status.indexOf("Not copying") === 0 }, 2000, mirror.status)
       compare(copied().length, 0, "nothing written there")
       verify(mirror.status.indexOf("can't keep the copy private") >= 0, mirror.status)
-      compare(asked()[0].folder, "/tmp/copy")
-      compare(asked()[0].names.slice(0, 4), ["Pages", "Notebooks", "sketches", "assets"], "Pages' pictures are in assets/")
-      verify(asked()[0].names.indexOf(Mirror.MANIFEST) >= 0)
       verify(mirror.notPrivate, "said in Settings too")
+      compare(asked("make-private").length, 0, "nothing changed there either")
+      // One that can: its own from before made yours alone, once.
       files.makePrivateLeft = 0
       syncNow()
       verify(copied().length > 0, "copied once it can be")
-      tryVerify(function() { return asked().length === 2 && !mirror.notPrivate }, 1000, "tried again, and it went")
+      verify(!mirror.notPrivate)
+      compare(asked("make-private").length, 1)
+      compare(asked("make-private")[0].folder, "/tmp/copy")
+      compare(asked("make-private")[0].names.slice(0, 4), ["Pages", "Notebooks", "sketches", "assets"], "Pages' pictures are in assets/")
+      verify(asked("make-private")[0].names.indexOf(Mirror.MANIFEST) >= 0)
+      var probes = asked("probe").length
       syncNow()
-      wait(100)
-      compare(asked().length, 2, "once it's gone, not again")
+      compare(asked("make-private").length, 1, "once a drive")
+      verify(asked("probe").length > probes, "but the drive looked at every time")
+      // Another drive mounted at the same path: looked at, and made so, again.
+      files.probeId = "2:2"
+      syncNow()
+      compare(asked("make-private").length, 2)
     }
 
     function test_6_another_profile_meanwhile() {

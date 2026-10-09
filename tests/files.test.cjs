@@ -731,6 +731,13 @@ try {
     assert.equal(r.status, 0, r.stderr);
     assert.deepEqual(JSON.parse(r.stdout), { ok: true, changed: 6, left: 0, keeps: true }, "Pages, A.md, Notebooks, Trip, assets, pic.png; the drive keeps files private");
     assert.ok(!fs.readdirSync(v).some((n) => n.startsWith(".uber-notebook-probe")), "its probe taken away");
+    // The drive looked at alone (every copy): it keeps files private, and which folder it is.
+    const pr = helperRun(["probe", v]);
+    assert.equal(pr.code, 0, pr.err);
+    const st = fs.statSync(v);
+    assert.deepEqual(JSON.parse(pr.out), { keeps: true, id: st.dev + ":" + st.ino });
+    assert.ok(!fs.readdirSync(v).some((n) => n.startsWith(".uber-notebook-probe")));
+    assert.equal(helperRun(["probe", "/usr/share"]).code, 3, "a folder that isn't yours");
     assert.equal(mode(path.join(v, "Pages", "A.md")), 0o600);
     assert.equal(mode(path.join(v, "Notebooks", "Trip", "assets", "pic.png")), 0o600, "its pictures too");
     assert.equal(mode(path.join(v, "Notebooks", "Trip", "assets")), 0o700, "its folders too");

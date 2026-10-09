@@ -291,18 +291,38 @@ ShellRoot {
       var n = 0
       t.triggered.connect(function() { if (!test() && ++n < 50) return; t.stop(); done() })
     }
-    store2.folder = "/usr/share"
+    // A profile open, a notebook in it.
+    store2.folder = d + "/n3"
     store2.active = true
     store2.locate()
-    until(function() { return store2.notPrivateFolder !== "" }, function() {
-      say("private: a notes folder that can't be made yours alone isn't opened, and it's said", store2.notPrivateFolder === "/usr/share" && store2.rootPath === "" && store2.notesRoot === "", store2.notPrivateFolder + " | " + store2.rootPath)
-      store2.folder = d + "/n3"
+    until(function() { return store2.ready && store2.rootPath === d + "/n3" }, function() {
+      var made = store2.createNotebook({ title: "Mine" }, [])
+      var had = store2.notebooks.length
+      // Then one whose folder can't be made yours alone: nothing of the one
+      // before shown, nothing made.
+      store2.folder = "/usr/share"
       store2.locate()
-      until(function() { return store2.rootPath === d + "/n3" }, function() {
-        store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/n3"], function(ok, out) {
-          say("private: one that can be is opened, made 700", store2.notPrivateFolder === "" && store2.notesRoot === d + "/n3" && String(out).trim() === "700", String(out).trim() + " | " + store2.notPrivateFolder)
-          store2.active = false
-          store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+      until(function() { return store2.blockedFolder !== "" }, function() {
+        var refused = store2.createNotebook({ title: "Lost" }, [])
+        say("private: a notes folder that can't be made yours alone isn't opened, nothing of the one before shown or made, and it's said",
+          made !== null && had === 1 && store2.blockedFolder === "/usr/share" && store2.blockedWhy === "private" && store2.rootPath === "" && store2.notesRoot === ""
+          && store2.notebooks.length === 0 && refused === null,
+          "had " + had + " now " + store2.notebooks.length + " " + store2.blockedFolder + " " + store2.blockedWhy + " refused " + (refused === null))
+        // One that can't even be made (a drive that's gone).
+        store2.folder = "/proc/uber-notebook-nope"
+        store2.locate()
+        until(function() { return store2.blockedWhy === "made" }, function() {
+          say("private: a notes folder that can't be made isn't opened, and it's said", store2.blockedFolder === "/proc/uber-notebook-nope" && store2.rootPath === "" && store2.notebooks.length === 0, store2.blockedFolder + " " + store2.blockedWhy)
+          // Back to the first: opened again, its notebook there, made 700.
+          store2.folder = d + "/n3"
+          store2.locate()
+          until(function() { return store2.ready && store2.rootPath === d + "/n3" && store2.notebooks.length === 1 }, function() {
+            store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/n3"], function(ok, out) {
+              say("private: one that can be is opened again, as it was, 700", store2.blockedFolder === "" && store2.notesRoot === d + "/n3" && store2.notebooks.length === 1 && String(out).trim() === "700", String(out).trim() + " | " + store2.notebooks.length)
+              store2.active = false
+              store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+            })
+          })
         })
       })
     })
