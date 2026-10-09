@@ -708,9 +708,6 @@ Item {
   // so, with where to pick another. "" when the one open is fine.
   property string blockedFolder: ""
   property string blockedWhy: ""
-  // The folder being made and checked, before it's opened (a quick note
-  // made meanwhile waits for it, under it).
-  property string openingFolder: ""
   // Nothing of a folder on the shelf (one left, or none to open).
   function clearShelf() {
     index = ({})
@@ -718,7 +715,6 @@ Item {
     publish()
   }
   function block(folder, why) {
-    openingFolder = ""
     if (rootPath) leaveRoot()
     rootPath = ""
     notesRoot = ""
@@ -744,7 +740,6 @@ Item {
       }
       store.blockedFolder = ""
       store.blockedWhy = ""
-      store.openingFolder = next
       // (Made, made yours alone and checked before anything of it's opened:
       // your notes aren't kept where another account could read them.)
       store.mkdirsAsBefore([next], function(made) {
@@ -757,7 +752,6 @@ Item {
             store.failed("Your notes can't be kept in " + next.replace(store.home, "~") + ": another account on this computer could read them there. Pick another folder for this profile")
             return
           }
-          store.openingFolder = ""
           store.rootPath = next
           store.notesRoot = next
           store.loadLibrary()

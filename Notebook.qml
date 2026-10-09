@@ -315,12 +315,15 @@ Item {
       recorder: root.service ? root.service.recorder : null
       onDestinationPicked: function(to) { if (root.service) root.service.setSetting("quickTo", to) }
       onKept: function(text) {
-        // (Where it can't be kept now (the profile's folder can't be used):
-        // said here, the note open, its words in it.)
-        var why = root.service && typeof root.service.quickRefusal === "function" ? root.service.quickRefusal() : ""
-        if (why) { quickNote.problem = why; return }
+        // (Closed only once it's kept: where it can't be now (the profile's
+        // folder can't be used, or isn't open yet), said here, the note
+        // open, its words in it.)
+        if (!root.service) return
+        if (root.service.quick(text) === false) {
+          quickNote.problem = root.service.quickRefusal() || "Not saved: try again in a moment"
+          return
+        }
         quickWindow.visible = false
-        if (root.service) root.service.quick(text)
       }
       onThrownAway: quickWindow.visible = false
     }
