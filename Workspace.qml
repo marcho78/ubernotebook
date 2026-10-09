@@ -1525,14 +1525,12 @@ Item {
         // said, not "Exported".)
         var left = pages.length + sketches.length + 1
         var lost = 0
-        var missing = false
         function one(ok2) {
           if (!ok2) lost++
           if (--left > 0) return
-          if (lost) { ws.failed("The export in " + dir.replace(files.home, "~") + " isn't whole: " + lost + (lost === 1 ? " file" : " files") + " couldn't be written"); return }
+          if (lost) { ws.failed("The export in " + dir.replace(files.home, "~") + " isn't whole: some of its files couldn't be written or copied"); files.openPath(dir); return }
           files.exported(dir)
           files.openPath(dir)
-          if (missing) ws.failed("Exported, but some of its pages' files weren't there to copy")
         }
         pages.forEach(function(p) {
           files.writeFile(dir + "/" + names[p.id] + ".md", Markdown.fromDocPage(p, function(pid) {
@@ -1541,10 +1539,7 @@ Item {
           }, { sketchFile: function(bid) { return "sketches/" + bid + ".svg" } }), one)
         })
         sketches.forEach(function(k) { files.writeFile(dir + "/sketches/" + k.id + ".svg", Sketch.toSvg(k.sketch, "A sketch on " + (k.title || "Untitled")), one) })
-        files.copyAssets(from, assets.map(function(s) { return s.slice(7) }), dir + "/assets", function(copied) {
-          missing = copied === false
-          one(true)
-        })
+        files.copyAssets(from, assets.map(function(s) { return s.slice(7) }), dir + "/assets", function(copied) { one(copied !== false) })
       })
     })
   }

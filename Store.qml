@@ -1035,8 +1035,14 @@ Item {
 
   function readPages(id, done) {
     var nb = index[id]
-    if (!nb) { done(null); return }
+    if (!nb || !rootPath) { done(null); return }
+    // (Another profile opened while it's read: nothing of it is shown,
+    // exported, merged with that one's pages or saved there; a restored
+    // profile's notebooks have the same ids.)
+    var gen = generation
+    var root0 = rootPath
     readGlob(Library.pagesDir(rootPath, id), "*.json", function(files, read, failed) {
+      if (gen !== store.generation || root0 !== store.rootPath) { done(null); return }
       // (A read that didn't go through isn't an empty notebook: nothing's
       // made or changed from it.)
       if (!read) { store.failed("Couldn't read that notebook's pages"); done(null); return }
@@ -1576,7 +1582,7 @@ Item {
         function one(ok2) {
           if (!ok2) lost++
           if (--left > 0) return
-          if (lost) { store.failed("The export in " + dir.replace(home, "~") + " isn't whole: " + lost + (lost === 1 ? " page" : " pages") + " couldn't be written"); return }
+          if (lost) { store.failed("The export in " + dir.replace(home, "~") + " isn't whole: some of its files couldn't be written or copied"); return }
           store.exported(dir)
           Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", dir])
         }
@@ -1586,7 +1592,9 @@ Item {
           used[file] = true
           store.writeFile(dir + "/" + file, Markdown.fromPage(page, ""), one)
         })
-        store.exec(["/usr/bin/cp", "-r", "--", from + "/" + id + "/assets", dir + "/assets"], function() { one(true) }, { okCodes: [0, 1], timeoutMs: 60000 })
+        // (Its pictures, if it has any: a copy that fails is an export
+        // that isn't whole, said.)
+        store.exec(["/usr/bin/bash", "-c", "[ -d \"$1\" ] || exit 0; exec /usr/bin/cp -r -- \"$1\" \"$2\"", "uber-notebook-export-assets", from + "/" + id + "/assets", dir + "/assets"], function(copied) { one(copied) }, { timeoutMs: 300000 })
       })
     })
   }

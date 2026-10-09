@@ -427,6 +427,29 @@ Item {
       }
     }
 
+    // One of its files that couldn't be copied: not said "Exported", said
+    // that it isn't whole.
+    function test_17d_an_export_not_whole_isnt_said_done() {
+      fresh()
+      var top = ws.createPage({ parent: "", title: "Gone", blocks: [{ type: "image", src: "assets/not-there.png", indent: 0 }] })
+      var said = []
+      var failedSaid = []
+      function heard(p) { said.push(p) }
+      function failedHeard(m) { failedSaid.push(m) }
+      files.exported.connect(heard)
+      ws.failed.connect(failedHeard)
+      files.exportBase = function(done) { done("/tmp/picked") }
+      try {
+        ws.exportPage(top.id)
+        tryVerify(function() { return failedSaid.some(function(m) { return /isn't whole/.test(m) }) }, 2000, JSON.stringify(failedSaid))
+        compare(said.length, 0, "not said exported")
+      } finally {
+        files.exported.disconnect(heard)
+        ws.failed.disconnect(failedHeard)
+        files.exportBase = null
+      }
+    }
+
     function test_17b_export_takes_only_its_pages_files() {
       fresh()
       var assets = Workspace.assetsDir(files.rootPath)

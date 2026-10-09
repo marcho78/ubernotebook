@@ -469,8 +469,17 @@ ShellRoot {
                       until(function() { return store2.ready && store2.rootPath === d + "/new/Work/Notes" }, function() {
                         store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/new/Work/Notes"], function(ok, out) {
                           say("private: a new profile's notes folder made, and the folders it's in, 700", store2.blockedFolder === "" && String(out).trim() === "700", store2.rootPath + " | " + store2.blockedFolder + " " + String(out).trim())
-                          store2.active = false
-                          store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                          // A notebook read as another profile opens: nothing of
+                          // it given (to be shown, exported or merged there).
+                          var held = store2.createNotebook({ title: "Held" }, [])
+                          var got = "pending"
+                          store2.readPages(held.id, function(nb) { got = nb })
+                          store2.rootPath = ""
+                          until(function() { return got !== "pending" }, function() {
+                            say("private: a notebook read as another profile opens gives nothing", held !== null && got === null, String(got))
+                            store2.active = false
+                            store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                          })
                         })
                       })
                     })

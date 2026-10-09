@@ -319,9 +319,12 @@ FocusScope {
   function openNotebook(meta, from, pageId, query) {
     if (opening || !meta) return
     opening = true
+    var root0 = store.rootPath
     store.openNotebook(meta.id, function(nb) {
       opening = false
-      if (!nb) { toast("That notebook couldn't be read"); return }
+      // (Another profile opened while it was read: not opened, nothing said.)
+      if (!nb) { if (store.rootPath === root0) toast("That notebook couldn't be read"); return }
+      if (store.rootPath !== root0) return
       var index = -1
       if (pageId) nb.pages.forEach(function(p, i) { if (p.id === pageId) index = i })
       view.show(nb, index)
@@ -504,6 +507,9 @@ FocusScope {
     target: root.store
     ignoreUnknownSignals: true
     function onRootPathChanged() {
+      // (A notebook still being opened from the profile before: never opened
+      // now, and others can be.)
+      root.opening = false
       if (root.mode !== "notebook") return
       view.pageDirty = false
       root.mode = "shelf"
