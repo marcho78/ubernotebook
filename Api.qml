@@ -163,7 +163,8 @@ QtObject {
   // gives (`paths`): taken at once from a folder you've said Always to
   // (Settings → AI), else asked in the panel, one question a file (Allow
   // once; Always from its folder, but never your home folder itself or a
-  // hidden one: Permissions.cleanFolder), and the command run when you've
+  // hidden one: Permissions.cleanFolder; a file in a profile's notes or the
+  // backups, Allow once only, each time), and the command run when you've
   // said yes to each (`run()`, while `scope` is the caller: `runAfterYes`).
   // Each is read from the folder you said Always to, or every step from the
   // root for a yes to that file alone, through no link. What the command
@@ -175,9 +176,13 @@ QtObject {
     // generation moves on a reload too): a yes after another's opened does
     // nothing.)
     var folder0 = workspace ? workspace.folder : ""
-    var entries = paths.map(function(p) { return { path: p, root: Permissions.allowedFileRoot(list, who, p) || "/" } })
+    // (A file in a profile's notes, any of them, or in the backups: asked
+    // about each time, Allow once only, whatever you've said Always to.)
+    var kept = keptFolders()
+    function ours(p) { return Permissions.inAny(kept, p) }
+    var entries = paths.map(function(p) { return { path: p, root: (!ours(p) && Permissions.allowedFileRoot(list, who, p)) || "/" } })
     var yes = Scope.withApproved(scope, entries)
-    var need = paths.filter(function(p) { return !Permissions.allowedFile(list, who, p) })
+    var need = paths.filter(function(p) { return ours(p) || !Permissions.allowedFile(list, who, p) })
     if (!need.length) return runAfterYes(yes, run, 25, folder0)
     var left = need.length
     var said = false
@@ -185,10 +190,10 @@ QtObject {
     need.forEach(function(p) {
       var folder = Permissions.folderOf(p)
       var home = String(files && files.home ? files.home : "")
-      var always = Permissions.cleanFolder(folder) !== "" && folder !== home && folder !== home.replace(/\/[^\/]*$/, "")
+      var always = !ours(p) && Permissions.cleanFolder(folder) !== "" && folder !== home && folder !== home.replace(/\/[^\/]*$/, "")
       var shown = home && folder.indexOf(home + "/") === 0 ? "~" + folder.slice(home.length) : folder
       asked = viewDoes("askAgentPermission", {
-        key: "file " + (scope.talk || "") + " " + p, agent: who, text: "put a file from outside its folder on your page", detail: p,
+        key: "file " + (scope.talk || "") + " " + p, agent: who, text: ours(p) ? "put a file from your notes or backups on your page" : "put a file from outside its folder on your page", detail: p,
         action: always ? "files" : "", target: always ? folder : "", always: always ? "Always from " + shown : "",
         talk: scope.talk || "", grants: scope.grants || null,
         run: function() { if (--left === 0 && !said) api.runAfterYes(yes, run, 25, folder0) },
@@ -213,6 +218,17 @@ QtObject {
       t.start()
     }
     return out
+  }
+  // Uber Notebook's own folders, as full paths: every profile's notes (the
+  // open one's too) and the backups'.
+  function keptFolders() {
+    var out = []
+    if (files && files.rootPath) out.push(String(files.rootPath))
+    if (profiles && Array.isArray(profiles.shown) && typeof profiles.pathOf === "function") {
+      profiles.shown.forEach(function(p) { out.push(String(profiles.pathOf(p && p.folder) || "")) })
+    }
+    if (backups && backups.folder) out.push(String(backups.folder))
+    return out.filter(function(f) { return /^\/./.test(f) })
   }
 
   function answer(o) { return JSON.stringify(o) }

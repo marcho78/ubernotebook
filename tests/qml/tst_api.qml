@@ -1455,6 +1455,48 @@ Item {
       api.ui = ui
     }
 
+    // A file in a profile's notes (the open one's or another's) or in the
+    // backups: asked about each time, Allow once only, though you've said
+    // Always to a folder it's in; one beside them, still taken at once.
+    function test_33b_your_notes_asked_each_time() {
+      fresh()
+      var askUi = Qt.createQmlObject("import QtQuick; QtObject { property var asks: []; function askAgentPermission(req) { asks = asks.concat([req]); return true } }", root)
+      var shownProfiles = Qt.createQmlObject("import QtQuick; QtObject { property var shown: [{ id: 'a', folder: '/tmp/Docs/Other' }]; function pathOf(f) { return f } }", root)
+      var backupsAt = Qt.createQmlObject("import QtQuick; QtObject { property string folder: '/tmp/Docs/Backups' }", root)
+      var scope = { agent: "Grok", id: "grok", dir: "/tmp/in", talk: "c-1", grants: {} }
+      try {
+        api.ui = askUi
+        api.profiles = shownProfiles
+        api.backups = backupsAt
+        api.settings = { agentPermissions: [
+          { agent: "grok", action: "files", target: "/tmp/Docs" },
+          { agent: "grok", action: "files", target: files.rootPath }] }
+        var ran = 0
+        var callers = []
+        function run() { ran++; callers.push(api.caller); return "" }
+        api.askForFiles(scope, ["/tmp/Docs/invoice.png"], run)
+        compare([ran, askUi.asks.length].join("|"), "1|0", "beside them: at once, as you said")
+        var theirs = ["/tmp/Docs/Other/Pages/a.png", "/tmp/Docs/Backups/b.png", files.rootPath + "/Pages/c.png"]
+        ran = 0
+        theirs.forEach(function(p) { api.askForFiles(scope, [p], run) })
+        compare(ran, 0, "none taken without asking")
+        compare(askUi.asks.map(function(r) { return r.detail }).join("|"), theirs.join("|"))
+        askUi.asks.forEach(function(r) {
+          compare([r.action, r.target, r.always].join("|"), "||", "Allow once only: " + r.detail)
+          compare(r.text, "put a file from your notes or backups on your page")
+        })
+        callers = []
+        askUi.asks[0].run([])
+        compare(ran, 1, "run once you say yes")
+        compare(Scope.within(callers[0], theirs[0]), "/", "that file alone, every step of it through no link")
+      } finally {
+        api.ui = ui
+        api.profiles = null
+        api.backups = null
+        api.settings = null
+      }
+    }
+
     // Columns an agent writes (::columns, ::next, ::end), as read gives them back.
     function test_34_an_agent_makes_columns() {
       fresh()

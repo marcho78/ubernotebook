@@ -1206,7 +1206,9 @@ Notebook's commands: they read and change your notes, as you ask.
   (`~/.grok/sessions/<its folder>/`), only a real picture, the same way; a
   file from anywhere else only once you say yes in the panel (*Allow once*,
   or *Always from* its folder, kept in Settings → AI; never offered for your
-  home folder itself or a hidden one like `~/.ssh`), the command done then,
+  home folder itself or a hidden one like `~/.ssh`; a file in a profile's
+  notes folder, any of them, or the backups folder is asked about each time,
+  *Allow once* only, whatever you've said Always to), the command done then,
   the file itself through no link; with no
   agent working in the panel, they do nothing. Taking things away is asked
   in the panel, one question for each thing: pages to the trash (*Allow

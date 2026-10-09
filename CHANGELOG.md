@@ -10,6 +10,12 @@ The first version.
 
 ### Changed
 
+- **Your notes and backups are asked about each time.** *Always from* a
+  folder (say `~/Documents`, for an invoice) also let the panel's agent take
+  any file in the profiles' notes folders and the backups folder in it
+  without asking, another profile's among them. A file in a profile's notes
+  folder, any of them, or the backups folder is now asked about each time,
+  *Allow once* only.
 - **An agent you stop doesn't start after all.** Stopped while it was still
   starting (its folder made, its program looked for), and another asked for
   straight away, the first one's next step saw the new one running and went

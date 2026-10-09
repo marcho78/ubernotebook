@@ -90,4 +90,14 @@ check("files from a folder you've said Always to: that folder and the ones in it
   assert.equal(P.without(list, "grok", "files", "/home/me/Pictures").length, 0, "taken back");
 });
 
+check("Uber Notebook's own folders: a file anywhere in one, not a folder whose name starts the same", () => {
+  const kept = ["/home/me/Documents/Omanote", "/home/me/Documents/Uber Notebook Backups/", "", "/"];
+  assert.ok(P.inAny(kept, "/home/me/Documents/Omanote/Pages/a.json"));
+  assert.ok(P.inAny(kept, "/home/me/Documents//Omanote/b.png"), "however many slashes");
+  assert.ok(P.inAny(kept, "/home/me/Documents/Uber Notebook Backups/x.tar.gz"), "a folder given with its last slash");
+  assert.ok(!P.inAny(kept, "/home/me/Documents/Omanote-Demo/a.json"));
+  assert.ok(!P.inAny(kept, "/home/me/Documents/invoice.pdf"), "nor the root or an empty one");
+  assert.ok(!P.inAny(null, "/home/me/Documents/Omanote/a.json"));
+});
+
 console.log(`permissions: ${passed} checks passed`);

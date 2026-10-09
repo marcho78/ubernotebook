@@ -73,6 +73,16 @@ function allowedFileRoot(list, agent, path) {
 }
 // Whether `agent` may give a command the file at `path` without asking.
 function allowedFile(list, agent, path) { return allowedFileRoot(list, agent, path) !== "" }
+// Whether the file at `path` is anywhere in one of `folders` (full paths):
+// Uber Notebook's own (a profile's notes, the backups), whose files are
+// asked about each time, whatever's been said Always to.
+function inAny(folders, path) {
+  var p = String(path || "").replace(/\/+/g, "/")
+  return (folders || []).some(function(f) {
+    var d = String(f || "").replace(/\/+/g, "/").replace(/\/$/, "")
+    return d.length > 1 && d.charAt(0) === "/" && p.indexOf(d + "/") === 0
+  })
+}
 
 function cleanTarget(action, target) {
   var t = String(target || "").trim()
@@ -136,7 +146,7 @@ function describe(r) {
   if (r.action === "search") return { label: "Web search", note: who + " may search the web without asking" }
   if (r.action === "trash") return { label: "Trashing pages", note: who + " may move pages to the trash without asking (they can be put back from it)" }
   if (r.action === "shell") return { label: "Any command", note: who + " may run any command without asking: through one, it can read any file you can and reach any site" }
-  if (r.action === "files") return { label: r.target, note: who + " may put files from this folder on a page without asking" }
+  if (r.action === "files") return { label: r.target, note: who + " may put files from this folder on a page without asking (a profile's notes or the backups are asked about each time)" }
   if (r.action === "tool") {
     var parts = r.target.split("__")
     return { label: (parts[1] || "A connector") + "\u2019s " + (parts.slice(2).join("__") || "tool"), note: who + " may use it without asking" }
