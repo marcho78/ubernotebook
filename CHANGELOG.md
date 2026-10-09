@@ -4,7 +4,7 @@ Every notable change to Uber Notebook is listed here, newest first. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version
 numbers follow [Semantic Versioning](https://semver.org/).
 
-## 1.0.0 - Unreleased
+## 1.0.0 - 2026-10-08
 
 The first version.
 
