@@ -123,6 +123,11 @@ Item {
         name.input.forceActiveFocus()
         type("Dr Jane Roe")
         compare(name.input.text, "Dr Jane Roe")
+        var notes = null
+        tryVerify(function() { notes = find(win(), function(it) { return it.objectName === "formNotes" }); return notes !== null }, 1000)
+        notes.forceActiveFocus()
+        type("Oncology")
+        compare(notes.text, "Oncology")
         files.rootPath = "/tmp/other-people-view"
         compare(pv().query, "", "what was looked for, gone")
         compare(cards.text, "", "in the cards' search too")
@@ -130,6 +135,7 @@ Item {
         tryCompare(ws, "ready", true, 2000)
         pv().newPerson()
         compare(name.input.text, "", "the new person's form: nothing of the one before")
+        compare(notes.text, "", "nor in its notes")
       } finally {
         pv().layoutMode = pv().savedLayout
         files.rootPath = root0
