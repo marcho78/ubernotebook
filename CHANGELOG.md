@@ -10,6 +10,29 @@ The first version.
 
 ### Changed
 
+- **Reminders say only that one is due; every profile kept private; nothing
+  of one profile in another.** A wide review of the privacy work found more
+  to close. A reminder's or an event alert's notification now says only "A
+  reminder is due" or "An event is starting" (a click opens it): Omarchy's
+  own notifications keep a notification's words for a moment on a command
+  line as they save it. Settings → Writing → *Show what reminders say* puts
+  them back. Every profile's folder is made yours alone as Uber Notebook
+  starts, not only the one opened; a folder that isn't yours (whatever its
+  mode) counts as one that can't be private; a backup is never put back on
+  a drive that can't keep it private; a file you save to a phone goes
+  through, with the note; a refused backups folder or Markdown copy is said
+  in the window and with a notification, not only in Settings; the notice
+  over a refused profile has *Try again*; a profile's folder that's gone (a
+  drive not mounted) isn't made again in its place. Recordings and
+  dictation on their way are in your runtime folder, never `/tmp`. A page's
+  export copies only the files its pages use. Nothing done for one profile
+  lands in another: no profile is opened while an audio note records ("Stop
+  the recording first"); a video's still, an email's attachment, dictation,
+  a transcript or a louder copy finishing after a switch stays with its
+  own; a quick note made right after a switch waits for that profile, and
+  the quick-note card never loses its words; `quick` and `importNotes`
+  answer whether they did it; each profile keeps its own Inbox. Exports of
+  many pages save a few files at a time.
 - **Your notes' words off command lines, and nothing readable by other
   accounts.** A marketplace review found that what you search for and a
   reminder's words went on a program's command line, which every account on
