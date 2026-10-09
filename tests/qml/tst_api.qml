@@ -1531,8 +1531,19 @@ Item {
       compare(r.ok, false)
       verify(/aren't loaded yet/.test(r.error), r.error)
       compare(Object.keys(ws.index.pages).length, before, "nothing made in the profile before")
+      // The notebooks too: not listed, read or added to.
+      var nbs = json(api.notebooks())
+      compare(nbs.ok, false)
+      verify(/aren't loaded yet/.test(nbs.error), nbs.error)
+      // (Refused before any notebook's looked for: "not loaded yet", not
+      // "there's no notebook with that id".)
+      ;[json(api.notebook("any")), json(api.readNotebook("any", "p")), json(api.addToNotebook("any", file("n.md", "x")))].forEach(function(r2) {
+        compare(r2.ok, false)
+        verify(/aren't loaded yet/.test(r2.error), r2.error)
+      })
       files.switching = false
       verify(json(api.add("In time", file("t.md", "x"))).ok, "once it's open")
+      verify(Array.isArray(json(api.notebooks())), "and the notebooks")
     }
 
     // Columns an agent writes (::columns, ::next, ::end), as read gives them back.

@@ -1064,7 +1064,8 @@ Item {
   // template's title and blocks). Returns it; it's written straight away.
   function createPage(id, at, options) {
     var nb = index[id]
-    if (!nb) return null
+    // (None while no folder's open, or another's being opened.)
+    if (!nb || !rootPath || !ready || switching) return null
     var taken = {}
     nb.pages.forEach(function(p) { taken[p] = true })
     var page = Library.newPage(options, new Date(), taken)

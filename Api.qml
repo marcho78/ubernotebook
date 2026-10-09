@@ -1866,8 +1866,16 @@ QtObject {
     if (!pages) return { error: "reading the notebook first: run the same command again in a moment" }
     return pages[pid] ? { page: pages[pid] } : { error: "couldn't read that page" }
   }
+  // (The notebooks of the profile open now: none while another's being
+  // opened, the one before still there a moment.)
+  function notebooksUnready() {
+    if (noProfile) return "Uber Notebook has no profile yet: make one with addProfile (or the user can, opening Uber Notebook)"
+    if (!files || !files.index || files.switching === true || files.ready === false) return "the notebooks aren't loaded yet: try again in a moment"
+    return ""
+  }
   function notebooks() {
-    if (!files || !files.index) return fail("the notebooks aren't loaded yet")
+    var nu = notebooksUnready()
+    if (nu) return fail(nu)
     return answer(files.notebookList().map(function(n) {
       var nb = files.index[n.id]
       return { id: n.id, title: n.title, pages: nb && nb.pages ? nb.pages.length : 0, modified: n.modified }
@@ -1875,6 +1883,8 @@ QtObject {
   }
   // A notebook's pages in order: [{ id, n, title, day, text }] (text: its first words).
   function notebook(id) {
+    var nu = notebooksUnready()
+    if (nu) return fail(nu)
     var nb = files && files.index ? files.index[id] : null
     if (!nb) return fail("there's no notebook with that id (notebooks lists them)")
     var out = []
@@ -1887,6 +1897,8 @@ QtObject {
     return answer({ id: id, title: nb.title, pages: out })
   }
   function readNotebook(id, pageId) {
+    var nu = notebooksUnready()
+    if (nu) return fail(nu)
     var nb = files && files.index ? files.index[id] : null
     if (!nb) return fail("there's no notebook with that id (notebooks lists them)")
     if (nb.pages.indexOf(String(pageId || "")) < 0) return fail("there's no page with that id in it (notebook <id> lists them)")
@@ -1897,6 +1909,8 @@ QtObject {
   // A new page at a notebook's end, from a Markdown file (headings, lists,
   // to-dos, quotes, paragraphs: what a notebook's page holds).
   function addToNotebook(id, path) {
+    var nu = notebooksUnready()
+    if (nu) return fail(nu)
     var nb = files && files.index ? files.index[id] : null
     if (!nb) return fail("there's no notebook with that id (notebooks lists them)")
     var md = readMarkdown(path)
