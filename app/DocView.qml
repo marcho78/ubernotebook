@@ -274,13 +274,15 @@ FocusScope {
     var a = d.attachments ? d.attachments[at] : null
     if (!a) return
     if (isCalendarFile(a.name) || isContactFile(a.name)) {
-      workspace.readEmail(d.src, function(m) {
+      // (Another profile opened while it's read: not shown there, nor its
+      // people added to that one's.)
+      workspace.readEmail(d.src, inThisFolder(function(m) {
         var att = m ? m.attachments[at] : null
         if (!att) { view.toast("That attachment couldn't be read"); return }
         var text = Email.attachmentText(m, att.index)
         if (view.isCalendarFile(a.name)) view.showIcs(text, a.name)
         else view.addPeopleFrom(a.name, text)
-      })
+      }))
       return
     }
     if (a.src) { openAsset(a.src, a.name); return }
@@ -1321,7 +1323,7 @@ FocusScope {
     commit()
     toast("Importing\u2026")
     workspace.importPaths(paths, parentId || "", function(r) {
-      if (r.unready) { view.toast("Not imported: your notes are still opening. Try again in a moment"); return }
+      if (r.unready) { view.toast(workspace && workspace.files && workspace.files.blockedFolder ? "Not imported: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)" : "Not imported: your notes are still opening. Try again in a moment"); return }
       if (r.stopped) { view.toast("Not imported: another profile was opened"); return }
       if (r.movedOn) { view.toast("Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into the profile that was open when it began"); return }
       var note = r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") : "There were no notes to import"
@@ -2220,10 +2222,15 @@ FocusScope {
     var a = page && page.id === pageId ? editor.audioOf(uid) : null
     if (!a || !a.src || !recorder || audioWork[uid]) return
     setAudioWork(uid, "transcribe")
+    // (Another profile opened before it's written out: its words aren't put
+    // in a page of that one.)
+    var mine = inThisFolder(function(fn) { fn() })
     recorder.transcribe(audioPath(a.src), a.duration, function(ok, text, problem) {
       view.setAudioWork(uid, "")
-      if (!ok) { view.toast(problem || "It couldn't be written out"); return }
-      view.updateAudio(pageId, uid, function(x) { x.transcript = text; x.open = true; return x })
+      mine(function() {
+        if (!ok) { view.toast(problem || "It couldn't be written out"); return }
+        view.updateAudio(pageId, uid, function(x) { x.transcript = text; x.open = true; return x })
+      })
     })
   }
 
@@ -2235,13 +2242,18 @@ FocusScope {
     var pageId = page.id
     var name = Audio.fileName(new Date())
     setAudioWork(uid, "louder")
+    // (Another profile opened meanwhile: not put in a page of that one; the
+    // louder copy stays beside the first, in its own profile.)
+    var mine = inThisFolder(function(fn) { fn() })
     recorder.louder(audioPath(a.src), audioPath("assets/" + name), function(ok, peaks) {
       view.setAudioWork(uid, "")
-      if (!ok) { view.toast("It couldn't be made louder"); return }
-      view.updateAudio(pageId, uid, function(x) {
-        x.src = "assets/" + name
-        if (peaks.length) x.peaks = peaks
-        return x
+      mine(function() {
+        if (!ok) { view.toast("It couldn't be made louder"); return }
+        view.updateAudio(pageId, uid, function(x) {
+          x.src = "assets/" + name
+          if (peaks.length) x.peaks = peaks
+          return x
+        })
       })
     })
   }

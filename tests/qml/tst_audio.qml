@@ -337,6 +337,45 @@ Item {
       }
     }
 
+    // An audio note written out, or made louder, as another profile opens:
+    // what it brings isn't put in a page of that one (nor its files).
+    function test_4c_written_out_or_louder_as_another_profile_opens() {
+      fresh()
+      var root0 = files.rootPath
+      var other = "/tmp/other-transcript-notes"
+      put({ src: "assets/audio-20261002-101010-abc.ogg", duration: 75, peaks: [10, 50, 90, 40] })
+      put({ src: "assets/audio-20261002-101011-def.ogg", duration: 30, peaks: [5, 9, 7, 4] })
+      var uid = view.editor.uidAt(0)
+      var uid2 = view.editor.uidAt(1)
+      rec.nextTranscript = "Only for the first profile."
+      // (The other profile a backup of this one put back: its pages, and
+      // their blocks, the same ids.)
+      view.commit()
+      wait(900)
+      Object.keys(files.disk).forEach(function(p) { if (p.indexOf(root0 + "/") === 0) files.disk[other + p.slice(root0.length)] = files.disk[p] })
+      rec.holdWork = true
+      try {
+        view.transcribeAudio(view.page.id, uid)
+        view.louderAudio(uid2)
+        compare(rec.heldWork.length, 2, "both under way")
+        files.rootPath = other
+        tryVerify(function() { return ws.ready && view.page !== null && ws.folder === other + "/Pages" }, 3000, "the other open")
+        var theirs = view.page.id
+        var before = JSON.stringify(view.editor.serialize())
+        rec.releaseWork()
+        wait(900)
+        compare(JSON.stringify(view.editor.serialize()), before, "their page as it was")
+        verify(!Object.keys(files.disk).some(function(p) { return p.indexOf(other + "/") === 0 && String(files.disk[p]).indexOf("audio-2026") >= 0 && String(files.disk[p]).indexOf("louder") >= 0 }), "no louder copy put in their page")
+        verify(!Object.keys(files.disk).some(function(p) { return p.indexOf(other + "/") === 0 && String(files.disk[p]).indexOf("Only for the first profile") >= 0 }), "nothing of it in their files")
+        compare(view.page.id, theirs)
+      } finally {
+        rec.holdWork = false
+        rec.releaseWork()
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     function test_6_settings_the_microphone_louder_and_a_test() {
       fresh()
       settingsPanel.openAt("audio")

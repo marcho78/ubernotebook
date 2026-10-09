@@ -36,9 +36,16 @@ QtObject {
     sources = [{ name: "alsa_input.internal", label: "Internal Microphone" }, { name: "alsa_input.usb", label: "USB Microphone" }]
     if (done) done(sources)
   }
+  // (holdWork: a transcript or a louder copy finishes only when
+  // releaseWork() says, so a test can open another profile meanwhile.)
+  property bool holdWork: false
+  property var heldWork: []
+  function releaseWork() { var h = heldWork; heldWork = []; h.forEach(function(f) { f() }) }
   function louder(file, to, done) {
     louders = louders.concat([{ file: file, to: to }])
-    Qt.callLater(function() { done(true, [30, 70, 95, 60]) })
+    var finish = function() { done(true, [30, 70, 95, 60]) }
+    if (holdWork) { heldWork = heldWork.concat([finish]); return }
+    Qt.callLater(finish)
   }
 
   function start(kind, owner, file, done) {
@@ -93,6 +100,8 @@ QtObject {
   function transcribe(file, seconds, done) {
     transcribed = transcribed.concat([file])
     var text = nextTranscript
-    Qt.callLater(function() { done(text !== "", text, text ? "" : "No words were heard") })
+    var finish = function() { done(text !== "", text, text ? "" : "No words were heard") }
+    if (holdWork) { heldWork = heldWork.concat([finish]); return }
+    Qt.callLater(finish)
   }
 }

@@ -219,10 +219,11 @@ QtObject {
   // The demo: its profile open (made the first time, in Uber Notebook's data folder).
   readonly property var demo: list.filter(function(p) { return p.demo })[0] || null
   function openDemo() {
-    startShown = false
-    if (demo) return use(demo.id)
+    // (Refused (an audio note being recorded): the welcome screen stays.)
     var busy = refuse()
     if (busy) return busy
+    startShown = false
+    if (demo) return use(demo.id)
     var p = Profiles.demo(list, dataFolder + "/demo")
     var next = shown.concat([p])
     if (typeof service.saveOpen === "function") service.saveOpen()

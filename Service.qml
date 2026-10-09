@@ -457,8 +457,6 @@ Item {
     else if (ui) ui.close()
   }
 
-  // A quick note: with text, straight into the Quick notes notebook (or the
-  // Pages Inbox, as Settings says); without, the quick-note card opens.
   // The open profile and its notes folder, as QuickQueue.js reads them.
   function quickState() {
     return { profile: profilesItem.current ? profilesItem.current.id : "", folder: storeItem.folder, home: storeItem.home,
@@ -475,6 +473,8 @@ Item {
     if (!s.profile) return "Not saved yet: your notes are still opening. Try again in a moment"
     return ""
   }
+  // A quick note: with text, straight into the Quick notes notebook (or the
+  // Pages Inbox, as Settings says); without, the quick-note card opens.
   // true once it's kept (written, or waiting for the profile it's made in);
   // false, and said, when it can't be: the note's window then stays open,
   // its words in it.
@@ -740,7 +740,7 @@ Item {
           if (p.indexOf("~/") === 0) p = root.home + p.slice(1)
           var said = ""
           workspaceItem.importPaths([p], "", function(r) {
-            said = r.unready ? "Not imported: your notes are still opening. Try again in a moment"
+            said = r.unready ? (storeItem.blockedFolder ? "Not imported: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)" : "Not imported: your notes are still opening. Try again in a moment")
               : r.stopped ? "Not imported: another profile was opened"
               : r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into Pages" : "Nothing to import there"
             root.osd("\u{f0e27}", said)
