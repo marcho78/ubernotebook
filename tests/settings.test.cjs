@@ -51,7 +51,9 @@ check("folders", () => {
   assert.equal(Settings.cleanFolder(""), "");
   assert.equal(Settings.cleanFolder("/home/u/Notes//x/"), "/home/u/Notes/x");
   assert.equal(Settings.cleanFolder("~/Notes"), "~/Notes");
-  for (const bad of ["Notes", "../etc", "/home/u/../etc", "/a\nb", "~user/x", 42, null]) {
+  // (What it gives, given again, the same.)
+  for (const f of ["/home/u/Notes//x/", "~/Notes/", "/", "~/a//b/"]) assert.equal(Settings.cleanFolder(Settings.cleanFolder(f)), Settings.cleanFolder(f), f);
+  for (const bad of ["Notes", "../etc", "/home/u/../etc", "/a\nb", "~user/x", "~/", "~//", 42, null]) {
     assert.equal(Settings.cleanFolder(bad), null, JSON.stringify(bad));
   }
   assert.equal(Settings.resolveFolder("", "/home/u", true), "/home/u/Documents/Uber Notebook");

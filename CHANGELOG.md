@@ -32,10 +32,12 @@ The first version.
   the recording first"); a video's still, an email's attachment, dictation,
   a transcript or a louder copy finishing after a switch is never put in
   the next profile (it's said, to do again in its own); the open page is
-  saved the moment another profile starts opening, and nothing is recorded,
-  dictated, written out or made louder till it's open; a search's results
-  are gone at once, and one on its way finds nothing; `set folder` and `set
-  profile` do as Settings does; a quick note made right after a switch waits for that profile, and
+  saved the moment another profile starts opening (an edit then, at once),
+  what's open over it (a page's history, an .ics file's events, an event, a
+  question) closes, and nothing is recorded, dictated, written out or made
+  louder till it's open; a search's results are gone at once, and one on its
+  way finds nothing; `set folder` and `set profile` do as Settings does
+  (`set profiles` is refused); a quick note made right after a switch waits for that profile, and
   the quick-note card never loses its words; `quick` and `importNotes`
   answer whether they did it; each profile keeps its own Inbox. Exports of
   many pages save a few files at a time.

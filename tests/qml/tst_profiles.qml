@@ -521,6 +521,52 @@ Item {
       compare(service.settings.folder, "~/Moved")
     }
 
+    // `set folder` with the folder it has written another way (the shell
+    // turns ~/ into your home): the same folder, tried again, not a new one
+    // (a drive not mounted isn't made in its place); "~/" alone refused; the
+    // demo's folder never moved; the profiles never set whole.
+    function test_6f_set_from_the_commands_what_it_mustnt_do() {
+      fresh({ sounds: false, profile: "p-a", folder: "~/Vault/Notes", profiles: [{ id: "p-a", name: "Vault", folder: "~/Vault/Notes" }, { id: "p-b", name: "Work", folder: "~/Work" }] })
+      function vault() { return profiles.list.filter(function(p) { return p.id === "p-a" })[0] }
+      var tried = files.retried
+      compare(profiles.setByCommand("folder", "/tmp/Vault/Notes/"), "")
+      compare(vault().fresh, undefined, "not a new one")
+      compare(vault().folder, "~/Vault/Notes", "kept as it was written")
+      compare(service.settings.folder, "~/Vault/Notes")
+      compare(files.retried, tried + 1, "tried again")
+      verify(profiles.setByCommand("folder", "~/") !== "", "~/ alone: refused")
+      verify(profiles.setByCommand("folder", "~//") !== "")
+      compare(profiles.list.length, 2, "no profile lost")
+      compare(profiles.current.id, "p-a")
+      compare(service.settings.folder, "~/Vault/Notes")
+      verify(profiles.setByCommand("profiles", "x") !== "", "the profiles never set whole")
+      compare(profiles.list.length, 2)
+      compare(profiles.setByCommand("profiles", "[]").indexOf("addProfile") >= 0, true)
+      compare(profiles.openDemo(), "")
+      tryVerify(function() { return profiles.current && profiles.current.demo }, 1000)
+      var demoFolder = service.settings.folder
+      compare(profiles.setByCommand("folder", "~/MyStuff"), "The demo keeps its own folder")
+      compare(service.settings.folder, demoFolder)
+      compare(profiles.current.folder, demoFolder)
+    }
+
+    // A question asked about the profile before (a page deleted for good,
+    // say): closed, unanswered, as another profile starts opening.
+    function test_6g_a_question_not_answered_in_the_next_profile() {
+      fresh()
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      var answered = false
+      app.docView.confirmRequested("Delete for good?", "Only for the profile before", "Delete", function() { answered = true })
+      tryVerify(function() { return find(win(), function(it) { return it.text === "Only for the profile before" }) !== null }, 1000, "asked")
+      try {
+        store.switching = true
+        tryVerify(function() { return find(win(), function(it) { return it.text === "Only for the profile before" }) === null }, 1000, "closed")
+        verify(!answered, "unanswered")
+      } finally {
+        store.switching = false
+      }
+    }
+
     // A notebook search of the profile before: what it found (titles, words)
     // gone the moment another profile starts opening; one on its way then
     // gives nothing.

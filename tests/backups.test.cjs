@@ -204,6 +204,14 @@ try {
     assert.equal(said[0], "open");
     assert.match(said[said.length - 1], /can't keep your backups private/);
     assert.deepEqual(fs.readdirSync(phone), [], "nothing written there");
+    // (A drive that's read-only isn't said to be open: its mode tells.)
+    const readOnly = path.join(tmp, "read-only-chmod");
+    fs.writeFileSync(readOnly, "#!/bin/sh\necho \"chmod: changing permissions of '$3': Read-only file system\" >&2\nexit 1\n", { mode: 0o700 });
+    const ro = (script) => script.split("/usr/bin/chmod go-rwx").join(readOnly + " go-rwx");
+    assert.ok(!/^open$/m.test(run(ro(B.LIST_SCRIPT), [phone]).out), "read-only: not open");
+    const r2 = run(ro(B.BACKUP_SCRIPT), [phone, n.stem, n.suffix, personal, "p1", ""], m);
+    assert.notEqual(r2.code, 4, r2.err);
+    assert.ok(!/^open$/m.test(r2.err), r2.err);
   });
 
   check("listed", () => {

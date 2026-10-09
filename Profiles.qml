@@ -177,6 +177,10 @@ QtObject {
     var busy = current && current.id === id ? refuse() : ""
     if (busy) return busy
     var f = Settings.cleanFolder(String(folder))
+    // (The folder it has, however it's written (~/Notes, /home/you/Notes):
+    // kept as it was, so it's the same folder picked again, not a new one.)
+    var had = Profiles.find(shown, id)
+    if (had && pathOf(had.folder) === pathOf(f)) f = had.folder || ""
     // (A folder you picked is made when it's opened, as a new profile's is;
     // the one it had, picked again, isn't: it was there before, so one
     // that's gone (a drive not mounted) isn't made again in its place.)
@@ -195,10 +199,12 @@ QtObject {
 
   // `set folder` and `set profile` (the commands): as Settings does them,
   // "" or what's wrong (checked, not while an audio note is being recorded,
-  // a folder new to it made); null with no profile yet (then it's the
-  // folder the first one is made of, as before).
+  // a folder new to it made; the demo's never moved); null with no profile
+  // yet (then it's the folder the first one is made of, as before). The
+  // profiles themselves: never set whole.
   function setByCommand(key, value) {
-    if (key === "folder" && current) return setFolder(current.id, String(value))
+    if (key === "profiles") return "Profiles are changed one at a time: addProfile, renameProfile, removeProfile, profileFolder (omarchy-shell uber-notebook help)"
+    if (key === "folder" && current) return current.demo ? "The demo keeps its own folder" : setFolder(current.id, String(value))
     if (key === "profile" && list.length) return use(String(value))
     return null
   }

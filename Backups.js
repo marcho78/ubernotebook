@@ -199,9 +199,10 @@ var EXISTS_SCRIPT = "for d in \"$@\"; do if [ -d \"$d\" ]; then echo 1; else ech
 // The backups in a folder: "<modified>\t<size>\t<name>" a line. (The
 // folder made yours alone as it's looked in: one from before was open to
 // other accounts, and backups hold all your notes. "open" on a line of its
-// own when it can't be: a drive that can't keep modes, a folder not yours,
-// a share that takes every account for the same one.)
-var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; c=1; /usr/bin/chmod go-rwx -- \"$1\" 2>/dev/null || c=; m=$(/usr/bin/stat -L -c %a -- \"$1\" 2>/dev/null); u=$(/usr/bin/stat -L -c %u -- \"$1\" 2>/dev/null); "
+// own when it can't be: a drive that can't keep modes or refuses the
+// change, a folder not yours, a share that takes every account for the
+// same one.)
+var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; c=1; e=$(LC_ALL=C /usr/bin/chmod go-rwx -- \"$1\" 2>&1) || case $e in *'not permitted'*|*'not supported'*|*'not implemented'*) c= ;; esac; m=$(/usr/bin/stat -L -c %a -- \"$1\" 2>/dev/null); u=$(/usr/bin/stat -L -c %u -- \"$1\" 2>/dev/null); "
   + "[ -n \"$c\" ] && [ -n \"$m\" ] && [ \"$u\" = \"$UID\" ] && [ $(( 8#$m & 077 )) -eq 0 ] || echo open; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
 
 // A backup made: <folder> <stem> <suffix> then, for each profile, <its
@@ -221,8 +222,9 @@ var BACKUP_SCRIPT = [
   // (A drive that can't keep files private (exFAT, some shares; a phone,
   // which refuses the change), a folder that isn't yours (a share that
   // takes every account for the same one): no backup of your notes is
-  // written there; said, after "open" on a line of its own (exit 4).)
-  "c=1; /usr/bin/chmod go-rwx -- \"$dir\" 2>/dev/null || c=",
+  // written there; said, after "open" on a line of its own (exit 4). A
+  // drive that's read-only isn't said to be open: it fails as it writes.)
+  "c=1; e=$(LC_ALL=C /usr/bin/chmod go-rwx -- \"$dir\" 2>&1) || case $e in *'not permitted'*|*'not supported'*|*'not implemented'*) c= ;; esac",
   "m=$(/usr/bin/stat -L -c %a -- \"$dir\") || exit 3",
   "u=$(/usr/bin/stat -L -c %u -- \"$dir\") || exit 3",
   "[ -n \"$c\" ] && [ \"$u\" = \"$UID\" ] && [ $(( 8#$m & 077 )) -eq 0 ] || { printf 'open\\n%s\\n' \"That folder can't keep your backups private: another account on this computer could read them there. Pick another folder for backups\" >&2; exit 4; }",

@@ -758,7 +758,7 @@ Item {
           if (!root.defaults || !Object.prototype.hasOwnProperty.call(root.defaults, key)) return "unknown setting"
           // (The open profile's folder, or another profile opened: as
           // Settings does them, Profiles.qml.)
-          var said = key === "folder" || key === "profile" ? profilesItem.setByCommand(key, value) : null
+          var said = key === "folder" || key === "profile" || key === "profiles" ? profilesItem.setByCommand(key, value) : null
           if (said !== null) return said || JSON.stringify(root.settings[key])
           // (No profile yet: the folder the first one is made of.)
           var busy = (key === "folder" || key === "profile") && value !== String(root.settings[key]) ? profilesItem.refuse() : ""

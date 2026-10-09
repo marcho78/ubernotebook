@@ -119,8 +119,13 @@ Item {
 
   function markDirty() {
     pageDirty = true
+    // (Another profile opening: saved at once, where it was.)
+    if (switching) { commit(); return }
     saveTimer.restart()
   }
+  // Another profile opening: the page as it is saved at once, where it was.
+  readonly property bool switching: !!(store && store.switching === true)
+  onSwitchingChanged: if (switching) commit()
 
   Timer {
     id: saveTimer

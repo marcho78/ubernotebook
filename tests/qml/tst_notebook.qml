@@ -57,6 +57,26 @@ Item {
       verify(saved.text.indexOf("Before we go!") >= 0)
     }
 
+    // Another profile opening: the page saved at once, where it was; an
+    // edit made then too (not left for a timer that would come too late).
+    function test_2c_saved_as_another_profile_opens() {
+      openFirst()
+      var item = view.editor.items[view.editor.uidAt(0)]
+      view.editor.focusBlock(item.uid, -1)
+      try {
+        keyClick("!")
+        verify(view.pageDirty)
+        fakeStore.switching = true
+        verify(!view.pageDirty, "saved the moment it started")
+        verify(/Before we go!/.test(stored(view.page.id).blocks[0].html))
+        keyClick("?")
+        verify(!view.pageDirty, "and an edit then, at once")
+        verify(/Before we go!\?/.test(stored(view.page.id).blocks[0].html), stored(view.page.id).blocks[0].html)
+      } finally {
+        fakeStore.switching = false
+      }
+    }
+
     // A middle click pastes what's selected (the primary selection), read
     // through the view's forwarding to the store, not the clipboard.
     function test_2b_middle_click_pastes_whats_selected() {

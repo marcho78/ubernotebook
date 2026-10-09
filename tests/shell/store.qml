@@ -469,6 +469,16 @@ ShellRoot {
                       until(function() { return store2.ready && store2.rootPath === d + "/new/Work/Notes" }, function() {
                         store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/new/Work/Notes"], function(ok, out) {
                           say("private: a new profile's notes folder made, and the folders it's in, 700", store2.blockedFolder === "" && String(out).trim() === "700", store2.rootPath + " | " + store2.blockedFolder + " " + String(out).trim())
+                          // A drive that refuses the change (a phone): not
+                          // private, though the folder reads 700 and yours; one
+                          // that's read-only: by its mode. (Its chmod here one
+                          // that answers as such a drive's does.)
+                          var fake = function(name, said) { return "/usr/bin/printf '#!/bin/sh\\necho \"chmod: changing permissions: " + said + "\" >&2\\nexit 1\\n' > " + d + "/" + name + "; /usr/bin/chmod 700 " + d + "/" + name }
+                          var on = function(name) { return store2.privateScript.split("/usr/bin/chmod go-rwx").join(d + "/" + name + " go-rwx") }
+                          store.exec(["/usr/bin/bash", "-c", fake("refuses", "Operation not supported") + "; " + fake("readonly", "Read-only file system")], function() {
+                            store.exec(["/usr/bin/bash", "-c", on("refuses"), "uber-notebook-private", d + "/new/Work/Notes"], function(refused) {
+                              store.exec(["/usr/bin/bash", "-c", on("readonly"), "uber-notebook-private", d + "/new/Work/Notes"], function(readOnly) {
+                                say("private: a drive that refuses the change isn't private; one that's read-only, by its mode", store2.privateScript.indexOf("/usr/bin/chmod go-rwx") > 0 && refused === false && readOnly === true, "refused " + refused + ", read-only " + readOnly)
                           // A notebook search as another profile opens: nothing
                           // of this one found (to be shown under that one).
                           var found = store2.createNotebook({ title: "Found" }, [{ title: "Zebrafish notes", blocks: [{ type: "p", html: "zebrafish" }] }])
@@ -491,6 +501,9 @@ ShellRoot {
                               })
                               store2.switching = true
                             })
+                          })
+                              }, { okCodes: [0] })
+                            }, { okCodes: [0] })
                           })
                         })
                       })

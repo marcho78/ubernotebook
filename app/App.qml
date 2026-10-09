@@ -506,6 +506,14 @@ FocusScope {
   Connections {
     target: root.store
     ignoreUnknownSignals: true
+    // (A question asked about the profile before (a page deleted for good,
+    // say): not answered in the next one, whose pages may have the same
+    // ids. Closed as it starts opening.)
+    function onSwitchingChanged() {
+      if (!root.store.switching || !confirm.visible) return
+      confirm.confirmAction = null
+      confirm.close()
+    }
     function onRootPathChanged() {
       // (A notebook still being opened from the profile before: never opened
       // now, and others can be.)

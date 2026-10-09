@@ -664,8 +664,9 @@ Item {
   // your home folder itself (a profile there: its own files and folders in
   // it, privateEntries). done(ok): checked after, readable by no one else
   // and yours (a drive that can't keep modes, a folder of someone else's,
-  // a share that takes every account for the same one: not ok).
-  readonly property string privateScript: "for p in \"$@\"; do [ -e \"$p\" ] || continue; /usr/bin/chmod go-rwx -- \"$p\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$p\") || exit 1; [ $(( 8#$m & 077 )) -eq 0 ] || exit 1; [ \"$(/usr/bin/stat -L -c %u -- \"$p\")\" = \"$UID\" ] || exit 1; done"
+  // a share that takes every account for the same one, a drive that refuses
+  // the change (a phone): not ok; one that's read-only, by its mode).
+  readonly property string privateScript: "for p in \"$@\"; do [ -e \"$p\" ] || continue; e=$(LC_ALL=C /usr/bin/chmod go-rwx -- \"$p\" 2>&1) || case $e in *'not permitted'*|*'not supported'*|*'not implemented'*) exit 1 ;; esac; m=$(/usr/bin/stat -L -c %a -- \"$p\") || exit 1; [ $(( 8#$m & 077 )) -eq 0 ] || exit 1; [ \"$(/usr/bin/stat -L -c %u -- \"$p\")\" = \"$UID\" ] || exit 1; done"
   function makePrivate(folder, done) {
     var f = String(folder || "").replace(/\/+$/, "")
     if (!/^\/./.test(f) || f === home) { if (done) done(f === home); return }

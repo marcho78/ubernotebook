@@ -201,6 +201,55 @@ Item {
       }
     }
 
+    // Another profile opening: what's open over the page (its history, an
+    // .ics file's events) closed, never put into the next one; an edit
+    // made then saved at once, where it was; a contact card or calendar
+    // file read then given nothing.
+    function test_6c_whats_open_as_another_profile_opens() {
+      fresh()
+      function popsOpen() { var n = 0; for (var i = 0; i < view.data.length; i++) { var o = view.data[i]; if (o && o.modal !== undefined && o.visible === true) n++ } return n }
+      var said = []
+      function heard(t) { said.push(t) }
+      view.toast.connect(heard)
+      var ics = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "DTSTART:20261011T072500", "DTEND:20261011T104000", "SUMMARY:Only for the profile before", "END:VEVENT", "END:VCALENDAR"].join("\r\n")
+      try {
+        view.commit()
+        view.openHistory()
+        view.showIcs(ics, "trip.ics")
+        tryVerify(function() { return popsOpen() >= 2 }, 1000, "its history and the events shown")
+        var file = Workspace.pageFile(files.rootPath, view.page.id)
+        files.switching = true
+        tryVerify(function() { return popsOpen() === 0 }, 1000, "closed as it starts opening")
+        // An edit made then: saved at once, where it was.
+        view.editor.insertBlocksAt(0, [{ type: "p", html: "typed as it switched", indent: 0 }])
+        verify(!view.pageDirty, "saved at once")
+        verify(String(files.disk[file]).indexOf("typed as it switched") >= 0, "where it was")
+        files.switching = false
+        // Events shown in the profile before, added after it: not.
+        var before = JSON.stringify(ws.calendar)
+        view.showIcs(ics, "trip.ics")
+        ws.generation++
+        said = []
+        view.addIcsEvents()
+        compare(JSON.stringify(ws.calendar), before, "not on this one's calendar")
+        verify(said.some(function(t) { return /another profile was opened/.test(t) }), JSON.stringify(said))
+        // A contact card read as another profile opens: no one added.
+        files.disk[files.rootPath + "/Pages/assets/sam.vcf"] = "BEGIN:VCARD\nVERSION:3.0\nFN:Sam Rivera\nEND:VCARD\n"
+        var people = JSON.stringify(ws.contacts)
+        files.holdReads = true
+        view.openFileHere("assets/sam.vcf", "sam.vcf")
+        files.switching = true
+        files.answerReads()
+        wait(50)
+        compare(JSON.stringify(ws.contacts), people, "no one added")
+      } finally {
+        view.toast.disconnect(heard)
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+      }
+    }
+
     function test_7_moving_blocks_to_another_page() {
       fresh()
       var home = view.page.id

@@ -84,6 +84,8 @@ function cleanFolder(value) {
   if (/(^|\/)\.\.(\/|$)/.test(path)) return null
   path = path.replace(/\/+/g, "/")
   if (path.length > 1 && path.charAt(path.length - 1) === "/") path = path.slice(0, -1)
+  // ("~/" alone: not a folder of its own, and "~" wouldn't be taken back.)
+  if (path === "~") return null
   return path
 }
 

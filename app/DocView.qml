@@ -262,7 +262,20 @@ FocusScope {
   // once, where it was; what's recorded, written out or made louder
   // meanwhile isn't put on it, and no recording starts.
   readonly property bool switching: !!(workspace && workspace.files && workspace.files.switching === true)
-  onSwitchingChanged: if (switching) commit()
+  onSwitchingChanged: if (switching) { commit(); closeForSwitch() }
+  // (What's open over the page is the profile before's: a version of a
+  // page, an .ics file's events, an event, a person, a picture. Closed, as
+  // it would close (what's typed in it kept where it was), never put into
+  // the next one.)
+  function closeForSwitch() {
+    for (var i = 0; i < view.data.length; i++) {
+      var o = view.data[i]
+      if (o && o.modal !== undefined && typeof o.close === "function" && o.visible === true) o.close()
+    }
+    viewer.close()
+    icsPop.events = []
+    commit()
+  }
   readonly property string switchingText: "Another profile is opening: try again in a moment"
   function addEmailTo(pageId, uid, path) {
     workspace.importEmail(path, inThisFolder(function(s, why) {
@@ -450,11 +463,14 @@ FocusScope {
   // A file block's file: a calendar's events, a contact card's people, here; else in its app.
   function openFileHere(src, name) {
     if (isCalendarFile(name) || isContactFile(name)) {
-      workspace.readAsset(src, function(text) {
+      // (Another profile opened before it's read: its events not shown
+      // there, nor its people added to that one's.)
+      workspace.readAsset(src, inThisFolder(function(text) {
+        if (view.switching) return
         if (text === null) { view.toast("That file couldn't be read"); return }
         if (view.isCalendarFile(name)) view.showIcs(text, name)
         else view.addPeopleFrom(name, text)
-      })
+      }))
       return
     }
     openAsset(src, name)
@@ -474,6 +490,8 @@ FocusScope {
     if (!events.length) { toast("There are no events in " + (name || "it")); return }
     icsPop.events = events
     icsPop.fileName = name || ""
+    icsPop.generation = workspace ? workspace.generation : -1
+    icsPop.folder = workspace ? workspace.folder : ""
     icsPop.x = Math.round((view.width - icsPop.width) / 2)
     icsPop.y = Math.round(Math.max(40, view.height * 0.18))
     icsPop.open()
@@ -482,6 +500,8 @@ FocusScope {
     var fresh = icsPop.fresh
     icsPop.close()
     if (!fresh.length) return
+    // (Shown in the profile before: never put on this one's calendar.)
+    if (switching || !workspace || icsPop.generation !== workspace.generation || icsPop.folder !== workspace.folder) { toast("Not added: another profile was opened. Open the file again in its own"); return }
     var cal = workspace.calendar
     fresh.forEach(function(e) { cal = Calendar.withEvent(cal, e) })
     workspace.setCalendar(cal)
@@ -1076,6 +1096,9 @@ FocusScope {
 
   function markDirty() {
     pageDirty = true
+    // (Another profile opening: saved at once, where it was; the one before
+    // is left before the timer would.)
+    if (switching) { commit(); return }
     saveTimer.restart()
   }
 
@@ -2666,7 +2689,7 @@ FocusScope {
   // An earlier version of the page put back, as a step Undo takes back (the
   // page as it was is kept in its history first, too).
   function restoreVersion(version, label) {
-    if (!page || !workspace || locked || !version) return
+    if (!page || !workspace || locked || !version || switching || historyPanel.pageId !== page.id) return
     commit()
     workspace.keepVersion(page.id, "restore", true)
     var r = Workspace.versionToRestore(version, page, workspace.index)
@@ -4633,6 +4656,8 @@ FocusScope {
     theme: view.theme
     property var events: []
     property string fileName: ""
+    property int generation: -1
+    property string folder: ""
     readonly property var fresh: { var r = view.workspace ? view.workspace.calendarRevision : 0; return view.workspace ? events.filter(function(e) { return !Calendar.hasLike(view.workspace.calendar, e) }) : [] }
     width: 420
     padding: 18
