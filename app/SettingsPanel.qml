@@ -955,7 +955,7 @@ Popup {
           Line {
             visible: panel.s.mirror === true
             label: "Copy to"
-            note: panel.service ? panel.service.mirrorPath : ""
+            note: panel.service ? panel.service.mirrorPath + (panel.service.mirror.notPrivate ? " · some of the copy couldn't be made yours alone: another account on this computer may read it" : "") : ""
             Row {
               spacing: 6
               Field {
@@ -1387,7 +1387,7 @@ Popup {
           }
           Line {
             label: "Folder"
-            note: panel.backups ? panel.backups.folderShown : ""
+            note: panel.backups ? panel.backups.folderShown + (panel.backups.notPrivate ? " · can't be made yours alone: another account on this computer may read your backups" : "") : ""
             Row {
               spacing: 4
               TextButton {

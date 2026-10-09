@@ -31,6 +31,8 @@ Item {
   }
   readonly property string folderShown: home && folder.indexOf(home + "/") === 0 ? "~" + folder.slice(home.length) : folder
 
+  // Whether their folder couldn't be made yours alone (Settings says so).
+  property bool notPrivate: false
   // The backups there, newest first: [{ name, path, time, size, automatic }].
   property var list: []
   // "" (nothing going on), "backup" or "restore".
@@ -58,6 +60,7 @@ Item {
     if (!files || !folder) { if (done) done(); return }
     files.exec(["/usr/bin/bash", "-c", Backups.LIST_SCRIPT, "uber-notebook-backups", folder], function(ok, out) {
       bk.list = ok ? Backups.listed(out, bk.folder) : []
+      bk.notPrivate = ok && /^open$/m.test(String(out || ""))
       if (done) done()
     }, { okCodes: [0], timeoutMs: 8000, maxBytes: 512 * 1024 })
   }

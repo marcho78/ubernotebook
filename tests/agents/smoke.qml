@@ -128,6 +128,9 @@ ShellRoot {
       }, { cwd: dir, input: first !== "", env: env, maxLine: Agent.streamLimits(where).maxLine, maxBytes: Agent.streamLimits(where).maxBytes, maxErrors: Agent.streamLimits(where).maxErrors })
       smoke.running = run
       if (first && run && run.send) run.send(first)
+      // (Codex reads its request to the end of its input: closed then, as
+      // DocView.runHere does.)
+      if (Agent.inputOnce(agent) && run && run.closeInput) run.closeInput()
     }
     begin(agent, dir)
     store.mkdirs([dir, dir + "/.grok", dir + "/.smoke-bin"], function() {

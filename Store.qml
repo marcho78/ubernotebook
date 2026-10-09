@@ -527,6 +527,14 @@ Item {
     // answer, or as the shell stops.)
     var h = stopping ? null : notesHelperFor(path)
     var rel = h ? notesRel(h, path) : ""
+    // (Anywhere else, a file you chose, an export, one of its own: by the
+    // files helper too, a new file yours alone put in its place, never one
+    // left readable by others with your words in it.)
+    if (!rel && !stopping && /^\/./.test(path)) {
+      helper(["save", path], function(ok, out) { finish(ok, ok ? "" : String(out || "").trim().split("\n").pop()) },
+        { input: String(text), timeoutMs: 60000, maxBytes: 8192 })
+      return
+    }
     if (!rel) { asBefore(); return }
     notesAsk(h, { op: "write", path: rel, text: String(text) }, function(r) {
       if (r === null) { asBefore(); return }
@@ -617,12 +625,23 @@ Item {
   // A folder of Uber Notebook's own (a profile's notes, the backups') made
   // yours alone (700), as one from before was made (755): nothing in it can
   // be reached by another account on the computer, whatever it holds. Never
-  // your home folder itself, never what's in it (that one folder is enough).
-  function makePrivate(folder) {
-    var f = String(folder || "")
-    if (!/^\/./.test(f) || f.replace(/\/+$/, "") === home) return
-    exec(["/usr/bin/chmod", "go-rwx", "--", f], null, { okCodes: [0, 1] })
+  // your home folder itself (a profile there: its own files and folders in
+  // it, privateEntries). done(ok): checked after, readable by no one else
+  // (a drive that can't keep modes, a folder of someone else's: not ok).
+  readonly property string privateScript: "for p in \"$@\"; do [ -e \"$p\" ] || continue; /usr/bin/chmod go-rwx -- \"$p\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$p\") || exit 1; [ $(( 8#$m & 077 )) -eq 0 ] || exit 1; done"
+  function makePrivate(folder, done) {
+    var f = String(folder || "").replace(/\/+$/, "")
+    if (!/^\/./.test(f) || f === home) { if (done) done(f === home); return }
+    exec(["/usr/bin/bash", "-c", privateScript, "uber-notebook-private", f], function(ok) { if (done) done(ok) }, { okCodes: [0] })
   }
+  function privateEntries(root, names, done) {
+    var paths = (names || []).filter(function(n) { return /^[^\/]+$/.test(String(n)) && n !== "." && n !== ".." }).map(function(n) { return root + "/" + n })
+    if (!paths.length) { if (done) done(true); return }
+    exec(["/usr/bin/bash", "-c", privateScript, "uber-notebook-private"].concat(paths), function(ok) { if (done) done(ok) }, { okCodes: [0] })
+  }
+  // What Uber Notebook keeps in a notes folder (a profile in your home
+  // folder itself: these made yours alone, not the home folder).
+  readonly property var ownEntries: ["Pages", ".trash", "library.json", "Exports", "Markdown"]
   // `mkdir -p` making every folder it makes yours alone (700): notes are
   // never readable by other accounts on the computer.
   function privateMkdir(paths) {
@@ -691,9 +710,17 @@ Item {
       store.rootPath = next
       store.mkdirs([store.rootPath], function(made) {
         if (!made || gen !== store.generation) return
-        store.makePrivate(store.rootPath)
-        store.notesRoot = store.rootPath
-        store.loadLibrary()
+        var root = store.rootPath
+        function opened(isPrivate) {
+          if (gen !== store.generation) return
+          // (Said, not hidden: a drive that can't keep files private, a
+          // folder that isn't yours.)
+          if (!isPrivate) store.failed("Your notes in " + root.replace(store.home, "~") + " couldn't be made yours alone: another account on this computer may be able to read them")
+          store.notesRoot = root
+          store.loadLibrary()
+        }
+        if (root === store.home) store.privateEntries(root, store.ownEntries, opened)
+        else store.makePrivate(root, opened)
       })
     })
   }
@@ -712,6 +739,10 @@ Item {
         if (nb) { found[id] = nb; store.folders[id] = true }
       }
       store.index = found
+      // (A profile in your home folder itself: its notebooks' folders too.)
+      if (store.rootPath === store.home) store.privateEntries(store.rootPath, Object.keys(found), function(ok) {
+        if (!ok) store.failed("Your notebooks in your home folder couldn't be made yours alone: another account on this computer may be able to read them")
+      })
       store.readFiles([Library.libraryFile(store.rootPath)], function(lib) {
         var saved = parseJson(lib[Library.libraryFile(store.rootPath)] || "")
         var list = Object.keys(found).map(function(id) { return found[id] })
@@ -1274,8 +1305,15 @@ Item {
   function tempPath(name) { return runtimeDir + "/uber-notebook-" + name }
 
   // A copy of a file at `to` (a picture saved where you said): done(ok, why).
-  function copyFileTo(from, to, done) {
-    exec(["/usr/bin/cp", "--", from, to], function(ok, output) { if (done) done(ok, String(output || "").trim()) }, { timeoutMs: 30000 })
+  function copyFileTo(from, to, done) { placeFile(from, to, true, done) }
+  // A copy of the file `from` at `to`, a place you chose: a new file yours
+  // alone, put there (`replace`: over a file that's there; else never),
+  // never one left readable by others (as cp over a 644 file would leave
+  // it). done(ok, why).
+  function placeFile(from, to, replace, done) {
+    helper(["place", from, to, replace ? "replace" : "keep"], function(ok, out) {
+      if (done) done(ok, ok ? "" : String(out || "").trim().split("\n").pop())
+    }, { timeoutMs: 120000, maxBytes: 8192 })
   }
 
   // A link from a page, a release's notes or an email: only to the web or

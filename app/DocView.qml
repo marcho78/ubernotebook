@@ -399,8 +399,14 @@ FocusScope {
     service.pickSavePath(Library.saveName(page && page.title ? page.title + " " + what : what.charAt(0).toUpperCase() + what.slice(1), "x.png"), function(to) {
       if (!to) return
       editor.drawingImage(kind, source, look, function(result) {
-        var ok = !!result && files.saveGrab(result, to)
-        view.drawingSaid(ok ? "Saved to " + view.tilde(to) : "The picture couldn't be saved")
+        // (Made in the runtime folder, yours alone, then put where you said
+        // as a new file yours alone: never over one left readable by others.)
+        var tmp = files.tempPath("drawing-" + Date.now() + ".png")
+        if (!result || !files.saveGrab(result, tmp)) { view.drawingSaid("The picture couldn't be saved"); return }
+        files.placeFile(tmp, to, true, function(ok) {
+          view.drawingSaid(ok ? "Saved to " + view.tilde(to) : "The picture couldn't be saved")
+          files.exec(["/usr/bin/rm", "-f", "--", tmp], null)
+        })
       })
     })
   }

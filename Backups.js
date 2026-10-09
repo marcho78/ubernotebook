@@ -187,8 +187,9 @@ var EXISTS_SCRIPT = "for d in \"$@\"; do if [ -d \"$d\" ]; then echo 1; else ech
 
 // The backups in a folder: "<modified>\t<size>\t<name>" a line. (The
 // folder made yours alone as it's looked in: one from before was open to
-// other accounts, and backups hold all your notes.)
-var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/chmod go-rwx -- \"$1\" 2>/dev/null; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
+// other accounts, and backups hold all your notes. "open" on a line of its
+// own when it can't be: a drive that can't keep modes, a folder not yours.)
+var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/chmod go-rwx -- \"$1\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$1\" 2>/dev/null); [ -n \"$m\" ] && [ $(( 8#$m & 077 )) -eq 0 ] || echo open; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
 
 // A backup made: <folder> <stem> <suffix> then, for each profile, <its
 // folder> <p1...> <a folder in it to leave out, or "">; its

@@ -55,6 +55,9 @@ Item {
       nbs.reset()
       mirror.manifest = null
       mirror.manifestFor = ""
+      mirror.madePrivate = ({})
+      mirror.privatePending = ""
+      mirror.notPrivate = false
       mirror.pageCache = ({})
       mirror.notebookCache = ({})
       mirror.folder = "/tmp/copy"
@@ -248,6 +251,31 @@ Item {
     // Another profile opened: what it read of these notes isn't kept for
     // those (their pages may have the same ids), and a copy that had begun
     // stops, writing nothing.
+    // Its own files and folders from before made yours alone (the helper's
+    // make-private: Pages/, Notebooks/, sketches/, its list; never the folder
+    // you chose): tried again until it goes, and said while it hasn't.
+    function test_5d_its_own_made_private() {
+      fresh()
+      function asked() {
+        var n = []
+        files.ran.forEach(function(a, i) { if (a[4] === "make-private") n.push({ folder: a[5], names: JSON.parse(files.inputs[i]) }) })
+        return n
+      }
+      files.makePrivateLeft = 2
+      mirror.on = true
+      tryVerify(function() { return mirror.status === "Up to date" && asked().length === 1 }, 2000)
+      compare(asked()[0].folder, "/tmp/copy")
+      compare(asked()[0].names.slice(0, 3), ["Pages", "Notebooks", "sketches"])
+      verify(asked()[0].names.indexOf(Mirror.MANIFEST) >= 0)
+      tryVerify(function() { return mirror.notPrivate }, 1000, "said")
+      files.makePrivateLeft = 0
+      syncNow()
+      tryVerify(function() { return asked().length === 2 && !mirror.notPrivate }, 1000, "tried again, and it went")
+      syncNow()
+      wait(100)
+      compare(asked().length, 2, "once it's gone, not again")
+    }
+
     function test_6_another_profile_meanwhile() {
       fresh()
       mirror.on = true

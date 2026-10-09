@@ -235,11 +235,13 @@ Item {
       })
       return
     }
+    // (A new file yours alone, put there: never one that was readable by
+    // others, left so with the page in it.)
     function copyTo(to, overwrite) {
-      files.exec(["/usr/bin/cp"].concat(overwrite ? [] : ["--update=none-fail"], ["--", made, to]), function(ok) {
+      files.placeFile(made, to, overwrite, function(ok) {
         ex.done(work)
         toast(ok ? "Saved to " + to.replace(/^\/home\/[^\/]+/, "~") : "It couldn't be saved there")
-      }, { timeoutMs: 60000 })
+      })
     }
     if (settings.exportTo === "folder" || !service || typeof service.pickSavePath !== "function") {
       var base = ex.from.root + "/Exports"

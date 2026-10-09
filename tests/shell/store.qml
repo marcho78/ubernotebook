@@ -252,6 +252,28 @@ ShellRoot {
                 say("private: what a program it runs writes is 600", m[4] === "600", m[4])
                 say("private: a folder of its own from before (755) is made 700", m[5] === "700", m[5])
                 say("private: an agent's request is in a file of its own (600, in a 700 folder), never on a command line", launched === true && m[6] === "700" && req[0] === "600" && req[1] === "Summarize my secret page", req.join(" | ") + " folder " + m[6])
+                root.overPublicChecks(d)
+              })
+            })
+          })
+        })
+      })
+    })
+  }
+  // Saved, or copied, where you chose over a file that was open to others
+  // (644): a new file yours alone in its place, never left so; "keep" never
+  // over one; a folder that can't be made yours alone (not yours) is said.
+  function overPublicChecks(d) {
+    store.exec(["/usr/bin/bash", "-c", "printf old > \"$1/pub.ics\"; printf old > \"$1/pub.pdf\"; printf PDF > \"$1/made.pdf\"; /usr/bin/chmod 644 \"$1/pub.ics\" \"$1/pub.pdf\"", "x", d], function() {
+      store.writeFile(d + "/pub.ics", "BEGIN:VCALENDAR secret", function(wrote) {
+        store.placeFile(d + "/made.pdf", d + "/pub.pdf", false, function(kept) {
+          store.placeFile(d + "/made.pdf", d + "/pub.pdf", true, function(placed) {
+            store.makePrivate("/usr/share", function(sharePrivate) {
+              store.exec(["/usr/bin/bash", "-c", "/usr/bin/stat -c %a \"$1/pub.ics\" \"$1/pub.pdf\"; /usr/bin/cat \"$1/pub.ics\"; echo; /usr/bin/cat \"$1/pub.pdf\"", "x", d], function(ok, out) {
+                var l = String(out).trim().split("\n")
+                say("private: a save over a 644 file is 600", wrote === true && l[0] === "600" && l[2] === "BEGIN:VCALENDAR secret", l.join(" | "))
+                say("private: a copy over a 644 file is 600; never over one when it mustn't be", kept === false && placed === true && l[1] === "600" && l[3] === "PDF", "kept " + kept + " placed " + placed + " " + l.join(" | "))
+                say("private: a folder that can't be made yours alone is said", sharePrivate === false, String(sharePrivate))
                 store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
               })
             })

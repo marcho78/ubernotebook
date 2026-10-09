@@ -143,6 +143,17 @@ try {
     assert.ok(!fs.readdirSync(backups).some((x) => x.includes(".part")), "nothing half-made left");
   });
 
+  check("listed: the folder made yours alone; one that can't be, said", () => {
+    const old = fs.mkdtempSync(path.join(tmp, "old-backups-"));
+    fs.chmodSync(old, 0o755);
+    const r = run(B.LIST_SCRIPT, [old]);
+    assert.equal(r.code, 0, r.err);
+    assert.ok(!/^open$/m.test(r.out), r.out);
+    assert.equal(fs.statSync(old).mode & 0o777, 0o700);
+    // (A folder that isn't yours can't be: "open".)
+    assert.match(run(B.LIST_SCRIPT, ["/usr/share"]).out, /^open$/m);
+  });
+
   check("listed", () => {
     const list = plain(B.listed(run(B.LIST_SCRIPT, [backups]).out, backups));
     assert.deepEqual(list.map((b) => b.name).sort(), ["Uber Notebook All profiles 2026-10-03 0130 2.tar.gz", "Uber Notebook All profiles 2026-10-03 0130.tar.gz", "older.tar.gz"]);

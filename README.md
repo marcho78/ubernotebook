@@ -1079,8 +1079,8 @@ cut between two pieces would come out wrong.
 |---|---|
 | `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
 | `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -f -`: plain text, never a pattern, the word on its input) |
-| `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders (its temporary ones new, never one that's there); save a picture, a PDF or a Word file where you say (the dialog asks before replacing one), and pictures into an export or the Markdown copy (new files only); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
-| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); copy in any other file an agent gives (the same way: only from its folder, through no link, at most 8 GB, as a new file); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below); look up a link's host (its name on its input) and send a notification (a reminder, an event's alert: over the session bus itself, its words on its input); make the Markdown copy's own files from before yours alone |
+| `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders (its temporary ones new, never one that's there); pictures into an export or the Markdown copy (new files only); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); copy in any other file an agent gives (the same way: only from its folder, through no link, at most 8 GB, as a new file); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below); look up a link's host (its name on its input) and send a notification (a reminder, an event's alert: over the session bus itself, its words on its input); make the Markdown copy's own files and folders from before yours alone; save a file you chose, or copy one there (an export, a picture: a new file yours alone, put in its place, checked) |
 | `/usr/lib/chromium/chromium` (or Chrome's or Brave's own program), `/usr/lib/libreoffice/program/soffice`, `/usr/bin/unshare` | a page made a PDF (Chromium, headless) or a Word file (LibreOffice, headless), each only a plain program owned by root that no one else can change (never the `chromium` launcher, which reads your flags and extensions), with a profile of its own, and no network at all (below) |
 | `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name); after you turn meeting mode on, until voxtype has restarted, when voxtype's daemon started (your own processes in `/proc`, read only, with `/usr/bin/stat`) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
@@ -1098,24 +1098,37 @@ cut between two pieces would come out wrong.
 **Private to you.** Nothing Uber Notebook writes can be read by another
 account on the computer. Your notes, their folders and attachments,
 recordings, backups, exports and the Markdown copy's files are yours alone
-(files 600, folders 700): the files helper makes them so, every program it
-runs writes with `umask 077`, and what it saves itself is made so after.
-A profile's notes folder and the backups' folder from before (755) are made
-700 when they're opened; the Markdown copy's own files from before are made
-600 (the folder you chose for it, and anything else in it, are left as you
-made them). Its working files are in your runtime folder
-(`$XDG_RUNTIME_DIR`, yours alone; without one, a folder of its own in your
-cache, never `/tmp`). And nothing you type or keep is on a command line,
-where every account on the computer can read it (`ps`): what you search for
-goes on `grep`'s input; a reminder or an event's alert is sent over the
-session bus by the files helper, its words on its input (never through
+(files 600, folders 700): the files helper writes them so; every program it
+runs writes with `umask 077`; and a file you save or copy where you choose
+(an export, a picture, a calendar or contacts file) is written new, yours
+alone, beside it, then put in its place and checked, so a file that was
+readable by others (644) is never left so with your words in it. A
+profile's notes folder and the backups' folder from before (755) are made
+700 when they're opened and checked; a profile kept in your home folder
+itself has its own files and folders made so, never your home folder. The
+Markdown copy's own files and folders from before (its pages, its
+pictures, its folders) are made so too; the folder you chose for it, and
+anything else in it, are left as you made them. When something can't be
+(a drive that can't keep modes, a folder that isn't yours), you're told:
+for your notes as they open, in Settings for the backups and the copy. Its
+working files are in your runtime folder (`$XDG_RUNTIME_DIR`, yours alone;
+without one, a folder of its own in your cache, never `/tmp`).
+
+Nor are your notes' words on a command line, where every account on the
+computer can read them (`ps`): what you search for goes on `grep`'s
+input; a reminder or an event's alert is sent over the session bus by the
+files helper, its words on its input (never through
 `omarchy-notification-send` or `busctl`, which take them as arguments); a
 link's host is looked up and its page fetched with the link on their input;
 Claude Code's, Grok's and Codex's requests go on their input; an agent
 opened in a terminal starts with a line naming a file of its own (600) its
 request is in; a backup's list of profiles goes on its input; a meeting's
-title stays with its block. What a command line still shows is where things
-are (paths, page ids) and fixed words.
+title stays with its block. A command line still shows where things are:
+a file's path (one you open, save or export is named there, its name from
+its page's title too, as in any app), page ids, fixed words. The commands
+agents run (`omarchy-shell uber-notebook-agent ...`) go through the Omarchy
+shell's IPC, which takes only arguments: what an agent passes there is on
+its own command line, as with any command you type.
 
 **Your notes.** Their files (pages, their history, Pages' index, People, the
 calendar, conversations with agents, notebooks) are read and written by the

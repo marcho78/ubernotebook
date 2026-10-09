@@ -58,6 +58,7 @@ QtObject {
   function reset() {
     ran = []
     inputs = []
+    makePrivateLeft = 0
     links = ({})
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
@@ -195,6 +196,7 @@ QtObject {
   // each was given on its input ("" for nothing), in the same order.
   property var ran: []
   property var inputs: []
+  property int makePrivateLeft: 0
   // The archive helper (Store.qml), as its commands' first words.
   readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
   function helper(args, done, options) { exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options) }
@@ -456,6 +458,19 @@ QtObject {
     }
     // A page's picture: its host looked up (a public address, unless
     // privateHosts names it), then fetched from there into a file.
+    // (The files helper's make-private: `makePrivateLeft` files it couldn't change.)
+    if (argv[3] === filesHelper && argv[4] === "make-private") {
+      done(true, JSON.stringify({ ok: true, changed: 0, left: makePrivateLeft }) + "\n")
+      return
+    }
+    // (The files helper's place: a copy where you said.)
+    if (argv[3] === filesHelper && argv[4] === "place") {
+      if (disk[argv[5]] === undefined) { done(false, "No such file"); return }
+      if (argv[7] === "keep" && disk[argv[6]] !== undefined) { done(false, "there's a file there already"); return }
+      disk[argv[6]] = disk[argv[5]]
+      done(true, argv[6] + "\n")
+      return
+    }
     // (The files helper's lookup: the host on its input.)
     if (argv[3] === filesHelper && argv[4] === "lookup") {
       var lhost = String(options && options.input || "")
@@ -536,11 +551,13 @@ QtObject {
     return true
   }
   function tempPath(name) { return "/tmp/uber-notebook-" + name }
-  // A copy of a file where you said (Store.qml: cp).
-  function copyFileTo(from, to, done) {
-    if (disk[from] === undefined) { if (done) done(false, "cp: cannot stat '" + from + "': No such file or directory"); return }
-    disk[to] = disk[from]
-    if (done) done(true, "")
+  // A copy of a file where you said (Store.qml: the files helper's place,
+  // a new file yours alone; "keep": never over one that's there).
+  function copyFileTo(from, to, done) { placeFile(from, to, true, done) }
+  function placeFile(from, to, replace, done) {
+    exec(["/usr/bin/python3", "-I", "-S", filesHelper, "place", from, to, replace ? "replace" : "keep"], function(ok, out) {
+      if (done) done(ok, ok ? "" : String(out || ""))
+    })
   }
   property var opened: []
   function openUrl(url) { opened = opened.concat([String(url)]) }

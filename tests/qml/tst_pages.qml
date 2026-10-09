@@ -715,7 +715,7 @@ Item {
       service.setSetting("exportTo", "folder")
       view.exportAs("pdf", false)
       tryVerify(function() { return Object.keys(files.disk).some(function(k) { return k.indexOf(files.rootPath + "/Exports/" + title + " ") === 0 && /\.pdf$/.test(k) }) }, 3000)
-      verify(lastRun(function(a) { return a[0] === "/usr/bin/cp" && a[1] === "--update=none-fail" }) !== null)
+      verify(lastRun(function(a) { return a[4] === "place" && a[7] === "keep" }) !== null, "a new file yours alone, never over one that's there")
       service.setSetting("exportTo", "ask")
       // The pictures couldn't be checked: nothing's made.
       files.failExportHtml = "a picture from elsewhere"

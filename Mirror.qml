@@ -57,7 +57,7 @@ Item {
     if (on) { status = "Copying soon"; Qt.callLater(mirror.sync) }
     else { timer.stop(); status = ""; problem = "" }
   }
-  onFolderChanged: { manifest = null; manifestFor = ""; schedule() }
+  onFolderChanged: { manifest = null; manifestFor = ""; notPrivate = false; schedule() }
   // (Another profile's notes: nothing read from these is kept for them;
   // their pages may have the same ids.)
   onNotesRootChanged: { pageCache = ({}); notebookCache = ({}); schedule() }
@@ -92,6 +92,7 @@ Item {
     status = "Copying\u2026"
     var gen = ++generation
     var dir = folder
+    makeOwnPrivate(dir)
     // (Where it copies from, as it was when it started: a copy that's begun
     // and another profile's open meanwhile, it stops.)
     var from = { root: notesRoot, pages: workspace.folder }
@@ -131,22 +132,34 @@ Item {
       try { raw = text ? JSON.parse(text) : null } catch (e) { raw = null }
       mirror.manifest = Mirror.cleanManifest(raw)
       mirror.manifestFor = dir
-      mirror.makeOwnPrivate(dir)
       done()
     })
   }
-  // The copy's own files from before (its list's, and the list) made yours
-  // alone, once a folder a session: as it writes them now. Nothing else in
-  // the folder you chose is touched, nor the folder itself.
+  // The copy's own files and folders from before (Pages/, Notebooks/ with
+  // their pictures, sketches/, and its list) made yours alone, once a folder
+  // a session, as it writes them now; tried again on the next copy until it
+  // goes. The folder you chose, and anything else in it, are left as they
+  // are. `notPrivate`: some couldn't be (Settings says so).
   property var madePrivate: ({})
+  property bool notPrivate: false
+  property string privatePending: ""
   function makeOwnPrivate(dir) {
-    if (madePrivate[dir] || !store || typeof store.helper !== "function") return
-    var done = {}
-    for (var k in madePrivate) done[k] = true
-    done[dir] = true
-    madePrivate = done
-    var names = Object.keys(manifest || {}).concat([Mirror.MANIFEST, Mirror.LEGACY_MANIFEST])
-    store.helper(["make-private", dir], null, { input: JSON.stringify(names), timeoutMs: 60000, maxBytes: 4096 })
+    if (madePrivate[dir] || privatePending === dir || !store || typeof store.helper !== "function") return
+    privatePending = dir
+    var names = ["Pages", "Notebooks", "sketches", Mirror.MANIFEST, Mirror.LEGACY_MANIFEST]
+    store.helper(["make-private", dir], function(ok, out) {
+      var r = null
+      try { r = JSON.parse(String(out || "").trim().split("\n").pop()) } catch (e) { r = null }
+      var good = ok && r && r.ok === true && r.left === 0
+      if (mirror.privatePending === dir) mirror.privatePending = ""
+      if (dir !== mirror.folder) return
+      mirror.notPrivate = !good
+      if (!good) return
+      var done = {}
+      for (var k in mirror.madePrivate) done[k] = true
+      done[dir] = true
+      mirror.madePrivate = done
+    }, { input: JSON.stringify(names), timeoutMs: 120000, maxBytes: 4096 })
   }
 
   // Every page of Pages not in the trash: those changed since they were last

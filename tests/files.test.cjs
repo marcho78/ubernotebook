@@ -679,6 +679,65 @@ try {
     }
   });
 
+  // A file you chose to save, or a copy put there: a new file yours alone,
+  // never one left readable by others with your words in it (as cp or a save
+  // over a 644 file would leave it); a link there replaced, never followed.
+  check("save and place: yours alone, over a file that was open to others too", () => {
+    const d = fs.mkdtempSync(path.join(tmp, "save-"));
+    const mode = (p) => fs.lstatSync(p).mode & 0o777;
+    const pub = path.join(d, "public.ics");
+    fs.writeFileSync(pub, "old"); fs.chmodSync(pub, 0o644);
+    let r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "save", pub], { input: "BEGIN:VCALENDAR secret", encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(fs.readFileSync(pub, "utf8"), "BEGIN:VCALENDAR secret");
+    assert.equal(mode(pub), 0o600, "a 644 file replaced, now 600");
+    const target = path.join(d, "target"); fs.writeFileSync(target, "T"); fs.chmodSync(target, 0o644);
+    const link = path.join(d, "link"); fs.symlinkSync(target, link);
+    r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "save", link], { input: "x", encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(fs.lstatSync(link).isFile() && fs.readFileSync(target, "utf8") === "T", "the link replaced, never written through");
+    const made = path.join(d, "made.pdf"); fs.writeFileSync(made, "PDF");
+    const old = path.join(d, "old.pdf"); fs.writeFileSync(old, "was"); fs.chmodSync(old, 0o644);
+    r = helperRun(["place", made, old, "keep"]);
+    assert.equal(r.code, 3, "keep: never over a file that's there");
+    assert.equal(fs.readFileSync(old, "utf8"), "was");
+    r = helperRun(["place", made, old, "replace"]);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(fs.readFileSync(old, "utf8"), "PDF");
+    assert.equal(mode(old), 0o600);
+    r = helperRun(["place", made, path.join(d, "new.pdf"), "keep"]);
+    assert.equal(r.code, 0, r.err);
+    assert.equal(mode(path.join(d, "new.pdf")), 0o600);
+    assert.ok(!fs.readdirSync(d).some((n) => n.startsWith(".uber-notebook-new")), "nothing half-made left");
+    assert.equal(helperRun(["place", d, path.join(d, "x"), "replace"]).code, 3, "only a plain file is copied");
+  });
+
+  // The Markdown copy's own files and folders from before made yours alone:
+  // what's named and everything in it, never through a link, nothing else
+  // in your folder, nor the folder itself.
+  check("make-private: the copy's own, all of it, nothing else", () => {
+    const v = fs.mkdtempSync(path.join(tmp, "copy-"));
+    const out = fs.mkdtempSync(path.join(tmp, "elsewhere-"));
+    const mode = (p) => fs.lstatSync(p).mode & 0o777;
+    for (const dir of ["Pages", "Notebooks/Trip/assets", "mine"]) fs.mkdirSync(path.join(v, dir), { recursive: true });
+    fs.writeFileSync(path.join(v, "Pages", "A.md"), "a");
+    fs.writeFileSync(path.join(v, "Notebooks", "Trip", "assets", "pic.png"), "p");
+    fs.writeFileSync(path.join(v, "mine", "x.md"), "m");
+    fs.writeFileSync(path.join(out, "o.md"), "o");
+    fs.symlinkSync(out, path.join(v, "Notebooks", "link"));
+    for (const p of [v, path.join(v, "Pages"), path.join(v, "Notebooks"), path.join(v, "Notebooks", "Trip"), path.join(v, "Notebooks", "Trip", "assets"), path.join(v, "mine"), out]) fs.chmodSync(p, 0o755);
+    for (const p of [path.join(v, "Pages", "A.md"), path.join(v, "Notebooks", "Trip", "assets", "pic.png"), path.join(v, "mine", "x.md"), path.join(out, "o.md")]) fs.chmodSync(p, 0o644);
+    const r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "make-private", v], { input: JSON.stringify(["Pages", "Notebooks", "sketches", "../x", "/etc"]), encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout), { ok: true, changed: 6, left: 0 }, "Pages, A.md, Notebooks, Trip, assets, pic.png");
+    assert.equal(mode(path.join(v, "Pages", "A.md")), 0o600);
+    assert.equal(mode(path.join(v, "Notebooks", "Trip", "assets", "pic.png")), 0o600, "its pictures too");
+    assert.equal(mode(path.join(v, "Notebooks", "Trip", "assets")), 0o700, "its folders too");
+    assert.equal(mode(v), 0o755, "the folder you chose, as it was");
+    assert.equal(mode(path.join(v, "mine", "x.md")), 0o644, "nothing else in it");
+    assert.equal(mode(path.join(out, "o.md")), 0o644, "never through a link");
+  });
+
   // A link's host looked up: its name on the input; only a host name.
   check("lookup: a host name on its input, nothing else", () => {
     const look = (host) => spawnSync("/usr/bin/python3", ["-I", "-S", helper, "lookup"], { input: host, encoding: "utf8" });
