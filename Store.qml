@@ -1245,17 +1245,18 @@ Item {
     return true
   }
 
-  // done, for what's picked (a file, pictures) for the notes open now:
-  // given `empty` if another profile was opened (or began to) before it's
-  // picked, as it would go into that one's; and said.
-  function forTheseNotes(done, empty) {
+  // done, for what's picked (a file, pictures, where an export goes) for
+  // the notes open now: given `empty` if another profile was opened (or
+  // began to) before it's picked, as it would go into (or come from) that
+  // one's; and said (`said`, or that it wasn't added).
+  function forTheseNotes(done, empty, said) {
     var gen = generation
     var root0 = rootPath
     var switching0 = switching
     return function(v) {
       var picked = Array.isArray(v) ? v.length > 0 : !!v
       if (picked && (switching0 || store.switching || gen !== store.generation || root0 !== store.rootPath)) {
-        store.failed("Not added: another profile was opened. Pick it again there")
+        store.failed(said || "Not added: another profile was opened. Pick it again there")
         if (done) done(empty)
         return
       }
@@ -1581,8 +1582,11 @@ Item {
   property var exportFolder: null
 
   function exportBase(done) {
-    if (typeof exportFolder === "function") exportFolder(done)
-    else done(rootPath + "/Exports")
+    // (Picked after another profile began to open: nothing exported, as
+    // what's read for it would be that one's.)
+    var given = forTheseNotes(done, "", "Not exported: another profile was opened. Export it again there")
+    if (typeof exportFolder === "function") exportFolder(given)
+    else given(rootPath + "/Exports")
   }
 
   function exportNotebook(id) {

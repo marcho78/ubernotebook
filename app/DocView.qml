@@ -1119,6 +1119,9 @@ FocusScope {
     // change anything: it would go on in the next folder.)
     if (agentRun) {
       if (service && service.agentScope) service.agentScope.frozen = true
+      // (Till its process has ended, it's still the one running: its panel,
+      // the folder before's, isn't shown again here, agentStillEnding.)
+      agentRun.left = true
       agentRun.stop()
     }
     // (Its conversation, and what you allowed in it, stay with the folder
@@ -1126,6 +1129,7 @@ FocusScope {
     agentTalk = null
     agentPending = null
     agentPanel.visible = false
+    agentRunPrompt = ""
     // (Anything opened over the page since the switch began: closed too.)
     Overlays.closeAll(view, [])
     icsPop.events = []
@@ -1137,6 +1141,9 @@ FocusScope {
     saveTimer.stop()
     pageDirty = false
     page = null
+    // (Nor is its page kept, hidden, to be found in (Find) here.)
+    editor.load([])
+    titleEdit.text = ""
     history = []
     historyAt = -1
     tagShown = ""
@@ -1463,8 +1470,16 @@ FocusScope {
   // (kept from before, its panel closed or not) goes back to it instead, what
   // you picked going with your next message; New chat, in its panel, opens
   // the box.
+  // A run stopped as another profile opened, still ending: said, and its
+  // panel (that profile's request and answer) not shown here.
+  function agentStillEnding() {
+    if (!agentRun || !agentRun.left) return false
+    toast("The agent from the profile before is still stopping: try again in a moment")
+    return true
+  }
   function openAgent(scope, uids) {
     if (!workspace || !workspace.ready) return
+    if (agentStillEnding()) return
     // (One at a time: while it works, its panel.)
     if (agentRun) { agentPanel.visible = true; if (agentTalk && page && agentTalk.owner !== page.id) toast(Agent.name(agentTalk.agent) + " is still working on what you asked before"); return }
     if (page && workspace.chatFor(page.id)) { openChat(page.id, agentContext(scope, uids)); return }
@@ -1512,6 +1527,7 @@ FocusScope {
   function askAgentWith(agent, request, ctx, label, terminal) {
     if (!page || !workspace) return
     var here = !terminal && Agent.runsHere(agent) && typeof workspace.files.stream === "function"
+    if (here && agentStillEnding()) return
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
     // (A new conversation: a folder of its own.)
     if (here) newAgentFolder()
@@ -1537,6 +1553,7 @@ FocusScope {
   function askAgentForPage(agent, request, parentId, terminal) {
     if (!workspace || !workspace.ready) return
     var here = !terminal && Agent.runsHere(agent) && typeof workspace.files.stream === "function"
+    if (here && agentStillEnding()) return
     if (here && agentRun) { agentPanel.visible = true; toast(Agent.name(agent) + " is still working on what you asked before"); return }
     // (A new conversation: a folder of its own.)
     if (here) newAgentFolder()
@@ -1917,6 +1934,11 @@ FocusScope {
       agentTalk = { agent: chat.agent, id: chat.session, owner: owner, page: chat.page || owner, picked: chat.picked || "", folder: chat.folder || "", grants: {} }
       var choice = { model: settings[chat.agent + "Model"] || "", effort: settings[chat.agent + "Effort"] || "" }
       agentPanel.show(Agent.name(chat.agent), "", chat.turns)
+      // (In a terminal instead: this conversation, its last request and what
+      // was said before it; never the last run's, another page's or
+      // profile's.)
+      var last = chat.turns[chat.turns.length - 1]
+      agentRunPrompt = last ? recapPrompt(last.request, chat.turns.slice(0, -1), true) : ""
       var files = workspace.files
       if (typeof files.agentModels === "function") files.agentModels(chat.agent, function(list) { agentPanel.choiceText = Agent.choiceLabel(list, choice.model, choice.effort) })
     }

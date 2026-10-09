@@ -60,6 +60,43 @@ Item {
       return String(run.argv[run.argv.length - 1])
     }
 
+    // Another profile opens: the last run's prompt (its page, its words)
+    // isn't what "Open in a terminal instead" launches there; a conversation
+    // gone back to launches its own. A run stopped as it switched, still
+    // ending: its panel (the profile before's) isn't shown again.
+    function test_0_a_terminal_prompt_and_a_run_ending_after_a_switch() {
+      fresh()
+      var root0 = files.rootPath
+      tryVerify(function() { return ws.chatsLoaded }, 2000)
+      try {
+        view.agentRunPrompt = "Only for the profile before"
+        files.rootPath = "/tmp/other-agent-notes"
+        compare(view.agentRunPrompt, "", "not kept for the next")
+        tryCompare(ws, "ready", true, 3000)
+        tryVerify(function() { return view.page !== null && ws.chatsLoaded }, 3000)
+        ws.setChat(view.page.id, { agent: "claude", session: "", page: view.page.id, updated: "2026-10-09T10:00:00Z",
+          turns: [{ request: "First thing", answer: "Done", status: "done" }, { request: "Make it a table", answer: "Done", status: "done" }] })
+        verify(view.openChat(view.page.id, null))
+        verify(view.agentRunPrompt.indexOf("Make it a table") >= 0, view.agentRunPrompt)
+        verify(view.agentRunPrompt.indexOf("Only for the profile before") < 0)
+        view.agentPanel.visible = false
+        // A run stopped as it switched, still ending.
+        var said = []
+        function heard(t) { said.push(t) }
+        view.toast.connect(heard)
+        view.agentRun = { left: true, stopped: true, stop: function() {} }
+        view.openAgent("page", [])
+        verify(!view.agentPanel.visible, "its panel not shown")
+        verify(said.some(function(t) { return /still stopping/.test(t) }), JSON.stringify(said))
+        view.toast.disconnect(heard)
+      } finally {
+        view.agentRun = null
+        view.agentPanel.visible = false
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     function test_1_slash_agent_on_an_empty_line() {
       fresh()
       var e = view.editor

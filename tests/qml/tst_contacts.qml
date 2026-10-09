@@ -98,6 +98,25 @@ Item {
     }
     function lastText() { var e = view.editor; return e.items[e.uidAt(e.model.count - 1)] }
 
+    // Another profile opens: what you looked for in People, picked or were
+    // writing there, gone (not shown, filtered by, in the next one).
+    function test_0_whats_looked_for_goes_with_the_profile() {
+      fresh()
+      var root0 = files.rootPath
+      view.openPeople("", false)
+      tryVerify(function() { return view.peopleShown }, 1000)
+      pv().query = "Dana Whitfield"
+      pv().selected = "c-someone"
+      try {
+        files.rootPath = "/tmp/other-people-view"
+        compare(pv().query, "", "what was looked for, gone")
+        compare(pv().selected, "", "who was picked, too")
+      } finally {
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     function test_1_people_imported_found_changed() {
       fresh()
       click(named(win(), "peopleTile"))

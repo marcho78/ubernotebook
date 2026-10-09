@@ -503,6 +503,23 @@ ShellRoot {
                                 store2.switching = false
                                 store2.failed.disconnect(tell)
                                 say("private: a file picked as another profile opens is given nothing, and said", JSON.stringify(gotPicked) === JSON.stringify(["/home/x/a.png", "", []]) && told.length === 2 && /another profile/.test(told[0]), JSON.stringify(gotPicked) + " " + told.length)
+                                // Where an export goes, picked after another profile
+                                // began to open: nothing exported (what's read for it
+                                // would be that one's), said.
+                                var held = null
+                                var hadFolder = store2.exportFolder
+                                store2.exportFolder = function(done) { held = done }
+                                var base = "pending"
+                                var told2 = []
+                                var tell2 = function(m) { told2.push(m) }
+                                store2.failed.connect(tell2)
+                                store2.exportBase(function(b) { base = b })
+                                store2.switching = true
+                                held("/home/x/Exports")
+                                store2.switching = false
+                                store2.failed.disconnect(tell2)
+                                store2.exportFolder = hadFolder
+                                say("private: an export's folder picked as another profile opens: nothing exported, said", base === "" && told2.length === 1 && /Not exported/.test(told2[0]), base + " " + JSON.stringify(told2))
                                 // A notebook read as another profile opens: nothing of
                                 // it given (to be shown, exported or merged there).
                                 var held = store2.createNotebook({ title: "Held" }, [])

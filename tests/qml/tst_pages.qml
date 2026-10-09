@@ -399,6 +399,43 @@ Item {
       }
     }
 
+    // A link's page read as another profile opens: its picture never kept in
+    // that one's folder. A page deleted for good as another opens: that
+    // one's history for the same id left as it is. The page the editor had:
+    // gone with the folder (not kept, hidden, to be found in).
+    function test_6i_late_answers_after_another_profile_opens() {
+      fresh()
+      var root0 = files.rootPath
+      var other = "/tmp/other-late-notes"
+      files.fetchPages["https://slow.example.com/"] = '<html><head><title>Slow</title><meta property="og:image" content="https://slow.example.com/p.png"></head></html>'
+      files.fetchPictures["https://slow.example.com/p.png"] = "image/png"
+      var p = ws.createPage({ parent: "", title: "Gone for good", blocks: [{ type: "p", html: "x", indent: 0 }] })
+      verify(ws.keepVersion(p.id, "command", true))
+      wait(200)
+      Object.keys(files.disk).forEach(function(k) { if (k.indexOf(root0 + "/") === 0) files.disk[other + k.slice(root0.length)] = files.disk[k] })
+      function textLeft() { return view.editor.serialize().map(function(b) { return Html.plainText(b.html || "") }).join("").trim() }
+      verify(textLeft() !== "")
+      try {
+        files.holdReads = true
+        var card = null
+        ws.fetchBookmark("https://slow.example.com/", function(d) { card = d })
+        ws.deleteForever(p.id)
+        files.rootPath = other
+        compare(textLeft(), "", "the page it had: gone with the folder")
+        files.holdReads = false
+        files.answerReads()
+        tryVerify(function() { return card !== null }, 2000)
+        compare(card.image, "", "no picture kept")
+        verify(!Object.keys(files.disk).some(function(k) { return k.indexOf(other + "/Pages/assets/bm-") === 0 }), "nothing in that one's folder")
+        verify(!files.trashedPaths.some(function(k) { return k === Workspace.historyDir(other, p.id) }), "that one's history left as it is")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     // Another folder: the people and the calendar of the one before aren't
     // shown, searched or undone here till this one's are read; its alerts
     // aren't sent, nor while one opens.

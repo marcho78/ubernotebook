@@ -25,6 +25,12 @@ Item {
   readonly property bool dictating: recorder !== null && recorder.busy && recorder.kind === "dictation" && recorder.owner === "quick"
   // Something in the way of dictating ("Dictation needs voxtype").
   property string problem: ""
+  // Words given back for a profile (its id), and the profile open now, with
+  // a name for each (nameOf(id)): kept in another than theirs only when you
+  // save them again, told.
+  property string heldFor: ""
+  property string openProfile: ""
+  property var nameOf: null
 
   signal kept(string text)
   signal thrownAway()
@@ -51,7 +57,8 @@ Item {
   }
   // A note given back (kept for a while, then it couldn't be after all):
   // after what's in it already, nothing wiped, with why.
-  function hold(text, why) {
+  function hold(text, why, profile) {
+    if (profile) heldFor = String(profile)
     var was = edit.text.replace(/\s+$/, "")
     edit.text = was ? was + "\n\n" + String(text || "") : String(text || "")
     edit.cursorPosition = edit.length
@@ -63,13 +70,22 @@ Item {
   function clear() {
     problem = ""
     edit.text = ""
+    heldFor = ""
   }
 
   function keep() {
     if (dictating) recorder.cancel()
     var text = edit.text.trim()
-    if (text) kept(text)
-    else thrownAway()
+    if (!text) { thrownAway(); return }
+    // (Given back for one profile, another open now: never written there
+    // without your saying so: said, and kept there if you save again.)
+    if (heldFor && heldFor !== openProfile) {
+      var who = function(id) { var n = typeof nameOf === "function" ? nameOf(id) : ""; return n ? "\u201c" + n + "\u201d" : "another profile" }
+      problem = "These words were kept for " + who(heldFor) + ". Save again to keep them in " + who(openProfile) + " instead"
+      heldFor = openProfile
+      return
+    }
+    kept(text)
   }
 
   // Dictation on, or (on) done: what you said goes in where the cursor is.

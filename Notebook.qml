@@ -289,9 +289,9 @@ Item {
   }
   // A quick note given back (it was waiting for a profile whose folder
   // can't be used after all): in the card, with why.
-  function holdQuick(text, why) {
+  function holdQuick(text, why, profile) {
     quickWindow.visible = true
-    Qt.callLater(function() { quickNote.hold(text, why) })
+    Qt.callLater(function() { quickNote.hold(text, why, profile) })
   }
 
   Theme {
@@ -321,6 +321,12 @@ Item {
       theme: quickTheme
       destination: root.service ? (root.service.settings.quickTo || "pages") : "pages"
       recorder: root.service ? root.service.recorder : null
+      openProfile: root.service && root.service.settings ? String(root.service.settings.profile || "") : ""
+      nameOf: function(id) {
+        var list = root.service && root.service.settings && root.service.settings.profiles ? root.service.settings.profiles : []
+        var p = list.filter(function(x) { return x.id === id })[0]
+        return p ? p.name : ""
+      }
       onDestinationPicked: function(to) { if (root.service) root.service.setSetting("quickTo", to) }
       onKept: function(text) {
         // (Closed only once it's kept: where it can't be now (the profile's

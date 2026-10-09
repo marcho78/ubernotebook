@@ -568,7 +568,7 @@ Item {
     if (!t.mine.length) return
     if (ui && typeof ui.holdQuick === "function") {
       quickWaiting = t.rest
-      ui.holdQuick(t.mine.join("\n\n"), quickRefusal())
+      ui.holdQuick(t.mine.join("\n\n"), quickRefusal(), s.profile)
     } else osd("\u{f0028}", "A quick note is waiting: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)")
   }
 

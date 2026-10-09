@@ -572,10 +572,14 @@ Item {
 
   // Past the newest Workspace.HISTORY_KEEP: gone.
   function pruneVersions(id) {
+    // (The folder it was asked for in: another opened meanwhile (a restored
+    // one has the same ids), none of its versions taken away.)
+    var gen = generation
+    var dir = Workspace.historyDir(files.rootPath, id)
     listVersions(id, function(list) {
+      if (gen !== ws.generation) return
       var past = Workspace.versionsPast(list.map(function(v) { return v.name }))
       if (past.length === 0) return
-      var dir = Workspace.historyDir(files.rootPath, id)
       files.exec(["/usr/bin/rm", "-f", "--"].concat(past.map(function(n) { return dir + "/" + n })), null)
     })
   }
@@ -964,7 +968,11 @@ Item {
       delete texts[pid]
       files.trash(ws.pagePath(pid), "page-" + pid + ".json")
       // Its history goes with it (if it has one).
-      ws.listVersions(pid, function(list) { if (list.length) files.trash(Workspace.historyDir(files.rootPath, pid), "history-" + pid) })
+      // (Its history in this folder: another opened before it's listed (a
+      // restored one has the same ids), that one's is left as it is.)
+      var gen = ws.generation
+      var dir = Workspace.historyDir(files.rootPath, pid)
+      ws.listVersions(pid, function(list) { if (list.length && gen === ws.generation) files.trash(dir, "history-" + pid) })
     })
     // And its conversations with your agent.
     if (all.some(function(pid) { return chats[pid] })) {
@@ -1189,6 +1197,9 @@ Item {
   function fetchBookmark(url, done) {
     var u = Bookmark.cleanUrl(url)
     if (!u) { done(null, "That isn't a web link (https://...)"); return }
+    // (Its picture into the folder it was asked for in: taken now, not once
+    // the page has come.)
+    var at = { gen: generation, dest: Workspace.assetsDir(files.rootPath) }
     fetchPage(u, false, function() { return "" }, function(html, from, why) {
       if (html === null || !String(html).trim()) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, why || "The page couldn't be read: the link's kept"); return }
       var meta = Bookmark.parse(html, from)
@@ -1196,7 +1207,7 @@ Item {
       ws.fetchBookmarkPicture(meta.image, function(src) {
         if (src) data.image = src
         done(data, "")
-      })
+      }, at)
     })
   }
 
@@ -1212,12 +1223,13 @@ Item {
     function within(link) { var h = Permissions.hostOf(link); return h !== "" && allowed.indexOf(h) >= 0 }
     if (!u || !within(u)) { done(null, "Uber Notebook may not contact that site for it"); return }
     function kept(why) { done({ url: u, title: "", description: "", site: Bookmark.domain(u), image: "" }, why) }
+    var at = { gen: generation, dest: Workspace.assetsDir(files.rootPath) }
     fetchPage(u, true, function(link) { return within(link) ? "" : "It goes on to a site you haven't let it contact: the link's kept" }, function(html, from, why) {
       if (html === null || !String(html).trim()) { kept(why || "The page couldn't be read: the link's kept"); return }
       var meta = Bookmark.parse(html, from)
       var data = { url: u, title: meta.title, description: meta.description, site: meta.site, image: "" }
       if (!meta.image || !within(meta.image)) { done(data, ""); return }
-      ws.fetchBookmarkPicture(meta.image, function(src) { if (src) data.image = src; done(data, "") })
+      ws.fetchBookmarkPicture(meta.image, function(src) { if (src) data.image = src; done(data, "") }, at)
     })
   }
 
@@ -1277,13 +1289,15 @@ Item {
   // address, past no proxy, never redirected, into a folder of its own;
   // then copied into assets under a new name, only if it's a picture
   // (Store.copyPictureIn). done("assets/<name>") or done("").
-  function fetchBookmarkPicture(url, done) {
+  function fetchBookmarkPicture(url, done, at) {
     var target = Bookmark.imageTarget(url)
     if (!target) { done(""); return }
-    // (Into the assets of the folder it was asked for in, or none: another
-    // opened meanwhile, it isn't kept.)
-    var gen = generation
-    var dest = Workspace.assetsDir(files.rootPath)
+    // (Into the assets of the folder it was asked for in (`at`, when the
+    // link was), or none: another opened meanwhile, or opening, it isn't
+    // kept.)
+    var gen = at ? at.gen : generation
+    var dest = at ? at.dest : Workspace.assetsDir(files.rootPath)
+    if (gen !== generation || files.switching === true) { done(""); return }
     files.helper(["lookup"], function(okR, out) {
       var ips = okR ? Bookmark.addresses(out) : []
       if (!ips.length || !ips.every(Bookmark.isPublicIp)) { done(""); return }

@@ -39,6 +39,31 @@ Item {
     // (Each test counts from nothing, the card empty.)
     function init() { card.clear(); kept.clear(); picked.clear(); thrown.clear() }
 
+    // Words given back for one profile (its folder couldn't be used), and
+    // another open by the time they're saved: not written there unless you
+    // save again, told.
+    function test_given_back_for_another_profile() {
+      card.nameOf = function(id) { return id === "p-a" ? "Client" : id === "p-b" ? "Personal" : "" }
+      card.openProfile = "p-b"
+      card.hold("For the client", "Not saved: that folder can't be used", "p-a")
+      card.keep()
+      compare(kept.count, 0, "not written into the other")
+      verify(/kept for \u201cClient\u201d/.test(card.problem), card.problem)
+      verify(/keep them in \u201cPersonal\u201d/.test(card.problem), card.problem)
+      card.keep()
+      compare(kept.count, 1, "saved again: kept where you are")
+      compare(kept.signalArguments[0][0], "For the client")
+      // Theirs open again: kept straight away.
+      card.clear()
+      kept.clear()
+      card.openProfile = "p-a"
+      card.hold("Again", "", "p-a")
+      card.keep()
+      compare(kept.count, 1)
+      card.openProfile = ""
+      card.nameOf = null
+    }
+
     function test_where_it_goes() {
       card.destination = "notebook"
       card.start("Groceries")

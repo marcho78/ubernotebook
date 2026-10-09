@@ -36,9 +36,13 @@ The first version.
   everything open over the notes (a page's history, an .ics file's events,
   an event, a picker, a question, an Undo) closes, and nothing is recorded,
   dictated, written out or made louder till it's open; a file picked, a
-  picture copied in, a meeting's transcript or list, a tag renamed on many
-  pages, an export or a notebook read for a command, arriving or going on
-  after the switch, isn't put in the next profile; a notebook's page is
+  picture copied in, a link's picture, a meeting's transcript or list, a tag
+  renamed on many pages, an export, a page's history let go, or a notebook
+  read for a command, arriving or going on after the switch, isn't put in
+  (or taken from) the next profile; nor is the page the editor had, People's
+  search, the last agent prompt for *Open in a terminal*, or a quick note
+  given back for another profile (saving it in the open one is asked
+  first); a notebook's page is
   never saved into another profile's; a conversation in a restored profile
   starts a new session (told what was said); the people, calendar and alerts of the one before aren't shown
   or sent there; a search's results are gone at once, and one on its way

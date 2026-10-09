@@ -22,6 +22,8 @@ QtObject {
   property var readClipboard: null
   property var copied: ""
   property var trashed: []
+  // (And where each was, for tests.)
+  property var trashedPaths: []
   property var notified: []
   // The default agent, and what was asked of it.
   property string agent: "claude"
@@ -90,6 +92,7 @@ QtObject {
     written = ({})
     copied = ""
     trashed = []
+    trashedPaths = []
     notified = []
     agent = "claude"
     agentList = [{ name: "claude", label: "Claude" }, { name: "codex", label: "Codex" }, { name: "gemini", label: "Gemini" }]
@@ -200,6 +203,7 @@ QtObject {
 
   function trash(path, name) {
     trashed.push(name)
+    trashedPaths.push(path)
     delete disk[path]
   }
 
@@ -275,6 +279,9 @@ QtObject {
     // (holdReads: a zip unpacked, or a file copied in, when answerReads() is.)
     if (holdReads && argv[3] === filesHelper && argv[4] === "unzip") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
     if (holdReads && argv[3] === "uber-notebook-import-file") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
+    // (holdReads: a link's page read, and a page's history listed, when answerReads() is.)
+    if (holdReads && argv[0] === "/usr/bin/curl" && argv.indexOf("\n%{http_code}\t%{redirect_url}") > 0) { heldReads.push(function() { files.execNow(argv, done, options) }); return }
+    if (holdReads && argv[3] === "uber-notebook-list") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
     execNow(argv, done, options)
   }
   function execNow(argv, done, options) {

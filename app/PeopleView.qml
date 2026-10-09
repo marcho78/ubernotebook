@@ -69,6 +69,23 @@ Item {
 
   // ---- going about ---------------------------------------------------------------------------
 
+  // Another folder (another profile): what was looked for, picked or being
+  // written in the one before, gone.
+  function reset() {
+    query = ""
+    search.text = ""
+    cardFocus = ""
+    selected = ""
+    editing = false
+    isNew = false
+    draft = null
+  }
+  Connections {
+    target: pv.workspace
+    ignoreUnknownSignals: true
+    function onFolderChanged() { pv.reset() }
+  }
+
   function show(id) {
     editing = false
     isNew = false
