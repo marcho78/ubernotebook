@@ -304,9 +304,10 @@ ShellRoot {
       store2.locate()
       until(function() { return store2.blockedFolder !== "" }, function() {
         var refused = store2.createNotebook({ title: "Lost" }, [])
+        var quickRefused = store2.quickNote("Call the dentist\nbefore Friday") === false && store2.notebooks.length === 0
         say("private: a notes folder that can't be made yours alone isn't opened, nothing of the one before shown or made, and it's said",
           made !== null && had === 1 && store2.blockedFolder === "/usr/share" && store2.blockedWhy === "private" && store2.rootPath === "" && store2.notesRoot === ""
-          && store2.notebooks.length === 0 && refused === null,
+          && store2.notebooks.length === 0 && refused === null && quickRefused,
           "had " + had + " now " + store2.notebooks.length + " " + store2.blockedFolder + " " + store2.blockedWhy + " refused " + (refused === null))
         // One that can't even be made (a drive that's gone).
         store2.folder = "/proc/uber-notebook-nope"
@@ -319,6 +320,8 @@ ShellRoot {
           until(function() { return store2.ready && store2.rootPath === d + "/n3" && store2.notebooks.length === 1 }, function() {
             store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/n3"], function(ok, out) {
               say("private: one that can be is opened again, as it was, 700", store2.blockedFolder === "" && store2.notesRoot === d + "/n3" && store2.notebooks.length === 1 && String(out).trim() === "700", String(out).trim() + " | " + store2.notebooks.length)
+              var kept = store2.quickNote("Call the dentist\nbefore Friday")
+              say("private: a quick note is kept once a folder can be used", kept === true && store2.notebooks.length === 2, kept + " " + store2.notebooks.length)
               store2.active = false
               store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
             })

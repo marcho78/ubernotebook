@@ -708,6 +708,9 @@ Item {
   // so, with where to pick another. "" when the one open is fine.
   property string blockedFolder: ""
   property string blockedWhy: ""
+  // The folder being made and checked, before it's opened (a quick note
+  // made meanwhile waits for it, under it).
+  property string openingFolder: ""
   // Nothing of a folder on the shelf (one left, or none to open).
   function clearShelf() {
     index = ({})
@@ -715,6 +718,7 @@ Item {
     publish()
   }
   function block(folder, why) {
+    openingFolder = ""
     if (rootPath) leaveRoot()
     rootPath = ""
     notesRoot = ""
@@ -740,6 +744,7 @@ Item {
       }
       store.blockedFolder = ""
       store.blockedWhy = ""
+      store.openingFolder = next
       // (Made, made yours alone and checked before anything of it's opened:
       // your notes aren't kept where another account could read them.)
       store.mkdirsAsBefore([next], function(made) {
@@ -752,6 +757,7 @@ Item {
             store.failed("Your notes can't be kept in " + next.replace(store.home, "~") + ": another account on this computer could read them there. Pick another folder for this profile")
             return
           }
+          store.openingFolder = ""
           store.rootPath = next
           store.notesRoot = next
           store.loadLibrary()
@@ -1128,16 +1134,19 @@ Item {
 
   // A quick note becomes a new page in the Quick notes notebook (made the
   // first time), titled with its first line.
+  // true once it's kept (written); false when it can't be (no folder open:
+  // none yet, or one that can't be used), nothing done.
   function quickNote(text) {
     var lines = String(text || "").replace(/\r/g, "").split("\n")
     while (lines.length && lines[0].trim() === "") lines.shift()
     while (lines.length && lines[lines.length - 1].trim() === "") lines.pop()
-    if (lines.length === 0) return
+    if (lines.length === 0) return true
+    if (!rootPath || !ready) return false
     var id = ""
     order.forEach(function(nid) { if (index[nid] && index[nid].role === "quick") id = nid })
     if (!id) {
       var made = createNotebook({ title: "Quick notes", cover: { color: "mustard", material: "plain" }, binding: "spiral", paper: { pattern: "legal", color: "yellow", spacing: "regular" }, pen: "print", role: "quick" }, [])
-      if (!made) return
+      if (!made) return false
       id = made.id
     }
     var title = lines[0].trim().slice(0, 120)
@@ -1149,11 +1158,11 @@ Item {
       return { type: "p", html: Html.escapeText(line) }
     })
     var page = createPage(id, index[id].pages.length, { title: title, blocks: blocks.length ? blocks : [{ type: "p", html: "" }] })
-    if (page) {
-      page.text = Blocks.plainText(page.blocks)
-      writePage(id, page)
-      pageAdded(id, page)
-    }
+    if (!page) return false
+    page.text = Blocks.plainText(page.blocks)
+    writePage(id, page)
+    pageAdded(id, page)
+    return true
   }
 
   // ---- finding text ------------------------------------------------------------------------

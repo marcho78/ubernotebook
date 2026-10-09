@@ -315,6 +315,10 @@ Item {
       recorder: root.service ? root.service.recorder : null
       onDestinationPicked: function(to) { if (root.service) root.service.setSetting("quickTo", to) }
       onKept: function(text) {
+        // (Where it can't be kept now (the profile's folder can't be used):
+        // said here, the note open, its words in it.)
+        var why = root.service && typeof root.service.quickRefusal === "function" ? root.service.quickRefusal() : ""
+        if (why) { quickNote.problem = why; return }
         quickWindow.visible = false
         if (root.service) root.service.quick(text)
       }

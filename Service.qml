@@ -451,10 +451,17 @@ Item {
 
   // A quick note: with text, straight into the Quick notes notebook (or the
   // Pages Inbox, as Settings says); without, the quick-note card opens.
+  // Why a quick note can't be kept now ("" when it can): the profile's
+  // notes folder can't be used (a drive that can't keep files private, or
+  // that's gone). The note's window stays open with it, its words in it.
+  function quickRefusal() {
+    return storeItem.blockedFolder ? "Not saved: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)" : ""
+  }
   function quick(text) {
     // (No profile yet: the window, to make one.)
     if (profilesItem.firstRun) { show({}); return }
     var value = String(text || "").trim()
+    if (value && quickRefusal()) { osd("\u{f0028}", quickRefusal()); return }
     if (value) {
       if (settings.quickTo === "notebook") quickToNotebook(value)
       else quickToPages(value)
@@ -464,8 +471,8 @@ Item {
   }
 
   function quickToNotebook(value) {
-    storeItem.quickNote(value)
-    osd("\u{f082e}", "Saved to Quick notes")
+    if (storeItem.quickNote(value)) osd("\u{f082e}", "Saved to Quick notes")
+    else osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet")
   }
 
   // Into the Pages Inbox, once Pages has loaded (a note made before then
@@ -476,17 +483,19 @@ Item {
 
   function quickToPages(value) {
     if (!workspaceItem.loaded) {
-      quickWaiting = QuickQueue.add(quickWaiting, value, storeItem.rootPath)
+      // (Under the folder it's for: the one open, or the one being opened;
+      // with none, not kept where it would be lost: said.)
+      var root0 = storeItem.rootPath || storeItem.openingFolder
+      if (!root0) { osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet"); return }
+      quickWaiting = QuickQueue.add(quickWaiting, value, root0)
       quickTimer.restart()
       return
     }
     var r = null
     try { r = JSON.parse(apiItem.quickPage(value)) } catch (e) { r = null }
     if (r && r.ok) osd("\u{f0836}", "Saved to your Pages Inbox")
-    else {
-      storeItem.quickNote(value)
-      osd("\u{f082e}", "Saved to Quick notes (Pages: " + (r ? r.error : "couldn't save it") + ")")
-    }
+    else if (storeItem.quickNote(value)) osd("\u{f082e}", "Saved to Quick notes (Pages: " + (r ? r.error : "couldn't save it") + ")")
+    else osd("\u{f0028}", quickRefusal() || "Not saved: Pages: " + (r ? r.error : "couldn't save it"))
   }
 
   // Those made in the profile open now, written; any of another, kept till
