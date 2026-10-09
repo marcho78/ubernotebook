@@ -1555,12 +1555,12 @@ Item {
   // over the session bus, its words on the helper's input: never on a
   // command line, where every account on the computer can read them (as
   // omarchy-notification-send would put them, through busctl).
-  // A reminder's or an event alert's own words (a page's, or a day's): only
-  // when Settings says so (reminderWords). Omarchy's notifications keep each
-  // one's words for a moment on a command line (as they save it), where
-  // every account on the computer can read them: by default it says only
-  // that one is due, and a click opens it.
-  property bool reminderWords: false
+  // A reminder's or an event alert's own words (a page's, or a day's), as
+  // Settings has it (reminderWords, on unless you turn it off). Omarchy's
+  // notifications keep each one's words for a moment on a command line (as
+  // they save it), where another account on the computer could read them:
+  // off, it says only that one is due, and a click opens it.
+  property bool reminderWords: true
   // What a notification says, and what a click on it opens: { summary,
   // body, glyph, exec }.
   function notification(title, text, pageId, day) {

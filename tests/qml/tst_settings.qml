@@ -124,6 +124,23 @@ Item {
       wait(100)
     }
 
+    // A reminder's words in its notification: on to start with; off when
+    // you turn it off (a computer you share).
+    function test_0_what_reminders_say() {
+      fresh()
+      app.settingsPopup.openAt("writing")
+      tryVerify(function() { return app.settingsPopup.opened }, 1000)
+      var toggle = null
+      tryVerify(function() { toggle = named(win(), "reminderWordsToggle"); return toggle !== null }, 1000)
+      compare(toggle.checked, true, "on to start with")
+      compare(service.settings.reminderWords, true)
+      toggle.toggled(false)
+      compare(service.settings.reminderWords, false, "off when turned off")
+      service.user = ({ sounds: false })
+      if (app.settingsPopup.opened) keyClick(Qt.Key_Escape)
+      tryVerify(function() { return !app.settingsPopup.opened }, 1000)
+    }
+
     function test_1_in_sections() {
       fresh()
       app.openSettings("general")

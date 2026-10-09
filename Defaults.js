@@ -74,7 +74,7 @@ var DEFAULTS = {
   // "A reminder is due" / "An event is starting"): Omarchy's notifications
   // keep each one's words for a moment on a command line, where every
   // account on the computer can read them.
-  reminderWords: false,
+  reminderWords: true,
   // How People shows everyone: a list beside the one picked ("list"), or cards.
   peopleLayout: "list",
   // As cards, how People groups everyone: A to Z ("letter") or by company.

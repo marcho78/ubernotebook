@@ -10,13 +10,14 @@ The first version.
 
 ### Changed
 
-- **Reminders say only that one is due; every profile kept private; nothing
-  of one profile in another.** A wide review of the privacy work found more
-  to close. A reminder's or an event alert's notification now says only "A
-  reminder is due" or "An event is starting" (a click opens it): Omarchy's
-  own notifications keep a notification's words for a moment on a command
-  line as they save it. Settings → Writing → *Show what reminders say* puts
-  them back. Every profile's folder is made yours alone as Uber Notebook
+- **Reminders can keep their words to themselves; every profile kept
+  private; nothing of one profile in another.** A wide review of the privacy
+  work found more to close. Omarchy's own notifications keep any
+  notification's words for a moment on a command line as they save it, so
+  on a computer you share, Settings → Writing → *Show what reminders say*
+  (on by default) can be turned off: a reminder's or an event alert's
+  notification then says only "A reminder is due" or "An event is
+  starting" (a click opens it). Every profile's folder is made yours alone as Uber Notebook
   starts, not only the one opened; a folder that isn't yours (whatever its
   mode), or a drive that refuses the change (a phone), counts as one that
   can't be private; a backup is never put back on

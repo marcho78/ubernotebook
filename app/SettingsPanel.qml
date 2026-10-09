@@ -942,7 +942,7 @@ Popup {
           Line {
             label: "Show what reminders say"
             note: panel.s.reminderWords === true
-              ? "A reminder's words and an event's title are in its notification. Omarchy's notifications keep them for a moment where another account on this computer could read them."
+              ? "A reminder's words and an event's title are in its notification. Omarchy's notifications keep them for a moment where another account on this computer could read them: turn this off on a computer you share."
               : "Notifications say only that a reminder is due or an event is starting; a click opens it."
             Toggle { objectName: "reminderWordsToggle"; theme: panel.theme; checked: panel.s.reminderWords === true; onToggled: function(on) { panel.set("reminderWords", on) } }
           }

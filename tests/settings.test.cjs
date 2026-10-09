@@ -47,6 +47,14 @@ check("merging validates", () => {
   });
 });
 
+// A reminder's words in its notification: on unless you turn it off, and
+// off stays off.
+check("reminders say what they're for, unless turned off", () => {
+  assert.equal(defaults.reminderWords, true);
+  assert.equal(Settings.merge(defaults, {}, schema).reminderWords, true);
+  assert.equal(Settings.merge(defaults, { reminderWords: false }, schema).reminderWords, false);
+});
+
 check("folders", () => {
   assert.equal(Settings.cleanFolder(""), "");
   assert.equal(Settings.cleanFolder("/home/u/Notes//x/"), "/home/u/Notes/x");
