@@ -37,7 +37,17 @@ Item {
   property var files: null
   // The program that records (tests give a stand-in).
   property string program: "/usr/bin/ffmpeg"
-  readonly property string tempDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/uber-notebook-audio"
+  // Where dictation and a note being written out are kept for a moment: a
+  // folder of its own in the store's runtime folder (yours alone, never
+  // /tmp; tests give another).
+  property string tempDir: files && files.runtimeDir ? files.runtimeDir + "/uber-notebook-audio" : ""
+  // It's made if it isn't there, and used only if it's a folder (not a
+  // link) that's yours and no one else's to look in (700): one another
+  // account made first, or one opened up, is never recorded into
+  // ("shared"). (mkdir -m does nothing to a folder that's there.)
+  readonly property string tempScript: "umask 077; d=$1; /usr/bin/mkdir -p -- \"$d\" 2>/dev/null || exit 1; "
+    + "if [ -d \"$d\" ] && [ ! -L \"$d\" ] && [ -O \"$d\" ] && [ \"$(/usr/bin/stat -c %a -- \"$d\")\" = 700 ]; then exit 0; fi; echo shared; exit 1"
+  function shared(output) { return /^shared$/m.test(String(output || "")) }
 
   // What's there: ffmpeg to record, voxtype to write out.
   property bool canRecord: false
@@ -106,6 +116,8 @@ Item {
     if (busy) return "Already recording: stop that one first"
     if (!canRecord) return "Recording needs ffmpeg"
     if (kind === "dictation" && !canTranscribe) return "Dictation needs voxtype (Omarchy's dictation)"
+    var temp = kind === "dictation" || kind === "test"
+    if (temp && !tempDir) return "There's nowhere to keep it"
     var path = kind === "dictation" ? tempDir + "/dictation-" + Date.now().toString(36) + ".wav" : kind === "test" ? tempDir : String(file || "")
     if (!path) return "There's nowhere to keep it"
     // A note to make louder once it's done is recorded beside it first.
@@ -133,12 +145,14 @@ Item {
     var dir = kind === "test" ? tempDir : path.replace(/\/[^\/]*$/, "")
     var argv = Audio.recordCommand(kind, path, { input: input, boost: boost })
     argv[0] = program
-    // Its folder first (not through a shell), then ffmpeg; stopped before it
-    // started: nothing recorded.
-    files.exec(["/usr/bin/mkdir", "-p", "-m", "700", "--", dir], function(made) {
+    // Its folder first (an audio note's not through a shell; the folder of
+    // its own checked, tempScript, its path an argument), then ffmpeg;
+    // stopped before it started: nothing recorded.
+    var making = temp ? ["/usr/bin/bash", "-c", tempScript, "uber-notebook-audio", dir] : ["/usr/bin/mkdir", "-p", "-m", "700", "--", dir]
+    files.exec(making, function(made, out) {
       if (rec._file !== path || rec.phase === "") return
       if (!made || rec._stopping) {
-        rec._end(false, rec._canceled ? { canceled: true } : { problem: made ? "Nothing was recorded" : "There's nowhere to keep it" })
+        rec._end(false, rec._canceled ? { canceled: true } : { problem: made ? "Nothing was recorded" : rec.shared(out) ? "Not recorded: " + rec.tempDir + " isn't yours alone" : "There's nowhere to keep it" })
         return
       }
       rec._launched = true
@@ -362,10 +376,17 @@ Item {
   // Any recording written out (an audio note's): done(ok, text, problem).
   function transcribe(file, seconds, done) {
     if (!files || !canTranscribe) { done(false, "", "Writing it out needs voxtype (Omarchy's dictation)"); return }
-    var wav = tempDir + "/transcribe-" + Date.now().toString(36) + ".wav"
-    files.execText(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p -m 700 -- \"$1\" && shift && exec /usr/bin/bash -c \"$@\"", "uber-notebook-transcribe", tempDir, Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, wav, boost ? Audio.BOOST : ""], function(ok, output) {
-      var text = ok ? Audio.transcriptOf(output) : ""
-      done(ok && text !== "", text, !ok ? "voxtype couldn't write it out" : text === "" ? "No words were heard" : "")
-    }, { timeoutMs: Audio.transcribeTimeout(seconds), maxBytes: 2 * 1024 * 1024 })
+    var dir = tempDir
+    var even = boost ? Audio.BOOST : ""
+    if (!dir) { done(false, "", "There's nowhere to write it out"); return }
+    // (Its WAV in the folder of its own, checked first: tempScript.)
+    files.exec(["/usr/bin/bash", "-c", tempScript, "uber-notebook-audio", dir], function(made, out) {
+      if (!made) { done(false, "", rec.shared(out) ? "Not written out: " + dir + " isn't yours alone" : "There's nowhere to write it out"); return }
+      var wav = dir + "/transcribe-" + Date.now().toString(36) + ".wav"
+      rec.files.execText(["/usr/bin/bash", "-c", Audio.TRANSCRIBE_SCRIPT, "uber-notebook-transcribe", file, wav, even], function(ok, output) {
+        var text = ok ? Audio.transcriptOf(output) : ""
+        done(ok && text !== "", text, !ok ? "voxtype couldn't write it out" : text === "" ? "No words were heard" : "")
+      }, { timeoutMs: Audio.transcribeTimeout(seconds), maxBytes: 2 * 1024 * 1024 })
+    })
   }
 }

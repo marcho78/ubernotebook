@@ -755,6 +755,9 @@ Item {
         function set(key: string, value: string): string {
           if (commands.agent) return "not for the panel's agent: Uber Notebook's settings are yours"
           if (!root.defaults || !Object.prototype.hasOwnProperty.call(root.defaults, key)) return "unknown setting"
+          // (Another notes folder: not while an audio note is being recorded, Profiles.qml.)
+          var busy = (key === "folder" || key === "profile") && value !== String(root.settings[key]) ? profilesItem.refuse() : ""
+          if (busy) return busy
           var parsed = value
           if (value === "true" || value === "false") parsed = value === "true"
           else if (/^-?\d{1,6}$/.test(value)) parsed = Number(value)

@@ -187,10 +187,13 @@ Item {
     working = ""
     var notPrivate = refused && refused.names.length ? Backups.notPrivateNote(refused.folder) + "." : ""
     if (!made.length) { failed = true; note = notPrivate ? "Nothing was put back: " + notPrivate : "Nothing could be put back from that backup."; done({ ok: false, error: note }); return }
+    // (An audio note being recorded: added, not opened.)
+    var held = open && typeof profiles.switchProblem === "function" ? profiles.switchProblem() : ""
     var r = profiles.addRestored(made, open)
     failed = false
     note = "Put back as " + r.map(function(p) { return "“" + p.name + "”" }).join(", ") + "."
       + (notPrivate ? " " + refused.names.map(function(n) { return "“" + n + "”" }).join(", ") + (refused.names.length === 1 ? " wasn't: " : " weren't: ") + notPrivate : "")
+      + (held ? " Not opened: " + held.charAt(0).toLowerCase() + held.slice(1) + "." : "")
       + (leftOut ? " " + leftOut + (leftOut === 1 ? " link (or special file) in it was" : " links (or special files) in it were") + " left out." : "")
     done({ ok: true, restored: r, leftOut: leftOut || 0 })
   }

@@ -613,6 +613,14 @@ Item {
       verify(JSON.parse(api.restoreBackup(listed.backups[0].file, "")).ok)
       tryVerify(function() { return profiles.list.length === 3 }, 2000)
       compare(profiles.current.name, "Personal", "not opened unless asked")
+      // Asked to open it while an audio note is being recorded: put back,
+      // not opened (the note's page would be gone from under it).
+      compare(service.recorder.start("audio", "a-block", "/tmp/Documents/Uber Notebook/Pages/assets/note.ogg", function() {}), "")
+      verify(JSON.parse(api.restoreBackup(listed.backups[0].file, "true")).ok)
+      tryVerify(function() { return profiles.list.length === 4 }, 2000)
+      compare(profiles.current.name, "Personal", "not opened")
+      verify(backups.note.indexOf("Not opened: stop the recording first.") >= 0, backups.note)
+      service.recorder.cancel()
       // Updates.
       files.http[root.releases] = { code: 200, body: JSON.stringify([{ tag_name: "v1.2.0", body: "Faster.", html_url: "https://github.com/marcho78/ubernotebook/releases/tag/v1.2.0" }]) }
       verify(JSON.parse(api.checkUpdate()).ok)

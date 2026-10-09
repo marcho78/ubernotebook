@@ -12,7 +12,7 @@ QtObject {
   id: pm
 
   // The service: settings, setSettings(changes), saveOpen() (what's open in
-  // the window written), pickFolder(title, done).
+  // the window written), pickFolder(title, done), recorder (Recorder.qml).
   property var service: null
   // Store.qml: home, and programs to run (exec).
   property var files: null
@@ -67,6 +67,24 @@ QtObject {
   readonly property var shown: service ? Profiles.withCurrent(list, service.settings) : []
 
   function apply(changes) { if (changes) service.setSettings(changes) }
+
+  // While an audio note is being recorded (or saved), no other profile is
+  // opened, and the open one's folder isn't changed: the note goes in a
+  // page of this one, which would be gone from under it (its recording
+  // left in this folder, in no page). "" when one can be.
+  function switchProblem() {
+    var r = service && service.recorder ? service.recorder : null
+    if (!r || !r.busy || r.kind !== "audio") return ""
+    return r.phase === "recording" ? "Stop the recording first" : "An audio note is being saved: try again in a moment"
+  }
+  // A switch not made: said in the window (the menus that ask don't), as
+  // well as to whoever asked.
+  signal refused(string message)
+  function refuse() {
+    var problem = switchProblem()
+    if (problem) refused(problem)
+    return problem
+  }
   // A profile's folder as a real path ("" is the usual place).
   function pathOf(folder) { return Settings.resolveFolder(folder || "", home(), true) }
   function home() { return files && files.home ? files.home : "" }
@@ -118,6 +136,8 @@ QtObject {
     var next = Profiles.find(list, id)
     if (!next) return "There's no profile like that"
     if (current && current.id === next.id) return ""
+    var busy = refuse()
+    if (busy) return busy
     if (typeof service.saveOpen === "function") service.saveOpen()
     apply(Profiles.switchTo(list, service.settings, next.id))
     return ""
@@ -127,6 +147,8 @@ QtObject {
   function add(name, folder, open) {
     var problem = Profiles.nameProblem(list, name, "") || Profiles.folderProblem(shown, folder, "", home())
     if (problem) return problem
+    var busy = open ? refuse() : ""
+    if (busy) return busy
     var p = Profiles.make(list, name, folder)
     var next = shown.concat([p])
     if (!open) { apply({ profiles: next }); return "" }
@@ -149,6 +171,8 @@ QtObject {
   function setFolder(id, folder) {
     var problem = Profiles.folderProblem(shown, folder, id, home())
     if (problem) return problem
+    var busy = current && current.id === id ? refuse() : ""
+    if (busy) return busy
     var f = Settings.cleanFolder(String(folder))
     var changes = { profiles: shown.map(function(p) { if (p.id === id) { p.folder = f; p.fresh = true } return p }) }
     // (The folder it has, picked again for the one open: looked at again if
@@ -165,8 +189,9 @@ QtObject {
 
   // Profiles put back from a backup ([{ name, folder, saved }]): each a new
   // one, its name or "Name (restored)" if that's taken, with the page, the
-  // notebook and the Inbox it had; the first opened if `open`. The ones
-  // made: [{ id, name, folder }].
+  // notebook and the Inbox it had; the first opened if `open` (not while an
+  // audio note is being recorded: then they're added, none opened). The
+  // ones made: [{ id, name, folder }].
   function addRestored(items, open) {
     var next = shown.slice()
     var made = []
@@ -178,7 +203,7 @@ QtObject {
       made.push({ id: p.id, name: p.name, folder: p.folder })
     })
     if (!made.length) return made
-    if (!open) { apply({ profiles: next }); return made }
+    if (!open || refuse()) { apply({ profiles: next }); return made }
     if (typeof service.saveOpen === "function") service.saveOpen()
     apply(Profiles.switchTo(next, service.settings, made[0].id))
     return made
@@ -196,6 +221,8 @@ QtObject {
   function openDemo() {
     startShown = false
     if (demo) return use(demo.id)
+    var busy = refuse()
+    if (busy) return busy
     var p = Profiles.demo(list, dataFolder + "/demo")
     var next = shown.concat([p])
     if (typeof service.saveOpen === "function") service.saveOpen()
@@ -205,6 +232,8 @@ QtObject {
   // The demo as new: a new folder for it, open; the one it had goes to the trash.
   function restartDemo() {
     if (!demo) return openDemo()
+    var busy = refuse()
+    if (busy) return busy
     var old = Settings.resolveFolder(current && current.id === demo.id ? service.settings.folder : demo.folder, home(), true)
     var base = Settings.resolveFolder(dataFolder, home(), true)
     var fresh = dataFolder + "/demo-" + Date.now().toString(36)

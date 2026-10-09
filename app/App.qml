@@ -640,6 +640,12 @@ FocusScope {
     ignoreUnknownSignals: true
     function onFailed(message) { if (typeof message === "string" && message) root.toast(message) }
   }
+  // (Another profile not opened: an audio note's being recorded.)
+  Connections {
+    target: root.service && root.service.profiles ? root.service.profiles : null
+    ignoreUnknownSignals: true
+    function onRefused(message) { root.toast(message) }
+  }
 
   // ---- keys -------------------------------------------------------------------------------
 

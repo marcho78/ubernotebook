@@ -10,8 +10,10 @@ import "@PLUGIN@" as UN
 // levels, a line far too long and errors, starts a child of its own, and
 // finishes its file on SIGINT. The recording: its file finished, its levels
 // read, the environment a tool gets, and what it started ended with it; one
-// that won't stop ended anyway; one that prints too much stopped. Prints
-// PASS/FAIL lines, then DONE.
+// that won't stop ended anyway; one that prints too much stopped. Dictation's
+// folder: the store's runtime folder, made yours alone; one that's open to
+// others, or a link, never recorded into (nor a note written out there).
+// Prints PASS/FAIL lines, then DONE.
 ShellRoot {
   id: root
   function say(name, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + name + (extra ? " :: " + extra : "")) }
@@ -90,8 +92,53 @@ ShellRoot {
     var t0 = Date.now()
     rec.start("audio", "test", file, function(ok, r) {
       say("one that prints too much: stopped", Date.now() - t0 < 8000 && rec._seen > rec.outputMax, (Date.now() - t0) + "ms seen " + rec._seen)
-      shell("rm -rf -- \"$1\"", [root.dir], function() { console.log("DONE"); Qt.quit() })
+      rec.outputMax = 64 * 1024 * 1024
+      root.fourth()
     })
   }
-  Timer { interval: 40000; running: true; onTriggered: { console.log("FAIL timeout"); Qt.quit() } }
+
+  // Dictation's folder: the store's runtime folder (never /tmp). One open to
+  // others (755) or a link (to a folder of yours): refused, nothing started
+  // there, nothing written out there either.
+  function fourth() {
+    say("its folder: in the store's runtime folder", rec.tempDir === store.runtimeDir + "/uber-notebook-audio" && rec.tempDir.indexOf("/tmp/") !== 0, rec.tempDir)
+    rec.canTranscribe = true
+    shell("/usr/bin/mkdir -m 755 -- \"$1/open\" && /usr/bin/mkdir -m 700 -- \"$1/mine\" && /usr/bin/ln -s -- \"$1/mine\" \"$1/link\"", [root.dir], function(made) {
+      if (!made) { say("set up", false); root.finish(); return }
+      rec.tempDir = root.dir + "/open"
+      var why = rec.start("dictation", "quick", "", function(ok, r) {
+        say("an open folder: refused", ok === false && /isn't yours alone/.test(r.problem || ""), JSON.stringify(r))
+        rec.tempDir = root.dir + "/link"
+        var why2 = rec.start("dictation", "quick", "", function(ok2, r2) {
+          say("a link: refused", ok2 === false && /isn't yours alone/.test(r2.problem || ""), JSON.stringify(r2))
+          rec.tempDir = root.dir + "/open"
+          rec.transcribe(root.dir + "/one/note.ogg", 2, function(ok3, text, problem) {
+            say("nothing written out in an open folder", ok3 === false && /isn't yours alone/.test(problem || ""), problem)
+            shell("/usr/bin/ls -A -- \"$1/open\" \"$1/mine\" | /usr/bin/grep -v ':$' | /usr/bin/grep -c . ; /usr/bin/stat -c %a -- \"$1/open\"", [root.dir], function(ok4, out) {
+              say("nothing started there (the folder left as it was)", out.trim().split("\n").join(" ") === "0 755", out.replace(/\n/g, " | "))
+              root.fifth()
+            })
+          })
+        })
+        if (why2) { say("started", false, why2); root.finish() }
+      })
+      if (why) { say("started", false, why); root.finish() }
+    })
+  }
+
+  // A folder that isn't there yet: made yours alone (700), and recorded into.
+  function fifth() {
+    rec.tempDir = root.dir + "/new/audio"
+    var why = rec.start("dictation", "quick", "", function(ok, r) {
+      shell("/usr/bin/stat -c %a -- \"$1/new/audio\"; [ -e \"$1/new/audio/env.txt\" ] && echo ran", [root.dir], function(ok2, out) {
+        say("a new folder: made yours alone, recorded into", r.canceled === true && out.trim().split("\n").join(" ") === "700 ran", JSON.stringify(r) + " " + out.replace(/\n/g, " | "))
+        root.finish()
+      })
+    })
+    if (why) { say("started", false, why); root.finish(); return }
+    after(1000, function() { rec.cancel() })
+  }
+
+  function finish() { shell("rm -rf -- \"$1\"", [root.dir], function() { console.log("DONE"); Qt.quit() }) }
+  Timer { interval: 60000; running: true; onTriggered: { console.log("FAIL timeout"); Qt.quit() } }
 }

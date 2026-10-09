@@ -473,5 +473,56 @@ Item {
       profiles.use("p-b")
       compare(files.madePrivate.length, n)
     }
+
+    // While an audio note is being recorded (or saved), no other profile is
+    // opened, nor the open one's folder changed: its page would be gone from
+    // under it, the recording left in no page. Said, from the menu as to
+    // agents; one not opened is made; once it's done, it opens.
+    function test_6b_not_while_an_audio_note_records() {
+      fresh()
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      verify(profiles.add("Work", "~/Work", false) === "")
+      var work = profiles.list.filter(function(p) { return p.name === "Work" })[0]
+      var rec = service.recorder
+      var got = null
+      compare(rec.start("audio", "a-block", "/tmp/Documents/Uber Notebook/Pages/assets/note.ogg", function(ok, r) { got = r }), "")
+      // From the dropdown: not opened, and said.
+      click(named(win(), "profileSwitch"))
+      var choice = null
+      tryVerify(function() { choice = find(win(), function(it) { return it.objectName === "profileChoice" && it.text === "Work" }); return choice !== null }, 1000)
+      click(choice)
+      tryVerify(function() { return find(win(), function(it) { return it.text === "Stop the recording first" }) !== null }, 1000, "said")
+      compare(profiles.current.name, "Personal")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
+      compare(files.rootPath, "/tmp/Documents/Uber Notebook")
+      // Every other way.
+      compare(profiles.use(work.id), "Stop the recording first")
+      compare(profiles.add("Client", "~/Client", true), "Stop the recording first")
+      verify(!profiles.list.some(function(p) { return p.name === "Client" }), "nothing made")
+      verify(profiles.add("Client", "~/Client", false) === "", "one not opened: made")
+      compare(profiles.setFolder(profiles.current.id, "~/Elsewhere"), "Stop the recording first")
+      verify(profiles.setFolder(work.id, "~/Work2") === "", "another one's folder: changed")
+      compare(profiles.openDemo(), "Stop the recording first")
+      compare(profiles.demo, null, "no demo made")
+      var made = profiles.addRestored([{ name: "Old", folder: "~/Old", saved: {} }], true)
+      compare(made.length, 1)
+      verify(profiles.list.some(function(p) { return p.name === "Old" }), "put back")
+      compare(JSON.parse(api.openProfile("Work")).error, "Stop the recording first")
+      compare(JSON.parse(api.addProfile("Studio", "", "true")).error, "Stop the recording first")
+      compare(JSON.parse(api.profileFolder("Personal", "~/Moved")).error, "Stop the recording first")
+      compare(JSON.parse(api.demo(false)).error, "Stop the recording first")
+      compare(profiles.current.name, "Personal", "still the one it's recorded in")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
+      // Stopped, and being saved (made louder): not yet either.
+      rec.phase = "finishing"
+      verify(/being saved/.test(profiles.use(work.id)))
+      rec.phase = "recording"
+      rec.stop()
+      compare(got.file, "/tmp/Documents/Uber Notebook/Pages/assets/note.ogg")
+      // Done: it opens.
+      compare(profiles.use(work.id), "")
+      compare(profiles.current.name, "Work")
+      compare(service.settings.folder, "~/Work2")
+    }
   }
 }
