@@ -1122,5 +1122,56 @@ Item {
       verify(files.streamed[1].argv.indexOf("--resume") > 0)
       files.streamEnd(0, "")
     }
+
+    // Stopped while it was still starting, and another asked for straight
+    // away: the stopped one never starts after all, and its end (or what it
+    // says) never touches the one after it.
+    function test_16_stopped_while_starting() {
+      fresh()
+      files.agent = "claude"
+      files.holdAgentPath = true
+      view.openAgent("page")
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      view.agentBox.send("The first thing")
+      tryVerify(function() { return files.heldAgentPaths.length === 1 }, 1000, "looking for its program")
+      verify(view.agentRun !== null)
+      view.stopAgent()
+      compare(view.agentRun, null, "stopped")
+      compare(service.agentScope, null)
+      view.agentPanel.replied("The second thing")
+      tryVerify(function() { return files.heldAgentPaths.length === 2 }, 1000)
+      var second = view.agentRun
+      verify(second !== null)
+      // The first one's program found, late: nothing starts for it.
+      files.releaseAgentPath(0)
+      wait(50)
+      compare(files.streamed.length, 0, "the stopped one never starts")
+      compare(view.agentRun, second, "and the one now is still the one now")
+      verify(service.agentScope !== null, "its scope too")
+      files.releaseAgentPath(1)
+      tryVerify(function() { return files.streamed.length === 1 }, 1000)
+      verify(said(files.streamed[0]).indexOf("The second thing") >= 0, "the second one started")
+      verify(said(files.streamed[0]).indexOf("The first thing") < 0)
+      files.streamEnd(0, "")
+      compare(view.agentRun, null)
+      // Running and stopped: nothing new till its end comes (as ever); then
+      // what it still says leaves the new one be.
+      files.holdAgentPath = false
+      view.agentPanel.replied("A third")
+      tryVerify(function() { return files.streamed.length === 2 }, 1000)
+      var old = files.streamed[1]
+      view.stopAgent()
+      view.agentPanel.replied("Too soon")
+      compare(files.streamed.length, 2, "not while the stopped one ends")
+      tryCompare(view, "agentRun", null, 1000, "its end")
+      view.agentPanel.replied("A fourth")
+      tryVerify(function() { return files.streamed.length === 3 }, 1000)
+      verify(view.agentRun !== null)
+      verify(service.agentScope !== null)
+      old.onLine(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Old news.", duration_ms: 10, permission_denials: [] }))
+      compare(view.agentPanel.status, "working", "what the stopped one says goes nowhere")
+      files.streamEnd(0, "")
+      compare(view.agentRun, null)
+    }
   }
 }

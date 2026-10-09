@@ -1748,15 +1748,19 @@ FocusScope {
     // (Its program and folder, once found.)
     var where = null
     function go(text, session) {
+      if (!current()) return
       var lost = false
       var argv = Agent.command(agent, text, choice, session, where)
-      if (!argv) { view.agentRun = null; view.agentScopeEnd(); agentPanel.end(127, Agent.name(agent) + " couldn't be started"); view.saveChat(); return }
+      if (!argv) { finish(127, Agent.name(agent) + " couldn't be started"); return }
       // (Claude Code takes its request on its input, and your answers to
       // what it asks as it works; Grok, over ACP, hello, its session, then
       // the request, and your answers; the input's closed once it's answered.)
       var first = Agent.input(agent, text)
       var run = null
       run = files.stream(argv, function(line) {
+        // (What a request no longer running says goes nowhere: not into the
+        // panel, nor its questions, nor answered.)
+        if (view.agentRun !== job || job.stream !== run) return
         Agent.fromLine(agent, line).forEach(function(ev) {
           if (ev.kind === "ask") { view.agentAsked(agent, ev, run); return }
           if (ev.kind === "control") { if (run && run.send) run.send(Agent.unsupportedFor(agent, ev.id)); return }
@@ -1775,7 +1779,7 @@ FocusScope {
       }, function(code, errors) {
         // (The conversation it was in is gone, cleared out or on another
         // computer: a new one, told what was said.)
-        if (session.resume && !retried && (lost || (code !== 0 && Agent.lostSession(errors)))) {
+        if (session.resume && !retried && current() && job.stream === run && (lost || (code !== 0 && Agent.lostSession(errors)))) {
           retried = true
           view.dropAgentAsks(run)
           talk.id = Agent.newSessionId(agent)
@@ -1784,40 +1788,53 @@ FocusScope {
           return
         }
         view.dropAgentAsks(run)
-        view.agentRun = null
-        view.agentScopeEnd()
-        agentPanel.end(code, Agent.failureText(agent, code, errors))
-        view.saveChat()
+        // (One stopped, or another's begun since: its end isn't theirs.)
+        if (view.agentRun !== job || job.stream !== run) return
+        finish(code, Agent.failureText(agent, code, errors))
       }, { cwd: dir, input: first !== "", env: Agent.env(agent), maxLine: Agent.streamLimits(where).maxLine, maxBytes: Agent.streamLimits(where).maxBytes, maxErrors: Agent.streamLimits(where).maxErrors })
-      view.agentRun = run
+      job.stream = run
       if (first && run && run.send) run.send(first)
     }
-    agentRun = { stop: function() { view.agentRun = null; view.agentScopeEnd(); agentPanel.end(-1, ""); view.saveChat() } }
+    // This request: what's done for it (its folder, its program found, its
+    // process and its end) checks it's still the one running, so one stopped
+    // never starts after all, and its end never ends one sent after it.
+    var job = { stream: null, stopped: false }
+    function current() { return view.agentRun === job && !job.stopped }
+    function finish(code, text) {
+      if (view.agentRun !== job) return
+      view.agentRun = null
+      view.agentScopeEnd()
+      agentPanel.end(code, text)
+      view.saveChat()
+    }
+    // Stop: its process, if it has one (its end says so, as ever), else
+    // before it's begun.
+    job.stop = function() {
+      if (job.stopped) return
+      job.stopped = true
+      if (job.stream && job.stream.stop) { job.stream.stop(); return }
+      finish(-1, "")
+    }
+    agentRun = job
     agentScope(agent, dir)
     files.mkdirs([dir, dir + "/.grok"], function() {
-      if (!view.agentRun) return
+      if (!current()) return
       // Its program, found where it's installed and checked, run by that
       // full path; Grok's sandbox, in its folder.
       files.agentPath(agent, function(exe) {
-        if (!view.agentRun) return
+        if (!current()) return
         if (!exe) {
-          view.agentRun = null
-          view.agentScopeEnd()
-          agentPanel.end(127, Agent.name(agent) + " isn't installed where Uber Notebook can find it (on your PATH, owned by you or root, and not changeable by anyone else)")
-          view.saveChat()
+          finish(127, Agent.name(agent) + " isn't installed where Uber Notebook can find it (on your PATH, owned by you or root, and not changeable by anyone else)")
           return
         }
         where = { exe: exe, dir: dir, skill: service && typeof service.skillDir === "string" ? service.skillDir : "", helper: files.filesHelper || "" }
-        function start() { if (view.agentRun) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
+        function start() { if (current()) go(prompt, { id: talk.id, resume: !!opts.reply && !opts.fresh }) }
         // (Grok's sandbox profile, written by the files helper, never through
         // a link left there; it doesn't start without it.)
         if (agent === "grok") files.putFile(dir, ".grok/sandbox.toml", Agent.grokSandbox(files.runtimeDir, where.skill), function(ok) {
           if (ok) { start(); return }
-          if (!view.agentRun) return
-          view.agentRun = null
-          view.agentScopeEnd()
-          agentPanel.end(127, "Grok's sandbox couldn't be set up in its folder")
-          view.saveChat()
+          if (!current()) return
+          finish(127, "Grok's sandbox couldn't be set up in its folder")
         })
         else start()
       })

@@ -10,6 +10,12 @@ The first version.
 
 ### Changed
 
+- **An agent you stop doesn't start after all.** Stopped while it was still
+  starting (its folder made, its program looked for), and another asked for
+  straight away, the first one's next step saw the new one running and went
+  on: it started, with the user's go-ahead for the new one, and its end could
+  end the new one's tracking. Each request now checks it's still the one
+  running at every step, and what a stopped one still says goes nowhere.
 - **Ctrl+Z after a block's own buttons.** Changing a block with its own
   buttons (an agenda's day, a board's card) was a step to undo, but Ctrl+Z
   did nothing unless you'd clicked into a line first: the keyboard stayed

@@ -71,6 +71,8 @@ QtObject {
     privateHosts = ({})
     failWrites = ""
     missingAgent = ""
+    holdAgentPath = false
+    heldAgentPaths = []
     disk = ({})
     index = ({})
     written = ({})
@@ -528,7 +530,15 @@ QtObject {
   function listAgents(done) { done(agentList.map(function(a) { return { name: a.name, label: a.label, path: "/usr/bin/" + a.name } })) }
   // An agent's program (Store.qml: found and checked): "" when missingAgent names it.
   property string missingAgent: ""
-  function agentPath(name, done) { done(name === missingAgent ? "" : "/usr/bin/" + name) }
+  function agentPath(name, done) {
+    if (holdAgentPath) { heldAgentPaths = heldAgentPaths.concat([{ name: name, done: done }]); return }
+    done(name === missingAgent ? "" : "/usr/bin/" + name)
+  }
+  // Looking for it held back (as a slow lookup is) till a test lets the one
+  // asked for i-th answer.
+  property bool holdAgentPath: false
+  property var heldAgentPaths: []
+  function releaseAgentPath(i) { var h = heldAgentPaths[i]; if (h) h.done(h.name === missingAgent ? "" : "/usr/bin/" + h.name) }
   function setDefaultAgent(name, done) { agent = name; done(true) }
   function defaultAgent(done) { done(agent) }
   function launchAgent(prompt) { launched = launched.concat([String(prompt)]) }
