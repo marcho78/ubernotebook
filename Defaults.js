@@ -70,6 +70,11 @@ var DEFAULTS = {
   calendarView: "month",
   // The clock times are shown with: "12" (1:30 pm) or "24" (13:30).
   clock: "12",
+  // A reminder's or an event alert's own words in its notification (off:
+  // "A reminder is due" / "An event is starting"): Omarchy's notifications
+  // keep each one's words for a moment on a command line, where every
+  // account on the computer can read them.
+  reminderWords: false,
   // How People shows everyone: a list beside the one picked ("list"), or cards.
   peopleLayout: "list",
   // As cards, how People groups everyone: A to Z ("letter") or by company.
@@ -138,6 +143,7 @@ var SCHEMA = {
     scrollSpeed: "string",
     strikeDone: "bool",
     clock: "string",
+    reminderWords: "bool",
     lastNotebook: "id",
     zoom: "int",
     space: "string",

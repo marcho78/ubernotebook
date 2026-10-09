@@ -198,6 +198,7 @@ Item {
     // (A new profile's folder is made if it isn't there; one opened before
     // isn't made again.)
     newProfile: profilesItem.current !== null && profilesItem.current.fresh === true
+    reminderWords: root.settings.reminderWords === true
     exportFolder: function(done) { root.exportFolder(done) }
   }
 

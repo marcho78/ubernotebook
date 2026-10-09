@@ -1504,11 +1504,24 @@ Item {
   // over the session bus, its words on the helper's input: never on a
   // command line, where every account on the computer can read them (as
   // omarchy-notification-send would put them, through busctl).
+  // A reminder's or an event alert's own words (a page's, or a day's): only
+  // when Settings says so (reminderWords). Omarchy's notifications keep each
+  // one's words for a moment on a command line (as they save it), where
+  // every account on the computer can read them: by default it says only
+  // that one is due, and a click opens it.
+  property bool reminderWords: false
+  // What a notification says, and what a click on it opens: { summary,
+  // body, glyph, exec }.
+  function notification(title, text, pageId, day) {
+    var isDay = /^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))
+    var isPage = /^[0-9a-f-]{36}$/.test(String(pageId || ""))
+    if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open its page" }
+    else if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it in your calendar" }
+    var click = isPage ? ["/usr/bin/omarchy-shell", "uber-notebook", "open", pageId] : isDay ? ["/usr/bin/omarchy-shell", "uber-notebook", "calendar", day] : []
+    return { summary: String(title || "Reminder").slice(0, 120), body: String(text || "").slice(0, 300), glyph: "\u{f009e}", exec: click }
+  }
   function notify(title, text, pageId, day) {
-    var click = []
-    if (/^[0-9a-f-]{36}$/.test(String(pageId || ""))) click = ["/usr/bin/omarchy-shell", "uber-notebook", "open", pageId]
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) click = ["/usr/bin/omarchy-shell", "uber-notebook", "calendar", day]
-    var note = { summary: String(title || "Reminder").slice(0, 120), body: String(text || "").slice(0, 300), glyph: "\u{f009e}", exec: click }
+    var note = notification(title, text, pageId, day)
     helper(["notify"], function(ok, out) {
       if (!ok) console.warn("Uber Notebook: a notification wasn't sent: " + String(out || "").trim().slice(0, 200))
     }, { input: JSON.stringify(note), timeoutMs: 10000, maxBytes: 4096 })

@@ -234,6 +234,21 @@ ShellRoot {
   // folders made with mkdir -p, a notes folder from before (755) made 700,
   // and an agent's request in a file of its own, never on a command line.
   function privateChecks(d) {
+    // A reminder's or an event's own words only when Settings says so; a
+    // notification of its own (not a reminder's) as it is; a click opens it.
+    var pid = "0b6f8f9e-1111-4222-8333-944455556666"
+    store.reminderWords = false
+    var r1 = store.notification("Health", "Call Dr. Patel about the results", pid, "")
+    var e1 = store.notification("Lawyer", "Tue 3 pm · Main St", "", "2026-10-09")
+    var own = store.notification("Not saved yet", "A change couldn't be saved", "", "")
+    store.reminderWords = true
+    var r2 = store.notification("Health", "Call Dr. Patel about the results", pid, "")
+    store.reminderWords = false
+    say("private: a reminder's and an event's words aren't in a notification unless asked for",
+      r1.summary === "A reminder is due" && JSON.stringify(r1).indexOf("Patel") < 0 && JSON.stringify(r1).indexOf("Health") < 0 && r1.exec.join(" ") === "/usr/bin/omarchy-shell uber-notebook open " + pid
+      && e1.summary === "An event is starting" && JSON.stringify(e1).indexOf("Lawyer") < 0 && e1.exec[3] === "2026-10-09"
+      && own.summary === "Not saved yet" && r2.summary === "Health" && r2.body.indexOf("Patel") >= 0,
+      JSON.stringify([r1.summary, e1.summary, own.summary, r2.summary]))
     var notes = d + "/notes"
     function modes(paths, done) {
       store.exec(["/usr/bin/stat", "-c", "%a"].concat(paths), function(ok, out) { done(String(out).trim().split("\n")) }, { okCodes: [0, 1] })
