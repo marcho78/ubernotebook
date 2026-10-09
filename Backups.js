@@ -161,6 +161,17 @@ function restoreFolder(name) {
   return "~/Documents/" + APP + " " + (safeLabel(name) || "Restored") + " (restored)"
 }
 
+// A profile not put back because where it goes is on a drive that can't
+// keep files private (~/Documents a link to an exFAT or NTFS partition, a
+// share): what the files helper says then (restore-backup), and how it's
+// said ("~/Documents can't keep ...").
+function notPrivate(said) {
+  return /can't keep your notes private/.test(String(said || ""))
+}
+function notPrivateNote(folder) {
+  return folder + " can't keep your notes private: another account on this computer could read them there"
+}
+
 // The backup folder as a path relative to a profile's folder, if it's
 // inside it (left out of the backup, or each would hold the ones before),
 // else "".

@@ -132,8 +132,8 @@
 #       place over what's there (a link there is replaced, never followed),
 #       and checked. So a file that was readable by others (644) before is
 #       never left so with your words in it. Prints its path, then "open" on
-#       a drive that can't keep files private (exFAT, some shares): saved,
-#       as you asked, and said.
+#       a drive that can't keep files private (exFAT, some shares, a phone
+#       that refuses the change): saved, as you asked, and said.
 #   place <from> <file> replace|keep
 #       The same for a copy of the plain file <from> (a PDF or a Word file
 #       made of a page, a picture): "keep" never over a file that's there.
@@ -169,7 +169,10 @@
 #       One profile (pN/ in the backup) into a new folder: <folder>, or
 #       "<folder> 2"... if that's taken, never one that's there. The backup
 #       must still be the one inspected (its sha256); if it isn't, or
-#       anything fails, the new folder is taken away again. Links and
+#       anything fails, the new folder is taken away again. So it is on a
+#       drive that can't keep files private (the folder made 700 and
+#       looked at, and a new file tried there, before anything's put in
+#       it): "that drive can't keep your notes private: ...". Links and
 #       special files are left out ("left-out:<n>"); a sparse file refuses
 #       it. Prints the folder last.
 
@@ -1633,6 +1636,11 @@ def new_folder(base):
     raise Refused("no free name for the folder")
 
 
+# (A restore refused where your notes can't be kept private: Backups.js
+# knows it by these words.)
+NOT_PRIVATE = "that drive can't keep your notes private: another account on this computer could read them there"
+
+
 def cmd_restore(path, member, base, expected, max_bytes, max_files):
     if not (len(member) in (2, 3) and member[0] == "p" and member[1:].isdigit()):
         raise Refused("not a profile in a backup")
@@ -1647,6 +1655,21 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
         root_fd = open_dir(name, pfd)
         made = os.fstat(root_fd)
         try:
+            # (Never a profile's notes on a drive that can't keep them
+            # private (~/Documents a link to an exFAT, FAT or NTFS
+            # partition, a share): the new folder made yours alone and
+            # looked at, and a new file of its own tried there, before
+            # anything's put in it. If not, refused, and the folder goes.)
+            try:
+                os.fchmod(root_fd, 0o700)
+                keeps = not os.fstat(root_fd).st_mode & 0o077 and _keeps_private(root_fd)
+            except OSError as e:
+                # (A drive that refuses the change.)
+                if e.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.ENOSYS):
+                    raise
+                keeps = False
+            if not keeps:
+                raise Refused(NOT_PRIVATE)
             with open_regular(path) as f:
                 src = Hashing(f)
                 # (All of it unpacked, the other profiles too: at most four
@@ -1861,12 +1884,17 @@ def _save_private(dest, write, replace=True):
     try:
         tmp = ".uber-notebook-new-%s" % os.urandom(6).hex()
         fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
+        refused = False
         try:
             try:
-                os.fchmod(fd, 0o600)
-                # (A drive that can't keep modes (exFAT, some shares): known
-                # before anything's written; still saved, as you asked, and
-                # said: "open".)
+                # (A drive that can't keep modes (exFAT, some shares) takes
+                # the change and keeps them as they were; one that refuses
+                # it (a phone, through gvfs) says so. Known before anything's
+                # written; still saved, as you asked, and said: "open".)
+                try:
+                    os.fchmod(fd, 0o600)
+                except OSError:
+                    refused = True
                 st0 = os.fstat(fd)
                 if not stat.S_ISREG(st0.st_mode):
                     raise Refused("not a plain file")
@@ -1894,7 +1922,7 @@ def _save_private(dest, write, replace=True):
     finally:
         os.close(dfd)
     print(dest)
-    if st0.st_mode & 0o077 or st.st_mode & 0o077:
+    if refused or st0.st_mode & 0o077 or st.st_mode & 0o077:
         print("open")
 
 
@@ -1932,6 +1960,8 @@ def cmd_place(source, dest, how):
 
 
 def _keeps_private(root_fd):
+    # (A drive that refuses the change (a phone, through gvfs): it raises,
+    # so neither the Markdown copy nor a profile put back is kept there.)
     probe = ".uber-notebook-probe-%s" % os.urandom(6).hex()
     pfd = os.open(probe, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=root_fd)
     try:

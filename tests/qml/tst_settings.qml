@@ -383,6 +383,40 @@ Item {
       closeAll()
     }
 
+    // Where a backup is put back (~/Documents) on a drive that can't keep
+    // files private (an exFAT partition, a share): nothing put back, no
+    // profile added, and why said, in Settings and on the first run.
+    function test_7b_never_put_back_where_it_cant_be_private() {
+      fresh()
+      var made = null
+      backups.backUp("all", false, function(x) { made = x })
+      tryVerify(function() { return made !== null && made.ok }, 2000)
+      files.makePrivateLeft = 1
+      var why = "Nothing was put back: ~/Documents can't keep your notes private: another account on this computer could read them there."
+      app.openSettings("backups")
+      tryVerify(function() { return panel() !== null }, 1000)
+      tryVerify(function() { return all(win(), "backupRestore").length === 1 }, 1000)
+      click(reach(all(win(), "backupRestore")[0]))
+      tryVerify(function() { return named(win(), "restoreYes") !== null }, 1000)
+      click(reach(named(win(), "restoreYes")))
+      tryCompare(backups, "working", "", 2000)
+      compare(backups.note, why)
+      verify(backups.failed)
+      compare(profiles.list.length, 2, "no profile added")
+      verify(!Object.keys(files.disk).some(function(p) { return p.indexOf("/tmp/Documents/Uber Notebook Personal (restored)") === 0 }))
+      tryVerify(function() { return find(win(), function(it) { return it.text === why }) !== null }, 1000, "said in Settings")
+      compare(named(win(), "restoredOpen"), null)
+      closeAll()
+      // The first run: said there, nothing opened.
+      service.user = ({ sounds: false })
+      tryVerify(function() { return named(win(), "firstRun") !== null }, 1000)
+      service.nextFile = made.path
+      click(named(win(), "firstRunRestore"))
+      tryCompare(named(win(), "firstRunRestoreNote"), "text", why, 2000)
+      verify(profiles.firstRun, "still no profile")
+      files.makePrivateLeft = 0
+    }
+
     function test_8_the_first_run_puts_one_back() {
       fresh()
       var made = null

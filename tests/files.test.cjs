@@ -712,6 +712,38 @@ try {
     assert.equal(helperRun(["place", d, path.join(d, "x"), "replace"]).code, 3, "only a plain file is copied");
   });
 
+  // A file you chose to save on a drive that can't keep files private: saved
+  // as you asked, and said ("open"), whether the drive takes the chmod and
+  // keeps its modes (exFAT) or refuses it (a phone, through gvfs). Your
+  // notes' own (the Markdown copy, looked at with probe) still aren't kept
+  // there.
+  check("save and place on a drive that can't keep files private: saved, said", () => {
+    const { helperOn } = require("./drive.cjs");
+    for (const drive of ["exfat", "refuses"]) {
+      const d = fs.mkdtempSync(path.join(tmp, "open-drive-"));
+      const out = path.join(d, "Calendar.ics");
+      let r = helperOn(drive, ["save", out], "BEGIN:VCALENDAR");
+      assert.equal(r.code, 0, drive + ": " + r.err);
+      assert.deepEqual(r.out.split("\n"), [out, "open", ""], drive);
+      assert.equal(fs.readFileSync(out, "utf8"), "BEGIN:VCALENDAR", drive);
+      const made = path.join(tmp, "made-" + drive + ".png"); fs.writeFileSync(made, "PNG");
+      const copy = path.join(d, "Picture.png"); fs.writeFileSync(copy, "old");
+      r = helperOn(drive, ["place", made, copy, "replace"]);
+      assert.equal(r.code, 0, drive + ": " + r.err);
+      assert.deepEqual(r.out.split("\n"), [copy, "open", ""], drive);
+      assert.equal(fs.readFileSync(copy, "utf8"), "PNG", drive);
+      r = helperOn(drive, ["place", made, path.join(d, "New.png"), "keep"]);
+      assert.equal(r.code, 0, drive + ": " + r.err);
+      assert.deepEqual(r.out.split("\n"), [path.join(d, "New.png"), "open", ""], drive);
+      assert.ok(!fs.readdirSync(d).some((n) => n.startsWith(".uber-notebook-")), drive + ": nothing half-made left");
+      // (The Markdown copy's check: never "keeps" there.)
+      const p = helperOn(drive, ["probe", d]);
+      if (drive === "refuses") assert.equal(p.code, 3, "a drive that refuses it: refused");
+      else assert.equal(JSON.parse(p.out).keeps, false, p.err);
+      assert.ok(!fs.readdirSync(d).some((n) => n.startsWith(".uber-notebook-probe")), drive + ": its probe taken away");
+    }
+  });
+
   // The Markdown copy's own files and folders from before made yours alone:
   // what's named and everything in it, never through a link, nothing else
   // in your folder, nor the folder itself.

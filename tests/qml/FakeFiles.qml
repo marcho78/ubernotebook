@@ -388,6 +388,8 @@ QtObject {
     }
     if (argv[0] === "/usr/bin/python3" && argv[3] === filesHelper && argv[4] === "restore-backup") {
       if (disk[argv[5]] === undefined || fakeHash(disk[argv[5]]) !== argv[8]) { done(false, "the backup changed after it was looked at"); return }
+      // (A drive that can't keep files private, with `makePrivateLeft`: refused, as the helper says it.)
+      if (makePrivateLeft > 0) { done(false, "that drive can't keep your notes private: another account on this computer could read them there"); return }
       var held = JSON.parse(String(disk[argv[5]]).slice(9)).files[argv[6]]
       if (!held) { done(false, "not in it"); return }
       var dest = argv[7]

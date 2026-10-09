@@ -132,12 +132,16 @@ Item {
       var todo = c.manifest.profiles.slice()
       var made = []
       var leftOut = 0
+      // (Not put back because where it goes can't keep your notes private:
+      // their names, and that folder.)
+      var refused = { names: [], folder: "" }
       function next() {
-        if (!todo.length) { bk.added(made, open, done, leftOut); return }
+        if (!todo.length) { bk.added(made, open, done, leftOut, refused); return }
         var p = todo.shift()
         var base = Backups.restoreFolder(p.name)
         // (From the file looked into: if it isn't that any more, nothing.)
         bk.files.helper(["restore-backup", c.path, p.dir, bk.home + base.slice(1), c.hash, String(bk.restoreMaxBytes), String(bk.restoreMaxFiles)], function(ok, out) {
+          if (!ok && Backups.notPrivate(out)) { refused.names.push(p.name); refused.folder = base.replace(/\/[^\/]*$/, "") }
           var lines = ok ? String(out || "").trim().split("\n") : []
           var at = lines.length ? lines[lines.length - 1] : ""
           // (Links and special files in it, left out: counted.)
@@ -150,12 +154,14 @@ Item {
       next()
     })
   }
-  function added(made, open, done, leftOut) {
+  function added(made, open, done, leftOut, refused) {
     working = ""
-    if (!made.length) { failed = true; note = "Nothing could be put back from that backup."; done({ ok: false, error: note }); return }
+    var notPrivate = refused && refused.names.length ? Backups.notPrivateNote(refused.folder) + "." : ""
+    if (!made.length) { failed = true; note = notPrivate ? "Nothing was put back: " + notPrivate : "Nothing could be put back from that backup."; done({ ok: false, error: note }); return }
     var r = profiles.addRestored(made, open)
     failed = false
     note = "Put back as " + r.map(function(p) { return "“" + p.name + "”" }).join(", ") + "."
+      + (notPrivate ? " " + refused.names.map(function(n) { return "“" + n + "”" }).join(", ") + (refused.names.length === 1 ? " wasn't: " : " weren't: ") + notPrivate : "")
       + (leftOut ? " " + leftOut + (leftOut === 1 ? " link (or special file) in it was" : " links (or special files) in it were") + " left out." : "")
     done({ ok: true, restored: r, leftOut: leftOut || 0 })
   }

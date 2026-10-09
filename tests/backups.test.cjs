@@ -224,6 +224,25 @@ try {
     assert.ok(!fs.existsSync(path.join(tmp, "Deep")));
   });
 
+  // Put back where your notes can't be kept private (~/Documents a link to
+  // an exFAT partition, a share, a phone): refused before anything's put
+  // there, said so, and the folder it made taken away.
+  check("never put back on a drive that can't keep files private", () => {
+    const { helperOn } = require("./drive.cjs");
+    const c = plain(B.checked(helper(["inspect-backup", file]).out));
+    for (const drive of ["exfat", "files", "refuses"]) {
+      const docs = fs.mkdtempSync(path.join(tmp, "docs-"));
+      const r = helperOn(drive, ["restore-backup", file, "p1", path.join(docs, "Uber Notebook Personal (restored)"), c.hash, MAXB, MAXF]);
+      assert.equal(r.code, 3, drive + ": " + r.out);
+      assert.equal(r.out, "", drive);
+      assert.ok(B.notPrivate(r.err), drive + ": " + r.err);
+      assert.deepEqual(fs.readdirSync(docs), [], drive + ": the folder it made, taken away");
+    }
+    // (Anything else that goes wrong isn't said to be that.)
+    assert.ok(!B.notPrivate(helper(["restore-backup", file, "p7", path.join(tmp, "Nothing"), c.hash, MAXB, MAXF]).err));
+    assert.equal(B.notPrivateNote("~/Documents"), "~/Documents can't keep your notes private: another account on this computer could read them there");
+  });
+
   check("files that aren't backups, or reach outside, refused", () => {
     write(path.join(tmp, "plain.txt"), "not an archive");
     assert.equal(plain(B.checked(helper(["inspect-backup", path.join(tmp, "plain.txt")]).out)).ok, false);
