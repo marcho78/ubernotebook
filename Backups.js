@@ -199,8 +199,10 @@ var EXISTS_SCRIPT = "for d in \"$@\"; do if [ -d \"$d\" ]; then echo 1; else ech
 // The backups in a folder: "<modified>\t<size>\t<name>" a line. (The
 // folder made yours alone as it's looked in: one from before was open to
 // other accounts, and backups hold all your notes. "open" on a line of its
-// own when it can't be: a drive that can't keep modes, a folder not yours.)
-var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/chmod go-rwx -- \"$1\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$1\" 2>/dev/null); [ -n \"$m\" ] && [ $(( 8#$m & 077 )) -eq 0 ] || echo open; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
+// own when it can't be: a drive that can't keep modes, a folder not yours,
+// a share that takes every account for the same one.)
+var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/chmod go-rwx -- \"$1\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$1\" 2>/dev/null); u=$(/usr/bin/stat -L -c %u -- \"$1\" 2>/dev/null); "
+  + "[ -n \"$m\" ] && [ \"$u\" = \"$UID\" ] && [ $(( 8#$m & 077 )) -eq 0 ] || echo open; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
 
 // A backup made: <folder> <stem> <suffix> then, for each profile, <its
 // folder> <p1...> <a folder in it to leave out, or "">; its
@@ -216,11 +218,14 @@ var BACKUP_SCRIPT = [
   "umask 077",
   "dir=$1; stem=$2; suffix=$3; shift 3",
   "/usr/bin/mkdir -p -- \"$dir\" || exit 3",
-  "/usr/bin/chmod go-rwx -- \"$dir\" || exit 3",
-  // (A drive that can't keep files private (exFAT, some shares): no backup
-  // of your notes is written there; said.)
+  "/usr/bin/chmod go-rwx -- \"$dir\" 2>/dev/null",
+  // (A drive that can't keep files private (exFAT, some shares), a folder
+  // that isn't yours (a share that takes every account for the same one):
+  // no backup of your notes is written there; said, after "open" on a
+  // line of its own (exit 4).)
   "m=$(/usr/bin/stat -L -c %a -- \"$dir\") || exit 3",
-  "[ $(( 8#$m & 077 )) -eq 0 ] || { echo \"That folder can't keep your backups private: another account on this computer could read them there. Pick another folder for backups\" >&2; exit 4; }",
+  "u=$(/usr/bin/stat -L -c %u -- \"$dir\") || exit 3",
+  "[ \"$u\" = \"$UID\" ] && [ $(( 8#$m & 077 )) -eq 0 ] || { printf 'open\\n%s\\n' \"That folder can't keep your backups private: another account on this computer could read them there. Pick another folder for backups\" >&2; exit 4; }",
   "tmp=$(/usr/bin/mktemp -d) || exit 3",
   "part=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",
   "gz=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",

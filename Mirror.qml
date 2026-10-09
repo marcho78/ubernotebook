@@ -104,10 +104,26 @@ Item {
       if (!isPrivate) {
         mirror.problem = "that folder can't keep the copy private: another account on this computer could read it there. Pick another folder"
         mirror.status = "Not copying: " + mirror.problem
+        mirror.sayStopped(dir)
         return finish(gen)
       }
       mirror.copyInto(dir, gen, from, stale)
     })
+  }
+  // (Refused there: said outside Settings too, in the window and as a
+  // notification, once a session for each folder, or the copy would stop
+  // without a word.)
+  property var warned: ({})
+  function sayStopped(dir) {
+    if (warned[dir]) return
+    var w = {}
+    for (var k in warned) w[k] = warned[k]
+    w[dir] = true
+    warned = w
+    var shown = home && dir.indexOf(home + "/") === 0 ? "~" + dir.slice(home.length) : dir
+    var text = "The Markdown copy stopped: " + shown + " can't keep it private (another account on this computer could read it there). Pick another folder (Settings, Writing)"
+    if (typeof store.failed === "function") store.failed(text)
+    if (typeof store.notify === "function") store.notify("Markdown copy stopped", text, "", "")
   }
   function copyInto(dir, gen, from, stale) {
     loadManifest(dir, function() {

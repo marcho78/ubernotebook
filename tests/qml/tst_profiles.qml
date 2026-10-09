@@ -203,6 +203,10 @@ Item {
       mouseClick(win(), at.x, at.y)
       wait(300)
       compare(Object.keys(ws.index.pages).length, pages, "nothing made under it")
+      // Try again: that folder looked at again (a drive mounted since).
+      var retried = store.retried
+      click(named(cover, "privateStripRetry"))
+      compare(store.retried, retried + 1, "looked at again")
       click(named(cover, "privateStripProfiles"))
       tryVerify(function() { return named(win(), "settingsFlick") !== null }, 1000, "Settings, at Profiles")
       keyClick(Qt.Key_Escape)
@@ -210,6 +214,26 @@ Item {
       store.blockedFolder = ""
       store.blockedWhy = ""
       tryVerify(function() { return named(win(), "privateStrip") === null }, 1000, "gone once it can be used")
+    }
+
+    // The folder the open profile has, picked again (Settings, Profiles):
+    // looked at again, if it couldn't be used (a drive mounted since);
+    // another folder is simply the next one.
+    function test_3d_the_same_folder_picked_again() {
+      fresh()
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      verify(profiles.add("Side", "~/Side", false) === "")
+      var id = profiles.current.id
+      compare(files.retried, 0)
+      compare(profiles.setFolder(id, "~/Documents/Uber Notebook"), "")
+      compare(files.retried, 1, "looked at again")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
+      var side = profiles.list.filter(function(p) { return p.name === "Side" })[0]
+      compare(profiles.setFolder(side.id, "~/Side"), "")
+      compare(files.retried, 1, "not the one open: nothing to look at")
+      compare(profiles.setFolder(id, "~/Documents/Elsewhere"), "")
+      compare(files.retried, 1, "another folder: opened as the next one")
+      compare(service.settings.folder, "~/Documents/Elsewhere")
     }
 
     // In the demo: a strip says so, with the welcome screen a click away (and
@@ -354,6 +378,25 @@ Item {
       // Profiles there already: the first, if the one open's gone.
       fresh({ sounds: false, profiles: [{ id: "p-x", name: "X", folder: "~/X" }], profile: "p-gone" })
       compare(profiles.current.name, "X")
+    }
+
+    // Once the profiles are in: every one's notes folder made yours alone,
+    // not only the one opened (one from before was open to others); in your
+    // home folder itself, only what Uber Notebook keeps there.
+    function test_6_every_profiles_folder_made_private() {
+      fresh({ sounds: false, profile: "p-a", folder: "~/Documents/Uber Notebook", profiles: [
+        { id: "p-a", name: "Personal", folder: "~/Documents/Uber Notebook" },
+        { id: "p-b", name: "Work", folder: "/mnt/data/Work" },
+        { id: "p-c", name: "Home", folder: "/tmp" }] })
+      var made = files.madePrivate
+      verify(made.indexOf("/tmp/Documents/Uber Notebook") >= 0, JSON.stringify(made))
+      verify(made.indexOf("/mnt/data/Work") >= 0, "not only the one open: " + JSON.stringify(made))
+      verify(made.indexOf("/tmp") < 0, "never your home folder itself")
+      verify(made.indexOf("/tmp/Pages") >= 0 && made.indexOf("/tmp/library.json") >= 0 && made.indexOf("/tmp/.trash") >= 0, "what's kept there: " + JSON.stringify(made))
+      // (Once, as they're settled: not again with each switch.)
+      var n = made.length
+      profiles.use("p-b")
+      compare(files.madePrivate.length, n)
     }
   }
 }

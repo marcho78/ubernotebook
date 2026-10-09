@@ -61,8 +61,31 @@ Item {
     files.exec(["/usr/bin/bash", "-c", Backups.LIST_SCRIPT, "uber-notebook-backups", folder], function(ok, out) {
       bk.list = ok ? Backups.listed(out, bk.folder) : []
       bk.notPrivate = ok && /^open$/m.test(String(out || ""))
+      if (bk.notPrivate && bk.every !== "off") bk.sayStopped()
       if (done) done()
     }, { okCodes: [0], timeoutMs: 8000, maxBytes: 512 * 1024 })
+  }
+  // (Once the profiles are in, the settings with them: their folder looked
+  // in, so made yours alone, as each profile's is.)
+  Connections {
+    target: bk.profiles
+    ignoreUnknownSignals: true
+    function onSettledChanged() { if (bk.profiles.settled) bk.refresh() }
+  }
+
+  // Automatic backups refused by their folder (it can't keep them private):
+  // said outside Settings too, in the window and as a notification, once a
+  // session for each folder, or they'd stop without a word.
+  property var warned: ({})
+  function sayStopped() {
+    if (!folder || warned[folder] || !profiles || !profiles.settled) return
+    var w = {}
+    for (var k in warned) w[k] = warned[k]
+    w[folder] = true
+    warned = w
+    var text = "Automatic backups stopped: " + folderShown + " can't keep them private (another account on this computer could read them there). Pick another folder (Settings, Backups)"
+    if (typeof files.failed === "function") files.failed(text)
+    if (typeof files.notify === "function") files.notify("Backups stopped", text, "", "")
   }
 
   // A backup: done({ ok, path, size, profiles, error }).
@@ -99,6 +122,12 @@ Item {
       bk.files.exec(["/usr/bin/bash", "-c", Backups.BACKUP_SCRIPT, "uber-notebook-backup"].concat(args), function(made, said) {
         var lines = String(said || "").trim().split("\n")
         var path = made ? lines[lines.length - 1] : ""
+        // (Its folder can't keep it private: said in Settings, and, for an
+        // automatic one, outside it too.)
+        if (!made && /^open$/m.test(String(said || ""))) {
+          bk.notPrivate = true
+          if (automatic) bk.sayStopped()
+        }
         if (!made || !path) { finish({ ok: false, error: "The backup didn't go: " + (String(said || "").trim().split("\n").pop() || "tar stopped") }); return }
         bk.refresh(function() {
           finish({ ok: true, path: path, name: path.split("/").pop(), size: Number(lines[lines.length - 2]) || 0, profiles: take.map(function(t) { return t.profile.name }) })

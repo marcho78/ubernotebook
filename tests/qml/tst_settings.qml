@@ -336,6 +336,61 @@ Item {
       compare(backups.list.length, count)
     }
 
+    // Their folder looked in once the profiles are in (so made yours alone).
+    // Automatic backups whose folder can't keep them private: said outside
+    // Settings too (in the window, and as a notification), once a session
+    // for that folder, not at every look; nothing written there. One you
+    // make yourself is said where you made it.
+    function test_6b_automatic_ones_refused() {
+      fresh()
+      var dir = "/tmp/Documents/Uber Notebook Backups"
+      profiles.settled = false
+      files.ran = []
+      profiles.settled = true
+      verify(files.ran.some(function(a) { return a[3] === "uber-notebook-backups" && a[4] === dir }), "looked in once the profiles are in")
+      backups.warned = ({})
+      files.openFolders[dir] = true
+      var heard = []
+      function hear(m) { heard.push(m) }
+      files.failed.connect(hear)
+      // (Off: said in Settings only.)
+      backups.refresh()
+      verify(backups.notPrivate)
+      compare(files.notified.length, 0, "off: not said outside Settings")
+      compare(heard.length, 0)
+      service.setSettings({ backupEvery: "daily", backupKeep: 3 })
+      backups.automaticNow()
+      tryVerify(function() { return files.notified.length === 1 }, 2000, "said, as a notification")
+      compare(files.notified[0].title, "Backups stopped")
+      verify(files.notified[0].text.indexOf("Automatic backups stopped: ~/Documents/Uber Notebook Backups can't keep them private") === 0, files.notified[0].text)
+      compare(heard, [files.notified[0].text], "and in the window")
+      wait(200)
+      compare(Object.keys(files.disk).filter(function(p) { return p.indexOf(dir + "/") === 0 }).length, 0, "nothing written there")
+      backups.automaticNow()
+      wait(200)
+      compare(files.notified.length, 1, "once a session for that folder")
+      compare(heard.length, 1)
+      // Refused by the backup itself (a folder that wasn't there yet when
+      // it was looked in): said too.
+      backups.warned = ({})
+      backups.notPrivate = false
+      var r = null
+      backups.backUp("all", true, function(x) { r = x })
+      tryVerify(function() { return r !== null }, 1000)
+      verify(!r.ok && /can't keep your backups private/.test(r.error), r.error)
+      verify(backups.notPrivate, "said in Settings")
+      compare(files.notified.length, 2, "and outside it")
+      // One you make yourself: said where you made it (Settings, an agent's answer).
+      backups.warned = ({})
+      r = null
+      backups.backUp("", false, function(x) { r = x })
+      tryVerify(function() { return r !== null }, 1000)
+      verify(!r.ok && /can't keep your backups private/.test(r.error), r.error)
+      compare(files.notified.length, 2, "not as a notification")
+      files.failed.disconnect(hear)
+      service.setSettings({ backupEvery: "off" })
+    }
+
     function test_7_put_back() {
       fresh()
       var made = null

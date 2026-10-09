@@ -540,10 +540,10 @@ Item {
     // files helper too, a new file yours alone put in its place, never one
     // left readable by others with your words in it.)
     if (!rel && !stopping && /^\/./.test(path)) {
-      helper(["save", path], function(ok, out) {
+      helperSave(path, text, function(ok, out) {
         finish(ok, ok ? "" : String(out || "").trim().split("\n").pop())
         if (ok && /^open$/m.test(String(out || ""))) store.failed(store.openDriveNote(path))
-      }, { input: String(text), timeoutMs: 60000, maxBytes: 8192 })
+      })
       return
     }
     if (!rel) { asBefore(); return }
@@ -551,6 +551,31 @@ Item {
       if (r === null) { asBefore(); return }
       finish(r.ok === true, r.ok ? "" : String(r.error || ""))
     })
+  }
+  // Saves by the files helper outside the notes folder, a few at a time
+  // (each is a program of its own: an export of hundreds of pages never
+  // starts hundreds at once); the rest wait their turn, in order, and each
+  // is heard when it's done. done(ok, output).
+  property var saveQueue: []
+  property int savesRunning: 0
+  readonly property int maxSaves: 4
+  function helperSave(path, text, done) {
+    saveQueue = saveQueue.concat([{ path: path, text: String(text), done: done }])
+    nextSaves()
+  }
+  function nextSaves() {
+    while (savesRunning < maxSaves && saveQueue.length) {
+      var s = saveQueue[0]
+      saveQueue = saveQueue.slice(1)
+      startSave(s)
+    }
+  }
+  function startSave(s) {
+    savesRunning++
+    helper(["save", s.path], function(ok, out) {
+      store.savesRunning--
+      try { s.done(ok, out) } finally { store.nextSaves() }
+    }, { input: s.text, timeoutMs: 60000, maxBytes: 8192 })
   }
 
   // ---- what couldn't be saved: kept, and tried again --------------------------------------------
@@ -638,8 +663,9 @@ Item {
   // be reached by another account on the computer, whatever it holds. Never
   // your home folder itself (a profile there: its own files and folders in
   // it, privateEntries). done(ok): checked after, readable by no one else
-  // (a drive that can't keep modes, a folder of someone else's: not ok).
-  readonly property string privateScript: "for p in \"$@\"; do [ -e \"$p\" ] || continue; /usr/bin/chmod go-rwx -- \"$p\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$p\") || exit 1; [ $(( 8#$m & 077 )) -eq 0 ] || exit 1; done"
+  // and yours (a drive that can't keep modes, a folder of someone else's,
+  // a share that takes every account for the same one: not ok).
+  readonly property string privateScript: "for p in \"$@\"; do [ -e \"$p\" ] || continue; /usr/bin/chmod go-rwx -- \"$p\" 2>/dev/null; m=$(/usr/bin/stat -L -c %a -- \"$p\") || exit 1; [ $(( 8#$m & 077 )) -eq 0 ] || exit 1; [ \"$(/usr/bin/stat -L -c %u -- \"$p\")\" = \"$UID\" ] || exit 1; done"
   function makePrivate(folder, done) {
     var f = String(folder || "").replace(/\/+$/, "")
     if (!/^\/./.test(f) || f === home) { if (done) done(f === home); return }
@@ -712,11 +738,35 @@ Item {
 
   // A notes folder that couldn't be used: one that couldn't be made yours
   // alone (a drive that can't keep files private, a folder that isn't
-  // yours: "private"), or made at all (a drive that's gone: "made"). Not
-  // opened, nothing of the one before shown or written to; the window says
-  // so, with where to pick another. "" when the one open is fine.
+  // yours: "private"), or made at all (a drive that's gone, a folder it's
+  // in that isn't there: "made"). Not opened, nothing of the one before
+  // shown or written to; the window says so, with where to pick another,
+  // or to try again. "" when the one open is fine.
   property string blockedFolder: ""
   property string blockedWhy: ""
+  // That folder looked at again (picked again, the window's Try again): a
+  // drive mounted since, a folder made private.
+  function retry() {
+    if (blockedFolder && active) locateTimer.restart()
+  }
+  // Uber Notebook's own data folder (the demo's notes are in it).
+  property string dataFolder: ""
+  // The notes folder made, if it isn't there yet: only the folder itself,
+  // in a folder that's there. One it's in that isn't (a drive mounted in a
+  // folder of yours, not mounted now) is never made, so nothing's put
+  // where that drive goes, hidden when it's back. Its parents are made too
+  // only in Uber Notebook's own data folder, or your Documents folder (as
+  // a first profile there has it). done(ok).
+  readonly property string notesMkdirScript: "umask 077; d=$1; [ -d \"$d\" ] && exit 0; [ \"$2\" = parents ] && exec /usr/bin/mkdir -p -- \"$d\"; "
+    + "[ -d \"$(/usr/bin/dirname -- \"$d\")\" ] || { echo \"the folder it's in isn't there\" >&2; exit 1; }; /usr/bin/mkdir -- \"$d\" || [ -d \"$d\" ]"
+  function makeNotesFolder(path, done) {
+    var parent = path.replace(/\/[^\/]*$/, "") || "/"
+    var parents = (dataFolder !== "" && path.indexOf(dataFolder + "/") === 0) || parent === home + "/Documents"
+    exec(["/usr/bin/bash", "-c", notesMkdirScript, "uber-notebook-mkdir", path, parents ? "parents" : "one"], function(ok, output) {
+      if (!ok) failed("Couldn't make " + path.replace(home, "~") + ": " + String(output || "").trim())
+      done(ok)
+    })
+  }
   // Nothing of a folder on the shelf (one left, or none to open).
   function clearShelf() {
     index = ({})
@@ -752,7 +802,7 @@ Item {
       store.blockedWhy = ""
       // (Made, made yours alone and checked before anything of it's opened:
       // your notes aren't kept where another account could read them.)
-      store.mkdirsAsBefore([next], function(made) {
+      store.makeNotesFolder(next, function(made) {
         if (gen !== store.generation) return
         if (!made) { store.block(next, "made"); return }
         function opened(isPrivate) {

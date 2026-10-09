@@ -58,6 +58,9 @@ QtObject {
   function reset() {
     ran = []
     inputs = []
+    madePrivate = []
+    retried = 0
+    openFolders = ({})
     makePrivateLeft = 0
     switching = false
     probeId = "1:1"
@@ -116,6 +119,17 @@ QtObject {
   property var exportBase: null
 
   function mkdirs(paths, done) { if (done) done(true) }
+  // Folders made yours alone (Store.makePrivate; privateEntries: each
+  // "<root>/<name>"), in order; the notes folder looked at again (retry).
+  property var madePrivate: []
+  readonly property var ownEntries: ["Pages", ".trash", "library.json", "Exports", "Markdown"]
+  function makePrivate(folder, done) { madePrivate = madePrivate.concat([String(folder)]); if (done) done(true) }
+  function privateEntries(root, names, done) { madePrivate = madePrivate.concat(names.map(function(n) { return root + "/" + n })); if (done) done(true) }
+  property int retried: 0
+  function retry() { retried++ }
+  // Backup folders that can't keep them private: listed with "open", and a
+  // backup there refused (exit 4), as Backups.js's scripts do.
+  property var openFolders: ({})
 
   function readNow(path, maxBytes) {
     var text = files.disk[path]
@@ -347,11 +361,12 @@ QtObject {
       var bdir = argv[4].replace(/\/+$/, "") + "/"
       var rows2 = Object.keys(disk).filter(function(p) { var n = p.slice(bdir.length); return p.indexOf(bdir) === 0 && n.indexOf("/") < 0 && n.charAt(0) !== "." && /\.tar\.gz$/.test(n) })
         .map(function(p) { return (mtimes[p] || 1759455000) + "\t" + String(disk[p]).length + "\t" + p.slice(bdir.length) })
-      done(true, rows2.join("\n") + (rows2.length ? "\n" : ""))
+      done(true, (openFolders[argv[4]] ? "open\n" : "") + rows2.join("\n") + (rows2.length ? "\n" : ""))
       return
     }
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-backup") {
       var a = argv.slice(4)
+      if (openFolders[a[0]]) { done(false, "open\nThat folder can't keep your backups private: another account on this computer could read them there. Pick another folder for backups"); return }
       var out2 = a[0] + "/" + a[1] + a[2]
       for (var k2 = 2; disk[out2] !== undefined; k2++) out2 = a[0] + "/" + a[1] + " " + k2 + a[2]
       var packed = {}

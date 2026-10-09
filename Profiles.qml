@@ -23,6 +23,24 @@ QtObject {
   readonly property var current: service ? Profiles.find(list, service.settings.profile) : null
   // Looked, once the settings were in, for notes from before profiles.
   property bool settled: false
+  // Then every profile's notes folder that's there made yours alone (700),
+  // not only the one opened: one from before was open to other accounts
+  // (755). Only the folder (in your home folder itself, what Uber Notebook
+  // keeps there); nothing in it is touched, and one that can't be is left
+  // till it's opened (then said).
+  onSettledChanged: if (settled) makeAllPrivate()
+  function makeAllPrivate() {
+    if (!files || typeof files.makePrivate !== "function") return
+    var h = home()
+    var seen = {}
+    shown.forEach(function(p) {
+      var path = pm.pathOf(p.folder)
+      if (!h || !path || seen[path]) return
+      seen[path] = true
+      if (path === h) files.privateEntries(h, files.ownEntries)
+      else files.makePrivate(path)
+    })
+  }
   // None yet: the window asks for the first (or the demo).
   readonly property bool firstRun: settled && current === null
   // The welcome screen asked for again (the demo's strip, the profile
@@ -117,11 +135,15 @@ QtObject {
     if (problem) return problem
     var f = Settings.cleanFolder(String(folder))
     var changes = { profiles: shown.map(function(p) { if (p.id === id) p.folder = f; return p }) }
+    // (The folder it has, picked again for the one open: looked at again if
+    // it couldn't be used, a drive mounted since.)
+    var again = current !== null && current.id === id && f === (service.settings.folder || "")
     if (current && current.id === id) {
       if (typeof service.saveOpen === "function") service.saveOpen()
       changes.folder = f
     }
     apply(changes)
+    if (again && files && typeof files.retry === "function") files.retry()
     return ""
   }
 

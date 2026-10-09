@@ -154,6 +154,38 @@ try {
     assert.match(run(B.LIST_SCRIPT, ["/usr/share"]).out, /^open$/m);
   });
 
+  // A folder whose mode says only its owner can read it, but whose owner
+  // isn't you (here a folder of root's, 700 or 500; an NFS share that takes
+  // every account for the same one is the same to these scripts): not
+  // kept there, and said.
+  const notMine = ["/proc/1/fd", "/var/lib/private", "/etc/credstore", "/var/cache/ldconfig", "/root"].find((p) => {
+    try { const s = fs.statSync(p); return s.isDirectory() && s.uid !== process.getuid() && (s.mode & 0o077) === 0; } catch (e) { return false; }
+  });
+  if (notMine) {
+    check("a folder that isn't yours, though only its owner can read it: open, and no backup there", () => {
+      assert.match(run(B.LIST_SCRIPT, [notMine]).out, /^open$/m, notMine);
+      const m = JSON.stringify(B.manifest([{ name: "Personal" }], "1.0.0", new Date()));
+      const n = B.fileName("Personal", new Date(2026, 9, 3, 1, 30), false);
+      const r = run(B.BACKUP_SCRIPT, [notMine, n.stem, n.suffix, personal, "p1", ""], m);
+      assert.equal(r.code, 4, r.err);
+      // ("open" on a line of its own, then what's said: the last line.)
+      const said = r.err.trim().split("\n");
+      assert.equal(said[0], "open");
+      assert.match(said[said.length - 1], /can't keep your backups private/);
+    });
+  } else console.log("backups: no folder of someone else's that only its owner can read here; that check skipped");
+
+  check("a folder that can't keep backups private: refused, \"open\" said before why", () => {
+    // (Its mode can't be changed back by chmod: a folder of root's, 755.)
+    const m = JSON.stringify(B.manifest([{ name: "Personal" }], "1.0.0", new Date()));
+    const n = B.fileName("Personal", new Date(2026, 9, 3, 1, 30), false);
+    const r = run(B.BACKUP_SCRIPT, ["/usr/share", n.stem, n.suffix, personal, "p1", ""], m);
+    assert.equal(r.code, 4, r.err);
+    const said = r.err.trim().split("\n");
+    assert.equal(said[0], "open");
+    assert.match(said[said.length - 1], /can't keep your backups private/);
+  });
+
   check("listed", () => {
     const list = plain(B.listed(run(B.LIST_SCRIPT, [backups]).out, backups));
     assert.deepEqual(list.map((b) => b.name).sort(), ["Uber Notebook All profiles 2026-10-03 0130 2.tar.gz", "Uber Notebook All profiles 2026-10-03 0130.tar.gz", "older.tar.gz"]);

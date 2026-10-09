@@ -277,7 +277,7 @@ ShellRoot {
                 say("private: a save over a 644 file is 600", wrote === true && l[0] === "600" && l[2] === "BEGIN:VCALENDAR secret", l.join(" | "))
                 say("private: a copy over a 644 file is 600; never over one when it mustn't be", kept === false && placed === true && l[1] === "600" && l[3] === "PDF", "kept " + kept + " placed " + placed + " " + l.join(" | "))
                 say("private: a folder that can't be made yours alone is said", sharePrivate === false, String(sharePrivate))
-                root.blockedChecks(d)
+                root.queueChecks(d)
               })
             })
           })
@@ -285,12 +285,54 @@ ShellRoot {
       })
     })
   }
+  function until(test, done) {
+    var t = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
+    var n = 0
+    t.triggered.connect(function() { if (!test() && ++n < 50) return; t.stop(); done() })
+  }
+  // Saves outside the notes folder (an export of many pages), by the files
+  // helper: a few at a time (each is a program of its own), the rest
+  // waiting their turn; every one heard, and written.
+  function queueChecks(d) {
+    store.exec(["/usr/bin/mkdir", "-p", "--", d + "/export"], function() {
+      var heard = []
+      var n = 12
+      for (var i = 0; i < n; i++) (function(k) { store.writeFile(d + "/export/p" + k + ".md", "page " + k, function(ok) { heard.push(k + ":" + ok) }) })(i)
+      var running = store.savesRunning
+      var waiting = store.saveQueue.length
+      var most = running
+      var watch = Qt.createQmlObject('import QtQuick; Timer { interval: 20; repeat: true; running: true }', root)
+      watch.triggered.connect(function() { most = Math.max(most, store.savesRunning) })
+      root.until(function() { return heard.length === n }, function() {
+        watch.stop()
+        var paths = []
+        for (var j = 0; j < n; j++) paths.push(d + "/export/p" + j + ".md")
+        store.readFiles(paths, function(got) {
+          var right = paths.every(function(p, j) { return got[p] === "page " + j })
+          say("saves outside the notes folder: 4 at a time, the rest waiting", running === 4 && waiting === n - 4 && most <= 4, "running " + running + " waiting " + waiting + " most " + most)
+          say("saves outside the notes folder: every one heard, and written", heard.length === n && heard.every(function(h) { return /:true$/.test(h) }) && right && store.savesRunning === 0 && store.saveQueue.length === 0,
+            JSON.stringify(heard) + " right " + right)
+          root.ownerChecks(d)
+        })
+      })
+    })
+  }
+  // A folder whose mode says only its owner can read it, but whose owner
+  // isn't you (one of root's here; a share that takes every account for
+  // the same one is the same to the check): not made yours alone, said.
+  function ownerChecks(d) {
+    store.exec(["/usr/bin/bash", "-c", "for p in /proc/1/fd /var/lib/private /etc/credstore /var/cache/ldconfig /root; do s=$(/usr/bin/stat -L -c '%u %a' -- \"$p\" 2>/dev/null) || continue; "
+      + "[ \"${s%% *}\" != \"$UID\" ] && [ $(( 8#${s##* } & 077 )) -eq 0 ] && { echo \"$p\"; exit 0; }; done; exit 0"], function(ok, out) {
+      var p = String(out || "").trim()
+      if (!p) { console.log("SKIP private: no folder of someone else's that only its owner can read here"); root.blockedChecks(d); return }
+      store.makePrivate(p, function(isPrivate) {
+        say("private: a folder that isn't yours isn't taken for private, though only its owner can read it", isPrivate === false, p + " " + isPrivate)
+        root.blockedChecks(d)
+      })
+    })
+  }
   function blockedChecks(d) {
-    function until(test, done) {
-      var t = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
-      var n = 0
-      t.triggered.connect(function() { if (!test() && ++n < 50) return; t.stop(); done() })
-    }
+    var until = root.until
     // A profile open, a notebook in it.
     store2.folder = d + "/n3"
     store2.active = true
@@ -328,8 +370,54 @@ ShellRoot {
               var atOnce = store2.switching === true && !store2.ready && store2.createNotebook({ title: "Too soon" }, []) === null
               until(function() { return store2.ready && store2.rootPath === d + "/n4" }, function() {
                 say("private: switching, nothing done in the profile before, then the next is opened", atOnce && !store2.switching && store2.notebooks.length === 0, "at once " + atOnce + " now " + store2.rootPath)
-              store2.active = false
-              store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                root.unmountedChecks(d)
+              })
+            })
+          })
+        })
+      })
+    })
+  }
+  // A notes folder in a folder that isn't there (a drive mounted in a
+  // folder of yours, not mounted now): never made, nor that folder, so
+  // nothing's put where that drive goes; said ("made"). Looked at again
+  // once it's there (Try again, the folder picked again): opened. Uber
+  // Notebook's own data folder (the demo's) and your Documents folder are
+  // made as they're needed.
+  function unmountedChecks(d) {
+    var until = root.until
+    function later(ms, fn) {
+      var t = Qt.createQmlObject('import QtQuick; Timer { interval: ' + ms + '; running: true }', root)
+      t.triggered.connect(fn)
+    }
+    var gone = d + "/mnt/Notes"
+    store2.folder = gone
+    until(function() { return store2.blockedWhy === "made" && store2.blockedFolder === gone }, function() {
+      store.exec(["/usr/bin/test", "-e", d + "/mnt"], function(there) {
+        say("private: a notes folder in a folder that isn't there isn't made, nor that folder, and it's said",
+          store2.blockedFolder === gone && store2.blockedWhy === "made" && store2.rootPath === "" && there === false, store2.blockedFolder + " " + store2.blockedWhy + " there " + there)
+        store.exec(["/usr/bin/mkdir", "-p", "--", d + "/mnt"], function() {
+          store2.retry()
+          until(function() { return store2.ready && store2.rootPath === gone }, function() {
+            say("private: tried again once its folder is there: opened", store2.blockedFolder === "" && store2.rootPath === gone && store2.ready, store2.rootPath + " | " + store2.blockedFolder)
+            // (One that's open: looking again does nothing.)
+            var gen = store2.generation
+            store2.retry()
+            later(600, function() {
+              say("private: trying again an open one does nothing", store2.generation === gen && store2.ready, "generation " + gen + " -> " + store2.generation)
+              store2.dataFolder = d + "/data"
+              store2.folder = d + "/data/demo"
+              until(function() { return store2.ready && store2.rootPath === d + "/data/demo" }, function() {
+                say("private: Uber Notebook's own data folder made as it's needed (the demo's in it)", store2.blockedFolder === "" && store2.rootPath === d + "/data/demo", store2.rootPath + " | " + store2.blockedFolder)
+                store.exec(["/usr/bin/mkdir", "-p", "--", d + "/home"], function() {
+                  store2.home = d + "/home"
+                  store2.folder = d + "/home/Documents/Uber Notebook Work"
+                  until(function() { return store2.ready && store2.rootPath === d + "/home/Documents/Uber Notebook Work" }, function() {
+                    say("private: your Documents folder made as it's needed (a profile's folder in it)", store2.blockedFolder === "" && store2.rootPath === d + "/home/Documents/Uber Notebook Work", store2.rootPath + " | " + store2.blockedFolder)
+                    store2.active = false
+                    store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                  })
+                })
               })
             })
           })
@@ -346,5 +434,5 @@ ShellRoot {
       })
     })
   }
-  Timer { interval: 30000; running: true; onTriggered: { console.log("FAIL timeout"); Qt.quit() } }
+  Timer { interval: 60000; running: true; onTriggered: { console.log("FAIL timeout"); Qt.quit() } }
 }

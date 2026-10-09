@@ -175,7 +175,8 @@ FocusScope {
   // exFAT stick, some network shares), a folder that isn't yours, or one
   // that couldn't be made (a drive that's gone): not opened (Store.block),
   // and nothing of the one before shown or changed. Said over the notes as
-  // long as it is, with where to pick another folder (Settings, above it).
+  // long as it is, with where to pick another folder (Settings, above it),
+  // or to try that one again (a drive mounted since: Store.retry).
   Rectangle {
     id: privateStrip
     objectName: "privateStrip"
@@ -207,12 +208,21 @@ FocusScope {
         font.pixelSize: 14
         color: themeObject.text
       }
-      TextButton {
-        objectName: "privateStripProfiles"
+      Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        theme: themeObject
-        text: "Pick another folder"
-        onClicked: root.openSettings("profiles")
+        spacing: 10
+        TextButton {
+          objectName: "privateStripRetry"
+          theme: themeObject
+          text: "Try again"
+          onClicked: if (privateStrip.store && typeof privateStrip.store.retry === "function") privateStrip.store.retry()
+        }
+        TextButton {
+          objectName: "privateStripProfiles"
+          theme: themeObject
+          text: "Pick another folder"
+          onClicked: root.openSettings("profiles")
+        }
       }
     }
   }

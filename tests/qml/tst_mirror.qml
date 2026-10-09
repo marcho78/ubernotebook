@@ -21,6 +21,11 @@ Item {
     property bool ready: true
     property var writes: []
     signal changed()
+    // (Said in the window: what; and as a notification, FakeFiles.notified.)
+    property var said: []
+    signal failed(string message)
+    onFailed: function(message) { said = said.concat([message]) }
+    function notify(title, text, pageId, day) { files.notify(title, text, pageId, day) }
     function notebookList() { return nbs.order.map(function(id) { return { id: id, title: nbs.data[id].title, modified: nbs.data[id].modified } }) }
     function notebookPages(id, done) { done(JSON.parse(JSON.stringify(nbs.data[id].pages))) }
     function readFiles(paths, done, max) { files.readFiles(paths, done) }
@@ -57,6 +62,8 @@ Item {
       mirror.manifestFor = ""
       mirror.madePrivate = ({})
       mirror.notPrivate = false
+      mirror.warned = ({})
+      shim.said = []
       mirror.pageCache = ({})
       mirror.notebookCache = ({})
       mirror.folder = "/tmp/copy"
@@ -270,6 +277,19 @@ Item {
       verify(mirror.status.indexOf("can't keep the copy private") >= 0, mirror.status)
       verify(mirror.notPrivate, "said in Settings too")
       compare(asked("make-private").length, 0, "nothing changed there either")
+      // (And outside Settings: in the window and as a notification, once a
+      // session for that folder, not with every copy it tries.)
+      compare(shim.said.length, 1, JSON.stringify(shim.said))
+      verify(shim.said[0].indexOf("The Markdown copy stopped: /tmp/copy can't keep it private") === 0, shim.said[0])
+      compare(files.notified.length, 1)
+      compare(files.notified[0].title, "Markdown copy stopped")
+      compare(files.notified[0].text, shim.said[0])
+      var probed = asked("probe").length
+      mirror.sync()
+      tryVerify(function() { return asked("probe").length > probed && !mirror.busy }, 2000)
+      compare(mirror.status.indexOf("Not copying"), 0)
+      compare(files.notified.length, 1, "once")
+      compare(shim.said.length, 1)
       // One that can: its own from before made yours alone, once.
       files.makePrivateLeft = 0
       syncNow()

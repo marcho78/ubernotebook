@@ -193,6 +193,8 @@ Item {
     active: profilesItem.current !== null
     // A first notebook with things to try: the demo's; a profile of your own starts empty.
     welcome: profilesItem.current !== null && profilesItem.current.demo === true
+    // (The demo's folder is made in it, and it too if it isn't there yet.)
+    dataFolder: Settings.resolveFolder(profilesItem.dataFolder, root.home, true)
     exportFolder: function(done) { root.exportFolder(done) }
   }
 
