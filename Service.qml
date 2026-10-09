@@ -464,18 +464,19 @@ Item {
   // open: checked); false, and said, when it can't be: the note's window
   // then stays open, its words in it.
   function quick(text) {
-    // (No profile yet: the window, to make one.)
-    if (profilesItem.firstRun) { show({}); return true }
     var value = String(text || "").trim()
+    // (No profile yet: the window, to make one; a note isn't kept.)
+    if (profilesItem.firstRun) { show({}); return value === "" }
     if (value && quickRefusal()) { osd("\u{f0028}", quickRefusal()); return false }
     if (value) return settings.quickTo === "notebook" ? quickToNotebook(value) : quickToPages(value)
     if (ui && typeof ui.openQuick === "function") ui.openQuick()
     return true
   }
 
-  function quickToNotebook(value) {
+  // (`quiet`: one waiting, tried again: not said when it can't be yet.)
+  function quickToNotebook(value, quiet) {
     if (storeItem.quickNote(value)) { osd("\u{f082e}", "Saved to Quick notes"); return true }
-    osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet")
+    if (!quiet) osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet")
     return false
   }
 
@@ -485,11 +486,13 @@ Item {
   // never into another profile: QuickQueue.js).
   property var quickWaiting: []
 
-  function quickToPages(value) {
+  function quickToPages(value, quiet) {
     if (!workspaceItem.loaded) {
       // (Only under a folder that's open, checked: one being made and
       // checked, or none, isn't one to keep it for: said, and not kept.)
-      if (!storeItem.rootPath) { osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet"); return false }
+      if (!storeItem.rootPath) { if (!quiet) osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet"); return false }
+      // (One waiting already, tried again: it stays where it is.)
+      if (quiet) return false
       quickWaiting = QuickQueue.add(quickWaiting, value, storeItem.rootPath)
       quickTimer.restart()
       return true
@@ -498,17 +501,19 @@ Item {
     try { r = JSON.parse(apiItem.quickPage(value)) } catch (e) { r = null }
     if (r && r.ok) { osd("\u{f0836}", "Saved to your Pages Inbox"); return true }
     if (storeItem.quickNote(value)) { osd("\u{f082e}", "Saved to Quick notes (Pages: " + (r ? r.error : "couldn't save it") + ")"); return true }
-    osd("\u{f0028}", quickRefusal() || "Not saved: Pages: " + (r ? r.error : "couldn't save it"))
+    if (!quiet) osd("\u{f0028}", quickRefusal() || "Not saved: Pages: " + (r ? r.error : "couldn't save it"))
     return false
   }
 
   // Those made in the profile open now, written; any of another, kept till
-  // it's open again.
+  // it's open again. One that can't be written yet (its profile still
+  // loading) stays waiting, under its folder, and is tried again: a note
+  // kept is never let go of before it's written.
   function flushQuick(toPages) {
     quickTimer.stop()
-    var t = QuickQueue.take(quickWaiting, storeItem.rootPath)
-    quickWaiting = t.rest
-    t.mine.forEach(function(v) { if (toPages) root.quickToPages(v); else root.quickToNotebook(v) })
+    var root0 = storeItem.rootPath
+    quickWaiting = QuickQueue.flush(quickWaiting, root0, function(v) { return toPages ? root.quickToPages(v, true) : root.quickToNotebook(v, true) })
+    if (root0 && QuickQueue.take(quickWaiting, root0).mine.length) quickTimer.restart()
   }
 
   Connections {

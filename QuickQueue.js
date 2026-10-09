@@ -24,3 +24,14 @@ function take(list, root) {
   })
   return { mine: mine, rest: rest }
 }
+
+// The queue after those of the notes folder `root` are written: each given
+// to `write(text)`, which says whether it's kept; one that isn't (its
+// profile still loading) stays, under its folder, to be tried again. A note
+// is never let go of before it's written. The others stay as they are.
+function flush(list, root, write) {
+  var t = take(list, root)
+  var left = t.rest
+  t.mine.forEach(function(text) { if (!write(text)) left = add(left, text, root) })
+  return left
+}
