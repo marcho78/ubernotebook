@@ -570,6 +570,18 @@ Item {
         store.switching = true
         compare(app.toastUndoAction, null, "no Undo")
         verify(!undone)
+        // Offered while it opens: said, with no Undo; offered before the
+        // folder's left: gone with it.
+        app.toastWithUndo("Moved it", function() { undone = true })
+        compare(app.toastUndoAction, null, "none while it opens")
+        store.switching = false
+        app.toastWithUndo("Moved it", function() { undone = true })
+        compare(typeof app.toastUndoAction, "function")
+        var root0 = store.rootPath
+        store.rootPath = "/tmp/another-profile"
+        compare(app.toastUndoAction, null, "gone with the folder")
+        store.rootPath = root0
+        verify(!undone)
       } finally {
         store.switching = false
       }

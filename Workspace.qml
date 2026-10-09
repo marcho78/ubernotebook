@@ -1010,7 +1010,16 @@ Item {
     var from = e.parent
     Workspace.attach(index, id, place.parent, place.at)
     var pending = 1
-    function one() { if (--pending === 0) { ws.touched(); if (done) done(true) } }
+    // (Another folder opened before its pages are changed: not said to be
+    // done.)
+    var gen = generation
+    var folder0 = folder
+    function one() {
+      if (--pending > 0) return
+      var ok = gen === ws.generation && folder0 === ws.folder
+      if (ok) ws.touched()
+      if (done) done(ok)
+    }
     if (from && from !== place.parent) { pending++; editPage(from, function(p) { return Workspace.removeBlock(p, id) }, one) }
     if (place.parent) { pending++; editPage(place.parent, function(p) { return Workspace.placePageBlock(p, id, place.before, place.after) }, one) }
     if (from !== place.parent) { pending++; editPage(id, function(p) { p.parent = place.parent; return true }, one) }

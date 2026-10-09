@@ -523,8 +523,10 @@ FocusScope {
       // (A notebook still being opened from the profile before: never opened
       // now, and others can be.)
       root.opening = false
-      // (Anything opened over the notes since the switch began: closed too.)
+      // (Anything opened over the notes since the switch began: closed too,
+      // and an Undo offered since, gone.)
       Overlays.closeAll(root, [settingsPanel, releaseNotes])
+      if (root.toastUndoAction) { root.toastUndoAction = null; toastTimer.stop(); toastBox.opacity = 0 }
       view.pageDirty = false
       if (root.mode !== "notebook") return
       view.pageDirty = false
@@ -581,6 +583,9 @@ FocusScope {
   // A message with Undo, a while longer.
   property var toastUndoAction: null
   function toastWithUndo(text, undo) {
+    // (Another profile opening: what was done is said, but it isn't undone
+    // from here: it would be undone in the next one.)
+    if (root.store && root.store.switching === true) { toast(text); return }
     toastText.text = text
     toastUndoAction = undo
     toastBox.opacity = 1

@@ -436,6 +436,32 @@ Item {
       }
     }
 
+    // A page moved, its pages changed after another profile opened: not
+    // said to be done (nor an Undo offered there).
+    function test_6k_a_move_not_done_in_another_profile() {
+      fresh()
+      var top = ws.createPage({ parent: "", title: "Top" })
+      var sub = ws.createPage({ parent: "", title: "Sub" })
+      wait(200)
+      var root0 = files.rootPath
+      ws.written = ({})
+      var said = null
+      try {
+        files.holdReads = true
+        ws.placePage(sub.id, { parent: top.id, at: 0, before: "", after: "" }, function(ok) { said = ok })
+        files.rootPath = "/tmp/other-move-notes"
+        files.holdReads = false
+        files.answerReads()
+        tryVerify(function() { return said !== null }, 2000)
+        compare(said, false, "not said to be done")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     // Find on a page: what was looked for goes with the profile.
     function test_6j_find_words_go_with_the_profile() {
       fresh()

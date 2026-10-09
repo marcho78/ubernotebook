@@ -1309,9 +1309,11 @@ FocusScope {
     commit()
     var title = workspace.index.pages[id].title || "Untitled"
     var into = place.parent ? "\u201c" + (workspace.index.pages[place.parent].title || "Untitled") + "\u201d" : "the top of Pages"
+    // (Another profile opened before it's done: nothing said there, nor
+    // an Undo offered that would act on its pages.)
     function move(then) {
       if (!moves) { then(); return }
-      workspace.placePage(id, place, function() { view.refreshOpen([was.parent, place.parent, id]); then() })
+      workspace.placePage(id, place, inThisFolder(function(ok) { if (!ok) return; view.refreshOpen([was.parent, place.parent, id]); then() }))
     }
     function undo() {
       view.commit()
@@ -1319,13 +1321,13 @@ FocusScope {
       if (unproject) view.projectOf(id, had)
     }
     if (unproject) {
-      projectOf(id, null, function(ok) {
+      projectOf(id, null, inThisFolder(function(ok) {
         if (!ok) { view.toast("\u201c" + title + "\u201d is locked: unlock it to make it a page again"); return }
         move(function() {
           view.expandTo(id)
           view.toastUndo("\u201c" + title + "\u201d is a page again" + (was.parent === place.parent ? "" : ", in " + into), undo)
         })
-      })
+      }))
       return true
     }
     move(function() {
@@ -2657,12 +2659,13 @@ FocusScope {
     commit()
     var had = e.project || null
     var title = e.title || "Untitled"
-    projectOf(id, on ? { status: "active", due: "" } : null, function(ok) {
+    // (Another profile opened before it's done: nothing said there.)
+    projectOf(id, on ? { status: "active", due: "" } : null, inThisFolder(function(ok) {
       if (!ok) { view.toast("\u201c" + title + "\u201d is locked: unlock it first"); return }
       view.toastUndo(on ? "\u201c" + title + "\u201d is a project, in Projects" : "\u201c" + title + "\u201d is a page again, in Pages", function() {
         view.projectOf(id, on ? null : had)
       })
-    })
+    }))
     return true
   }
 
