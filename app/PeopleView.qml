@@ -1098,7 +1098,9 @@ Item {
       placeholder: "Search people, companies, numbers"
       text: pv.query
       onEdited: function(text) { pv.query = text; pv.cardFocus = "" }
-      onEscaped: { text = ""; pv.query = "" }
+      // (Its text follows the query: never set here, so a new profile's
+      // empty query empties it too.)
+      onEscaped: pv.query = ""
       onAccepted: if (pv.shown.length) pv.show(pv.shown[0].id)
     }
 

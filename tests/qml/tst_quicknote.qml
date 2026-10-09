@@ -53,6 +53,19 @@ Item {
       card.keep()
       compare(kept.count, 1, "saved again: kept where you are")
       compare(kept.signalArguments[0][0], "For the client")
+      // Given back for one, then another, in the same card: asked first,
+      // whichever is open.
+      card.clear()
+      kept.clear()
+      card.openProfile = "p-b"
+      card.hold("For the client", "", "p-a")
+      card.hold("Mine", "", "p-b")
+      card.keep()
+      compare(kept.count, 0, "not kept in either without asking")
+      verify(/more than one profile/.test(card.problem), card.problem)
+      card.keep()
+      compare(kept.count, 1)
+      compare(kept.signalArguments[0][0], "For the client\n\nMine")
       // Theirs open again: kept straight away.
       card.clear()
       kept.clear()

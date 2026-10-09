@@ -436,6 +436,24 @@ Item {
       }
     }
 
+    // Find on a page: what was looked for goes with the profile.
+    function test_6j_find_words_go_with_the_profile() {
+      fresh()
+      var root0 = files.rootPath
+      view.forceActiveFocus()
+      keyClick(Qt.Key_F, Qt.ControlModifier)
+      var field = null
+      tryVerify(function() { field = findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Find on this page" }); return field !== null }, 1000)
+      field.text = "salary"
+      try {
+        files.rootPath = "/tmp/other-find-notes"
+        compare(field.text, "", "gone with the folder")
+      } finally {
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     // Another folder: the people and the calendar of the one before aren't
     // shown, searched or undone here till this one's are read; its alerts
     // aren't sent, nor while one opens.

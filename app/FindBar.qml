@@ -37,6 +37,11 @@ Item {
   }
 
   function toggle() { if (shown) close(); else open() }
+  // Closed, and what was looked for gone (another profile's opened).
+  function reset() {
+    if (shown) close()
+    field.text = ""
+  }
 
   // Opens with text already in it (a search on the shelf led here).
   function openWith(text) {

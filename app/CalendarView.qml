@@ -446,6 +446,13 @@ Item {
 
   property var dragOcc: null
   property var dragDay: null
+  // (Another profile opening: a drag under way is over, its event that
+  // one's, never moved in the next.)
+  Connections {
+    target: cv.workspace ? cv.workspace.files : null
+    ignoreUnknownSignals: true
+    function onSwitchingChanged() { if (cv.workspace.files.switching) { cv.dragOcc = null; cv.dragDay = null; cv.weekDrag = null } }
+  }
   property point dragPoint: Qt.point(0, 0)
   function startMonthDrag(o, item) { dragOcc = o; dragDay = null }
   function monthDragTo(p) {

@@ -132,6 +132,13 @@ Item {
   // Another profile opening: the page as it is saved at once, where it was.
   readonly property bool switching: !!(store && store.switching === true)
   onSwitchingChanged: if (switching) commit()
+  // (Another profile open: what was looked for on a page of the one before
+  // goes with it.)
+  Connections {
+    target: view.store
+    ignoreUnknownSignals: true
+    function onRootPathChanged() { findBar.reset() }
+  }
 
   Timer {
     id: saveTimer

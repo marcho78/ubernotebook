@@ -845,8 +845,12 @@ Item {
 
   function loadLibrary() {
     var gen = generation
+    // (Another profile's folder opened meanwhile: not its shelf, nor marked
+    // open. The same one looked at again (a new generation) is still this
+    // one: the read that answers last is the one kept.)
+    var root0 = rootPath
     readGlob(rootPath, "*/notebook.json", function(files) {
-      if (gen !== store.generation) return
+      if (gen !== store.generation || root0 !== store.rootPath) return
       var found = {}
       for (var path in files) {
         var id = path.slice(rootPath.length + 1, path.length - "/notebook.json".length)
@@ -859,8 +863,9 @@ Item {
       if (store.rootPath === store.home) store.privateEntries(store.rootPath, Object.keys(found), function(ok) {
         if (!ok) store.failed("Your notebooks in your home folder couldn't be made yours alone: another account on this computer may be able to read them")
       })
-      store.readFiles([Library.libraryFile(store.rootPath)], function(lib) {
-        var saved = parseJson(lib[Library.libraryFile(store.rootPath)] || "")
+      store.readFiles([Library.libraryFile(root0)], function(lib) {
+        if (root0 !== store.rootPath) return
+        var saved = parseJson(lib[Library.libraryFile(root0)] || "")
         var list = Object.keys(found).map(function(id) { return found[id] })
         store.order = Library.shelfOrder(saved && Array.isArray(saved.order) ? saved.order : [], list).map(function(nb) { return nb.id })
         store.publish()
@@ -938,8 +943,11 @@ Item {
     order = order.concat([nb.id])
     publish()
     var dir = rootPath + "/" + nb.id
+    // (Its folder made after another profile's folder opened: nothing of it
+    // put in that one's, nor its shelf's order.)
+    var root0 = rootPath
     mkdirs([dir + "/pages", dir + "/assets"], function(ok) {
-      if (!ok) return
+      if (!ok || root0 !== store.rootPath) return
       store.folderMade(nb.id)
       store.saveOrder()
     })

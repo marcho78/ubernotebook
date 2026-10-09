@@ -109,6 +109,23 @@ Item {
     }
     function entry(title) { return find(cv(), function(it) { return it.objectName === "calEntry" && it.occ && it.occ.title === title }) }
 
+    // An event being dragged as another profile opens: the drag's over, the
+    // event (that profile's) never moved in the next.
+    function test_0_a_drag_ends_as_another_profile_opens() {
+      fresh()
+      cv().dragOcc = { key: "k", id: "e-1", start: new Date(), allDay: true }
+      cv().dragDay = new Date()
+      cv().weekDrag = { occ: cv().dragOcc, kind: "move", day: 0, minutes: 0, length: 30 }
+      try {
+        files.switching = true
+        compare(cv().dragOcc, null)
+        compare(cv().dragDay, null)
+        compare(cv().weekDrag, null)
+      } finally {
+        files.switching = false
+      }
+    }
+
     function test_1_kept_and_opened() {
       fresh()
       var e = add({ title: "Dentist", start: iso(today(), 15), end: iso(today(), 15, 45), color: "blue" })

@@ -103,15 +103,24 @@ Item {
     function test_0_whats_looked_for_goes_with_the_profile() {
       fresh()
       var root0 = files.rootPath
+      ws.saveContact({ id: "c-sam", name: "Sam Rivera", phones: [], emails: [] })
       view.openPeople("", false)
       tryVerify(function() { return view.peopleShown }, 1000)
-      pv().query = "Dana Whitfield"
-      pv().selected = "c-someone"
       try {
+        // (The cards' search, Esc'd once: still the query's.)
+        var cards = null
+        pv().layoutMode = "cards"
+        tryVerify(function() { cards = find(win(), function(it) { return it.objectName === "peopleCardSearch" }); return cards !== null }, 1000)
+        cards.escaped()
+        pv().query = "Dana Whitfield"
+        compare(cards.text, "Dana Whitfield")
+        pv().selected = "c-someone"
         files.rootPath = "/tmp/other-people-view"
         compare(pv().query, "", "what was looked for, gone")
+        compare(cards.text, "", "in the cards' search too")
         compare(pv().selected, "", "who was picked, too")
       } finally {
+        pv().layoutMode = pv().savedLayout
         files.rootPath = root0
         tryCompare(ws, "ready", true, 2000)
       }

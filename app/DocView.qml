@@ -1141,7 +1141,9 @@ FocusScope {
     saveTimer.stop()
     pageDirty = false
     page = null
-    // (Nor is its page kept, hidden, to be found in (Find) here.)
+    // (Nor is its page kept, hidden, to be found in (Find) here, nor what
+    // was looked for in it.)
+    findBar.reset()
     editor.load([])
     titleEdit.text = ""
     history = []

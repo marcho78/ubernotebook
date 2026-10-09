@@ -520,16 +520,36 @@ ShellRoot {
                                 store2.failed.disconnect(tell2)
                                 store2.exportFolder = hadFolder
                                 say("private: an export's folder picked as another profile opens: nothing exported, said", base === "" && told2.length === 1 && /Not exported/.test(told2[0]), base + " " + JSON.stringify(told2))
-                                // A notebook read as another profile opens: nothing of
-                                // it given (to be shown, exported or merged there).
-                                var held = store2.createNotebook({ title: "Held" }, [])
-                                var got = "pending"
-                                store2.readPages(held.id, function(nb) { got = nb })
-                                store2.rootPath = ""
-                                until(function() { return got !== "pending" }, function() {
-                                  say("private: a notebook read as another profile opens gives nothing", held !== null && got === null, String(got))
-                                  store2.active = false
-                                  store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                                // A notebook whose folder's made after another profile
+                                // opened: nothing of it (its shelf's order) put in that
+                                // one's. A shelf read for the profile before: not taken
+                                // for the next one's, nor that one marked open.
+                                var here = store2.rootPath
+                                store.exec(["/usr/bin/mkdir", "-p", "--", d + "/elsewhere"], function() {
+                                  var made = store2.createNotebook({ title: "Late" }, [])
+                                  store2.rootPath = d + "/elsewhere"
+                                  store2.ready = false
+                                  store2.rootPath = here
+                                  store2.loadLibrary()
+                                  store2.rootPath = d + "/elsewhere"
+                                  later(900, function() {
+                                    store.exec(["/usr/bin/test", "-e", d + "/elsewhere/library.json"], function(there) {
+                                      say("private: a notebook made, or a shelf read, as another profile opens: nothing of it in that one", made !== null && there === false && store2.ready === false, "library there " + there + ", ready " + store2.ready)
+                                      store2.rootPath = here
+                                      store2.ready = true
+                                      // A notebook read as another profile opens: nothing of
+                                      // it given (to be shown, exported or merged there).
+                                      var held = store2.createNotebook({ title: "Held" }, [])
+                                      var got = "pending"
+                                      store2.readPages(held.id, function(nb) { got = nb })
+                                      store2.rootPath = ""
+                                      until(function() { return got !== "pending" }, function() {
+                                        say("private: a notebook read as another profile opens gives nothing", held !== null && got === null, String(got))
+                                        store2.active = false
+                                        store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                                      })
+                                    })
+                                  })
                                 })
                               })
                               store2.switching = true
