@@ -964,6 +964,42 @@ Item {
       }
     }
 
+    // An import right after a profile switch (`profile Work && importNotes
+    // x.md`): the one before is still open a moment, and nothing's made in
+    // it; said, not "nothing to import".
+    function test_27b_an_import_right_after_a_profile_switch() {
+      fresh()
+      var said = []
+      function heard(t) { said.push(t) }
+      view.toast.connect(heard)
+      try {
+        files.disk["/tmp/exp3/Plan.md"] = "# Plan\n\nx"
+        var before = Object.keys(ws.index.pages).length
+        files.switching = true
+        var result = null
+        ws.importPaths(["/tmp/exp3"], "", function(r) { result = r })
+        verify(result !== null, "answered at once")
+        compare(result.pages, 0)
+        compare(result.unready, true)
+        compare(ws.importing, false)
+        view.importPaths(["/tmp/exp3"], "")
+        verify(said.indexOf("Not imported: your notes are still opening. Try again in a moment") >= 0, JSON.stringify(said))
+        wait(200)
+        compare(Object.keys(ws.index.pages).length, before, "nothing made in the one before")
+        verify(!files.ran.some(function(a) { return a[3] === "uber-notebook-import-dir" }), "not even begun")
+        // Open: imported as always.
+        files.switching = false
+        result = null
+        ws.importPaths(["/tmp/exp3"], "", function(r) { result = r })
+        tryVerify(function() { return result !== null }, 3000)
+        compare(result.pages, 1)
+        verify(!result.unready)
+      } finally {
+        files.switching = false
+        view.toast.disconnect(heard)
+      }
+    }
+
     // A calendar (or People, or the tree) made so that cleaning it throws:
     // as one that couldn't be read, left as it is, and the profile still
     // loads.

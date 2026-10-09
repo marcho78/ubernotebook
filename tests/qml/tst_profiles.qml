@@ -27,7 +27,12 @@ Item {
     starter: profiles.current !== null && profiles.current.demo ? "examples" : "templates"
   }
 
-  UberNotebook.Api { id: api; workspace: ws; files: files; profiles: profiles; noProfile: profiles.firstRun }
+  // (Its Inbox the open profile's, kept as its setting, as Service.qml has it.)
+  UberNotebook.Api {
+    id: api; workspace: ws; files: files; profiles: profiles; noProfile: profiles.firstRun
+    inbox: service.settings.inbox || ""
+    onInboxMade: function(id) { service.setSetting("inbox", id) }
+  }
 
   App {
     id: app
@@ -153,6 +158,46 @@ Item {
       // A name or a folder that's taken.
       compare(profiles.add("business", "~/Elsewhere", false), "There's a profile called that already")
       compare(profiles.add("Other", "~/Documents/Uber Notebook/Other", false), "“Personal” keeps its notes there")
+    }
+
+    // Each profile its own Inbox: one made in a profile (its first quick
+    // note) is kept as its setting, and switching back brings the other's,
+    // never another "Inbox" made there.
+    function test_2b_each_profile_its_own_inbox() {
+      fresh()
+      function j(t) { return JSON.parse(t) }
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      var personal = profiles.current.id
+      pagesOpen()
+      tryVerify(function() { return ws.loaded }, 2000)
+      var a = j(api.quickPage("Milk"))
+      verify(a.ok, JSON.stringify(a))
+      var inboxP = service.settings.inbox
+      verify(Workspace.isUuid(inboxP), inboxP)
+      compare(api.inbox, inboxP)
+      // A new profile: none yet, its own made there.
+      verify(profiles.add("Client", "~/Documents/Uber Notebook Client", true) === "")
+      compare(api.inbox, "", "Client's, not Personal's")
+      pagesOpen()
+      tryVerify(function() { return ws.loaded }, 2000)
+      var b = j(api.quickPage("Call"))
+      verify(b.ok, JSON.stringify(b))
+      var inboxC = service.settings.inbox
+      verify(Workspace.isUuid(inboxC) && inboxC !== inboxP, inboxC)
+      compare(api.inbox, inboxC)
+      // Back to Personal: its Inbox again, the next note (or `add`) in it.
+      verify(profiles.use(personal) === "")
+      compare(api.inbox, inboxP, "Personal's again")
+      pagesOpen()
+      tryVerify(function() { return ws.loaded }, 2000)
+      var c = j(api.quickPage("Eggs"))
+      verify(c.ok, JSON.stringify(c))
+      compare(ws.index.pages[c.id].parent, inboxP, "into Personal's Inbox")
+      compare(titles().filter(function(t) { return t === "Inbox" }).length, 1, "no other Inbox made")
+      compare(service.settings.inbox, inboxP, "its setting as it was")
+      // And Client's, as it was.
+      verify(profiles.use("Client") === "")
+      compare(api.inbox, inboxC)
     }
 
     function test_3_the_demo() {

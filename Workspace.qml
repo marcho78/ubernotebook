@@ -1552,7 +1552,11 @@ Item {
 
   function importPaths(paths, parent, done) {
     var list = (paths || []).filter(function(p) { return /^\/[^\u0000-\u001f]{1,4000}$/.test(String(p)) }).slice(0, 200)
-    if (!ready || importing || list.length === 0) { if (done) done({ pages: 0, first: "", skipped: [] }); return }
+    // (Not loaded, or another profile being opened (Store.qml): "unready",
+    // nothing made; the one before is still there a moment, and an import
+    // meant for the next never lands in it.)
+    if (!ready || (files && files.switching === true)) { if (done) done({ pages: 0, first: "", skipped: [], unready: true }); return }
+    if (importing || list.length === 0) { if (done) done({ pages: 0, first: "", skipped: [] }); return }
     importing = true
     importCount = 0
     importProblems = []

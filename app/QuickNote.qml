@@ -31,12 +31,38 @@ Item {
   // The other place picked, from the note's foot (kept as the setting).
   signal destinationPicked(string to)
 
+  // Words in it not kept yet (one that couldn't be kept stays in it).
+  readonly property bool held: edit.text.trim() !== ""
+
   function start(text) {
     problem = ""
     edit.text = text || ""
     edit.cursorPosition = edit.length
     edit.forceActiveFocus()
     pop.restart()
+  }
+  // Opened again (its shortcut while it's up, or after a note in it
+  // couldn't be kept): what's in it stays as it was, and why, only focused;
+  // with nothing in it, a new one.
+  function open() {
+    if (!held) { start(""); return }
+    edit.forceActiveFocus()
+    pop.restart()
+  }
+  // A note given back (kept for a while, then it couldn't be after all):
+  // after what's in it already, nothing wiped, with why.
+  function hold(text, why) {
+    var was = edit.text.replace(/\s+$/, "")
+    edit.text = was ? was + "\n\n" + String(text || "") : String(text || "")
+    edit.cursorPosition = edit.length
+    problem = why || ""
+    edit.forceActiveFocus()
+    pop.restart()
+  }
+  // Kept, or thrown away: nothing of it left for the next one.
+  function clear() {
+    problem = ""
+    edit.text = ""
   }
 
   function keep() {

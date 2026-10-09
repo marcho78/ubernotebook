@@ -281,9 +281,17 @@ Item {
 
   // ---- the quick note ------------------------------------------------------------
 
+  // (Up already, or still holding a note that wasn't kept: brought back as
+  // it was, its words never wiped; else a new one.)
   function openQuick() {
     quickWindow.visible = true
-    Qt.callLater(function() { quickNote.start() })
+    Qt.callLater(function() { quickNote.open() })
+  }
+  // A quick note given back (it was waiting for a profile whose folder
+  // can't be used after all): in the card, with why.
+  function holdQuick(text, why) {
+    quickWindow.visible = true
+    Qt.callLater(function() { quickNote.hold(text, why) })
   }
 
   Theme {
@@ -323,9 +331,14 @@ Item {
           quickNote.problem = root.service.quickRefusal() || "Not saved: try again in a moment"
           return
         }
+        // (Kept: nothing of it left in the card for the next one.)
+        quickNote.clear()
         quickWindow.visible = false
       }
-      onThrownAway: quickWindow.visible = false
+      onThrownAway: {
+        quickNote.clear()
+        quickWindow.visible = false
+      }
     }
   }
 

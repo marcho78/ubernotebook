@@ -36,6 +36,8 @@ Item {
       return null
     }
     function text(t) { return find(root, function(it) { return it.text === t }) }
+    // (Each test counts from nothing, the card empty.)
+    function init() { card.clear(); kept.clear(); picked.clear(); thrown.clear() }
 
     function test_where_it_goes() {
       card.destination = "notebook"
@@ -60,6 +62,48 @@ Item {
       card.start("")
       keyClick(Qt.Key_Escape)
       compare(thrown.count, 1)
+    }
+
+    // A note that couldn't be kept stays in the card, with why: opened
+    // again (its shortcut, to try again), it's as it was, never wiped.
+    function test_opened_again_keeps_what_wasnt_kept() {
+      card.start("Call the bank")
+      keyClick(Qt.Key_Return, Qt.ControlModifier)
+      compare(kept.count, 1)
+      // (The service said no: the card stays up, the note in it.)
+      card.problem = "Not saved: this profile's notes folder can't be used"
+      verify(card.held)
+      card.open()
+      compare(card.problem, "Not saved: this profile's notes folder can't be used", "why, still said")
+      verify(card.held, "its words still there")
+      keyClick(Qt.Key_Space)
+      keyClick(Qt.Key_A)
+      keyClick(Qt.Key_Return, Qt.ControlModifier)
+      compare(kept.count, 2)
+      compare(kept.signalArguments[1][0], "Call the bank a", "the same note, written on")
+      // Kept (or thrown away): nothing left; opened again, a new one.
+      card.clear()
+      verify(!card.held)
+      card.open()
+      compare(card.problem, "")
+      keyClick(Qt.Key_Escape)
+      compare(thrown.count, 1, "empty: let go")
+    }
+
+    // A note kept for a while, given back (its profile's folder couldn't be
+    // used after all): put in after what's there, with why.
+    function test_a_note_given_back() {
+      card.start("Draft")
+      card.hold("Call Bob", "Not saved: pick another folder")
+      compare(card.problem, "Not saved: pick another folder")
+      keyClick(Qt.Key_Return, Qt.ControlModifier)
+      compare(kept.count, 1)
+      compare(kept.signalArguments[0][0], "Draft\n\nCall Bob")
+      card.clear()
+      card.hold("Only this", "")
+      keyClick(Qt.Key_Return, Qt.ControlModifier)
+      compare(kept.signalArguments[1][0], "Only this")
+      card.clear()
     }
   }
 }

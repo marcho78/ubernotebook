@@ -2059,8 +2059,11 @@ QtObject {
       { type: "p", html: "", indent: 0 }
     ] })
     if (!page) return ""
-    inbox = page.id
+    // (Kept as the open profile's setting first, which `inbox` follows
+    // (Service.qml binds it): set here only when nothing did, so that
+    // binding stays, and each profile switched to brings its own Inbox.)
     inboxMade(page.id)
+    if (inbox !== page.id) inbox = page.id
     return page.id
   }
 

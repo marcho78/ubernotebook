@@ -151,7 +151,7 @@ Item {
       saveOpen()
       // (Quick notes still waiting for this one's Pages: into its Quick notes
       // notebook now, while it's open.)
-      if (quickWaiting.length) flushQuick(false)
+      if (quickWaiting.length) flushQuick(true)
       // (What couldn't be saved, tried again where it was.)
       storeItem.retryUnsaved(null)
     }
@@ -291,6 +291,8 @@ Item {
     workspace: workspaceItem
     files: storeItem
     ui: root.ui
+    // (The open profile's, always: an Inbox made is set as the setting,
+    // never over this binding.)
     inbox: root.settings.inbox || ""
     noProfile: profilesItem.firstRun
     profiles: profilesItem
@@ -456,33 +458,59 @@ Item {
 
   // A quick note: with text, straight into the Quick notes notebook (or the
   // Pages Inbox, as Settings says); without, the quick-note card opens.
+  // The open profile and its notes folder, as QuickQueue.js reads them.
+  function quickState() {
+    return { profile: profilesItem.current ? profilesItem.current.id : "", folder: storeItem.folder, home: storeItem.home,
+      rootPath: storeItem.rootPath, switching: storeItem.switching, ready: storeItem.ready, blockedFolder: storeItem.blockedFolder }
+  }
   // Why a quick note can't be kept now ("" when it can): the profile's
   // notes folder can't be used (a drive that can't keep files private, or
-  // that's gone), or it isn't open yet (being made and checked). The note's
-  // window stays open with it, its words in it.
+  // that's gone), or there's no profile known yet (the shell just started).
+  // The note's window stays open with it, its words in it. (One being
+  // opened, a switch a moment ago, is kept for it: QuickQueue.js.)
   function quickRefusal() {
-    if (storeItem.blockedFolder) return "Not saved: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)"
-    if (!storeItem.rootPath) return "Not saved yet: your notes are still opening. Try again in a moment"
+    var s = quickState()
+    if (QuickQueue.blocked(s)) return "Not saved: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)"
+    if (!s.profile) return "Not saved yet: your notes are still opening. Try again in a moment"
     return ""
   }
-  // true once it's kept (written, or waiting for Pages in the folder that's
-  // open: checked); false, and said, when it can't be: the note's window
-  // then stays open, its words in it.
-  function quick(text) {
+  // true once it's kept (written, or waiting for the profile it's made in);
+  // false, and said, when it can't be: the note's window then stays open,
+  // its words in it.
+  function quick(text) { return keepQuick(text).ok }
+  // The same, with what was said: { ok, said, waiting } (the quick command
+  // answers with it).
+  function keepQuick(text) {
     var value = String(text || "").trim()
     // (No profile yet: the window, to make one; a note isn't kept.)
-    if (profilesItem.firstRun) { show({}); return value === "" }
-    if (value && quickRefusal()) { osd("\u{f0028}", quickRefusal()); return false }
-    if (value) return settings.quickTo === "notebook" ? quickToNotebook(value) : quickToPages(value)
-    if (ui && typeof ui.openQuick === "function") ui.openQuick()
-    return true
+    if (profilesItem.firstRun) { show({}); return { ok: value === "", said: (value ? "Not saved: " : "") + "Uber Notebook has no profile yet. Make one in its window" } }
+    if (!value) {
+      if (ui && typeof ui.openQuick === "function") ui.openQuick()
+      return { ok: true, said: "" }
+    }
+    var s = quickState()
+    var now = QuickQueue.now(s)
+    if (now === "refuse") return quickSaid(false, quickRefusal())
+    // (Its notes still opening, or Pages still loading when it goes there:
+    // kept for that profile, written once they're open.)
+    if (now === "wait" || (settings.quickTo !== "notebook" && !workspaceItem.loaded)) {
+      quickWaiting = QuickQueue.add(quickWaiting, value, s.profile)
+      quickTimer.restart()
+      return { ok: true, waiting: true, said: "Kept: it's saved as soon as this profile's notes are open" }
+    }
+    return settings.quickTo === "notebook" ? quickToNotebook(value) : quickToPages(value)
+  }
+  // { ok, said }, said in the OSD (`quiet`: one that can't be kept yet, not).
+  function quickSaid(ok, message, quiet) {
+    if (ok) osd("\u{f082e}", message)
+    else if (!quiet) osd("\u{f0028}", message)
+    return { ok: ok, said: message }
   }
 
   // (`quiet`: one waiting, tried again: not said when it can't be yet.)
   function quickToNotebook(value, quiet) {
-    if (storeItem.quickNote(value)) { osd("\u{f082e}", "Saved to Quick notes"); return true }
-    if (!quiet) osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet")
-    return false
+    if (storeItem.quickNote(value)) return quickSaid(true, "Saved to Quick notes")
+    return quickSaid(false, quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet", quiet)
   }
 
   // Into the Pages Inbox, once Pages has loaded (a note made before then
@@ -492,44 +520,61 @@ Item {
   property var quickWaiting: []
 
   function quickToPages(value, quiet) {
-    if (!workspaceItem.loaded) {
-      // (Only under a folder that's open, checked: one being made and
-      // checked, or none, isn't one to keep it for: said, and not kept.)
-      if (!storeItem.rootPath) { if (!quiet) osd("\u{f0028}", quickRefusal() || "Not saved: Uber Notebook's notes aren't open yet"); return false }
-      // (One waiting already, tried again: it stays where it is.)
-      if (quiet) return false
-      quickWaiting = QuickQueue.add(quickWaiting, value, storeItem.rootPath)
-      quickTimer.restart()
-      return true
-    }
+    if (!workspaceItem.loaded) return quickSaid(false, quickRefusal() || "Not saved yet: Pages is still loading", quiet)
     var r = null
     try { r = JSON.parse(apiItem.quickPage(value)) } catch (e) { r = null }
-    if (r && r.ok) { osd("\u{f0836}", "Saved to your Pages Inbox"); return true }
-    if (storeItem.quickNote(value)) { osd("\u{f082e}", "Saved to Quick notes (Pages: " + (r ? r.error : "couldn't save it") + ")"); return true }
-    if (!quiet) osd("\u{f0028}", quickRefusal() || "Not saved: Pages: " + (r ? r.error : "couldn't save it"))
-    return false
+    if (r && r.ok) { osd("\u{f0836}", "Saved to your Pages Inbox"); return { ok: true, said: "Saved to your Pages Inbox" } }
+    if (storeItem.quickNote(value)) return quickSaid(true, "Saved to Quick notes (Pages: " + (r ? r.error : "couldn't save it") + ")")
+    return quickSaid(false, quickRefusal() || "Not saved: Pages: " + (r ? r.error : "couldn't save it"), quiet)
   }
 
-  // Those made in the profile open now, written; any of another, kept till
-  // it's open again. One that can't be written yet (its profile still
-  // loading) stays waiting, under its folder, and is tried again: a note
-  // kept is never let go of before it's written.
-  function flushQuick(toPages) {
+  // Those made in the profile open now, written, once its notes folder is
+  // the one open and read (where Settings says; `notebook`: Pages can't be
+  // waited for, a while gone by or the profile being left: its Quick notes
+  // notebook). Any of another, kept till it's open again. One that can't be
+  // written yet (its profile still loading) stays waiting, under its
+  // profile, and is tried again: a note kept is never let go of before it's
+  // written.
+  function flushQuick(notebook) {
     quickTimer.stop()
-    var root0 = storeItem.rootPath
-    quickWaiting = QuickQueue.flush(quickWaiting, root0, function(v) { return toPages ? root.quickToPages(v, true) : root.quickToNotebook(v, true) })
-    if (root0 && QuickQueue.take(quickWaiting, root0).mine.length) quickTimer.restart()
+    var id = QuickQueue.openProfile(quickState())
+    var toPages = !notebook && settings.quickTo !== "notebook"
+    if (id && (!toPages || workspaceItem.loaded))
+      quickWaiting = QuickQueue.flush(quickWaiting, id, function(v) { return (toPages ? root.quickToPages(v, true) : root.quickToNotebook(v, true)).ok })
+    var mine = profilesItem.current ? profilesItem.current.id : ""
+    if (mine && QuickQueue.take(quickWaiting, mine).mine.length) quickTimer.restart()
   }
 
   Connections {
     target: workspaceItem
-    function onLoadedChanged() { if (workspaceItem.loaded && root.quickWaiting.length) root.flushQuick(true) }
+    function onLoadedChanged() { if (workspaceItem.loaded && root.quickWaiting.length) root.flushQuick(false) }
+  }
+
+  Connections {
+    target: storeItem
+    // (Its notes folder open and read: those waiting for it written, once
+    // what Store does first is done: a new demo's first notebook.)
+    function onReadyChanged() { if (storeItem.ready && root.quickWaiting.length) Qt.callLater(root.flushQuick, false) }
+    // (Its folder can't be used after all: those waiting for it given back
+    // to you, in the quick-note card with why, not kept where a restart
+    // would lose them; with no window, they wait on, said.)
+    function onBlockedFolderChanged() { Qt.callLater(root.giveBackQuick) }
+  }
+  function giveBackQuick() {
+    var s = quickState()
+    if (!QuickQueue.blocked(s)) return
+    var t = QuickQueue.take(quickWaiting, s.profile)
+    if (!t.mine.length) return
+    if (ui && typeof ui.holdQuick === "function") {
+      quickWaiting = t.rest
+      ui.holdQuick(t.mine.join("\n\n"), quickRefusal())
+    } else osd("\u{f0028}", "A quick note is waiting: this profile's notes folder can't be used. Pick another folder (Settings, Profiles)")
   }
 
   Timer {
     id: quickTimer
     interval: 10000
-    onTriggered: root.flushQuick(false)
+    onTriggered: root.flushQuick(true)
   }
 
   // The desktop's file picker, for notes to import into Pages (files, or a folder).
@@ -671,7 +716,14 @@ Item {
         function hide(): void { root.hide() }
         // uber-notebook quick            opens the quick-note card
         // uber-notebook quick "Buy milk"  saves it straight away
-        function quick(text: string): void { if (!commands.agent) root.quick(String(text || "").slice(0, 20000)) }
+        // ({ ok, note }, waiting: true if its profile's notes are still
+        // opening; or { ok: false, error }: not kept, said why.)
+        function quick(text: string): string {
+          if (commands.agent) return JSON.stringify({ ok: false, error: "not for the panel's agent: quick notes are yours" })
+          var r = root.keepQuick(String(text || "").slice(0, 20000))
+          if (!r.ok) return JSON.stringify({ ok: false, error: r.said || "not saved" })
+          return JSON.stringify(r.waiting ? { ok: true, waiting: true, note: r.said } : { ok: true, note: r.said || "the quick-note card is open" })
+        }
         function search(text: string): void { root.show({ search: String(text || "").slice(0, 200) }) }
         function shelf(): void { root.show({ shelf: true }) }
         // uber-notebook pages: straight to Pages.
@@ -679,13 +731,22 @@ Item {
         // The calendar, on a day ("" is today).
         function calendar(day: string): void { root.show({ calendar: /^\d{4}-\d{2}-\d{2}$/.test(String(day || "")) ? String(day) : "today" }) }
         // uber-notebook importNotes ~/notes: files or a folder (a Notion or Obsidian export) into Pages.
-        function importNotes(path: string): void {
-          if (commands.agent) return
+        // (Right after a profile switch, its notes still opening: not
+        // imported, said; never into the profile before.)
+        function importNotes(path: string): string {
+          if (commands.agent) return JSON.stringify({ ok: false, error: "not for the panel's agent: importing is yours" })
           var p = String(path || "")
           if (p.indexOf("~/") === 0) p = root.home + p.slice(1)
+          var said = ""
           workspaceItem.importPaths([p], "", function(r) {
-            root.osd("\u{f0e27}", r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into Pages" : "Nothing to import there")
+            said = r.unready ? "Not imported: your notes are still opening. Try again in a moment"
+              : r.stopped ? "Not imported: another profile was opened"
+              : r.pages ? "Imported " + r.pages + (r.pages === 1 ? " page" : " pages") + " into Pages" : "Nothing to import there"
+            root.osd("\u{f0e27}", said)
           })
+          // (Done or refused at once, said; else on its way: the OSD says how it went.)
+          if (said) return JSON.stringify(said.indexOf("Imported") === 0 ? { ok: true, note: said } : { ok: false, error: said })
+          return JSON.stringify({ ok: true, note: "importing: the OSD says how it went" })
         }
         // uber-notebook open <page id>: a page in Pages (a reminder's notification does this).
         function open(id: string): void { if (/^[0-9a-f-]{36}$/.test(String(id || ""))) root.show({ page: String(id) }) }
