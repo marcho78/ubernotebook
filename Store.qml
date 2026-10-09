@@ -59,7 +59,16 @@ Item {
 
   // The folder can change just after the shell starts (when the settings
   // arrive): look a moment later, once, and ignore what an older look finds.
-  onFolderChanged: { welcomed = false; locateTimer.restart() }
+  // (Another profile's folder: switching from now till it's open (or said
+  // it can't be). A command that comes right after the switch is told the
+  // notes aren't open yet (Api.unready), never done in the profile before;
+  // what that one was writing still finishes there.)
+  property bool switching: false
+  onFolderChanged: {
+    welcomed = false
+    if (rootPath) { switching = true; ready = false }
+    locateTimer.restart()
+  }
   onActiveChanged: locateTimer.restart()
   Component.onCompleted: {
     // (No runtime folder from the session: the one in your cache, made
@@ -715,6 +724,7 @@ Item {
     publish()
   }
   function block(folder, why) {
+    switching = false
     if (rootPath) leaveRoot()
     rootPath = ""
     notesRoot = ""
@@ -752,6 +762,7 @@ Item {
             store.failed("Your notes can't be kept in " + next.replace(store.home, "~") + ": another account on this computer could read them there. Pick another folder for this profile")
             return
           }
+          store.switching = false
           store.rootPath = next
           store.notesRoot = next
           store.loadLibrary()

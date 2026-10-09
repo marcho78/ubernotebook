@@ -1521,6 +1521,20 @@ Item {
       }
     }
 
+    // Another profile being opened (its folder chosen, the one before still
+    // there a moment): a command waits, never done in the one before.
+    function test_33c_nothing_done_while_switching() {
+      fresh()
+      var before = Object.keys(ws.index.pages).length
+      files.switching = true
+      var r = json(api.add("Too soon", file("s.md", "x")))
+      compare(r.ok, false)
+      verify(/aren't loaded yet/.test(r.error), r.error)
+      compare(Object.keys(ws.index.pages).length, before, "nothing made in the profile before")
+      files.switching = false
+      verify(json(api.add("In time", file("t.md", "x"))).ok, "once it's open")
+    }
+
     // Columns an agent writes (::columns, ::next, ::end), as read gives them back.
     function test_34_an_agent_makes_columns() {
       fresh()

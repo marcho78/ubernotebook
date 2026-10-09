@@ -276,7 +276,10 @@ QtObject {
 
   function unready() {
     if (noProfile) return "Uber Notebook has no profile yet: make one with addProfile (or the user can, opening Uber Notebook)"
-    // (All of it: its pages, People and the calendar, of the profile open now.)
+    // (All of it: its pages, People and the calendar, of the profile open now;
+    // none while another's being opened: the one before is still there a
+    // moment, and a command meant for the next never lands in it.)
+    if (files && files.switching === true) return "Uber Notebook's pages aren't loaded yet: try again in a moment"
     if (!workspace || !workspace.ready || !workspace.contactsLoaded || !workspace.calendarLoaded) return "Uber Notebook's pages aren't loaded yet: try again in a moment"
     return ""
   }

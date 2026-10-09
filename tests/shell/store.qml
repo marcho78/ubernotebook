@@ -322,8 +322,15 @@ ShellRoot {
               say("private: one that can be is opened again, as it was, 700", store2.blockedFolder === "" && store2.notesRoot === d + "/n3" && store2.notebooks.length === 1 && String(out).trim() === "700", String(out).trim() + " | " + store2.notebooks.length)
               var kept = store2.quickNote("Call the dentist\nbefore Friday")
               say("private: a quick note is kept once a folder can be used", kept === true && store2.notebooks.length === 2, kept + " " + store2.notebooks.length)
+              // Another profile's folder: switching at once (a command right
+              // after the switch isn't done in the one before), then the next opened.
+              store2.folder = d + "/n4"
+              var atOnce = store2.switching === true && !store2.ready && store2.createNotebook({ title: "Too soon" }, []) === null
+              until(function() { return store2.ready && store2.rootPath === d + "/n4" }, function() {
+                say("private: switching, nothing done in the profile before, then the next is opened", atOnce && !store2.switching && store2.notebooks.length === 0, "at once " + atOnce + " now " + store2.rootPath)
               store2.active = false
               store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+              })
             })
           })
         })

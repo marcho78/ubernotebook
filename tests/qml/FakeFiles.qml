@@ -59,6 +59,7 @@ QtObject {
     ran = []
     inputs = []
     makePrivateLeft = 0
+    switching = false
     probeId = "1:1"
     links = ({})
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
@@ -198,6 +199,8 @@ QtObject {
   property var ran: []
   property var inputs: []
   property int makePrivateLeft: 0
+  // Another profile being opened (Store.qml): commands wait (Api.unready).
+  property bool switching: false
   property string probeId: "1:1"
   // The archive helper (Store.qml), as its commands' first words.
   readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
