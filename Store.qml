@@ -1245,6 +1245,24 @@ Item {
     return true
   }
 
+  // done, for what's picked (a file, pictures) for the notes open now:
+  // given `empty` if another profile was opened (or began to) before it's
+  // picked, as it would go into that one's; and said.
+  function forTheseNotes(done, empty) {
+    var gen = generation
+    var root0 = rootPath
+    var switching0 = switching
+    return function(v) {
+      var picked = Array.isArray(v) ? v.length > 0 : !!v
+      if (picked && (switching0 || store.switching || gen !== store.generation || root0 !== store.rootPath)) {
+        store.failed("Not added: another profile was opened. Pick it again there")
+        if (done) done(empty)
+        return
+      }
+      if (done) done(v)
+    }
+  }
+
   // ---- finding text ------------------------------------------------------------------------
 
   // Every page that has every word of the query: done([...]), best first.

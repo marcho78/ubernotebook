@@ -112,6 +112,23 @@ Rectangle {
     dragId = row.id
     dragLabel = (row.icon || "\u{1f4c4}") + "  " + (row.title || "Untitled")
     drop = null
+    dragGeneration = view.workspace.generation
+  }
+  // (Another profile opening while a page is dragged: the drag's over, its
+  // rows the next one's; a drop then never moves a page of that one (a
+  // restored one's have the same ids).)
+  property int dragGeneration: -1
+  function cancelDrag() {
+    if (dragId === "") return
+    dragId = ""
+    drop = null
+    scroller.dir = 0
+    takeRows()
+  }
+  Connections {
+    target: bar.view && bar.view.workspace ? bar.view.workspace.files : null
+    ignoreUnknownSignals: true
+    function onSwitchingChanged() { if (bar.view.workspace.files.switching) bar.cancelDrag() }
   }
 
   function over(item, p) {
@@ -138,6 +155,7 @@ Rectangle {
   }
 
   function moveDrag(p) {
+    if (dragId === "") return
     dragAt = p
     var spot = null
     if (over(mid, p)) {
@@ -162,7 +180,7 @@ Rectangle {
     drop = null
     scroller.dir = 0
     takeRows()
-    if (dropped && id && spot) view.dropPage(id, spot.id, spot.where, spot.inPages === true)
+    if (dropped && id && spot && dragGeneration === view.workspace.generation && !view.switching) view.dropPage(id, spot.id, spot.where, spot.inPages === true)
   }
 
   Timer {

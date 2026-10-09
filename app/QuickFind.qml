@@ -34,6 +34,13 @@ Pop {
       if (pop.visible) pop.close()
     }
   }
+  // (Pages not read yet when it was looked for (just opened): looked for
+  // again once they are.)
+  Connections {
+    target: pop.workspace
+    ignoreUnknownSignals: true
+    function onReadyChanged() { if (pop.workspace.ready && pop.visible && pop.query.trim()) searchTimer.restart() }
+  }
 
   width: Math.min(600, (parent ? parent.width : 600) - 40)
   height: Math.min(480, (parent ? parent.height : 480) - 80)

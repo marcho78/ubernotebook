@@ -9,6 +9,8 @@ import QtQuick.Controls
 // under it too.
 Rectangle {
   id: pv
+  // (Closed as another profile opens: Overlays.js.)
+  readonly property bool closesForSwitch: true
 
   property var theme: null
   // [{ src, caption }], and the one shown.

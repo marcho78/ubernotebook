@@ -5,6 +5,8 @@ import QtQuick.Effects
 // the next, Shift+Enter for the one before, Esc to put it away.
 Item {
   id: bar
+  // (Closed as another profile opens: Overlays.js.)
+  readonly property bool closesForSwitch: true
 
   property var theme: null
   property var editor: null

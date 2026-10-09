@@ -57,6 +57,16 @@ Item {
     chatsLoaded = false
     chats = ({})
     chatsRevision++
+    // (Nor its people and calendar, shown, searched or undone here till
+    // this one's are read; nor its alerts sent.)
+    reminderTimer.stop()
+    contacts = Contacts.make()
+    contactsUndo = []
+    contactsRevision++
+    calendar = Calendar.make()
+    calendarUndo = []
+    calendarRedo = []
+    calendarRevision++
     if (indexTimer.running && indexRoot) {
       indexTimer.stop()
       var was = Workspace.indexFile(indexRoot)
@@ -601,7 +611,8 @@ Item {
       var e = ws.index.pages[r.page]
       return { key: r.key, at: r.at, title: e && e.title ? e.title : "Reminder", text: r.text || "Reminder", page: r.page, day: "" }
     })
-    Calendar.alerts(calendar, new Date(now - lateness), new Date(now + 2 * 86400000)).forEach(function(a) {
+    // (The calendar this folder's, once it's read.)
+    if (calendarLoaded) Calendar.alerts(calendar, new Date(now - lateness), new Date(now + 2 * 86400000)).forEach(function(a) {
       if (!ws.index.fired[a.key]) list.push(a)
     })
     return list.sort(function(a, b) { return a.at - b.at })
@@ -622,6 +633,8 @@ Item {
   }
 
   function checkReminders() {
+    // (Another folder opening, or none open: nothing of it sent.)
+    if (!ready || !folder || (files && files.switching === true)) return
     var now = Date.now()
     var any = false
     pendingAlerts().forEach(function(r) {
@@ -832,7 +845,11 @@ Item {
   // A .vcf or .csv file's people put in (those there already filled in, not
   // added twice): done({ added, updated }), or done(null, why).
   function importContacts(path, done) {
+    // (Another profile opened before it's read: not put in that one's.)
+    var gen = generation
+    if (files.switching === true) { done(null, "Not added: another profile is opening. Try again in a moment"); return }
     files.readFiles([path], function(got) {
+      if (gen !== ws.generation || files.switching === true) { done(null, "Not added: another profile was opened. Add it again there"); return }
       var raw = got[path]
       if (raw === undefined || raw === null) { done(null, "It couldn't be read"); return }
       var people = Contacts.fromFile(path, raw)

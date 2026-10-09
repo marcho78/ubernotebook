@@ -10,6 +10,8 @@ import "../Library.js" as Library
 // takes one file at a time, and the desktop's would run in the shell.
 Rectangle {
   id: pk
+  // (Closed as another profile opens: Overlays.js.)
+  readonly property bool closesForSwitch: true
 
   property var theme: null
   // Store.qml (exec, home, isImagePath), or the tests' files.

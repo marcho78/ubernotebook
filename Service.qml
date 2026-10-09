@@ -578,9 +578,13 @@ Item {
     onTriggered: root.flushQuick(true)
   }
 
+  // (What's picked is for the notes open when the picker was opened:
+  // Store.forTheseNotes.)
+  function forTheseNotes(done, empty) { return storeItem.forTheseNotes(done, empty) }
+
   // The desktop's file picker, for notes to import into Pages (files, or a folder).
   function pickImport(folder, done) {
-    if (ui && typeof ui.pickImport === "function") ui.pickImport(folder, done)
+    if (ui && typeof ui.pickImport === "function") ui.pickImport(folder, forTheseNotes(done, []))
     else done([])
   }
 
@@ -593,19 +597,20 @@ Item {
 
   // The desktop's file picker, for a picture (the window shows it).
   // A file to put on a page: "any", "pdf" or "video". done(path), or done("").
+  // (A backup: put back as profiles of its own, for no profile's notes.)
   function pickFile(kind, done, from) {
-    if (ui && typeof ui.pickFile === "function") ui.pickFile(kind, done, from || "")
+    if (ui && typeof ui.pickFile === "function") ui.pickFile(kind, kind === "backup" ? done : forTheseNotes(done, ""), from || "")
     else done("")
   }
 
   // Pictures (several at once): done([paths]), or done([]).
   function pickPictures(done) {
-    if (ui && typeof ui.pickPictures === "function") ui.pickPictures(done)
+    if (ui && typeof ui.pickPictures === "function") ui.pickPictures(forTheseNotes(done, []))
     else done([])
   }
 
   function pickPicture(done) {
-    if (ui && typeof ui.pickPicture === "function") ui.pickPicture(done)
+    if (ui && typeof ui.pickPicture === "function") ui.pickPicture(forTheseNotes(done, ""))
     else done("")
   }
 

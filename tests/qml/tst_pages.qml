@@ -6,6 +6,7 @@ import "../../Workspace.js" as Workspace
 import "../../Html.js" as Html
 import "../../Mindmap.js" as Mindmap
 import "../../Colors.js" as Colors
+import "../../Calendar.js" as Calendar
 
 // Pages end to end: the view, the real workspace store, and files in memory.
 Item {
@@ -195,6 +196,17 @@ Item {
         files.switching = true
         tryVerify(function() { return findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }) === null }, 1000, "closed")
         compare(field.text, "", "what was typed gone")
+        files.switching = false
+        // Looked for before the pages were read (just opened): again once they are.
+        view.openFind()
+        tryVerify(function() { field = findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }); return field !== null }, 1000)
+        ws.ready = false
+        field.text = "toggles"; field.edited("toggles")
+        wait(400)
+        var greps = function() { return files.ran.filter(function(a) { return a[0] === "/usr/bin/grep" }).length }
+        var looked = greps()
+        ws.ready = true
+        tryVerify(function() { return greps() > looked }, 1000, "looked for again")
       } finally {
         root.switchOnGrep = false
         files.switching = false
@@ -247,6 +259,99 @@ Item {
         files.holdReads = false
         files.answerReads()
         files.switching = false
+      }
+    }
+
+    // What's open anywhere over the notes, not only the page view's own
+    // popups: the picture picker (its pick never put in the next profile),
+    // an equation's box in the editor. A contact file read as another
+    // profile opens: no one added there.
+    function test_6d_nested_and_others_as_another_profile_opens() {
+      fresh()
+      var picked = []
+      try {
+        view.picturePicker.choose(false, function(paths) { picked.push(paths) }, null)
+        verify(view.picturePicker.visible, "the picture picker open")
+        view.editor.insertBlocksAt(0, [{ type: "p", html: "x", indent: 0 }])
+        var item = view.editor.items[view.editor.uidAt(0)]
+        tryVerify(function() { return item && item.edit }, 1000)
+        view.editor.newInlineMath(item, 0)
+        tryVerify(function() { return view.editor.mathBox && view.editor.mathBox.visible }, 1000, "an equation's box open")
+        view.editor.mathBox.close()
+        view.editor.openDrawing("math", "E = mc^2", null)
+        tryVerify(function() { return view.editor.drawingViewer && view.editor.drawingViewer.visible }, 1000, "an equation shown large")
+        view.editor.newInlineMath(item, 0)
+        tryVerify(function() { return view.editor.mathBox.visible }, 1000)
+        // A page being dragged in the sidebar.
+        var bar = findItem(root, function(it) { return it.objectName === "sidebar" })
+        bar.startDrag({ id: view.page.id, title: "Dragged", icon: "" })
+        compare(bar.dragId, view.page.id)
+        files.switching = true
+        verify(!view.picturePicker.visible, "the picker closed")
+        tryVerify(function() { return !view.editor.mathBox.visible }, 1000, "the equation's box closed")
+        tryVerify(function() { return !view.editor.drawingViewer.visible }, 1000, "the equation shown large closed")
+        compare(bar.dragId, "", "the drag's over")
+        // Ctrl+P: not while it opens.
+        view.openFind()
+        verify(findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }) === null, "not opened")
+        compare(view.picturePicker.done, null, "nothing to put its pick anywhere")
+        compare(picked.length, 0)
+        files.switching = false
+        // A contact file read as another profile opens.
+        files.disk["/tmp/sam.vcf"] = "BEGIN:VCARD\nVERSION:3.0\nFN:Sam Rivera\nEND:VCARD\n"
+        var people = JSON.stringify(ws.contacts)
+        var why = null
+        files.holdReads = true
+        ws.importContacts("/tmp/sam.vcf", function(r, w) { why = w || "" })
+        files.switching = true
+        files.answerReads()
+        tryVerify(function() { return why !== null }, 1000)
+        verify(/another profile/.test(why), why)
+        compare(JSON.stringify(ws.contacts), people, "no one added there")
+        // Asked for while one opens: not read at all.
+        why = null
+        ws.importContacts("/tmp/sam.vcf", function(r, w) { why = w || "" })
+        verify(/another profile/.test(why), why)
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+        view.picturePicker.close()
+      }
+    }
+
+    // Another folder: the people and the calendar of the one before aren't
+    // shown, searched or undone here till this one's are read; its alerts
+    // aren't sent, nor while one opens.
+    function test_6e_people_and_calendar_of_the_folder_before() {
+      fresh()
+      tryVerify(function() { return ws.calendarLoaded && ws.contactsLoaded }, 2000)
+      ws.saveContact({ id: "c-before", name: "Only Before", phones: [], emails: [] })
+      // (An alert due a minute ago: sent at once, were it sent.)
+      ws.setCalendar({ events: [{ id: "e-before", title: "Only before", start: Calendar.timeIso(new Date(Date.now() - 60000)), end: Calendar.timeIso(new Date(Date.now() + 3600000)), alert: 0 }] })
+      verify(ws.contacts.contacts.length > 0 && ws.calendar.events.length > 0)
+      verify(ws.pendingAlerts().some(function(a) { return a.title === "Only before" }), "its alert due")
+      var root0 = files.rootPath
+      try {
+        files.notified = []
+        files.switching = true
+        ws.checkReminders()
+        compare(files.notified.length, 0, "no alert sent while another opens")
+        files.switching = false
+        files.holdReads = true
+        files.rootPath = "/tmp/other-people-notes"
+        compare(ws.contacts.contacts.length, 0, "no one of the one before")
+        compare(ws.calendar.events.length, 0, "no event of the one before")
+        compare(ws.contactsUndo.length, 0)
+        compare(ws.calendarUndo.length, 0)
+        ws.checkReminders()
+        compare(files.notified.length, 0, "nor its alerts")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
       }
     }
 

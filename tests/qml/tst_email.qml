@@ -175,6 +175,36 @@ Item {
     // Attachments that open here: a calendar file's events, shown and put on
     // the calendar (not twice); a contact card's people, into People; one
     // with no app but a web browser isn't handed to it.
+    // A calendar file in an email read as another profile opens: its events
+    // not shown (the popup closed as it started, not opened after).
+    function test_1a_an_attachment_read_as_another_profile_opens() {
+      fresh()
+      tryVerify(function() { return ws.calendarLoaded && ws.contactsLoaded }, 2000)
+      var ics = ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "DTSTART:20261011T072500", "DTEND:20261011T104000", "SUMMARY:Flight SK 214", "END:VEVENT", "END:VCALENDAR"].join("\r\n")
+      files.disk["/tmp/in/Held.eml"] = [
+        "From: Skylark <bookings@skylark.example>", "To: me@example.com", "Subject: Your trip", "MIME-Version: 1.0",
+        "Content-Type: multipart/mixed; boundary=\"b\"", "", "--b", "Content-Type: text/plain", "", "Booked.",
+        "--b", "Content-Type: text/calendar; name=\"flights.ics\"", "Content-Disposition: attachment; filename=\"flights.ics\"", "", ics,
+        "--b--", ""].join("\r\n")
+      var e = view.editor
+      e.insertBlocksAt(0, [{ type: "email", indent: 0, data: {} }])
+      var uid = e.uidAt(0)
+      view.addEmailTo(view.page.id, uid, "/tmp/in/Held.eml")
+      tryVerify(function() { return dataAt(0).attachments.length === 1 }, 2000)
+      try {
+        files.holdReads = true
+        view.openEmailAttachment(uid, 0)
+        files.switching = true
+        files.answerReads()
+        wait(300)
+        compare(named(win(), "icsAdd"), null, "its events not shown")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+      }
+    }
+
     function test_1b_attachments_that_open_here() {
       fresh()
       tryVerify(function() { return ws.calendarLoaded && ws.contactsLoaded }, 2000)

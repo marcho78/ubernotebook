@@ -562,6 +562,14 @@ Item {
         store.switching = true
         tryVerify(function() { return find(win(), function(it) { return it.text === "Only for the profile before" }) === null }, 1000, "closed")
         verify(!answered, "unanswered")
+        store.switching = false
+        // An Undo offered for the profile before: gone, not done in the next.
+        var undone = false
+        app.toastWithUndo("In the archive", function() { undone = true })
+        compare(typeof app.toastUndoAction, "function")
+        store.switching = true
+        compare(app.toastUndoAction, null, "no Undo")
+        verify(!undone)
       } finally {
         store.switching = false
       }

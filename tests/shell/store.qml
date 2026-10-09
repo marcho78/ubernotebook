@@ -487,6 +487,22 @@ ShellRoot {
                               store2.search("zebrafish", function(r2) {
                                 say("private: a notebook search as another profile opens gives nothing", found !== null && r1.length === 1 && r2.length === 0, r1.length + " then " + r2.length)
                                 store2.switching = false
+                                // A file picked after another profile began to open:
+                                // nothing given (it would go into that one's), said.
+                                var told = []
+                                var tell = function(m) { told.push(m) }
+                                store2.failed.connect(tell)
+                                var gotPicked = []
+                                var later1 = store2.forTheseNotes(function(v) { gotPicked.push(v) }, "")
+                                var later2 = store2.forTheseNotes(function(v) { gotPicked.push(v) }, [])
+                                var now = store2.forTheseNotes(function(v) { gotPicked.push(v) }, "")
+                                now("/home/x/a.png")
+                                store2.switching = true
+                                later1("/home/x/b.png")
+                                later2(["/home/x/c.png"])
+                                store2.switching = false
+                                store2.failed.disconnect(tell)
+                                say("private: a file picked as another profile opens is given nothing, and said", JSON.stringify(gotPicked) === JSON.stringify(["/home/x/a.png", "", []]) && told.length === 2 && /another profile/.test(told[0]), JSON.stringify(gotPicked) + " " + told.length)
                                 // A notebook read as another profile opens: nothing of
                                 // it given (to be shown, exported or merged there).
                                 var held = store2.createNotebook({ title: "Held" }, [])

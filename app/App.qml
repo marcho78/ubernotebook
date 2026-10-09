@@ -4,6 +4,7 @@ import QtMultimedia
 import "../Papers.js" as Papers
 import "../Covers.js" as Covers
 import "../Blocks.js" as Blocks
+import "../Overlays.js" as Overlays
 
 // Uber Notebook: a desk with your notebooks on it. The shelf shows them cover up;
 // pick one and it slides onto the desk and its cover swings open. Or Pages:
@@ -510,9 +511,13 @@ FocusScope {
     // say): not answered in the next one, whose pages may have the same
     // ids. Closed as it starts opening.)
     function onSwitchingChanged() {
-      if (!root.store.switching || !confirm.visible) return
+      if (!root.store.switching) return
       confirm.confirmAction = null
-      confirm.close()
+      // (An Undo offered for the profile before: not done in the next one.)
+      if (root.toastUndoAction) { root.toastUndoAction = null; toastTimer.stop(); toastBox.opacity = 0 }
+      // (What's open over the notes anywhere, the profile before's: closed.
+      // Settings stays open: the switch may be made there.)
+      Overlays.closeAll(root, [settingsPanel, releaseNotes])
     }
     function onRootPathChanged() {
       // (A notebook still being opened from the profile before: never opened

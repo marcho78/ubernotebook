@@ -102,6 +102,31 @@ Item {
       return find(win(), test)
     }
 
+    // Another profile opening as a meeting's transcript comes: never put in
+    // a page (a restored one's pages have the same ids); voxtype keeps it.
+    // The meetings started in the profile before: not looked for in the next.
+    function test_0_a_transcript_as_another_profile_opens() {
+      fresh()
+      var m = slashMeeting()
+      var before = JSON.stringify(meetingAt(m.at))
+      var root0 = files.rootPath
+      try {
+        view.fetchMeeting(view.page.id, m.uid, "m-held")
+        files.switching = true
+        tryVerify(function() { return root.lastToast.indexOf("wasn't added") >= 0 }, 1000, root.lastToast)
+        compare(JSON.stringify(meetingAt(m.at)), before, "not put in")
+        files.switching = false
+        view.meetingOwners = ({ "m-old": { pageId: view.page.id, uid: m.uid, at: 1 } })
+        files.rootPath = "/tmp/other-meeting-notes"
+        tryVerify(function() { return ws.folder === "/tmp/other-meeting-notes/Pages" }, 2000)
+        compare(JSON.stringify(view.meetingOwners), "{}", "not looked for in the next")
+      } finally {
+        files.switching = false
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     function test_1_started_paused_stopped_written_out() {
       fresh()
       var sync = ws.createPage({ parent: "", title: "Weekly sync" })

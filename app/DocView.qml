@@ -20,6 +20,7 @@ import "../Files.js" as Files
 import "../Contacts.js" as Contacts
 import "../Email.js" as Email
 import "../Library.js" as Library
+import "../Overlays.js" as Overlays
 
 // Pages: the other way to write in Uber Notebook, the way Notion does it. The
 // sidebar has every page as a tree; the page you're on has its cover, icon
@@ -268,11 +269,7 @@ FocusScope {
   // it would close (what's typed in it kept where it was), never put into
   // the next one.)
   function closeForSwitch() {
-    for (var i = 0; i < view.data.length; i++) {
-      var o = view.data[i]
-      if (o && o.modal !== undefined && typeof o.close === "function" && o.visible === true) o.close()
-    }
-    viewer.close()
+    Overlays.closeAll(view, [])
     icsPop.events = []
     commit()
   }
@@ -297,6 +294,7 @@ FocusScope {
       // (Another profile opened while it's read: not shown there, nor its
       // people added to that one's.)
       workspace.readEmail(d.src, inThisFolder(function(m) {
+        if (view.switching) return
         var att = m ? m.attachments[at] : null
         if (!att) { view.toast("That attachment couldn't be read"); return }
         var text = Email.attachmentText(m, att.index)
@@ -512,10 +510,12 @@ FocusScope {
     if (!service || typeof service.pickFile !== "function") { toast("Files can't be picked here"); return }
     service.pickFile("calendar", function(path) {
       if (!path) return
-      view.workspace.files.readFiles([path], function(got) {
+      // (Another profile opened before it's read: its events not shown there.)
+      view.workspace.files.readFiles([path], view.inThisFolder(function(got) {
+        if (view.switching) return
         if (got[path] === undefined) { view.toast("That file couldn't be read"); return }
         view.showIcs(got[path], path.slice(path.lastIndexOf("/") + 1))
-      }, 16 * 1024 * 1024)
+      }), 16 * 1024 * 1024)
     })
   }
   function eventWhen(e) {
@@ -1119,6 +1119,11 @@ FocusScope {
     agentTalk = null
     agentPending = null
     agentPanel.visible = false
+    // (The meetings started in the folder before are its pages': not
+    // looked for here.)
+    meetingPending = null
+    meetingWait.stop()
+    meetingOwners = ({})
     saveTimer.stop()
     pageDirty = false
     page = null
@@ -2429,8 +2434,15 @@ FocusScope {
   function fetchMeeting(pageId, uid, id) {
     if (!meetings || !id) return
     setMeetingWork(uid, true)
+    // (Another profile opened before it comes: never put in a page of that
+    // one (a restored one's pages have the same ids); voxtype keeps it, to
+    // fetch again in its own.)
+    var mine = inThisFolder(function(fn) { fn() })
     meetings.fetch(id, function(ok, out) {
       view.setMeetingWork(uid, false)
+      var here = false
+      mine(function() { here = !view.switching })
+      if (!here) { if (ok) view.toast("A meeting's transcript wasn't added: another profile was opened. Fetch it again in its own"); return }
       if (!ok) { view.toast("voxtype couldn't give the meeting: " + out); return }
       view.updateMeeting(pageId, uid, function(m) { return Meeting.fromExport(out, m) || m })
     })
@@ -2789,7 +2801,10 @@ FocusScope {
     openRows = o
   }
 
-  function openFind() { quickFind.start() }
+  function openFind() {
+    if (switching) { toast(switchingText); return }
+    quickFind.start()
+  }
   function openTrash() { trashPop.x = 12; trashPop.y = view.height - trashPop.height - 60; trashPop.open() }
   // Templates (yours, then Uber Notebook's), in place of a page.
   function openTemplates(fromHistory) {
@@ -3680,7 +3695,7 @@ FocusScope {
             // A calendar file (.ics): its events, to put on your calendar.
             if (view.isCalendarFile(path)) {
               var icsPath = path
-              view.workspace.files.readFiles([icsPath], function(got) { if (got[icsPath] !== undefined) view.showIcs(got[icsPath], icsPath.slice(icsPath.lastIndexOf("/") + 1)) }, 16 * 1024 * 1024)
+              view.workspace.files.readFiles([icsPath], view.inThisFolder(function(got) { if (got[icsPath] !== undefined && !view.switching) view.showIcs(got[icsPath], icsPath.slice(icsPath.lastIndexOf("/") + 1)) }), 16 * 1024 * 1024)
               continue
             }
             // Notes dropped on a page come in as pages inside it; pictures, on it.

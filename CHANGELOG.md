@@ -33,10 +33,13 @@ The first version.
   a transcript or a louder copy finishing after a switch is never put in
   the next profile (it's said, to do again in its own); the open page is
   saved the moment another profile starts opening (an edit then, at once),
-  what's open over it (a page's history, an .ics file's events, an event, a
-  question) closes, and nothing is recorded, dictated, written out or made
-  louder till it's open; a search's results are gone at once, and one on its
-  way finds nothing; `set folder` and `set profile` do as Settings does
+  everything open over the notes (a page's history, an .ics file's events,
+  an event, a picker, a question, an Undo) closes, and nothing is recorded,
+  dictated, written out or made louder till it's open; a file picked, or a
+  meeting's transcript, arriving after the switch isn't put in the next
+  profile; the people, calendar and alerts of the one before aren't shown
+  or sent there; a search's results are gone at once, and one on its way
+  finds nothing; `set folder` and `set profile` do as Settings does
   (`set profiles` is refused); a quick note made right after a switch waits for that profile, and
   the quick-note card never loses its words; `quick` and `importNotes`
   answer whether they did it; each profile keeps its own Inbox. Exports of
