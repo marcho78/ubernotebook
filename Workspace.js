@@ -416,6 +416,28 @@ function sketchesOf(page) {
   return flatten(page).filter(function(b) { return b.type === "sketch" && b.sketch }).map(function(b) { return { id: b.uid, sketch: b.sketch } })
 }
 
+// The files in assets that pages' Markdown points to (Markdown.fromDocPage):
+// their pictures, galleries' pictures, files, videos, emails and audio
+// notes, each once, as their blocks name them ("assets/<name>"). (What an
+// export copies: never the whole of Pages/assets, where every page's are.)
+function assetsOf(pages) {
+  var out = []
+  var seen = {}
+  function add(src) {
+    var s = Blocks.cleanAsset(src)
+    if (s && !seen[s]) { seen[s] = true; out.push(s) }
+  }
+  (pages || []).forEach(function(p) {
+    flatten(p).forEach(function(b) {
+      if (b.type === "image") add(b.src)
+      else if (b.type === "gallery" && b.data && Array.isArray(b.data.images)) b.data.images.forEach(function(x) { add(x && x.src) })
+      else if ((b.type === "file" || b.type === "video" || b.type === "email") && b.data) add(b.data.src)
+      else if (b.type === "audio" && b.audio) add(b.audio.src)
+    })
+  })
+  return out
+}
+
 function childPages(page) {
   var out = []
   flatten(page).forEach(function(b) {

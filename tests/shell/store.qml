@@ -317,6 +317,32 @@ ShellRoot {
       })
     })
   }
+  // An export's files (copyAssets): only those named, into a folder yours
+  // alone (700), each a new file yours alone (600) even from one open to
+  // others (644), a link copied as a link (never what it points to), a name
+  // that isn't one of the folder's never followed, one that isn't there
+  // left out (and said: not every one copied).
+  function assetsChecks(d) {
+    var out = d + "/export/assets"
+    store.exec(["/usr/bin/bash", "-c", "/usr/bin/mkdir -p \"$1/assets-src\" && cd \"$1/assets-src\" && printf one > one.png && printf two > file-two.pdf && printf other > other.png "
+      + "&& printf secret > \"$1/secret.txt\" && /usr/bin/ln -s \"$1/secret.txt\" link.png && /usr/bin/chmod 644 one.png file-two.pdf", "x", d], function() {
+      store.mkdirs([out], function() {
+        store.copyAssets(d + "/assets-src", ["one.png", "file-two.pdf", "link.png", "gone.png", "../secret.txt"], out, function(ok) {
+          store.exec(["/usr/bin/bash", "-c", "/usr/bin/stat -c %a -- \"$1\"; cd -- \"$1\" && for f in *; do if [ -L \"$f\" ]; then echo \"$f link $(/usr/bin/readlink -- \"$f\")\"; "
+            + "else echo \"$f $(/usr/bin/stat -c %a -- \"$f\") $(/usr/bin/cat -- \"$f\")\"; fi; done", "x", out], function(ok2, list) {
+            var l = String(list).trim().split("\n")
+            say("export: only its files, 600 in a 700 folder, a link as a link, nothing else",
+              l[0] === "700" && JSON.stringify(l.slice(1)) === JSON.stringify(["file-two.pdf 600 two", "link.png link " + d + "/secret.txt", "one.png 600 one"]), l.join(" | "))
+            say("export: one that isn't there is said (not every one copied)", ok === false, String(ok))
+            store.copyAssets(d + "/assets-src", [], out, function(none) {
+              say("export: none to copy, nothing run", none === true, String(none))
+              root.blockedChecks(d)
+            })
+          })
+        })
+      })
+    })
+  }
   // A folder whose mode says only its owner can read it, but whose owner
   // isn't you (one of root's here; a share that takes every account for
   // the same one is the same to the check): not made yours alone, said.
@@ -324,10 +350,10 @@ ShellRoot {
     store.exec(["/usr/bin/bash", "-c", "for p in /proc/1/fd /var/lib/private /etc/credstore /var/cache/ldconfig /root; do s=$(/usr/bin/stat -L -c '%u %a' -- \"$p\" 2>/dev/null) || continue; "
       + "[ \"${s%% *}\" != \"$UID\" ] && [ $(( 8#${s##* } & 077 )) -eq 0 ] && { echo \"$p\"; exit 0; }; done; exit 0"], function(ok, out) {
       var p = String(out || "").trim()
-      if (!p) { console.log("SKIP private: no folder of someone else's that only its owner can read here"); root.blockedChecks(d); return }
+      if (!p) { console.log("SKIP private: no folder of someone else's that only its owner can read here"); root.assetsChecks(d); return }
       store.makePrivate(p, function(isPrivate) {
         say("private: a folder that isn't yours isn't taken for private, though only its owner can read it", isPrivate === false, p + " " + isPrivate)
-        root.blockedChecks(d)
+        root.assetsChecks(d)
       })
     })
   }

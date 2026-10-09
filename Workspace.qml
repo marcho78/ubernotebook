@@ -1506,7 +1506,10 @@ Item {
       // Sketches as SVG files in sketches/, named by their blocks.
       var sketches = []
       pages.forEach(function(p) { Workspace.sketchesOf(p).forEach(function(k) { k.title = p.title; sketches.push(k) }) })
-      files.mkdirs(sketches.length ? [dir, dir + "/sketches"] : [dir], function(ok) {
+      // The files its pages point to, in assets/ (only those: never every
+      // page's, as Pages/assets has them).
+      var assets = Workspace.assetsOf(pages)
+      files.mkdirs([dir].concat(sketches.length ? [dir + "/sketches"] : [], assets.length ? [dir + "/assets"] : []), function(ok) {
         if (!ok) return
         pages.forEach(function(p) {
           files.writeFile(dir + "/" + names[p.id] + ".md", Markdown.fromDocPage(p, function(pid) {
@@ -1515,10 +1518,10 @@ Item {
           }, { sketchFile: function(bid) { return "sketches/" + bid + ".svg" } }))
         })
         sketches.forEach(function(k) { files.writeFile(dir + "/sketches/" + k.id + ".svg", Sketch.toSvg(k.sketch, "A sketch on " + (k.title || "Untitled"))) })
-        files.exec(["/usr/bin/cp", "-r", "--", Workspace.assetsDir(files.rootPath), dir + "/assets"], function() {
+        files.copyAssets(Workspace.assetsDir(files.rootPath), assets.map(function(s) { return s.slice(7) }), dir + "/assets", function() {
           files.exported(dir)
           files.openPath(dir)
-        }, { okCodes: [0, 1], timeoutMs: 60000 })
+        })
       })
     })
   }

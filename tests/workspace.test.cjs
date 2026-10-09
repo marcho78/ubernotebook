@@ -422,4 +422,30 @@ check("a tree thousands of pages deep: gone through without running out of stack
   assert.deepEqual(JSON.parse(JSON.stringify(W.rows(tx, all).map((x) => [+x.id.slice(-3), x.depth]))), [[1, 0], [3, 1], [6, 2], [4, 1], [2, 0], [5, 1], [7, 2], [8, 2]]);
 });
 
+check("an export's files: only those its pages' Markdown points to, each once", () => {
+  const Markdown = load("Markdown.js");
+  const one = W.newPage({ title: "One", cover: "assets/cover.png", blocks: [
+    { type: "image", src: "assets/pic.png", indent: 0 },
+    { type: "toggle", html: "more", indent: 0 },
+    { type: "gallery", indent: 1, data: { images: [{ src: "assets/g1.jpg", caption: "a" }, { src: "assets/pic.png" }, { src: "../../etc/passwd" }] } },
+    { type: "file", indent: 0, data: { src: "assets/file-report.pdf", name: "Report.pdf", size: 10 } },
+    { type: "video", indent: 0, data: { src: "assets/file-clip.mp4", name: "Clip.mp4", kind: "video" } },
+    { type: "bookmark", indent: 0, data: { url: "https://example.org", image: "assets/bm-x.png" } },
+  ] });
+  const two = W.newPage({ title: "Two", blocks: [
+    { type: "email", indent: 0, data: { src: "assets/mail-plan.eml", name: "Plan.eml", subject: "Plan" } },
+    { type: "audio", indent: 0, audio: { src: "assets/audio-1.ogg", duration: 3 } },
+    { type: "file", indent: 0, data: { src: "", name: "" } },
+    { type: "image", src: "assets/pic.png", indent: 0 },
+  ] });
+  const got = plain(W.assetsOf([one, two]));
+  assert.deepEqual(got, ["assets/pic.png", "assets/g1.jpg", "assets/file-report.pdf", "assets/file-clip.mp4", "assets/mail-plan.eml", "assets/audio-1.ogg"]);
+  // (Exactly what their Markdown links to: every link found there, nothing more.)
+  const linked = new Set();
+  for (const p of [one, two]) for (const m of Markdown.fromDocPage(p, () => null, {}).matchAll(/\]\((assets\/[^)\s]+)\)/g)) linked.add(m[1]);
+  assert.deepEqual([...linked].sort(), [...got].sort());
+  assert.deepEqual(plain(W.assetsOf([W.newPage({ title: "Plain", blocks: [{ type: "p", html: "words", indent: 0 }] })])), []);
+  assert.deepEqual(plain(W.assetsOf([])), []);
+});
+
 console.log(`workspace: ${passed} checks passed`);

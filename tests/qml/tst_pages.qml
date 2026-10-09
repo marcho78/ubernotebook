@@ -400,6 +400,46 @@ Item {
       tryVerify(function() { return written(files.rootPath + "/Exports/Getting started ").length === 2 }, 2000)
     }
 
+    function test_17b_export_takes_only_its_pages_files() {
+      fresh()
+      var assets = Workspace.assetsDir(files.rootPath)
+      ;["top.png", "g1.jpg", "file-report.pdf", "mail-plan.eml", "audio-1.ogg", "thrown.png", "other.png", "file-other.pdf"].forEach(function(n) { files.disk[assets + "/" + n] = "data of " + n })
+      var top = ws.createPage({ parent: "", title: "Trip", blocks: [{ type: "image", src: "assets/top.png", indent: 0 },
+        { type: "gallery", indent: 0, data: { images: [{ src: "assets/g1.jpg", caption: "" }, { src: "assets/top.png", caption: "" }] } }] })
+      ws.createPage({ parent: top.id, title: "Inside", blocks: [{ type: "file", indent: 0, data: { src: "assets/file-report.pdf", name: "Report.pdf", size: 14 } },
+        { type: "email", indent: 0, data: { src: "assets/mail-plan.eml", name: "Plan.eml", subject: "Plan" } },
+        { type: "audio", indent: 0, audio: { src: "assets/audio-1.ogg", duration: 2 } }] })
+      var thrown = ws.createPage({ parent: top.id, title: "Thrown", blocks: [{ type: "image", src: "assets/thrown.png", indent: 0 }] })
+      ws.trashPage(thrown.id)
+      // (Another page's, never exported with this one.)
+      ws.createPage({ parent: "", title: "Elsewhere", blocks: [{ type: "image", src: "assets/other.png", indent: 0 },
+        { type: "file", indent: 0, data: { src: "assets/file-other.pdf", name: "Other.pdf", size: 14 } }] })
+      files.exportBase = function(done) { done("/tmp/picked") }
+      ws.exportPage(top.id)
+      tryVerify(function() { return files.assetCopies.length === 1 }, 2000)
+      var c = files.assetCopies[0]
+      compare(c.from, assets)
+      compare(c.names.slice().sort(), ["audio-1.ogg", "file-report.pdf", "g1.jpg", "mail-plan.eml", "top.png"], "only the files its pages point to, each once")
+      var dir = c.to.replace(/\/assets$/, "")
+      verify(/^\/tmp\/picked\/Trip /.test(dir), dir)
+      // Its Markdown's links find them, beside it.
+      var md = files.disk[dir + "/Trip.md"] + files.disk[dir + "/Inside.md"]
+      var links = []
+      md.replace(/\]\((assets\/[^)\s]+)\)/g, function(m, src) { links.push(src) })
+      verify(links.length >= 5, md)
+      verify(links.every(function(src) { return files.disk[dir + "/" + src] === "data of " + src.slice(7) }), links.join(", "))
+      var copied = Object.keys(files.disk).filter(function(k) { return k.indexOf(dir + "/assets/") === 0 }).map(function(k) { return k.slice(dir.length + 8) }).sort()
+      compare(copied, ["audio-1.ogg", "file-report.pdf", "g1.jpg", "mail-plan.eml", "top.png"], "nothing of other pages', or of one in the trash")
+      verify(!files.ran.some(function(a) { return a[0] === "/usr/bin/cp" && a.indexOf(assets) >= 0 }), "never the whole of Pages/assets")
+      // A page with no files: none copied.
+      var plain = ws.createPage({ parent: "", title: "Plain", blocks: [{ type: "p", html: "words", indent: 0 }] })
+      ws.exportPage(plain.id)
+      tryVerify(function() { return Object.keys(files.disk).some(function(k) { return /^\/tmp\/picked\/Plain [^\/]+\/Plain\.md$/.test(k) }) }, 2000)
+      tryCompare(files.assetCopies, "length", 2, 2000)
+      compare(files.assetCopies[1].names, [], "none of Pages/assets")
+      verify(!Object.keys(files.disk).some(function(k) { return /^\/tmp\/picked\/Plain [^\/]+\/assets\//.test(k) }))
+    }
+
     // A visible item anywhere in the window (popups too) that `test` likes.
     function findItem(item, test) {
       if (!item || !item.visible) return null

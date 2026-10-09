@@ -70,6 +70,7 @@ QtObject {
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
     printed = []
+    assetCopies = []
     picturesIn = []
     deferHelperReads = false
     servesAll = false
@@ -238,6 +239,18 @@ QtObject {
     if (failPut) { if (done) done(false); return }
     disk[folder + "/" + path] = String(text)
     if (done) done(true)
+  }
+  // Files of Pages/assets copied out (Store.copyAssets): those named that
+  // are there, into `to`; each call ({ from, names, to }) kept for tests.
+  property var assetCopies: []
+  function copyAssets(from, names, to, done) {
+    assetCopies = assetCopies.concat([{ from: from, names: names.slice(), to: to }])
+    var ok = true
+    names.forEach(function(n) {
+      if (disk[from + "/" + n] !== undefined) disk[to + "/" + n] = disk[from + "/" + n]
+      else ok = false
+    })
+    if (done) done(ok)
   }
   // (Store.execText: its words through the files helper's to-json; here as they are.)
   function execText(argv, done, options) { exec(argv, done, options) }

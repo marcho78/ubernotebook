@@ -1428,6 +1428,21 @@ Item {
       if (ok && /^open$/m.test(String(out || ""))) store.failed(store.openDriveNote(to))
     }, { timeoutMs: 120000, maxBytes: 8192 })
   }
+  // Files of a folder of Uber Notebook's own (Pages/assets), by their names,
+  // copied into `to` (an export's assets folder, made yours alone first):
+  // only those (never the whole folder), each a new file yours alone (as
+  // umask 077 leaves it, whatever the one copied was), a link copied as a
+  // link (never what it points to), one that isn't there left out. Their
+  // names on its input (xargs), never too many for a command line.
+  // done(ok): every one copied.
+  readonly property string copyAssetsScript: "umask 077 && cd -- \"$1\" && exec /usr/bin/xargs -r -d '\\n' /usr/bin/cp -P -t \"$2\" --"
+  function copyAssets(from, names, to, done) {
+    var list = (names || []).map(String).filter(function(n) { return /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(n) && n.indexOf("..") < 0 })
+    if (!list.length || !/^\/./.test(String(from)) || !/^\/./.test(String(to))) { if (done) done(list.length === 0); return }
+    exec(["/usr/bin/bash", "-c", copyAssetsScript, "uber-notebook-copy-assets", String(from), String(to)], function(ok) { if (done) done(ok) },
+      { input: list.join("\n") + "\n", timeoutMs: 300000, maxBytes: 1024 * 1024 })
+  }
+
   // A file you saved where you chose, on a drive that can't keep files
   // private (an exFAT stick, some shares): saved, as you asked, and said.
   function openDriveNote(path) {
