@@ -1,5 +1,7 @@
 # Uber Notebook for Omarchy
 
+![Uber Notebook in 45 seconds: Pages and blocks, your agent on the page, paper notebooks, the calendar and habits, plain files](motion-graphics/uber-notebook-loop.gif)
+
 ![Uber Notebook: Pages with Ctrl+J asking your agent, a paper notebook behind](screenshots/00-banner.png)
 
 Your notes, in your Omarchy shell. Press **Super+N**, or click the notebook in
