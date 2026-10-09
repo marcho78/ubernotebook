@@ -48,6 +48,21 @@ Item {
 
   function focusSearch() { search.focusField() }
 
+  // Another profile opening: what was found in this one (titles, words)
+  // gone at once, and a search still on its way given nothing.
+  function clearSearch() {
+    searchTimer.stop()
+    search.text = ""
+    query = ""
+    results = []
+    searching = false
+  }
+  Connections {
+    target: shelf.store
+    function onSwitchingChanged() { if (shelf.store.switching) shelf.clearSearch() }
+    function onRootPathChanged() { shelf.clearSearch() }
+  }
+
   Timer {
     id: searchTimer
     interval: 180

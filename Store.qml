@@ -1249,13 +1249,20 @@ Item {
   // Every page that has every word of the query: done([...]), best first.
   function search(query, done) {
     var words = Library.terms(query)
-    if (words.length === 0 || !rootPath) { done([]); return }
+    if (words.length === 0 || !rootPath || switching) { done([]); return }
     var longest = words.slice().sort(function(a, b) { return b.length - a.length })[0]
+    // (Another profile opened meanwhile: nothing found in the one before is
+    // given, nor mixed with this one's notebooks.)
+    var gen = generation
+    var root0 = rootPath
+    function moved() { return gen !== store.generation || root0 !== store.rootPath || store.switching }
     // (The word on grep's input, not its command line, where every account
     // on the computer can read it.)
     exec(["/usr/bin/grep", "-rilF", "--include=*.json", "--exclude-dir=.trash", "--exclude-dir=Pages", "-f", "-", "--", rootPath], function(ok, output) {
+      if (moved()) { done([]); return }
       var paths = String(output || "").split("\n").filter(function(p) { return /\/pages\/[a-z0-9-]+\.json$/.test(p) }).slice(0, 400)
       store.readFiles(paths, function(files) {
+        if (moved()) { done([]); return }
         var results = []
         for (var path in files) {
           var parts = path.slice(store.rootPath.length + 1).split("/")

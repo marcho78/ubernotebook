@@ -469,16 +469,28 @@ ShellRoot {
                       until(function() { return store2.ready && store2.rootPath === d + "/new/Work/Notes" }, function() {
                         store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/new/Work/Notes"], function(ok, out) {
                           say("private: a new profile's notes folder made, and the folders it's in, 700", store2.blockedFolder === "" && String(out).trim() === "700", store2.rootPath + " | " + store2.blockedFolder + " " + String(out).trim())
-                          // A notebook read as another profile opens: nothing of
-                          // it given (to be shown, exported or merged there).
-                          var held = store2.createNotebook({ title: "Held" }, [])
-                          var got = "pending"
-                          store2.readPages(held.id, function(nb) { got = nb })
-                          store2.rootPath = ""
-                          until(function() { return got !== "pending" }, function() {
-                            say("private: a notebook read as another profile opens gives nothing", held !== null && got === null, String(got))
-                            store2.active = false
-                            store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                          // A notebook search as another profile opens: nothing
+                          // of this one found (to be shown under that one).
+                          var found = store2.createNotebook({ title: "Found" }, [{ title: "Zebrafish notes", blocks: [{ type: "p", html: "zebrafish" }] }])
+                          later(800, function() {
+                            store2.search("zebrafish", function(r1) {
+                              store2.search("zebrafish", function(r2) {
+                                say("private: a notebook search as another profile opens gives nothing", found !== null && r1.length === 1 && r2.length === 0, r1.length + " then " + r2.length)
+                                store2.switching = false
+                                // A notebook read as another profile opens: nothing of
+                                // it given (to be shown, exported or merged there).
+                                var held = store2.createNotebook({ title: "Held" }, [])
+                                var got = "pending"
+                                store2.readPages(held.id, function(nb) { got = nb })
+                                store2.rootPath = ""
+                                until(function() { return got !== "pending" }, function() {
+                                  say("private: a notebook read as another profile opens gives nothing", held !== null && got === null, String(got))
+                                  store2.active = false
+                                  store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                                })
+                              })
+                              store2.switching = true
+                            })
                           })
                         })
                       })

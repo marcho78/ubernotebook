@@ -521,6 +521,39 @@ Item {
       compare(service.settings.folder, "~/Moved")
     }
 
+    // A notebook search of the profile before: what it found (titles, words)
+    // gone the moment another profile starts opening; one on its way then
+    // gives nothing.
+    function test_6e_a_search_of_the_profile_before() {
+      fresh()
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      app.showSpace("notebooks")
+      var shelf = app.shelfView
+      var field = null
+      tryVerify(function() { field = find(shelf, function(it) { return it.placeholder === "Search every page" }); return field !== null }, 2000)
+      try {
+        field.text = "eggs"; field.edited("eggs")
+        tryVerify(function() { return shelf.results.length > 0 }, 2000, "found")
+        store.switching = true
+        compare(shelf.results.length, 0, "gone at once")
+        compare(shelf.query, "")
+        compare(field.text, "")
+        store.switching = false
+        store.holdSearch = true
+        field.text = "eggs"; field.edited("eggs")
+        tryVerify(function() { return store.heldSearches.length === 1 }, 2000, "on its way")
+        store.switching = true
+        store.answerSearches()
+        compare(shelf.results.length, 0, "the one on its way gives nothing")
+        compare(shelf.searching, false)
+      } finally {
+        store.holdSearch = false
+        store.answerSearches()
+        store.switching = false
+        app.showSpace("pages")
+      }
+    }
+
     // While an audio note is being recorded (or saved), no other profile is
     // opened, nor the open one's folder changed: its page would be gone from
     // under it, the recording left in no page. Said, from the menu as to

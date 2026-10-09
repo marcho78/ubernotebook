@@ -18,7 +18,8 @@ The first version.
   line as they save it. Settings → Writing → *Show what reminders say* puts
   them back. Every profile's folder is made yours alone as Uber Notebook
   starts, not only the one opened; a folder that isn't yours (whatever its
-  mode) counts as one that can't be private; a backup is never put back on
+  mode), or a drive that refuses the change (a phone), counts as one that
+  can't be private; a backup is never put back on
   a drive that can't keep it private; a file you save to a phone goes
   through, with the note; a refused backups folder or Markdown copy is said
   in the window and with a notification, not only in Settings; the notice
@@ -30,7 +31,11 @@ The first version.
   lands in another: no profile is opened while an audio note records ("Stop
   the recording first"); a video's still, an email's attachment, dictation,
   a transcript or a louder copy finishing after a switch is never put in
-  the next profile (it's said, to do again in its own); a quick note made right after a switch waits for that profile, and
+  the next profile (it's said, to do again in its own); the open page is
+  saved the moment another profile starts opening, and nothing is recorded,
+  dictated, written out or made louder till it's open; a search's results
+  are gone at once, and one on its way finds nothing; `set folder` and `set
+  profile` do as Settings does; a quick note made right after a switch waits for that profile, and
   the quick-note card never loses its words; `quick` and `importNotes`
   answer whether they did it; each profile keeps its own Inbox. Exports of
   many pages save a few files at a time.

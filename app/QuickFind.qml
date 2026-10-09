@@ -18,6 +18,23 @@ Pop {
   signal pageChosen(string id)
   signal tagChosen(string name)
 
+  // Another profile opening (a command, an agent): what was found in this
+  // one gone, and the search closed.
+  Connections {
+    target: pop.workspace ? pop.workspace.files : null
+    ignoreUnknownSignals: true
+    function onSwitchingChanged() {
+      if (!pop.workspace.files.switching) return
+      searchTimer.stop()
+      pop.query = ""
+      pop.found = []
+      pop.searching = false
+      field.text = ""
+      // (Still opening, too.)
+      if (pop.visible) pop.close()
+    }
+  }
+
   width: Math.min(600, (parent ? parent.width : 600) - 40)
   height: Math.min(480, (parent ? parent.height : 480) - 80)
   padding: 12

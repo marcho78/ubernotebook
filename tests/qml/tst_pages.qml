@@ -31,6 +31,16 @@ Item {
     service: service
   }
 
+  // (Another profile picked the moment a search's grep runs.)
+  property bool switchOnGrep: false
+  Connections {
+    target: files
+    function onRanChanged() {
+      var last = files.ran.length ? files.ran[files.ran.length - 1] : null
+      if (root.switchOnGrep && last && last[0] === "/usr/bin/grep") { root.switchOnGrep = false; files.switching = true }
+    }
+  }
+
   TestCase {
     name: "Pages"
     when: windowShown
@@ -160,6 +170,35 @@ Item {
       compare(greps.length, 1)
       verify(greps[0].argv.join(" ").indexOf("toggles") < 0, greps[0].argv.join(" "))
       compare(greps[0].input, "toggles\n")
+    }
+
+    // Another profile opening: a search on its way gives nothing of the one
+    // before, none starts, and Ctrl+P's results are gone, it closed.
+    function test_6b_search_as_another_profile_opens() {
+      fresh()
+      var found = null
+      try {
+        root.switchOnGrep = true
+        ws.search("toggles fold", function(list) { found = list })
+        tryVerify(function() { return found !== null }, 2000)
+        verify(files.switching, "picked as it looked")
+        compare(found.length, 0, "nothing of the one before")
+        found = null
+        ws.search("toggles fold", function(list) { found = list })
+        compare(found.length, 0, "none while it opens")
+        files.switching = false
+        view.openFind()
+        var field = null
+        tryVerify(function() { field = findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }); return field !== null }, 1000)
+        field.text = "toggles"; field.edited("toggles")
+        tryVerify(function() { return findItem(root.Window.window.contentItem, function(it) { return it.text === "Getting started" && typeof it.textFormat !== "undefined" }) !== null }, 2000, "found")
+        files.switching = true
+        tryVerify(function() { return findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }) === null }, 1000, "closed")
+        compare(field.text, "", "what was typed gone")
+      } finally {
+        root.switchOnGrep = false
+        files.switching = false
+      }
     }
 
     function test_7_moving_blocks_to_another_page() {

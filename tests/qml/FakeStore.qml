@@ -16,6 +16,12 @@ QtObject {
   property int retried: 0
   function retry() { retried++ }
   property string rootPath: "/tmp/uber-notebook-dev"
+  // Another profile being opened (Store.qml).
+  property bool switching: false
+  // With holdSearch, a search waits for answerSearches().
+  property bool holdSearch: false
+  property var heldSearches: []
+  function answerSearches() { var list = heldSearches; heldSearches = []; list.forEach(function(f) { f() }) }
   property var notebooks: []
   // Store.readClipboard(done, primary), when a test sets one (null: Qt's paste).
   property var readClipboard: null
@@ -28,6 +34,9 @@ QtObject {
   Component.onCompleted: seed()
 
   function reset() {
+    switching = false
+    holdSearch = false
+    heldSearches = []
     readClipboard = null
     failSaves = false
     data = ({})
@@ -130,6 +139,10 @@ QtObject {
   }
 
   function search(query, done) {
+    if (holdSearch) { heldSearches.push(function() { store.searchNow(query, done) }); return }
+    searchNow(query, done)
+  }
+  function searchNow(query, done) {
     var out = []
     order.forEach(function(id) {
       var nb = data[id]

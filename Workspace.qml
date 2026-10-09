@@ -1420,15 +1420,20 @@ Item {
   // done([{ id, title, icon, snippet }]).
   function search(query, done) {
     var words = Workspace.terms(query)
-    if (words.length === 0 || !folder) { done([]); return }
+    if (words.length === 0 || !folder || (files && files.switching === true)) { done([]); return }
     var longest = words.slice().sort(function(a, b) { return b.length - a.length })[0]
+    // (Another profile opened meanwhile: nothing found in the one before is
+    // given; its pages read again from this one's (readPages) never.)
+    var gen = generation
     // (The word on grep's input, not its command line, where every account
     // on the computer can read it.)
     files.exec(["/usr/bin/grep", "-rliF", "--include=*.json", "-f", "-", "--", folder], function(ok, output) {
+      if (gen !== ws.generation || files.switching === true) { done([]); return }
       var ids = String(output || "").split("\n").map(function(p) { return p.slice(p.lastIndexOf("/") + 1).replace(/\.json$/, "") }).filter(function(id) { return Workspace.isUuid(id) && ws.index.pages[id] && !Workspace.inTrash(ws.index, id) && !Workspace.inTemplates(ws.index, id) })
       // And pages whose titles match, whether or not grep found them.
       Workspace.findTitles(ws.index, query, 40).forEach(function(id) { if (ids.indexOf(id) < 0) ids.push(id) })
       ws.readPages(ids.slice(0, 300), function(pages) {
+        if (gen !== ws.generation || files.switching === true) { done([]); return }
         var results = []
         pages.forEach(function(p) {
           var score = Workspace.score(p.title || "Untitled", p.text, query)
