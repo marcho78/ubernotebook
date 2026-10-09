@@ -380,6 +380,64 @@ Item {
       }
     }
 
+    // Another profile opening (picked, its notes not open yet): the page as
+    // it is saved at once, where it was; what comes back meanwhile (words
+    // dictated, written out, made louder) isn't put on it; nothing new is
+    // recorded, written out or made louder, and that's said.
+    function test_4d_while_another_profile_opens() {
+      fresh()
+      var pageFile = files.rootPath + "/Pages/" + view.page.id + ".json"
+      put({ src: "assets/audio-20261003-090909-sav.ogg", duration: 12, peaks: [10, 20] })
+      put({ src: "assets/audio-20261003-090910-two.ogg", duration: 8, peaks: [5, 9] })
+      var uid = view.editor.uidAt(0)
+      var uid2 = view.editor.uidAt(1)
+      verify(view.pageDirty, "not saved yet")
+      verify(String(files.disk[pageFile] || "").indexOf("090909-sav") < 0)
+      try {
+        files.switching = true
+        verify(!view.pageDirty, "saved the moment it started")
+        verify(String(files.disk[pageFile]).indexOf("090909-sav") >= 0, "where it was")
+        var said = "Another profile is opening: try again in a moment"
+        root.lastToast = ""; view.dictate(); compare(root.lastToast, said)
+        root.lastToast = ""; view.newAudioNote(); compare(root.lastToast, said)
+        root.lastToast = ""; view.recordAudio(uid); compare(root.lastToast, said)
+        root.lastToast = ""; view.transcribeAudio(view.page.id, uid); compare(root.lastToast, said)
+        root.lastToast = ""; view.louderAudio(uid); compare(root.lastToast, said)
+        compare(rec.starts.length, 0, "nothing recorded")
+        compare(rec.transcribed.length, 0, "nothing written out")
+        compare(rec.louders.length, 0, "nothing made louder")
+        // Under way before it, back during it.
+        files.switching = false
+        rec.nextTranscript = "Words from before the switch."
+        rec.holdWork = true
+        view.transcribeAudio(view.page.id, uid)
+        view.louderAudio(uid2)
+        compare(rec.heldWork.length, 2, "both under way")
+        files.switching = true
+        var before = JSON.stringify(view.editor.serialize())
+        rec.releaseWork()
+        wait(50)
+        compare(JSON.stringify(view.editor.serialize()), before, "the page as it was")
+        var made = rec.louders[rec.louders.length - 1].to
+        verify(files.ran.some(function(a) { return a[0] === "/usr/bin/rm" && a[a.length - 1] === made }), "the louder copy taken away")
+        rec.holdWork = false
+        files.switching = false
+        view.dictate()
+        tryCompare(rec, "phase", "recording", 1000)
+        rec.phase = "transcribing"
+        files.switching = true
+        rec._end(true, { text: "said as it switched" })
+        compare(files.copied, "said as it switched", "copied instead")
+        compare(root.lastToast, "Copied what you said: paste it where you want it")
+        verify(view.editor.serialize().every(function(b) { return Html.plainText(b.html || "").indexOf("said as it switched") < 0 }), "not on the page")
+      } finally {
+        rec.holdWork = false
+        rec.releaseWork()
+        rec.cancel()
+        files.switching = false
+      }
+    }
+
     function test_6_settings_the_microphone_louder_and_a_test() {
       fresh()
       settingsPanel.openAt("audio")

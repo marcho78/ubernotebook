@@ -737,9 +737,16 @@ try {
       assert.deepEqual(r.out.split("\n"), [path.join(d, "New.png"), "open", ""], drive);
       assert.ok(!fs.readdirSync(d).some((n) => n.startsWith(".uber-notebook-")), drive + ": nothing half-made left");
       // (The Markdown copy's check: never "keeps" there.)
+      // (A drive that refuses the change too: it's said not to keep them,
+      // not that the check failed.)
       const p = helperOn(drive, ["probe", d]);
-      if (drive === "refuses") assert.equal(p.code, 3, "a drive that refuses it: refused");
-      else assert.equal(JSON.parse(p.out).keeps, false, p.err);
+      assert.equal(p.code, 0, drive + ": " + p.err);
+      assert.equal(JSON.parse(p.out).keeps, false, drive);
+      assert.ok(!fs.readdirSync(d).some((n) => n.startsWith(".uber-notebook-probe")), drive + ": its probe taken away");
+      // (Nor does making a copy's own files private say they are.)
+      const mp = helperOn(drive, ["make-private", d], JSON.stringify(["Picture.png"]));
+      assert.equal(mp.code, 0, drive + ": " + mp.err);
+      assert.equal(JSON.parse(mp.out).keeps, false, drive);
       assert.ok(!fs.readdirSync(d).some((n) => n.startsWith(".uber-notebook-probe")), drive + ": its probe taken away");
     }
   });

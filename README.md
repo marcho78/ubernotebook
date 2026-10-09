@@ -1123,8 +1123,11 @@ only in Settings. A profile's folder that was there before and isn't now (a
 drive mounted in a folder of yours, not mounted) isn't made again, nor the
 folder it's in, so nothing is put where that drive goes: it's said the
 same way, and picking it again only tries it again (a new profile's folder
-is made, and another folder you pick for one). A file you save there yourself
-(a PDF for a stick, a picture to a phone) is still saved, and you're told
+is made, and another folder you pick for one). The one case it can't
+tell is a drive mounted on the notes folder itself: unmounted, the empty
+folder it leaves looks like an empty profile, so pick a folder inside the
+drive instead. A file you save there yourself (a PDF for a stick, a
+picture to a phone) is still saved, and you're told
 that drive can't keep it private. A page's export copies only the files
 its pages use. Its working files, recordings and dictation on their way
 included, are in your runtime folder (`$XDG_RUNTIME_DIR`, yours alone;

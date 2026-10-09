@@ -193,6 +193,16 @@ QtObject {
     return ""
   }
 
+  // `set folder` and `set profile` (the commands): as Settings does them,
+  // "" or what's wrong (checked, not while an audio note is being recorded,
+  // a folder new to it made); null with no profile yet (then it's the
+  // folder the first one is made of, as before).
+  function setByCommand(key, value) {
+    if (key === "folder" && current) return setFolder(current.id, String(value))
+    if (key === "profile" && list.length) return use(String(value))
+    return null
+  }
+
   // Profiles put back from a backup ([{ name, folder, saved }]): each a new
   // one, its name or "Name (restored)" if that's taken, with the page, the
   // notebook and the Inbox it had; the first opened if `open` (not while an

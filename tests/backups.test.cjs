@@ -186,6 +186,26 @@ try {
     assert.match(said[said.length - 1], /can't keep your backups private/);
   });
 
+  // A drive that refuses the change itself (a phone, through gvfs), though
+  // the folder reads 700 and yours: not taken for private either. (Its
+  // chmod here one that refuses, as such a drive's does.)
+  check("a folder whose drive refuses the change: open, and no backup there", () => {
+    const refusing = path.join(tmp, "refusing-chmod");
+    fs.writeFileSync(refusing, "#!/bin/sh\necho 'Operation not supported' >&2\nexit 1\n", { mode: 0o700 });
+    const on = (script) => { assert.ok(script.includes("/usr/bin/chmod go-rwx")); return script.split("/usr/bin/chmod go-rwx").join(refusing + " go-rwx"); };
+    const phone = fs.mkdtempSync(path.join(tmp, "phone-"));
+    fs.chmodSync(phone, 0o700);
+    assert.match(run(on(B.LIST_SCRIPT), [phone]).out, /^open$/m);
+    const m = JSON.stringify(B.manifest([{ name: "Personal" }], "1.0.0", new Date()));
+    const n = B.fileName("Personal", new Date(2026, 9, 3, 1, 30), false);
+    const r = run(on(B.BACKUP_SCRIPT), [phone, n.stem, n.suffix, personal, "p1", ""], m);
+    assert.equal(r.code, 4, r.err);
+    const said = r.err.trim().split("\n");
+    assert.equal(said[0], "open");
+    assert.match(said[said.length - 1], /can't keep your backups private/);
+    assert.deepEqual(fs.readdirSync(phone), [], "nothing written there");
+  });
+
   check("listed", () => {
     const list = plain(B.listed(run(B.LIST_SCRIPT, [backups]).out, backups));
     assert.deepEqual(list.map((b) => b.name).sort(), ["Uber Notebook All profiles 2026-10-03 0130 2.tar.gz", "Uber Notebook All profiles 2026-10-03 0130.tar.gz", "older.tar.gz"]);

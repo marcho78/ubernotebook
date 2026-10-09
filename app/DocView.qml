@@ -257,6 +257,13 @@ FocusScope {
     var folder = workspace ? workspace.folder : ""
     return function() { if (view.workspace && gen === view.workspace.generation && folder === view.workspace.folder) return fn.apply(null, arguments) }
   }
+  // Another profile opening (from the moment it's picked till its notes
+  // are open, or it's said they can't be): the page as it is saved at
+  // once, where it was; what's recorded, written out or made louder
+  // meanwhile isn't put on it, and no recording starts.
+  readonly property bool switching: !!(workspace && workspace.files && workspace.files.switching === true)
+  onSwitchingChanged: if (switching) commit()
+  readonly property string switchingText: "Another profile is opening: try again in a moment"
   function addEmailTo(pageId, uid, path) {
     workspace.importEmail(path, inThisFolder(function(s, why) {
       if (!s) { view.toast(why || "That email couldn't be read"); return }
@@ -2196,6 +2203,7 @@ FocusScope {
   // it's written out, as Settings has it.
   function recordAudio(uid) {
     if (!recorder || !page || locked || !audioPath("assets")) return
+    if (switching) { toast(switchingText); return }
     var name = Audio.fileName(new Date())
     var pageId = page.id
     var problem = recorder.start("audio", uid, audioPath("assets/" + name), function(ok, r) {
@@ -2221,6 +2229,7 @@ FocusScope {
   function transcribeAudio(pageId, uid) {
     var a = page && page.id === pageId ? editor.audioOf(uid) : null
     if (!a || !a.src || !recorder || audioWork[uid]) return
+    if (switching) { toast(switchingText); return }
     setAudioWork(uid, "transcribe")
     // (Another profile opened before it's written out: its words aren't put
     // in a page of that one, and that's said: write it out again there.)
@@ -2229,6 +2238,7 @@ FocusScope {
     recorder.transcribe(audioPath(a.src), a.duration, function(ok, text, problem) {
       view.setAudioWork(uid, "")
       mine(function() {
+        if (view.switching) return
         moved = false
         if (!ok) { view.toast(problem || "It couldn't be written out"); return }
         view.updateAudio(pageId, uid, function(x) { x.transcript = text; x.open = true; return x })
@@ -2242,6 +2252,7 @@ FocusScope {
   function louderAudio(uid) {
     var a = page && !locked ? editor.audioOf(uid) : null
     if (!a || !a.src || !recorder || audioWork[uid]) return
+    if (switching) { toast(switchingText); return }
     var pageId = page.id
     var name = Audio.fileName(new Date())
     setAudioWork(uid, "louder")
@@ -2253,6 +2264,7 @@ FocusScope {
     recorder.louder(audioPath(a.src), made, function(ok, peaks) {
       view.setAudioWork(uid, "")
       mine(function() {
+        if (view.switching) return
         moved = false
         if (!ok) { view.toast("It couldn't be made louder"); return }
         view.updateAudio(pageId, uid, function(x) {
@@ -2299,6 +2311,7 @@ FocusScope {
     if (recordingNote) { if (recorder.phase === "recording") recorder.stop(); return }
     if (recorder.busy) { toast("Already recording: stop that one first"); return }
     if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to record on it" : "Open a page to record on it"); return }
+    if (switching) { toast(switchingText); return }
     if (!recorder.canRecord) { toast("Recording needs ffmpeg"); return }
     var made = editor.placeBlock(editor.focusUid, { type: "audio" })
     if (made) Qt.callLater(function() { view.recordAudio(made) })
@@ -2311,13 +2324,14 @@ FocusScope {
     if (!recorder) { toast("Dictation isn't here: Uber Notebook runs without the shell"); return }
     if (dictating) { if (recorder.phase === "recording") recorder.stop(); return }
     if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to dictate into it" : "Open a page to dictate into it"); return }
+    if (switching) { toast(switchingText); return }
     var gen = workspace.generation
     var folder = workspace.folder
     var problem = recorder.start("dictation", "page", "", function(ok, r) {
       if (!ok) { if (!r.canceled) view.toast(r.problem || "Nothing was written down"); return }
       // (Another profile's notes open by the time it's written down: never
       // put on a page of theirs; copied instead.)
-      var here = view.workspace && gen === view.workspace.generation && folder === view.workspace.folder
+      var here = view.workspace && gen === view.workspace.generation && folder === view.workspace.folder && !view.switching
       if (here && view.page && !view.locked && view.tagShown === "" && editor.dictated(r.text)) return
       view.workspace.files.copyText(r.text)
       view.toast("Copied what you said: paste it where you want it")

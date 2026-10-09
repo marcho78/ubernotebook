@@ -756,7 +756,11 @@ Item {
         function set(key: string, value: string): string {
           if (commands.agent) return "not for the panel's agent: Uber Notebook's settings are yours"
           if (!root.defaults || !Object.prototype.hasOwnProperty.call(root.defaults, key)) return "unknown setting"
-          // (Another notes folder: not while an audio note is being recorded, Profiles.qml.)
+          // (The open profile's folder, or another profile opened: as
+          // Settings does them, Profiles.qml.)
+          var said = key === "folder" || key === "profile" ? profilesItem.setByCommand(key, value) : null
+          if (said !== null) return said || JSON.stringify(root.settings[key])
+          // (No profile yet: the folder the first one is made of.)
           var busy = (key === "folder" || key === "profile") && value !== String(root.settings[key]) ? profilesItem.refuse() : ""
           if (busy) return busy
           var parsed = value

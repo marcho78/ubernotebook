@@ -488,6 +488,39 @@ Item {
       compare(vault().fresh, true, "another folder: made when it's opened")
     }
 
+    // `set folder` and `set profile` (the commands) do as Settings does:
+    // another profile's folder refused; a folder new to it made when it's
+    // opened; another profile opened with its own folder, never the one
+    // before's; not while an audio note records. No profile yet: the
+    // setting alone, as before.
+    function test_6d_set_folder_and_profile_from_the_commands() {
+      fresh()
+      compare(profiles.setByCommand("folder", "~/Start"), null, "no profile yet")
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      verify(profiles.add("Work", "~/Work", false) === "")
+      var me = profiles.current.id
+      var work = profiles.list.filter(function(p) { return p.name === "Work" })[0]
+      verify(profiles.setByCommand("folder", "~/Work/Inside") !== "", "another profile's folder: refused")
+      compare(service.settings.folder, "~/Documents/Uber Notebook")
+      compare(profiles.setByCommand("folder", "~/Moved"), "")
+      compare(service.settings.folder, "~/Moved")
+      var mine = profiles.list.filter(function(p) { return p.id === me })[0]
+      compare(mine.folder, "~/Moved", "kept on the profile, not the setting alone")
+      compare(mine.fresh, true, "made when it's opened")
+      compare(profiles.setByCommand("profile", "no-such"), "There's no profile like that")
+      compare(profiles.setByCommand("profile", work.id), "")
+      compare(profiles.current.name, "Work")
+      compare(service.settings.folder, "~/Work", "its own folder")
+      var rec = service.recorder
+      compare(rec.start("audio", "a-block", "/tmp/Work/Pages/assets/note.ogg", function() {}), "")
+      compare(profiles.setByCommand("profile", me), "Stop the recording first")
+      compare(profiles.setByCommand("folder", "~/Work2"), "Stop the recording first")
+      compare(service.settings.folder, "~/Work")
+      rec.stop()
+      compare(profiles.setByCommand("profile", me), "")
+      compare(service.settings.folder, "~/Moved")
+    }
+
     // While an audio note is being recorded (or saved), no other profile is
     // opened, nor the open one's folder changed: its page would be gone from
     // under it, the recording left in no page. Said, from the menu as to
