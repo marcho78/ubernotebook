@@ -1179,16 +1179,16 @@ Item {
       if (no) { done(null, "", no); return }
       var target = Bookmark.pageTarget(link, httpsOnly)
       if (!target) { done(null, "", "The page couldn't be read: the link's kept"); return }
-      files.exec(["/usr/bin/getent", "ahosts", target.host], function(okR, outR) {
+      files.helper(["lookup"], function(okR, outR) {
         var ips = okR ? Bookmark.addresses(outR) : []
         if (!ips.length || !ips.every(Bookmark.isPublicIp)) { done(null, "", "That site isn't on the internet (it's this computer or your network): the link's kept"); return }
         var ip = ips.filter(function(a) { return a.indexOf(":") < 0 })[0] || ips[0]
         var at = target.host + ":" + target.port + ":" + (ip.indexOf(":") >= 0 ? "[" + ip + "]" : ip)
         // (It prints the page, then on a line of its own after it, how it
         // answered: its code, and where it sends you on to.)
-        files.exec(["/usr/bin/curl", "-q", "-s", "--noproxy", "*", "--proto", httpsOnly ? "=https" : "=http,https", "--max-redirs", "0",
-          "--resolve", at, "--max-time", "15", "--max-filesize", "2000000", "-A", ws.fetchAgent, "-H", "Accept: text/html",
-          "-w", "\n%{http_code}\t%{redirect_url}", "--", target.url], function(ok, out) {
+        files.exec(["/usr/bin/curl", "-q", "-K", "-", "-s", "--noproxy", "*", "--proto", httpsOnly ? "=https" : "=http,https", "--max-redirs", "0",
+          "--max-time", "15", "--max-filesize", "2000000", "-A", ws.fetchAgent, "-H", "Accept: text/html",
+          "-w", "\n%{http_code}\t%{redirect_url}"], function(ok, out) {
           var text = String(out || "")
           var cut = text.lastIndexOf("\n")
           var parts = (cut >= 0 ? text.slice(cut + 1) : "").split("\t")
@@ -1202,10 +1202,18 @@ Item {
           var html = cut >= 0 ? text.slice(0, cut) : ""
           if (!ok || code !== 200 || !html.trim()) { done(null, "", "The page couldn't be read: the link's kept"); return }
           done(html, target.url, "")
-        }, { timeoutMs: 20000, maxBytes: 2100000 })
-      }, { timeoutMs: 5000, maxBytes: 65536 })
+        }, { input: curlConfig(target.url, at), timeoutMs: 20000, maxBytes: 2100000 })
+      }, { input: target.host, timeoutMs: 5000, maxBytes: 65536 })
     }
     step(url, 0)
+  }
+
+  // curl's config, on its input (-K -): the link, and the address it's
+  // fetched from (looked up first, a public one), never on its command line,
+  // where every account on the computer can read them.
+  function curlConfig(url, at) {
+    function quoted(v) { return "\"" + String(v).replace(/[\r\n]/g, "").replace(/\\/g, "\\\\").replace(/"/g, "\\\"") + "\"" }
+    return "url = " + quoted(url) + "\nresolve = " + quoted(at) + "\n"
   }
 
   // The page's picture (its og:image, named by the page, not by you): only
@@ -1221,7 +1229,7 @@ Item {
     // opened meanwhile, it isn't kept.)
     var gen = generation
     var dest = Workspace.assetsDir(files.rootPath)
-    files.exec(["/usr/bin/getent", "ahosts", target.host], function(okR, out) {
+    files.helper(["lookup"], function(okR, out) {
       var ips = okR ? Bookmark.addresses(out) : []
       if (!ips.length || !ips.every(Bookmark.isPublicIp)) { done(""); return }
       var ip = ips.filter(function(a) { return a.indexOf(":") < 0 })[0] || ips[0]
@@ -1230,17 +1238,17 @@ Item {
       files.exec(["/usr/bin/mkdir", "-m", "700", "--", tmp], function(madeTmp) {
         if (!madeTmp) { done(""); return }
         function finish(src) { files.exec(["/usr/bin/rm", "-rf", "--", tmp], null); done(src) }
-        files.exec(["/usr/bin/curl", "-q", "-sS", "--noproxy", "*", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
-          "--resolve", at, "-A", ws.fetchAgent, "-o", tmp + "/picture", "-w", "%{content_type}", "--", target.url], function(ok2, type) {
+        files.exec(["/usr/bin/curl", "-q", "-K", "-", "-sS", "--noproxy", "*", "--proto", "=https", "--max-redirs", "0", "--max-time", "15", "--max-filesize", "5000000",
+          "-A", ws.fetchAgent, "-o", tmp + "/picture", "-w", "%{content_type}"], function(ok2, type) {
           var name = ok2 ? Bookmark.imageName(String(type || ""), target.url, new Date()) : ""
           if (!name || gen !== ws.generation) { finish(""); return }
           files.mkdirs([dest], function() {
             if (gen !== ws.generation) { finish(""); return }
             files.copyPictureIn(tmp + "/picture", dest, name, function(ok3) { finish(ok3 && gen === ws.generation ? "assets/" + name : "") })
           })
-        }, { timeoutMs: 20000, maxBytes: 4096 })
+        }, { input: curlConfig(target.url, at), timeoutMs: 20000, maxBytes: 4096 })
       })
-    }, { timeoutMs: 5000, maxBytes: 65536 })
+    }, { input: target.host, timeoutMs: 5000, maxBytes: 65536 })
   }
 
   // The template new pages inside a page start from ("" for none).
@@ -1398,7 +1406,9 @@ Item {
     var words = Workspace.terms(query)
     if (words.length === 0 || !folder) { done([]); return }
     var longest = words.slice().sort(function(a, b) { return b.length - a.length })[0]
-    files.exec(["/usr/bin/grep", "-rliF", "--include=*.json", "-e", longest, "--", folder], function(ok, output) {
+    // (The word on grep's input, not its command line, where every account
+    // on the computer can read it.)
+    files.exec(["/usr/bin/grep", "-rliF", "--include=*.json", "-f", "-", "--", folder], function(ok, output) {
       var ids = String(output || "").split("\n").map(function(p) { return p.slice(p.lastIndexOf("/") + 1).replace(/\.json$/, "") }).filter(function(id) { return Workspace.isUuid(id) && ws.index.pages[id] && !Workspace.inTrash(ws.index, id) && !Workspace.inTemplates(ws.index, id) })
       // And pages whose titles match, whether or not grep found them.
       Workspace.findTitles(ws.index, query, 40).forEach(function(id) { if (ids.indexOf(id) < 0) ids.push(id) })
@@ -1411,7 +1421,7 @@ Item {
         results.sort(function(a, b) { return b.score - a.score || (a.modified < b.modified ? 1 : -1) })
         done(results.slice(0, 50))
       })
-    }, { okCodes: [0, 1], maxBytes: 2 * 1024 * 1024, timeoutMs: 8000 })
+    }, { input: longest + "\n", okCodes: [0, 1], maxBytes: 2 * 1024 * 1024, timeoutMs: 8000 })
   }
 
   // ---- pictures ---------------------------------------------------------------------------------

@@ -67,7 +67,7 @@ Item {
     _started = false
     proc.stdinEnabled = input
     if (workingDirectory) proc.workingDirectory = workingDirectory
-    proc.command = ["/usr/bin/setsid", "--wait"].concat(argv)
+    proc.command = Env.START.concat(argv)
     proc.running = true
     deadline.restart()
     return true

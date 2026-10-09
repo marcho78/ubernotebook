@@ -147,11 +147,19 @@ Item {
     function test_6_search() {
       fresh()
       var found = null
+      var mark = files.ran.length
       ws.search("toggles fold", function(list) { found = list })
       tryVerify(function() { return found !== null }, 2000)
       compare(found.length, 1)
       compare(found[0].title, "Getting started")
       compare(found[0].snippet.match.toLowerCase(), "toggles")
+      // (The word on grep's input, never its command line, where every
+      // account on the computer can read it.)
+      var greps = []
+      files.ran.slice(mark).forEach(function(a, j) { if (a[0] === "/usr/bin/grep") greps.push({ argv: a, input: files.inputs[mark + j] }) })
+      compare(greps.length, 1)
+      verify(greps[0].argv.join(" ").indexOf("toggles") < 0, greps[0].argv.join(" "))
+      compare(greps[0].input, "toggles\n")
     }
 
     function test_7_moving_blocks_to_another_page() {

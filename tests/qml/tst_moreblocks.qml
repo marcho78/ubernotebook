@@ -244,11 +244,18 @@ Item {
         view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://example.com/inside" + k })
         tryVerify(function() { return dataAt(i).title === "Inside " + k }, 2000)
         compare(dataAt(i).image, "", "no picture: " + pictures[k])
-        verify(!files.ran.slice(before).some(function(a) { return a[0] === "/usr/bin/curl" && a[a.length - 1] === pictures[k] }), "never fetched: " + pictures[k])
+        verify(!files.ran.slice(before).some(function(a, j) { return a[0] === "/usr/bin/curl" && files.curlUrl(a, { input: files.inputs[before + j] }) === pictures[k] }), "never fetched: " + pictures[k])
       }
       // The page itself: read step by step, from the address looked up,
       // past no proxy, redirects followed here, each checked again.
-      function curls(from) { return files.ran.slice(from).filter(function(a) { return a[0] === "/usr/bin/curl" }) }
+      // (Each curl: its command line, and its config on its input: the link
+      // and the address it's fetched from, never on the command line.)
+      function curls(from) {
+        var out = []
+        files.ran.slice(from).forEach(function(a, j) { if (a[0] === "/usr/bin/curl") out.push({ argv: a, input: files.inputs[from + j] }) })
+        return out
+      }
+      function resolveOf(c) { var m = /^resolve = "([^"]*)"$/m.exec(c.input); return m ? m[1] : "" }
       files.fetchPages["http://plain.example.com/a"] = "REDIRECT https://example.com/b"
       files.fetchPages["https://example.com/b"] = '<html><head><title>Followed</title></head></html>'
       var mark = files.ran.length
@@ -256,9 +263,10 @@ Item {
       tryVerify(function() { return dataAt(i).title === "Followed" }, 2000, "plain http, and a redirect followed")
       var two = curls(mark)
       compare(two.length, 2)
-      verify(two.every(function(a) { return a.indexOf("--noproxy") > 0 && a[a.indexOf("--noproxy") + 1] === "*" && a[a.indexOf("--max-redirs") + 1] === "0" }), "past no proxy, never redirected by curl")
-      compare(two[0][two[0].indexOf("--resolve") + 1], "plain.example.com:80:93.184.215.14")
-      compare(two[1][two[1].indexOf("--resolve") + 1], "example.com:443:93.184.215.14")
+      verify(two.every(function(c) { var a = c.argv; return a.indexOf("--noproxy") > 0 && a[a.indexOf("--noproxy") + 1] === "*" && a[a.indexOf("--max-redirs") + 1] === "0" }), "past no proxy, never redirected by curl")
+      verify(two.every(function(c) { return c.argv.join(" ").indexOf("example.com") < 0 && c.argv[2] === "-K" && c.argv[3] === "-" }), "the link and its address on curl's input, never its command line")
+      compare(resolveOf(two[0]), "plain.example.com:80:93.184.215.14")
+      compare(resolveOf(two[1]), "example.com:443:93.184.215.14")
       // Sent on to your own network: not followed.
       files.privateHosts = { "admin.example.net": "10.0.0.1" }
       files.fetchPages["https://example.com/sneaky"] = "REDIRECT https://admin.example.net/secret"
@@ -267,7 +275,7 @@ Item {
       view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://example.com/sneaky" })
       tryVerify(function() { return dataAt(i).url === "https://example.com/sneaky" && root.lastToast.indexOf("isn't on the internet") >= 0 }, 2000, root.lastToast)
       compare(dataAt(i).title, "")
-      verify(!curls(mark).some(function(a) { return a[a.length - 1] === "https://admin.example.net/secret" }), "never read")
+      verify(!curls(mark).some(function(c) { return files.curlUrl(c.argv, { input: c.input }) === "https://admin.example.net/secret" }), "never read")
       // A site on your network asked for itself: not read either.
       mark = files.ran.length
       view.dataAction(view.editor.uidAt(i), "fetch", { url: "https://admin.example.net/secret" })

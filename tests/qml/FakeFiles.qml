@@ -57,6 +57,7 @@ QtObject {
 
   function reset() {
     ran = []
+    inputs = []
     links = ({})
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
@@ -190,8 +191,10 @@ QtObject {
   // Hosts whose address is on your own network: { host: "192.168.1.5" }.
   property var privateHosts: ({})
 
-  // Every command run, in order ([argv, ...]), for tests to read.
+  // Every command run, in order ([argv, ...]), for tests to read; and what
+  // each was given on its input ("" for nothing), in the same order.
   property var ran: []
+  property var inputs: []
   // The archive helper (Store.qml), as its commands' first words.
   readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
   function helper(args, done, options) { exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options) }
@@ -212,9 +215,17 @@ QtObject {
   }
   // (Store.execText: its words through the files helper's to-json; here as they are.)
   function execText(argv, done, options) { exec(argv, done, options) }
+  // The link curl's asked for: its config's url = "..." on its input (-K -),
+  // as Workspace.qml gives it; never on its command line.
+  function curlUrl(argv, options) {
+    if (argv.indexOf("-K") < 0) return ""
+    var m = /^url = "((?:[^"\\]|\\.)*)"$/m.exec(String(options && options.input || ""))
+    return m ? m[1].replace(/\\(.)/g, "$1") : ""
+  }
 
   function exec(argv, done, options) {
     ran = ran.concat([argv.slice()])
+    inputs = inputs.concat([String(options && options.input || "")])
     // (holdReads: a zip unpacked when answerReads() is.)
     if (holdReads && argv[3] === filesHelper && argv[4] === "unzip") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
     execNow(argv, done, options)
@@ -337,7 +348,7 @@ QtObject {
       var out2 = a[0] + "/" + a[1] + a[2]
       for (var k2 = 2; disk[out2] !== undefined; k2++) out2 = a[0] + "/" + a[1] + " " + k2 + a[2]
       var packed = {}
-      for (var t = 4; t + 2 < a.length; t += 3) {
+      for (var t = 3; t + 2 < a.length; t += 3) {
         var src = a[t], skip = a[t + 2]
         packed[a[t + 1]] = {}
         Object.keys(disk).forEach(function(p) {
@@ -347,7 +358,8 @@ QtObject {
           packed[a[t + 1]][rel] = disk[p]
         })
       }
-      disk[out2] = "FAKE-TAR:" + JSON.stringify({ manifest: JSON.parse(a[3]), files: packed })
+      // (Its uber-notebook-backup.json on its input, never its command line.)
+      disk[out2] = "FAKE-TAR:" + JSON.stringify({ manifest: JSON.parse(String(options && options.input || "null")), files: packed })
       mtimes[out2] = Date.now() / 1000
       done(true, String(disk[out2].length) + "\n" + out2 + "\n")
       return
@@ -444,22 +456,24 @@ QtObject {
     }
     // A page's picture: its host looked up (a public address, unless
     // privateHosts names it), then fetched from there into a file.
-    if (argv[0] === "/usr/bin/getent" && argv[1] === "ahosts") {
-      done(true, (privateHosts[argv[2]] || "93.184.215.14") + "     STREAM " + argv[2] + "\n")
+    // (The files helper's lookup: the host on its input.)
+    if (argv[3] === filesHelper && argv[4] === "lookup") {
+      var lhost = String(options && options.input || "")
+      done(true, (privateHosts[lhost] || "93.184.215.14") + "\n")
       return
     }
     // A page read step by step (Workspace.fetchPage; `fetchPages`: { url:
     // html }, "REDIRECT <url>" says it's sent on; `fetchPictures`: { url:
     // content type }).
     if (argv[0] === "/usr/bin/curl" && argv.indexOf("\n%{http_code}\t%{redirect_url}") > 0) {
-      var page = fetchPages[argv[argv.length - 1]]
+      var page = fetchPages[curlUrl(argv, options)]
       if (page === undefined) { done(false, "\n000\t"); return }
       if (String(page).indexOf("REDIRECT ") === 0) { done(true, "\n301\t" + String(page).slice(9)); return }
       done(true, String(page) + "\n200\t")
       return
     }
     if (argv[0] === "/usr/bin/curl" && argv.indexOf("-o") > 0) {
-      var type = fetchPictures[argv[argv.length - 1]]
+      var type = fetchPictures[curlUrl(argv, options)]
       if (type === undefined) { done(false, ""); return }
       disk[argv[argv.indexOf("-o") + 1]] = "PNG"
       done(true, type)
@@ -477,7 +491,8 @@ QtObject {
       return
     }
     if (argv[0] === "/usr/bin/grep") {
-      var term = argv[argv.indexOf("-e") + 1].toLowerCase()
+      // (The word on its input, "-f -", as Store.qml and Workspace.qml give it.)
+      var term = (argv.indexOf("-f") > 0 && argv[argv.indexOf("-f") + 1] === "-" ? String(options && options.input || "").split("\n")[0] : argv[argv.indexOf("-e") + 1]).toLowerCase()
       var root = argv[argv.length - 1]
       var hits = Object.keys(disk).filter(function(p) { return p.indexOf(root) === 0 && disk[p].toLowerCase().indexOf(term) >= 0 })
       done(hits.length > 0, hits.join("\n"))

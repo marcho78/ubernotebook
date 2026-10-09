@@ -90,7 +90,9 @@ function fromExport(json, into) {
   var m = e.metadata
   var segs = Array.isArray(e.transcript.segments) ? e.transcript.segments : []
   base.id = cleanId(m.id) || base.id
-  base.title = cleanLine(m.title, MAX_TITLE) || base.title
+  // (The block's own title first: voxtype's is only its name for one
+  // recorded elsewhere, or started with none.)
+  base.title = base.title || cleanLine(m.title, MAX_TITLE)
   base.startedAt = m.startedAt || base.startedAt
   var secs = Number(m.durationSecs)
   base.duration = isFinite(secs) && secs > 0 ? secs : Math.round((Number(e.transcript.durationMs) || 0) / 1000)

@@ -27,8 +27,11 @@ Item {
   id: store
 
   property string home: Quickshell.env("HOME")
-  // Where imports are unpacked and converted for a moment (a tmpfs of your own).
-  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+  // Where imports are unpacked and converted for a moment (a tmpfs of your
+  // own). Without one (no XDG_RUNTIME_DIR), a folder of Uber Notebook's own in
+  // your cache, yours alone (made as it starts), never /tmp, which every
+  // account on the computer can look in.
+  readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || cacheDir + "/run"
   // On disk, for what may be big (an import unzipped): the runtime folder is
   // memory, shared with the whole session.
   readonly property string cacheDir: { var c = Quickshell.env("XDG_CACHE_HOME") || ""; return (c.charAt(0) === "/" ? c : home + "/.cache") + "/uber-notebook" }
@@ -58,7 +61,12 @@ Item {
   // arrive): look a moment later, once, and ignore what an older look finds.
   onFolderChanged: { welcomed = false; locateTimer.restart() }
   onActiveChanged: locateTimer.restart()
-  Component.onCompleted: locateTimer.restart()
+  Component.onCompleted: {
+    // (No runtime folder from the session: the one in your cache, made
+    // yours alone before anything's put in it.)
+    if (!Quickshell.env("XDG_RUNTIME_DIR")) exec(privateMkdir([runtimeDir]), function() { store.makePrivate(store.runtimeDir) })
+    locateTimer.restart()
+  }
 
   Timer {
     id: locateTimer
@@ -359,10 +367,25 @@ Item {
     done(Agent.models(agent, file ? readNow(file, 4 * 1024 * 1024) || "" : ""))
   }
 
-  // Omarchy launches it, in its own terminal, starting with the prompt;
-  // nothing here waits for it.
-  function launchAgent(prompt) {
-    Quickshell.execDetached(["/usr/bin/omarchy-agent-prompt", String(prompt)])
+  // Omarchy launches it, in its own terminal; nothing here waits for it.
+  // Its request (your words, the page's, what was said) is put in a file of
+  // its own, yours alone, in Uber Notebook's agent folder (in
+  // $XDG_RUNTIME_DIR), and it starts with a line saying to read it: a
+  // program's command line is there for every account on the computer to
+  // read, as long as it runs. done(ok) once it's launched (or not).
+  property var agentLauncher: ["/usr/bin/omarchy-agent-prompt"]
+  property string agentRequests: runtimeDir + "/uber-notebook-agent"
+  function launchAgent(prompt, done) {
+    var dir = agentRequests
+    var name = "request-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 0x7fffffff).toString(36) + ".md"
+    mkdirs([dir], function(made) {
+      if (!made) { if (done) done(false); return }
+      putFile(dir, name, String(prompt), function(ok) {
+        if (ok) Quickshell.execDetached(agentLauncher.concat([Agent.requestPointer(dir + "/" + name)]))
+        else console.warn("Uber Notebook: the agent's request couldn't be written")
+        if (done) done(ok)
+      })
+    })
   }
 
   // The agents Omarchy offers (its menu file says which, and what each is
@@ -490,7 +513,13 @@ Item {
     }
     function asBefore() {
       view = writerComponent.createObject(store, { path: path, blockWrites: stopping })
-      view.saved.connect(function() { finish(true, "") })
+      view.saved.connect(function() {
+        // (Yours alone, as everything Uber Notebook writes: Qt makes a new
+        // file readable by others. As the shell stops, nothing more runs;
+        // what's written then is in a folder that's yours alone.)
+        if (!stopping) exec(["/usr/bin/chmod", "go-rwx", "--", path], null, { okCodes: [0, 1] })
+        finish(true, "")
+      })
       view.saveFailed.connect(function(error) { finish(false, String(error)) })
       view.setText(text)
     }
@@ -585,6 +614,20 @@ Item {
     })
   }
 
+  // A folder of Uber Notebook's own (a profile's notes, the backups') made
+  // yours alone (700), as one from before was made (755): nothing in it can
+  // be reached by another account on the computer, whatever it holds. Never
+  // your home folder itself, never what's in it (that one folder is enough).
+  function makePrivate(folder) {
+    var f = String(folder || "")
+    if (!/^\/./.test(f) || f.replace(/\/+$/, "") === home) return
+    exec(["/usr/bin/chmod", "go-rwx", "--", f], null, { okCodes: [0, 1] })
+  }
+  // `mkdir -p` making every folder it makes yours alone (700): notes are
+  // never readable by other accounts on the computer.
+  function privateMkdir(paths) {
+    return ["/usr/bin/bash", "-c", "umask 077 && exec /usr/bin/mkdir -p -- \"$@\"", "uber-notebook-mkdir"].concat(paths)
+  }
   function mkdirs(paths, done) {
     // (In the notes folder, by the files helper; else, or when it doesn't answer, as before.)
     var h = paths.length ? notesHelperFor(paths[0] + "/x") : null
@@ -609,7 +652,7 @@ Item {
     mkdirsAsBefore(paths, done)
   }
   function mkdirsAsBefore(paths, done) {
-    exec(["/usr/bin/mkdir", "-p", "--"].concat(paths), function(ok, output) {
+    exec(privateMkdir(paths), function(ok, output) {
       if (!ok) failed("Couldn't make " + paths[0].replace(home, "~") + ": " + output)
       if (done) done(ok)
     })
@@ -648,6 +691,7 @@ Item {
       store.rootPath = next
       store.mkdirs([store.rootPath], function(made) {
         if (!made || gen !== store.generation) return
+        store.makePrivate(store.rootPath)
         store.notesRoot = store.rootPath
         store.loadLibrary()
       })
@@ -1048,7 +1092,9 @@ Item {
     var words = Library.terms(query)
     if (words.length === 0 || !rootPath) { done([]); return }
     var longest = words.slice().sort(function(a, b) { return b.length - a.length })[0]
-    exec(["/usr/bin/grep", "-rilF", "--include=*.json", "--exclude-dir=.trash", "--exclude-dir=Pages", "-e", longest, "--", rootPath], function(ok, output) {
+    // (The word on grep's input, not its command line, where every account
+    // on the computer can read it.)
+    exec(["/usr/bin/grep", "-rilF", "--include=*.json", "--exclude-dir=.trash", "--exclude-dir=Pages", "-f", "-", "--", rootPath], function(ok, output) {
       var paths = String(output || "").split("\n").filter(function(p) { return /\/pages\/[a-z0-9-]+\.json$/.test(p) }).slice(0, 400)
       store.readFiles(paths, function(files) {
         var results = []
@@ -1070,7 +1116,7 @@ Item {
         results.sort(function(a, b) { return b.score - a.score || (a.modified < b.modified ? 1 : -1) })
         done(results.slice(0, 60))
       }, 16 * 1024 * 1024)
-    }, { okCodes: [0, 1], maxBytes: 2 * 1024 * 1024, timeoutMs: 8000 })
+    }, { input: longest + "\n", okCodes: [0, 1], maxBytes: 2 * 1024 * 1024, timeoutMs: 8000 })
   }
 
   // ---- pictures ---------------------------------------------------------------------------
@@ -1217,7 +1263,12 @@ Item {
 
   // A picture made here (a diagram or an equation, grabbed) written to
   // `path` (a PNG, or as its ending says): true when it is.
-  function saveGrab(result, path) { return !!result && result.saveToFile(path) }
+  function saveGrab(result, path) {
+    var ok = !!result && result.saveToFile(path)
+    // (Yours alone, as everything Uber Notebook writes.)
+    if (ok) exec(["/usr/bin/chmod", "go-rwx", "--", path], null, { okCodes: [0, 1] })
+    return ok
+  }
   // A file for a moment (a picture on its way to the clipboard), where only
   // you can read it.
   function tempPath(name) { return runtimeDir + "/uber-notebook-" + name }
@@ -1278,15 +1329,18 @@ Item {
   }
 
   // An Omarchy notification (a reminder, an event's alert); clicking it
-  // opens the page (or the calendar, on `day`).
+  // opens the page (or the calendar, on `day`). Sent by the files helper
+  // over the session bus, its words on the helper's input: never on a
+  // command line, where every account on the computer can read them (as
+  // omarchy-notification-send would put them, through busctl).
   function notify(title, text, pageId, day) {
-    // Texts starting with "-" would be read as options.
-    var head = String(title || "Reminder").replace(/^-+/, "\u2010").slice(0, 120)
-    var body = String(text || "").replace(/^-+/, "\u2010").slice(0, 300)
-    var argv = ["/usr/bin/omarchy-notification-send", "-g", "\u{f009e}", "-u", "normal", "--app-name", "Uber Notebook", head, body]
-    if (/^[0-9a-f-]{36}$/.test(String(pageId || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "uber-notebook", "open", pageId])
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) argv = argv.concat(["--exec", "/usr/bin/omarchy-shell", "uber-notebook", "calendar", day])
-    Quickshell.execDetached(argv)
+    var click = []
+    if (/^[0-9a-f-]{36}$/.test(String(pageId || ""))) click = ["/usr/bin/omarchy-shell", "uber-notebook", "open", pageId]
+    else if (/^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))) click = ["/usr/bin/omarchy-shell", "uber-notebook", "calendar", day]
+    var note = { summary: String(title || "Reminder").slice(0, 120), body: String(text || "").slice(0, 300), glyph: "\u{f009e}", exec: click }
+    helper(["notify"], function(ok, out) {
+      if (!ok) console.warn("Uber Notebook: a notification wasn't sent: " + String(out || "").trim().slice(0, 200))
+    }, { input: JSON.stringify(note), timeoutMs: 10000, maxBytes: 4096 })
   }
 
   // A folder Uber Notebook made (an export), in the file manager.

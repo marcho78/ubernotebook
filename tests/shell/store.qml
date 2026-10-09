@@ -219,7 +219,41 @@ ShellRoot {
           store.retryUnsaved(function(left) {
             store.exec(["/usr/bin/test", "-e", g], function(there) {
               say("kept: what's taken away isn't written again", ok1 === false && kept && left === 0 && !there && store.unsaved[g] === undefined, "kept " + kept + " left " + left + " there " + there)
-              store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+              root.privateChecks(d)
+            })
+          })
+        })
+      })
+    })
+  }
+  // Nothing Uber Notebook writes can be read by another account: notes and
+  // their folders (by the files helper), whatever a program it runs writes,
+  // folders made with mkdir -p, a notes folder from before (755) made 700,
+  // and an agent's request in a file of its own, never on a command line.
+  function privateChecks(d) {
+    var notes = d + "/notes"
+    function modes(paths, done) {
+      store.exec(["/usr/bin/stat", "-c", "%a"].concat(paths), function(ok, out) { done(String(out).trim().split("\n")) }, { okCodes: [0, 1] })
+    }
+    store.rootPath = notes
+    store.notesRoot = notes
+    store.writeFile(notes + "/Pages/private.json", '{"p":1}', function(wrote) {
+      store.mkdirs([notes + "/Pages/sub", d + "/out/deep"], function() {
+        store.exec(["/usr/bin/bash", "-c", "printf x > \"$1/child.txt\"; /usr/bin/mkdir -p \"$1/open\"; /usr/bin/chmod 755 \"$1/open\"", "x", d], function() {
+          store.makePrivate(d + "/open")
+          store.agentLauncher = ["/usr/bin/true"]
+          store.agentRequests = d + "/agent"
+          store.launchAgent("Summarize my secret page", function(launched) {
+            store.exec(["/usr/bin/bash", "-c", "/usr/bin/sleep 0.3; for f in \"$1\"/agent/request-*.md; do /usr/bin/stat -c %a \"$f\"; /usr/bin/cat \"$f\"; echo; done", "x", d], function(ok, out) {
+              var req = String(out).trim().split("\n")
+              modes([notes + "/Pages/private.json", notes + "/Pages/sub", d + "/out", d + "/out/deep", d + "/child.txt", d + "/open", d + "/agent"], function(m) {
+                say("private: a note written by the helper is 600, its folder 700", wrote === true && m[0] === "600" && m[1] === "700", m.slice(0, 2).join(" "))
+                say("private: folders made with mkdir -p are 700", m[2] === "700" && m[3] === "700", m.slice(2, 4).join(" "))
+                say("private: what a program it runs writes is 600", m[4] === "600", m[4])
+                say("private: a folder of its own from before (755) is made 700", m[5] === "700", m[5])
+                say("private: an agent's request is in a file of its own (600, in a 700 folder), never on a command line", launched === true && m[6] === "700" && req[0] === "600" && req[1] === "Summarize my secret page", req.join(" | ") + " folder " + m[6])
+                store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+              })
             })
           })
         })

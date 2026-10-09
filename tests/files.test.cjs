@@ -641,6 +641,56 @@ try {
     assert.equal(read(path.join(out, "target")).ok, false, "not outside it");
     assert.equal(read(path.join(f, "..", "agent-outside", "target")).ok, false);
   });
+
+  // A notification: its words on the helper's input, sent over the session
+  // bus by the helper itself (never on a command line). On a bus of its own
+  // with no notification server, the call is seen by dbus-monitor, and the
+  // bus's "nobody's there" comes back as the helper's error.
+  check("notify: the notification on the bus, its words never on a command line", () => {
+    if (!fs.existsSync("/usr/bin/dbus-daemon") || !fs.existsSync("/usr/bin/dbus-monitor")) { console.log("files: notify skipped (no dbus-daemon)"); return; }
+    const bus = fs.mkdtempSync(path.join(tmp, "bus-"));
+    const address = "unix:path=" + path.join(bus, "bus");
+    const pid = execFileSync("/usr/bin/dbus-daemon", ["--session", "--fork", "--address=" + address, "--print-pid"], { encoding: "utf8" }).trim();
+    const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    const log = fs.openSync(path.join(bus, "monitor.txt"), "w");
+    const monitor = require("node:child_process").spawn("/usr/bin/dbus-monitor", ["--address", address], { stdio: ["ignore", log, log] });
+    try {
+      sleep(400);
+      const note = { summary: "-rf Call the dentist", body: "before Friday ✓", glyph: "\u{f009e}", exec: ["/usr/bin/omarchy-shell", "uber-notebook", "open", "0b6f8f9e-1111-4222-8333-944455556666"] };
+      const r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "notify"], { input: JSON.stringify(note), encoding: "utf8", env: { DBUS_SESSION_BUS_ADDRESS: address } });
+      assert.equal(r.status, 3, r.stderr);
+      assert.match(r.stderr, /ServiceUnknown/);
+      sleep(300);
+      const seen = fs.readFileSync(path.join(bus, "monitor.txt"), "utf8");
+      const call = seen.slice(seen.indexOf("member=Notify"));
+      assert.ok(seen.indexOf("member=Notify") >= 0, seen);
+      for (const want of ['string "Uber Notebook"', 'string "-rf Call the dentist"', 'string "before Friday ✓"', 'string "urgency"', "byte 1",
+        'string "omarchy-glyph"', 'string "omarchy-exec-argv"', 'string "["/usr/bin/omarchy-shell","uber-notebook","open","0b6f8f9e-1111-4222-8333-944455556666"]"', "int32 -1"]) {
+        assert.ok(call.indexOf(want) >= 0, "the call has " + want + ":\n" + call.slice(0, 1500));
+      }
+      // Only words for the click command, a few of them.
+      const bad = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "notify"], { input: JSON.stringify({ summary: "x", exec: "rm -rf ~" }), encoding: "utf8", env: { DBUS_SESSION_BUS_ADDRESS: address } });
+      assert.equal(bad.status, 3);
+      assert.match(bad.stderr, /exec: a list of words/);
+    } finally {
+      monitor.kill();
+      fs.closeSync(log);
+      try { process.kill(Number(pid)); } catch (e) {}
+    }
+  });
+
+  // A link's host looked up: its name on the input; only a host name.
+  check("lookup: a host name on its input, nothing else", () => {
+    const look = (host) => spawnSync("/usr/bin/python3", ["-I", "-S", helper, "lookup"], { input: host, encoding: "utf8" });
+    const local = look("localhost");
+    assert.equal(local.status, 0, local.stderr);
+    assert.ok(/^(127\.0\.0\.1|::1)$/m.test(local.stdout), local.stdout);
+    for (const bad of ["", "bad host", "a;b", "-x", "a".repeat(300), "x\ny"]) {
+      const r = look(bad);
+      assert.equal(r.status, 3, JSON.stringify(bad));
+      assert.equal(r.stdout, "");
+    }
+  });
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

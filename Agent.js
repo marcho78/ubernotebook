@@ -207,8 +207,10 @@ function cleanChoice(v) {
 // With `choice` ({ model, effort }), the model and effort you chose. With
 // `session` ({ id, resume }), the conversation it's in: Claude Code starts
 // its with the id given (--session-id) and goes on with it (--resume);
-// Grok's and Codex's name their own. Codex's prompt is last, never read as
-// an option. null without a program or a folder.
+// Grok's and Codex's name their own. Codex reads its prompt on its input
+// ("-": input(), then the input's closed): no agent's request, nor anything
+// of yours, is ever on a command line, where every account on the computer
+// can read it. null without a program or a folder.
 // The tools Claude Code has in the panel (beyond its rules, it asks for
 // each, and you're asked in the panel; MCP tools, yours, as well).
 var CLAUDE_TOOLS = "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch"
@@ -238,8 +240,6 @@ function command(agent, prompt, choice, session, where) {
     return helper ? ["/usr/bin/bash", "-c", "h=$1; n=$2; t=$3; shift 3; set -o pipefail; \"$@\"" + input + " | /usr/bin/python3 -I -S \"$h\" ascii-lines \"$n\" \"$t\"", "uber-notebook-agent", helper, String(LINE_MAX), String(OUTPUT_MAX)]
       : ["/usr/bin/bash", "-c", "exec \"$@\"" + input, "uber-notebook-agent"]
   }
-  var head = filtered(" < /dev/null")
-  var p = String(prompt)
   var c = choice || {}
   var model = cleanChoice(c.model)
   var effort = cleanChoice(c.effort)
@@ -259,21 +259,32 @@ function command(agent, prompt, choice, session, where) {
   if (agent === "codex") {
     var opts = ["--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false"]
       .concat(model ? ["-m", model] : [], effort ? ["-c", "model_reasoning_effort=\"" + effort + "\""] : [])
-    if (s && s.resume) return head.concat([exe, "exec"], opts, ["resume", "--", s.id, p])
-    return head.concat([exe, "exec"], opts, ["--", p])
+    if (s && s.resume) return filtered("").concat([exe, "exec"], opts, ["resume", "--", s.id, "-"])
+    return filtered("").concat([exe, "exec"], opts, ["--", "-"])
   }
   return null
 }
 
 // What an agent is told first on its input, when it works there (Claude
 // Code, stream-json: its request; Grok, ACP: hello, and the rest follows,
-// DocView.runHere): so what it asks can be answered as it works. A line, or
-// "" (Codex takes its request in its command line).
+// DocView.runHere): so what it asks can be answered as it works. Codex: its
+// request, all of it, then its input's closed (inputOnce). A line, or "".
 function input(agent, prompt) {
   if (agent === "grok") return acpInit()
+  if (agent === "codex") return String(prompt)
   if (agent !== "claude") return ""
   return JSON.stringify({ type: "user", message: { role: "user", content: String(prompt) } }) + "\n"
 }
+// What an agent Omarchy opens in a terminal starts with: where its request
+// is (Store.launchAgent wrote it there, a file yours alone), never the
+// request itself, which its command line would show to every account.
+function requestPointer(path) {
+  return "Your request from Uber Notebook is in the file " + String(path) + ". Read that file first and do what it asks."
+}
+
+// Whether its input's closed once its request is on it (Codex reads it to
+// the end; the others are answered on theirs as they work).
+function inputOnce(agent) { return agent === "codex" }
 // What's in its environment besides yours (Grok: its sandbox, which its agent
 // mode takes only from there).
 function env(agent) {

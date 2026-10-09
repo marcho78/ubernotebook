@@ -15,6 +15,13 @@
 
 var PATH = "/usr/bin"
 
+// How every program Uber Notebook runs is started: leading a process group
+// of its own (setsid, so it's stopped with everything it started), and
+// making whatever it writes yours alone (umask 077: files 600, folders 700),
+// never readable by another account on the computer: a picture pasted, a
+// file brought in, a recording, an export, a backup, an agent's files.
+var START = ["/usr/bin/bash", "-c", "umask 077 && exec /usr/bin/setsid --wait \"$@\"", "uber-notebook"]
+
 // What a tool's command gets, from the shell's environment.
 var TOOLS = [
   "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_MESSAGES", "LC_TIME", "LC_NUMERIC", "LC_COLLATE", "TZ",

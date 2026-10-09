@@ -131,8 +131,22 @@ Item {
       try { raw = text ? JSON.parse(text) : null } catch (e) { raw = null }
       mirror.manifest = Mirror.cleanManifest(raw)
       mirror.manifestFor = dir
+      mirror.makeOwnPrivate(dir)
       done()
     })
+  }
+  // The copy's own files from before (its list's, and the list) made yours
+  // alone, once a folder a session: as it writes them now. Nothing else in
+  // the folder you chose is touched, nor the folder itself.
+  property var madePrivate: ({})
+  function makeOwnPrivate(dir) {
+    if (madePrivate[dir] || !store || typeof store.helper !== "function") return
+    var done = {}
+    for (var k in madePrivate) done[k] = true
+    done[dir] = true
+    madePrivate = done
+    var names = Object.keys(manifest || {}).concat([Mirror.MANIFEST, Mirror.LEGACY_MANIFEST])
+    store.helper(["make-private", dir], null, { input: JSON.stringify(names), timeoutMs: 60000, maxBytes: 4096 })
   }
 
   // Every page of Pages not in the trash: those changed since they were last

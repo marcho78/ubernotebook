@@ -104,7 +104,7 @@ Item {
     }, options || { timeoutMs: 15000, maxBytes: 64 * 1024 })
   }
 
-  // A meeting started, named `title`: done(ok, problem). Its id comes with
+  // A meeting started (`title` is the block's own, not voxtype's): done(ok, problem). Its id comes with
   // the daemon's file a moment later.
   function start(title, done) {
     if (!available) { done(false, "Meetings need voxtype (omarchy voxtype install)"); return }
@@ -112,9 +112,9 @@ Item {
     if (waiting) { done(false, waitingText); return }
     if (status !== "idle") { done(false, "A meeting is already being recorded"); return }
     working = "start"
+    // (Its title stays the block's: voxtype only takes one on its command
+    // line, where every account on the computer can read it.)
     var argv = ["/usr/bin/voxtype", "meeting", "start"]
-    var t = String(title || "").replace(/\s+/g, " ").trim().slice(0, 200)
-    if (t) argv = argv.concat(["--title", t])
     run(argv, function(ok, problem) {
       mt.working = ""
       stateFile.reload()

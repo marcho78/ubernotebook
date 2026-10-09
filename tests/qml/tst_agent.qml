@@ -912,6 +912,13 @@ Item {
       view.agentBox.send("Turn this into to-dos")
       tryVerify(function() { return files.streamed.length === 1 }, 1000)
       compare(files.streamed[0].argv.indexOf("resume"), -1)
+      // (Its request on its input, all of it, then its input closed: never
+      // on its command line, where every account on the computer can read it.)
+      verify(files.streamed[0].argv.join(" ").indexOf("Turn this into to-dos") < 0, "not on its command line")
+      compare(files.streamed[0].argv[files.streamed[0].argv.length - 1], "-")
+      compare(files.streamed[0].sent.length, 1)
+      verify(files.streamed[0].sent[0].indexOf("Turn this into to-dos") >= 0, files.streamed[0].sent[0])
+      verify(files.streamed[0].closed, "its input closed: it reads to the end")
       files.streamFeed(JSON.stringify({ type: "thread.started", thread_id: tid }))
       files.streamFeed(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "Which ones?" } }))
       files.streamFeed(JSON.stringify({ type: "turn.completed", usage: {} }))
@@ -919,7 +926,9 @@ Item {
       panel.replied("All of them")
       tryVerify(function() { return files.streamed.length === 2 }, 1000)
       var c2 = files.streamed[1].argv
-      compare(c2.slice(c2.indexOf("resume")), ["resume", "--", tid, "All of them"])
+      compare(c2.slice(c2.indexOf("resume")), ["resume", "--", tid, "-"])
+      compare(files.streamed[1].sent, ["All of them"], "the reply on its input")
+      verify(files.streamed[1].closed)
       compare(files.streamed[1].cwd, files.streamed[0].cwd, "a reply goes on in its conversation's folder")
       compare(ws.chatFor(view.page.id).folder, files.streamed[0].cwd.split("/").pop(), "kept with the conversation")
       files.streamFeed(JSON.stringify({ type: "turn.completed", usage: {} }))
@@ -943,7 +952,8 @@ Item {
       tryVerify(function() { return files.streamed.length === 4 }, 1000)
       var c4 = files.streamed[3].argv
       compare(c4.indexOf("resume"), -1, "a new one")
-      var p4 = c4[c4.length - 1]
+      compare(c4[c4.length - 1], "-")
+      var p4 = files.streamed[3].sent[0]
       verify(p4.indexOf("We've talked about this before") >= 0 && p4.indexOf("- I said: Summarize it") >= 0, "told what was said: " + p4)
       verify(p4.indexOf("What I'd like now: Shorter") >= 0, p4)
       compare(all(panel, function(it) { return it.objectName === "agentPanelTurn" }).length, 1, "the same conversation, in the panel")

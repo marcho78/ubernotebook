@@ -10,6 +10,23 @@ The first version.
 
 ### Changed
 
+- **Nothing of yours on a command line, nothing readable by other accounts.**
+  A marketplace review found that what you search for and a reminder's words
+  went on a program's command line, which every account on the computer can
+  read, and that notes were written readable by other accounts (files 644,
+  folders 755). Now nothing you type or keep is on a command line: search
+  words go on `grep`'s input; notifications are sent over the session bus by
+  the files helper, their words on its input; a link and its host go on
+  curl's and the helper's input; Codex's request goes on its input, like
+  Claude Code's and Grok's; an agent opened in a terminal starts with a line
+  naming a file (600) its request is in; a backup's list of profiles goes on
+  its input; a meeting's title stays with its block. And everything Uber
+  Notebook writes is yours alone (600 and 700): the files helper writes so,
+  every program it runs writes with `umask 077`, what it saves itself is
+  made so after; a profile's notes folder and the backups' folder from
+  before are made 700 when they're opened, and the Markdown copy's own files
+  from before 600. Without `XDG_RUNTIME_DIR`, its working files go in a
+  folder of its own in your cache, never `/tmp`.
 - **Your notes and backups are asked about each time.** *Always from* a
   folder (say `~/Documents`, for an invoice) also let the panel's agent take
   any file in the profiles' notes folders and the backups folder in it

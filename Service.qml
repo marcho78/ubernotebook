@@ -251,7 +251,7 @@ Item {
   // The copy's folder, in the file manager (once there's a copy).
   function openMirror() {
     if (!mirrorItem.on || mirrorItem.problem || !mirrorPath) return
-    storeItem.exec(["/usr/bin/mkdir", "-p", "--", mirrorPath], function(ok) {
+    storeItem.exec(storeItem.privateMkdir([mirrorPath]), function(ok) {
       if (ok) Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", root.mirrorPath])
     })
   }

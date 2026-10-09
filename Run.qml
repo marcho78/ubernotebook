@@ -72,7 +72,7 @@ Item {
     _cancelled = false
     _pid = 0
     proc.stdinEnabled = input !== ""
-    proc.command = ["/usr/bin/setsid", "--wait"].concat(argv)
+    proc.command = Env.START.concat(argv)
     proc.running = true
     deadline.restart()
   }

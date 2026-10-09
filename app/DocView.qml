@@ -1775,7 +1775,8 @@ FocusScope {
       if (!argv) { finish(127, Agent.name(agent) + " couldn't be started"); return }
       // (Claude Code takes its request on its input, and your answers to
       // what it asks as it works; Grok, over ACP, hello, its session, then
-      // the request, and your answers; the input's closed once it's answered.)
+      // the request, and your answers; the input's closed once it's answered.
+      // Codex, its request on its input, closed then: none on a command line.)
       var first = Agent.input(agent, text)
       var run = null
       run = files.stream(argv, function(line) {
@@ -1815,6 +1816,8 @@ FocusScope {
       }, { cwd: dir, input: first !== "", env: Agent.env(agent), maxLine: Agent.streamLimits(where).maxLine, maxBytes: Agent.streamLimits(where).maxBytes, maxErrors: Agent.streamLimits(where).maxErrors })
       job.stream = run
       if (first && run && run.send) run.send(first)
+      // (Codex reads its request to the end of its input.)
+      if (Agent.inputOnce(agent) && run && run.closeInput) run.closeInput()
     }
     agentRun = job
     agentScope(agent, dir)

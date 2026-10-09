@@ -185,23 +185,31 @@ function sizeLabel(bytes) {
 // Which folders are there: "1" or "0" a line, for each argument.
 var EXISTS_SCRIPT = "for d in \"$@\"; do if [ -d \"$d\" ]; then echo 1; else echo 0; fi; done"
 
-// The backups in a folder: "<modified>\t<size>\t<name>" a line.
-var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
+// The backups in a folder: "<modified>\t<size>\t<name>" a line. (The
+// folder made yours alone as it's looked in: one from before was open to
+// other accounts, and backups hold all your notes.)
+var LIST_SCRIPT = "[ -d \"$1\" ] || exit 0; /usr/bin/chmod go-rwx -- \"$1\" 2>/dev/null; /usr/bin/find \"$1\" -mindepth 1 -maxdepth 1 -type f -name '*.tar.gz' ! -name '.*' -printf '%T@\\t%s\\t%f\\n' 2>/dev/null | /usr/bin/head -n 2000"
 
-// A backup made: <folder> <stem> <suffix> <uber-notebook-backup.json> then, for
-// each profile, <its folder> <p1...> <a folder in it to leave out, or "">.
+// A backup made: <folder> <stem> <suffix> then, for each profile, <its
+// folder> <p1...> <a folder in it to leave out, or "">; its
+// uber-notebook-backup.json (the profiles' names) on its input, never on a
+// command line, where every account on the computer can read it. Everything
+// it makes is yours alone (umask 077), the backups' folder too (700, one
+// from before as well): backups hold all your notes.
 // It's written beside where it goes, in files of its own (mktemp: made new,
 // never one that's there), and named when it's done, never over a file
 // that's there (mv --update=none-fail: the next free name then), so a backup
 // that's there is a whole one. Prints its size, then its path.
 var BACKUP_SCRIPT = [
-  "dir=$1; stem=$2; suffix=$3; json=$4; shift 4",
+  "umask 077",
+  "dir=$1; stem=$2; suffix=$3; shift 3",
   "/usr/bin/mkdir -p -- \"$dir\" || exit 3",
+  "/usr/bin/chmod go-rwx -- \"$dir\" || exit 3",
   "tmp=$(/usr/bin/mktemp -d) || exit 3",
   "part=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",
   "gz=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",
   "trap '/usr/bin/rm -rf -- \"$tmp\"; /usr/bin/rm -f -- \"$part\" \"$gz\"' EXIT",
-  "printf '%s' \"$json\" > \"$tmp/" + MANIFEST + "\" || exit 3",
+  "/usr/bin/cat > \"$tmp/" + MANIFEST + "\" || exit 3",
   "/usr/bin/tar -cf \"$part\" -C \"$tmp\" " + MANIFEST + " || exit 3",
   "while [ $# -ge 3 ]; do",
   "  src=$1; name=$2; skip=$3; shift 3",

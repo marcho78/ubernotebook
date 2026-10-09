@@ -26,8 +26,8 @@ const sha256 = (file) => require("node:crypto").createHash("sha256").update(fs.r
 const MAXB = String(1024 * 1024 * 1024);
 const MAXF = "100000";
 
-function run(script, args) {
-  const r = spawnSync("/usr/bin/bash", ["-c", script, "uber-notebook-test"].concat(args), { encoding: "utf8" });
+function run(script, args, input) {
+  const r = spawnSync("/usr/bin/bash", ["-c", script, "uber-notebook-test"].concat(args), { encoding: "utf8", input: input === undefined ? "" : input });
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
 
@@ -118,10 +118,16 @@ try {
   check("a backup made", () => {
     const m = JSON.stringify(B.manifest([{ name: "Personal" }, { name: "Work" }], "1.0.0", new Date()));
     const n = B.fileName("All profiles", new Date(2026, 9, 3, 1, 30), false);
-    const r = run(B.BACKUP_SCRIPT, [backups, n.stem, n.suffix, m, personal, "p1", B.inside(backups, personal), work, "p2", ""]);
+    // (A backups folder from before, open to others: made yours alone.)
+    fs.mkdirSync(backups, { recursive: true });
+    fs.chmodSync(backups, 0o755);
+    const r = run(B.BACKUP_SCRIPT, [backups, n.stem, n.suffix, personal, "p1", B.inside(backups, personal), work, "p2", ""], m);
     assert.equal(r.code, 0, r.err);
     const [size, at] = r.out.trim().split("\n");
     file = at;
+    assert.equal(fs.statSync(backups).mode & 0o777, 0o700, "the backups' folder, yours alone");
+    assert.equal(fs.statSync(file).mode & 0o777, 0o600, "the backup, yours alone");
+    assert.equal(execFileSync("/usr/bin/tar", ["-xOzf", file, "uber-notebook-backup.json"], { encoding: "utf8" }), m, "its list, from its input");
     assert.equal(path.basename(file), "Uber Notebook All profiles 2026-10-03 0130.tar.gz");
     assert.equal(Number(size), fs.statSync(file).size);
     const names = execFileSync("/usr/bin/tar", ["-tzf", file], { encoding: "utf8" }).split("\n").filter(Boolean).sort();
@@ -132,7 +138,7 @@ try {
     assert.ok(!names.some((x) => x.includes("older.tar.gz")), "the backup folder, left out");
     assert.ok(names.every((x) => x === "uber-notebook-backup.json" || /^p[12](\/|$)/.test(x)), names.join("\n"));
     // Twice in a minute: a second file, not the first written over.
-    const again = run(B.BACKUP_SCRIPT, [backups, n.stem, n.suffix, m, work, "p1", ""]);
+    const again = run(B.BACKUP_SCRIPT, [backups, n.stem, n.suffix, work, "p1", ""], m);
     assert.equal(path.basename(again.out.trim().split("\n")[1]), "Uber Notebook All profiles 2026-10-03 0130 2.tar.gz");
     assert.ok(!fs.readdirSync(backups).some((x) => x.includes(".part")), "nothing half-made left");
   });

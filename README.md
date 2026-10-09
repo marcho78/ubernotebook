@@ -1058,7 +1058,8 @@ page never opens a file on your computer.
 
 **Programs.** Every command it waits on (the recorder's ffmpeg too) runs by
 absolute path, with an argument list, in its own process group
-(`/usr/bin/setsid`) with a deadline and a budget for what it prints (counted
+(`/usr/bin/setsid`, through `bash -c 'umask 077 && exec setsid ...'`, so
+whatever it writes is yours alone) with a deadline and a budget for what it prints (counted
 in characters, as they're kept; its errors too); when it's done (or overruns,
 or Uber Notebook stops), anything it left running ends too (`/usr/bin/kill`
 on its group), but `wl-copy`, which holds what you copied. A command gets only
@@ -1068,8 +1069,8 @@ and PipeWire sockets, Hyprland's instance, a proxy you set) and
 (`BASH_ENV`, `LD_PRELOAD`, `TAR_OPTIONS`...). A few are started and left to
 themselves, with the shell's environment: opening a link or a file in its
 app (`uwsm-app xdg-open`), the OSD, a process group's `kill`, and taking its
-skill's links out as it stops. Note text is never part of a script, only its
-arguments. Long text a program prints (a transcript, a list of files, an
+skill's links out as it stops. Note text is never part of a script, and
+never on a command line either (below). Long text a program prints (a transcript, a list of files, an
 agent's lines) comes back through the files helper as ASCII (JSON escapes):
 Quickshell decodes what a program prints a piece at a time, and a character
 cut between two pieces would come out wrong.
@@ -1077,22 +1078,44 @@ cut between two pieces would come out wrong.
 | Program | Why |
 |---|---|
 | `/usr/bin/bash` | fixed scripts: read files (each after a mark made new for each read, so what's in a file can't pass for another), list a folder, scan an import (names ended by NUL, each inside what was asked for), paste a picture, copy a file in, make a backup, a video's still, a recording made louder or written out |
-| `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -e`: plain text, never a pattern) |
+| `/usr/bin/cat`, `/usr/bin/head`, `/usr/bin/stat`, `/usr/bin/test`, `/usr/bin/find`, `/usr/bin/grep` | read files; copy a file in (only a plain file, at most 8 GB; an email 64 MB) and paste a picture (at most 50 MB), each into a new file, never over one that's there; see what a file is before showing a PDF (at most 200 MB); find what you searched for (`grep -F -f -`: plain text, never a pattern, the word on its input) |
 | `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders (its temporary ones new, never one that's there); save a picture, a PDF or a Word file where you say (the dialog asks before replacing one), and pictures into an export or the Markdown copy (new files only); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
-| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); copy in any other file an agent gives (the same way: only from its folder, through no link, at most 8 GB, as a new file); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below) |
+| `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); copy in any other file an agent gives (the same way: only from its folder, through no link, at most 8 GB, as a new file); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below); look up a link's host (its name on its input) and send a notification (a reminder, an event's alert: over the session bus itself, its words on its input); make the Markdown copy's own files from before yours alone |
 | `/usr/lib/chromium/chromium` (or Chrome's or Brave's own program), `/usr/lib/libreoffice/program/soffice`, `/usr/bin/unshare` | a page made a PDF (Chromium, headless) or a Word file (LibreOffice, headless), each only a plain program owned by root that no one else can change (never the `chromium` launcher, which reads your flags and extensions), with a profile of its own, and no network at all (below) |
 | `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name); after you turn meeting mode on, until voxtype has restarted, when voxtype's daemon started (your own processes in `/proc`, read only, with `/usr/bin/stat`) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
 | `/usr/bin/uwsm-app` with `xdg-open` | open a link (http, https, mailto), or one of Uber Notebook's own folders and files |
 | `/usr/bin/hyprctl` | read Hyprland's bindings; register and remove the shortcuts and rules |
-| `/usr/bin/omarchy-shell`, `/usr/bin/omarchy-notification-send`, `/usr/bin/omarchy-menu`, `/usr/bin/omarchy-default-agent`, `/usr/bin/omarchy-agent-prompt` | the OSD; a reminder as a notification (a title or text starting with "-" made safe); the menu for choosing your agent; which agent is Omarchy's default; an agent in a terminal |
+| `/usr/bin/omarchy-shell`, `/usr/bin/omarchy-menu`, `/usr/bin/omarchy-default-agent`, `/usr/bin/omarchy-agent-prompt` | the OSD; the menu for choosing your agent; which agent is Omarchy's default; an agent in a terminal (its request in a file of its own, below) |
 | `/usr/bin/soffice`, `/usr/bin/pandoc` | turn a Word, OpenDocument or RTF file you import into HTML or Markdown (LibreOffice with a profile of its own and no network, `unshare --net`, where the system allows it: a document can name pictures on the web; pandoc with `--sandbox`: it reads only that file) |
 | `/usr/bin/ffmpeg`, `/usr/bin/pactl` | record from your microphone (as every other command runs, with a deadline on the clock too; stopped with SIGINT, so it finishes its file); even out a voice; make a recording a WAV for voxtype; a video's still; a picture copied as PNG. A file it reads is read as a file, in one of a few formats (`-protocol_whitelist file -format_whitelist ...`): never a playlist or a list of other files. `pactl` lists the microphones |
-| `/usr/bin/curl` | a bookmark's page and picture, one request a step, never redirected by curl, from the address looked up (`--resolve`), past any proxy (`--noproxy '*'`); GitHub's list of releases (`-q`: no `~/.curlrc`) |
-| `/usr/bin/getent` | `ahosts`: where a bookmark's page (each step) and picture are, before each is fetched |
-| `/usr/bin/voxtype` | `transcribe`; `meeting start`, `stop`, `pause`, `resume`, `list`, `export`; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on (Uber Notebook doesn't restart voxtype: it reads the setting as it starts, and you restart it) |
+| `/usr/bin/curl` | a bookmark's page and picture, one request a step, never redirected by curl, from the address looked up (`resolve` in its config), past any proxy (`--noproxy '*'`), the link and the address in its config on its input (`-K -`), never on its command line; GitHub's list of releases (`-q`: no `~/.curlrc`) |
+| `/usr/bin/chmod` | `go-rwx`: a folder of Uber Notebook's own from before (a profile's notes, the backups') made yours alone, and a file it saves itself |
+| `/usr/bin/voxtype` | `transcribe`; `meeting start` (no title: a meeting's title is its block's), `stop`, `pause`, `resume`, `list`, `export`; `config get meeting.enabled`, and `config set meeting.enabled true` when you turn meeting mode on (Uber Notebook doesn't restart voxtype: it reads the setting as it starts, and you restart it) |
 | `/usr/bin/tar`, `/usr/bin/gzip`, `/usr/bin/mktemp` | make a backup (written into files of its own beside where it goes, then named when it's whole, never over a file that's there) |
 | `/usr/bin/gio` | `trash`: automatic backups past how many are kept |
+
+**Private to you.** Nothing Uber Notebook writes can be read by another
+account on the computer. Your notes, their folders and attachments,
+recordings, backups, exports and the Markdown copy's files are yours alone
+(files 600, folders 700): the files helper makes them so, every program it
+runs writes with `umask 077`, and what it saves itself is made so after.
+A profile's notes folder and the backups' folder from before (755) are made
+700 when they're opened; the Markdown copy's own files from before are made
+600 (the folder you chose for it, and anything else in it, are left as you
+made them). Its working files are in your runtime folder
+(`$XDG_RUNTIME_DIR`, yours alone; without one, a folder of its own in your
+cache, never `/tmp`). And nothing you type or keep is on a command line,
+where every account on the computer can read it (`ps`): what you search for
+goes on `grep`'s input; a reminder or an event's alert is sent over the
+session bus by the files helper, its words on its input (never through
+`omarchy-notification-send` or `busctl`, which take them as arguments); a
+link's host is looked up and its page fetched with the link on their input;
+Claude Code's, Grok's and Codex's requests go on their input; an agent
+opened in a terminal starts with a line naming a file of its own (600) its
+request is in; a backup's list of profiles goes on its input; a meeting's
+title stays with its block. What a command line still shows is where things
+are (paths, page ids) and fixed words.
 
 **Your notes.** Their files (pages, their history, Pages' index, People, the
 calendar, conversations with agents, notebooks) are read and written by the
@@ -1304,9 +1327,9 @@ to one is followed); the demo's old folder, moved to the Trash by its name
 themselves when the files helper can't run. Anything that can write in the
 Markdown copy's folder can also change its list of what it wrote
 (`.uber-notebook-mirror.json`). Codex in the panel can read any file you
-can (its sandbox reads everywhere), and its prompt is an argument on its
-command line, as it takes it there (Claude Code's and Grok's go on their
-input).
+can (its sandbox reads everywhere). A file you open or save names itself
+on the command line of the program that does it (`cp`, `xdg-open`, the
+app it opens in), as in any app, an export's name (its page's title) too.
 
 ## Development
 

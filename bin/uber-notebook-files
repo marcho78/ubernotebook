@@ -125,6 +125,25 @@
 #       writes: nothing that loads from anywhere (only data: pictures, links
 #       to the web, email or the document), or it's refused and nothing is
 #       written. Prints JSON: { ok, pictures, missing } or { ok: false, error }.
+#   make-private <folder>
+#       The files named on its input (a JSON list of paths in <folder>: the
+#       Markdown copy's own, from before) made yours alone (600): each a plain
+#       file of yours, every step opened without following a link (the folder
+#       itself may be a link, to a folder of yours, as for put-copy). Nothing
+#       else there is touched. Prints how many were changed.
+#   lookup
+#       The addresses of the host named on its input (a link's, before its
+#       page or picture is fetched), one a line, as getent ahosts would print
+#       them first; its name on the input, never on a command line, where
+#       every account on the computer can read it.
+#   notify
+#       A desktop notification (a reminder, an event's alert), as JSON on its
+#       input: { summary, body, glyph, exec: [program, args...] }. Sent to
+#       org.freedesktop.Notifications on the session bus by this process
+#       itself, over the bus's socket (as omarchy-notification-send would,
+#       through busctl), so its words are never on a command line, where
+#       every account on the computer can read them. Prints the
+#       notification's id.
 #   restore-backup <backup.tar.gz> <pN> <folder> <sha256> <max bytes> <max files>
 #       One profile (pN/ in the backup) into a new folder: <folder>, or
 #       "<folder> 2"... if that's taken, never one that's there. The backup
@@ -143,7 +162,9 @@ import os
 import re
 import resource
 import shutil
+import socket
 import stat
+import struct
 import sys
 import tarfile
 import zipfile
@@ -342,7 +363,7 @@ def serve_write(root_fd, req):
         except FileNotFoundError:
             pass
         tmp = ".%s.%s.tmp" % (name[:100], os.urandom(6).hex())
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
         try:
             view = memoryview(data)
             while view:
@@ -383,7 +404,7 @@ def serve_mkdir(root_fd, req):
     try:
         for p in parts:
             try:
-                os.mkdir(p, 0o755, dir_fd=fd)
+                os.mkdir(p, 0o700, dir_fd=fd)
             except FileExistsError:
                 pass
             nfd = open_dir(p, fd)
@@ -813,7 +834,7 @@ def copy_into(src, folder, name, limit):
     try:
         if os.fstat(dfd).st_uid != os.getuid():
             raise Refused("that folder isn't yours")
-        out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        out = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
         copied = 0
         try:
             os.lseek(src, 0, os.SEEK_SET)
@@ -935,7 +956,7 @@ def mirror_op(root_fd, op):
         tmp = None
         if kind == "write":
             tmp = ".uber-notebook-new-%s" % tag
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
             try:
                 view = memoryview(data)
                 while view:
@@ -1231,7 +1252,7 @@ def cmd_put(folder, path, follow_top=False):
         os.close(root)
     try:
         tmp = ".uber-notebook-new-%s" % os.urandom(6).hex()
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o644, dir_fd=dfd)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=dfd)
         try:
             view = memoryview(data)
             while view:
@@ -1662,6 +1683,272 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
 ARCHIVE_MEMORY = 4 * 1024 * 1024 * 1024
 
 
+# ---- a notification, over the session bus ----------------------------------------
+
+class _Wire:
+    """D-Bus's wire format, little-endian, aligned from the start of what it writes."""
+    def __init__(self):
+        self.b = bytearray()
+
+    def pad(self, n):
+        self.b += b"\0" * (-len(self.b) % n)
+
+    def byte(self, v):
+        self.b.append(v)
+
+    def u32(self, v):
+        self.pad(4)
+        self.b += struct.pack("<I", v)
+
+    def i32(self, v):
+        self.pad(4)
+        self.b += struct.pack("<i", v)
+
+    def string(self, text):
+        data = text.encode("utf-8")
+        self.u32(len(data))
+        self.b += data + b"\0"
+
+    def signature(self, sig):
+        data = sig.encode("ascii")
+        self.byte(len(data))
+        self.b += data + b"\0"
+
+    def array(self, align, write):
+        """An array: its length in bytes, then its elements, each `align`-aligned."""
+        self.u32(0)
+        at = len(self.b) - 4
+        self.pad(align)
+        start = len(self.b)
+        write()
+        struct.pack_into("<I", self.b, at, len(self.b) - start)
+
+
+def _bus_message(serial, dest, path, iface, member, sig="", body=b""):
+    w = _Wire()
+    w.b += b"l\x01\x00\x01"  # little-endian, a method call, no flags, version 1
+    w.u32(len(body))
+    w.u32(serial)
+    fields = [(1, "o", path), (2, "s", iface), (3, "s", member), (6, "s", dest)]
+    if sig:
+        fields.append((8, "g", sig))
+
+    def each():
+        for code, vsig, value in fields:
+            w.pad(8)
+            w.byte(code)
+            w.signature(vsig)
+            if vsig == "g":
+                w.signature(value)
+            else:
+                w.string(value)
+    w.array(8, each)
+    w.pad(8)
+    return bytes(w.b) + body
+
+
+def _bus_path():
+    """The session bus's socket: DBUS_SESSION_BUS_ADDRESS's unix:path= (or abstract=), else
+    $XDG_RUNTIME_DIR/bus."""
+    for part in os.environ.get("DBUS_SESSION_BUS_ADDRESS", "").split(";"):
+        kind, _, rest = part.partition(":")
+        if kind != "unix":
+            continue
+        opts = dict(kv.split("=", 1) for kv in rest.split(",") if "=" in kv)
+        unescape = lambda v: re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), v)
+        if opts.get("path"):
+            return unescape(opts["path"])
+        if opts.get("abstract"):
+            return "\0" + unescape(opts["abstract"])
+    run = os.environ.get("XDG_RUNTIME_DIR", "")
+    if run.startswith("/"):
+        return run + "/bus"
+    raise Refused("there's no session bus")
+
+
+def _bus_read(sock, want):
+    """Messages off the bus until the answer to call `want`: its body, or Refused with its error."""
+    buf = b""
+
+    def need(n):
+        nonlocal buf
+        while len(buf) < n:
+            chunk = sock.recv(65536)
+            if not chunk:
+                raise Refused("the session bus closed")
+            buf += chunk
+
+    while True:
+        need(16)
+        end = "<" if buf[0:1] == b"l" else ">"
+        kind = buf[1]
+        body_len, _, fields_len = struct.unpack(end + "III", buf[4:16])
+        if body_len > 1 << 20 or fields_len > 1 << 16:
+            raise Refused("a message too big from the session bus")
+        head = 16 + fields_len + (-(16 + fields_len) % 8)
+        need(head + body_len)
+        msg, buf = buf[:head + body_len], buf[head + body_len:]
+        reply_to, error = None, ""
+        i = 16
+        while i < 16 + fields_len:
+            i += -i % 8
+            code = msg[i]
+            n = msg[i + 1]
+            vsig = msg[i + 2:i + 2 + n].decode("ascii", "replace")
+            i += 3 + n
+            if vsig in ("s", "o"):
+                i += -i % 4
+                (ln,) = struct.unpack(end + "I", msg[i:i + 4])
+                value = msg[i + 4:i + 4 + ln].decode("utf-8", "replace")
+                i += 5 + ln
+            elif vsig == "g":
+                ln = msg[i]
+                value = msg[i + 1:i + 1 + ln].decode("ascii", "replace")
+                i += 2 + ln
+            elif vsig == "u":
+                i += -i % 4
+                (value,) = struct.unpack(end + "I", msg[i:i + 4])
+                i += 4
+            else:
+                raise Refused("a message the session bus sent that this can't read")
+            if code == 5:
+                reply_to = value
+            elif code == 4:
+                error = value
+        if reply_to != want:
+            continue  # a signal, or the answer to Hello
+        if kind == 3:
+            raise Refused("the notification wasn't sent: " + (error or "an error")[:200])
+        if kind == 2:
+            return msg[head:], end
+
+
+def _bus_text(value, most):
+    """A string D-Bus takes: at most `most` characters, no NUL, valid UTF-8."""
+    return str(value if isinstance(value, str) else "").replace("\0", "")[:most].encode("utf-8", "replace").decode("utf-8")
+
+
+def cmd_make_private(folder):
+    data = sys.stdin.buffer.read(16 * 1024 * 1024 + 1)
+    if len(data) > 16 * 1024 * 1024:
+        raise Refused("too many names")
+    names = json.loads(data.decode("utf-8"))
+    if not isinstance(names, list):
+        raise Refused("not a list")
+    root_fd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    changed = 0
+    try:
+        if os.fstat(root_fd).st_uid != os.getuid():
+            raise Refused("not a folder of yours")
+        for name in names[:100000]:
+            parts = parts_of(name) if isinstance(name, str) else None
+            if not parts:
+                continue
+            fd = os.dup(root_fd)
+            try:
+                for part in parts[:-1]:
+                    nfd = open_dir(part, fd)
+                    os.close(fd)
+                    fd = nfd
+                ffd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=fd)
+                try:
+                    st = os.fstat(ffd)
+                    if stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid() and st.st_mode & 0o077:
+                        os.fchmod(ffd, stat.S_IMODE(st.st_mode) & 0o700)
+                        changed += 1
+                finally:
+                    os.close(ffd)
+            except OSError:
+                pass  # gone, a link, or not a file: left as it is
+            finally:
+                os.close(fd)
+    finally:
+        os.close(root_fd)
+    print(changed)
+
+
+def cmd_lookup():
+    host = sys.stdin.buffer.read(256).decode("utf-8", "replace").strip()
+    if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\]", host):
+        raise Refused("not a host name")
+    host = host.strip("[]")
+    seen = []
+    for family, _, _, _, addr in socket.getaddrinfo(host, None, 0, socket.SOCK_STREAM):
+        if family in (socket.AF_INET, socket.AF_INET6) and addr[0] not in seen:
+            seen.append(addr[0])
+    if not seen:
+        raise Refused("no address")
+    for a in seen:
+        print(a)
+
+
+def cmd_notify():
+    data = sys.stdin.buffer.read(64 * 1024 + 1)
+    if len(data) > 64 * 1024:
+        raise Refused("more than 64 KB")
+    req = json.loads(data.decode("utf-8"))
+    if not isinstance(req, dict):
+        raise Refused("not a notification")
+    summary = _bus_text(req.get("summary"), 300)
+    body = _bus_text(req.get("body"), 2000)
+    glyph = _bus_text(req.get("glyph"), 8)
+    argv = req.get("exec") or []
+    if not isinstance(argv, list) or not all(isinstance(a, str) and a for a in argv) or len(argv) > 16:
+        raise Refused("exec: a list of words")
+    argv = [_bus_text(a, 200) for a in argv]
+
+    b = _Wire()
+    b.string("Uber Notebook")  # app_name
+    b.u32(0)  # replaces_id
+    b.string("")  # app_icon
+    b.string(summary)
+    b.string(body)
+    b.array(4, lambda: None)  # actions: none (a click runs omarchy-exec-argv)
+    hints = [("urgency", "y", 1)]
+    if glyph:
+        hints.append(("omarchy-glyph", "s", glyph))
+    if argv:
+        hints.append(("omarchy-exec-argv", "s", json.dumps(argv, separators=(",", ":"), ensure_ascii=False)))
+
+    def each():
+        for key, vsig, value in hints:
+            b.pad(8)
+            b.string(key)
+            b.signature(vsig)
+            if vsig == "y":
+                b.byte(value)
+            else:
+                b.string(value)
+    b.array(8, each)
+    b.i32(-1)  # expire_timeout: the server's own
+
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM | socket.SOCK_CLOEXEC)
+    sock.settimeout(5)
+    try:
+        sock.connect(_bus_path())
+        sock.sendall(b"\0AUTH EXTERNAL " + str(os.getuid()).encode("ascii").hex().encode("ascii") + b"\r\n")
+        line = b""
+        while not line.endswith(b"\r\n"):
+            chunk = sock.recv(1)
+            if not chunk or len(line) > 512:
+                raise Refused("the session bus didn't let this in")
+            line += chunk
+        if not line.startswith(b"OK "):
+            raise Refused("the session bus didn't let this in")
+        sock.sendall(b"BEGIN\r\n")
+        sock.sendall(_bus_message(1, "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "Hello"))
+        sock.sendall(_bus_message(2, "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                                  "org.freedesktop.Notifications", "Notify", "susssasa{sv}i", bytes(b.b)))
+        answer, end = _bus_read(sock, 2)
+        print(struct.unpack(end + "I", answer[:4])[0] if len(answer) >= 4 else 0)
+    except socket.timeout:
+        raise Refused("the session bus didn't answer")
+    except struct.error:
+        raise Refused("a message the session bus sent that this can't read")
+    finally:
+        sock.close()
+
+
 def main(argv):
     if argv[1:2] in (["unzip"], ["inspect-backup"], ["restore-backup"], ["export-html"]):
         try:
@@ -1705,6 +1992,12 @@ def main(argv):
             cmd_export_html(argv[2], argv[3], argv[4])
         elif len(argv) == 3 and argv[1] == "serve":
             cmd_serve(argv[2])
+        elif len(argv) == 3 and argv[1] == "make-private":
+            cmd_make_private(argv[2])
+        elif len(argv) == 2 and argv[1] == "lookup":
+            cmd_lookup()
+        elif len(argv) == 2 and argv[1] == "notify":
+            cmd_notify()
         elif len(argv) == 8 and argv[1] == "restore-backup":
             cmd_restore(argv[2], argv[3], argv[4], argv[5], argv[6], argv[7])
         else:

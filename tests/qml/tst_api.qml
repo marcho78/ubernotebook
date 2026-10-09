@@ -1134,7 +1134,9 @@ Item {
     function test_26_sites_contacted_for_an_agent_only_with_your_yes() {
       fresh()
       var r = json(api.add("Links", file("l.md", "x")))
-      function contacted(host) { return files.ran.filter(function(a) { return a.join(" ").indexOf(host) >= 0 && (a[0] === "/usr/bin/curl" || a[2] && String(a[2]).indexOf("curl") >= 0 || a[0] === "/usr/bin/getent") }).length }
+      // (A site's name or link on the command line, or on the input: curl's
+      // config and the files helper's lookup take them there.)
+      function contacted(host) { return files.ran.filter(function(a, i) { return (a.join(" ") + " " + files.inputs[i]).indexOf(host) >= 0 && (a[0] === "/usr/bin/curl" || a[2] && String(a[2]).indexOf("curl") >= 0 || a[4] === "lookup") }).length }
       function cards() { var p = fileOf(r.id); return Object.keys(p.blocks).map(function(k) { return p.blocks[k] }).filter(function(b) { return b.type === "bookmark" }).map(function(b) { return b.data }) }
       function find(item, name) {
         if (!item) return null

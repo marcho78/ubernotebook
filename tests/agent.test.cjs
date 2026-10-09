@@ -102,8 +102,9 @@ check("Claude Code works here: its command, and the prompt says so", () => {
   assert.deepEqual(plain(Agent.streamLimits(Object.assign(W("claude"), { helper: "/plugin/bin/uber-notebook-files" }))), { maxLine: 6 * 4194304 + 1024, maxBytes: 6 * 67108864 + 1048576, maxErrors: 67108864 });
   assert.deepEqual(plain(Agent.streamLimits(W("claude"))), { maxLine: 4194304, maxBytes: 67108864, maxErrors: 67108864 });
   const codexF = plain(Agent.command("codex", "-x", undefined, undefined, Object.assign(W("codex"), { helper: "/plugin/bin/uber-notebook-files" })));
-  assert.ok(codexF[2].indexOf("\"$@\" < /dev/null | /usr/bin/python3") > 0, "Codex: nothing on its input, its output filtered");
-  assert.equal(codexF[codexF.length - 1], "-x", "its prompt still last");
+  assert.ok(codexF[2].indexOf("\"$@\" | /usr/bin/python3") > 0, "Codex: its request on its input, its output filtered");
+  assert.equal(codexF[codexF.length - 1], "-", "its prompt read from its input");
+  assert.ok(!codexF.includes("-x"), "the request isn't in its command line");
   for (const a of ["-p", "--verbose", "--include-partial-messages"]) assert.ok(argv.includes(a), a);
   assert.ok(!argv.includes("--restricted") && !argv.includes("--strict-mcp-config"), "your setup as in your terminal: your plugins and MCP servers among it");
   assert.equal(argv[argv.indexOf("--setting-sources") + 1], "user", "your settings, never its folder's (a hook planted there would run)");
@@ -124,7 +125,10 @@ check("Claude Code works here: its command, and the prompt says so", () => {
   // Its request on its input, and your answers to what it asks.
   assert.deepEqual(JSON.parse(Agent.input("claude", "-starts with a dash")), { type: "user", message: { role: "user", content: "-starts with a dash" } });
   assert.ok(Agent.input("claude", "x").endsWith("\n"));
-  assert.equal(Agent.input("codex", "x"), "", "Codex: in its command line");
+  assert.equal(Agent.input("codex", "-x\nall of it"), "-x\nall of it", "Codex: its request on its input, as it is");
+  assert.equal(Agent.inputOnce("codex"), true, "then its input's closed");
+  assert.equal(Agent.inputOnce("claude"), false);
+  assert.equal(Agent.inputOnce("grok"), false);
   assert.deepEqual(JSON.parse(Agent.answer("r1", true, { url: "https://e.org" })), { type: "control_response", response: { subtype: "success", request_id: "r1", response: { behavior: "allow", updatedInput: { url: "https://e.org" } } } });
   assert.deepEqual(JSON.parse(Agent.answer("r2", false, {})).response.response, { behavior: "deny", message: "The user said no." });
   assert.equal(JSON.parse(Agent.unsupported("r3")).response.subtype, "error");
@@ -407,7 +411,8 @@ check("Grok and Codex work here too: their commands, in their sandboxes", () => 
   assert.ok(c.includes("--approve-for-me"), "as Omarchy starts Codex");
   assert.equal(c[c.indexOf("sandbox_workspace_write.network_access=false") - 1], "-c", "no network in its sandbox");
   assert.ok(c.includes("--skip-git-repo-check"), "its folder isn't a git repository");
-  assert.deepEqual(c.slice(-2), ["--", "-a prompt"]);
+  assert.deepEqual(c.slice(-2), ["--", "-"], "its prompt on its input");
+  assert.ok(!c.some((a) => a.indexOf("a prompt") >= 0), "never on its command line");
 });
 
 // Grok over ACP (JSON-RPC, a message a line), as grok 1.0.46 speaks it.
@@ -492,10 +497,10 @@ check("a conversation: started with its id, gone on with in the same one", () =>
   assert.equal(JSON.parse(Agent.acpSession("/run/x", { id: id, resume: true })).params.sessionId, id);
   // Codex: its own id, from its first line; exec's options, then resume.
   const x1 = tail(Agent.command("codex", "Hi", {}, { id: "", resume: false }, W("codex")));
-  assert.deepEqual(x1, ["/usr/bin/codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false", "--", "Hi"]);
+  assert.deepEqual(x1, ["/usr/bin/codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false", "--", "-"]);
   const t = "01a105cd-1057-70a1-8862-616924424b31";
   const x2 = tail(Agent.command("codex", "-and then?", { effort: "low" }, { id: t, resume: true }, W("codex")));
-  assert.deepEqual(x2, ["/usr/bin/codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false", "-c", "model_reasoning_effort=\"low\"", "resume", "--", t, "-and then?"]);
+  assert.deepEqual(x2, ["/usr/bin/codex", "exec", "--json", "--approve-for-me", "--skip-git-repo-check", "-c", "sandbox_workspace_write.network_access=false", "-c", "model_reasoning_effort=\"low\"", "resume", "--", t, "-"]);
   // Not an id: not on the command line (a new conversation, as before).
   const bad = tail(Agent.command("claude", "Hi", {}, { id: "--dangerous", resume: true }, W("claude")));
   assert.equal(bad.indexOf("--resume"), -1);

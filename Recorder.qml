@@ -142,7 +142,7 @@ Item {
         return
       }
       rec._launched = true
-      proc.command = ["/usr/bin/setsid", "--wait"].concat(argv)
+      proc.command = Env.START.concat(argv)
       proc.running = true
     })
     // (ffmpeg's own limit is the recording's length; a microphone that stops

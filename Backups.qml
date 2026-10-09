@@ -91,7 +91,7 @@ Item {
       var label = picked.length > 1 || String(which) === "all" ? "All profiles" : picked[0].name
       var name = Backups.fileName(label, now, automatic)
       var m = Backups.manifest(take.map(function(t) { return t.profile }), bk.version, now)
-      var args = [bk.folder, name.stem, name.suffix, JSON.stringify(m)]
+      var args = [bk.folder, name.stem, name.suffix]
       take.forEach(function(t, i) { args.push(t.path, "p" + (i + 1), Backups.inside(bk.folder, t.path)) })
       bk.files.exec(["/usr/bin/bash", "-c", Backups.BACKUP_SCRIPT, "uber-notebook-backup"].concat(args), function(made, said) {
         var lines = String(said || "").trim().split("\n")
@@ -100,7 +100,7 @@ Item {
         bk.refresh(function() {
           finish({ ok: true, path: path, name: path.split("/").pop(), size: Number(lines[lines.length - 2]) || 0, profiles: take.map(function(t) { return t.profile.name }) })
         })
-      }, { timeoutMs: 30 * 60 * 1000, maxBytes: 64 * 1024 })
+      }, { input: JSON.stringify(m), timeoutMs: 30 * 60 * 1000, maxBytes: 64 * 1024 })
     }, { timeoutMs: 8000 })
   }
 
