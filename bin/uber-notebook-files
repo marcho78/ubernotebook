@@ -1662,7 +1662,10 @@ def cmd_restore(path, member, base, expected, max_bytes, max_files):
             # anything's put in it. If not, refused, and the folder goes.)
             try:
                 os.fchmod(root_fd, 0o700)
-                keeps = not os.fstat(root_fd).st_mode & 0o077 and _keeps_private(root_fd)
+                # (Yours too: a share that takes every account for the same
+                # one makes it 700 and its owner someone else.)
+                st = os.fstat(root_fd)
+                keeps = st.st_uid == os.getuid() and not st.st_mode & 0o077 and _keeps_private(root_fd)
             except OSError as e:
                 # (A drive that refuses the change.)
                 if e.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.ENOSYS):

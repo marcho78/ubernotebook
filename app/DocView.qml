@@ -2223,14 +2223,17 @@ FocusScope {
     if (!a || !a.src || !recorder || audioWork[uid]) return
     setAudioWork(uid, "transcribe")
     // (Another profile opened before it's written out: its words aren't put
-    // in a page of that one.)
+    // in a page of that one, and that's said: write it out again there.)
     var mine = inThisFolder(function(fn) { fn() })
+    var moved = true
     recorder.transcribe(audioPath(a.src), a.duration, function(ok, text, problem) {
       view.setAudioWork(uid, "")
       mine(function() {
+        moved = false
         if (!ok) { view.toast(problem || "It couldn't be written out"); return }
         view.updateAudio(pageId, uid, function(x) { x.transcript = text; x.open = true; return x })
       })
+      if (moved && ok) view.toast("An audio note's words weren't added: another profile was opened. Write it out again in its own")
     })
   }
 
@@ -2242,12 +2245,15 @@ FocusScope {
     var pageId = page.id
     var name = Audio.fileName(new Date())
     setAudioWork(uid, "louder")
-    // (Another profile opened meanwhile: not put in a page of that one; the
-    // louder copy stays beside the first, in its own profile.)
+    // (Another profile opened meanwhile: not put in a page of that one, and
+    // the louder copy it made taken away again, never left in no page; said.)
     var mine = inThisFolder(function(fn) { fn() })
-    recorder.louder(audioPath(a.src), audioPath("assets/" + name), function(ok, peaks) {
+    var made = audioPath("assets/" + name)
+    var moved = true
+    recorder.louder(audioPath(a.src), made, function(ok, peaks) {
       view.setAudioWork(uid, "")
       mine(function() {
+        moved = false
         if (!ok) { view.toast("It couldn't be made louder"); return }
         view.updateAudio(pageId, uid, function(x) {
           x.src = "assets/" + name
@@ -2255,6 +2261,10 @@ FocusScope {
           return x
         })
       })
+      if (moved && ok) {
+        if (view.workspace && view.workspace.files) view.workspace.files.exec(["/usr/bin/rm", "-f", "--", made], null)
+        view.toast("An audio note wasn't made louder: another profile was opened. Try again in its own")
+      }
     })
   }
 

@@ -461,17 +461,31 @@ Item {
     function test_6_every_profiles_folder_made_private() {
       fresh({ sounds: false, profile: "p-a", folder: "~/Documents/Uber Notebook", profiles: [
         { id: "p-a", name: "Personal", folder: "~/Documents/Uber Notebook" },
-        { id: "p-b", name: "Work", folder: "/mnt/data/Work" },
-        { id: "p-c", name: "Home", folder: "/tmp" }] })
+        { id: "p-b", name: "Work", folder: "/tmp/data/Work" },
+        { id: "p-c", name: "Home", folder: "/tmp" }] }, { "/tmp/field-journal-a1b2/notebook.json": "{}" })
       var made = files.madePrivate
       verify(made.indexOf("/tmp/Documents/Uber Notebook") >= 0, JSON.stringify(made))
-      verify(made.indexOf("/mnt/data/Work") >= 0, "not only the one open: " + JSON.stringify(made))
+      verify(made.indexOf("/tmp/data/Work") >= 0, "not only the one open: " + JSON.stringify(made))
       verify(made.indexOf("/tmp") < 0, "never your home folder itself")
       verify(made.indexOf("/tmp/Pages") >= 0 && made.indexOf("/tmp/library.json") >= 0 && made.indexOf("/tmp/.trash") >= 0, "what's kept there: " + JSON.stringify(made))
+      verify(made.indexOf("/tmp/field-journal-a1b2") >= 0, "its notebooks' folders too: " + JSON.stringify(made))
       // (Once, as they're settled: not again with each switch.)
       var n = made.length
       profiles.use("p-b")
       compare(files.madePrivate.length, n)
+    }
+
+    // A profile's own folder picked again (to try it again, a drive mounted
+    // since): not taken for a new one, so one that's gone isn't made again
+    // in its place; another folder picked is (made when it's opened).
+    function test_6c_its_own_folder_picked_again_isnt_new() {
+      fresh({ sounds: false, profile: "p-a", folder: "~/Vault/Notes", profiles: [{ id: "p-a", name: "Vault", folder: "~/Vault/Notes" }] })
+      function vault() { return profiles.list.filter(function(p) { return p.id === "p-a" })[0] }
+      verify(!vault().fresh, "opened before")
+      verify(profiles.setFolder("p-a", "~/Vault/Notes") === "")
+      verify(!vault().fresh, "picked again: still not a new one")
+      verify(profiles.setFolder("p-a", "~/Elsewhere") === "")
+      compare(vault().fresh, true, "another folder: made when it's opened")
     }
 
     // While an audio note is being recorded (or saved), no other profile is

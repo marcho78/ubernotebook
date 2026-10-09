@@ -400,6 +400,33 @@ Item {
       tryVerify(function() { return written(files.rootPath + "/Exports/Getting started ").length === 2 }, 2000)
     }
 
+    // Said exported only once every one of its files is written (the files
+    // helper writes a few at a time): never while some are still waiting.
+    function test_17c_exported_only_once_all_is_written() {
+      fresh()
+      var top = ws.createPage({ parent: "", title: "Many", blocks: [{ type: "p", html: "x", indent: 0 }] })
+      for (var i = 0; i < 3; i++) ws.createPage({ parent: top.id, title: "P" + i })
+      var said = []
+      function heard(p) { said.push(p) }
+      files.exported.connect(heard)
+      files.exportBase = function(done) { done("/tmp/picked") }
+      files.holdWrites = true
+      try {
+        ws.exportPage(top.id)
+        wait(400)
+        compare(said.length, 0, "not while its files are being written")
+        files.holdWrites = false
+        files.answerReads()
+        tryVerify(function() { return said.length === 1 }, 2000, "once they are")
+        verify(/^\/tmp\/picked\/Many /.test(said[0]), said[0])
+      } finally {
+        files.exported.disconnect(heard)
+        files.holdWrites = false
+        files.answerReads()
+        files.exportBase = null
+      }
+    }
+
     function test_17b_export_takes_only_its_pages_files() {
       fresh()
       var assets = Workspace.assetsDir(files.rootPath)

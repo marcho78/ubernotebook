@@ -262,7 +262,7 @@ try {
   check("never put back on a drive that can't keep files private", () => {
     const { helperOn } = require("./drive.cjs");
     const c = plain(B.checked(helper(["inspect-backup", file]).out));
-    for (const drive of ["exfat", "files", "refuses"]) {
+    for (const drive of ["exfat", "files", "refuses", "notmine"]) {
       const docs = fs.mkdtempSync(path.join(tmp, "docs-"));
       const r = helperOn(drive, ["restore-backup", file, "p1", path.join(docs, "Uber Notebook Personal (restored)"), c.hash, MAXB, MAXF]);
       assert.equal(r.code, 3, drive + ": " + r.out);

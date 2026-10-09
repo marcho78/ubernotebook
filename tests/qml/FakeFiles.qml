@@ -129,6 +129,12 @@ QtObject {
   property var madePrivate: []
   readonly property var ownEntries: ["Pages", ".trash", "library.json", "Exports", "Markdown"]
   function makePrivate(folder, done) { madePrivate = madePrivate.concat([String(folder)]); if (done) done(true) }
+  // (Store.qml: the notebooks' folders in a notes folder, as the disk has them.)
+  function notebookFoldersIn(root, done) {
+    var ids = []
+    Object.keys(disk).forEach(function(p) { var m = /^(.*)\/([a-z0-9][a-z0-9-]{0,79})\/notebook\.json$/.exec(p); if (m && m[1] === root && ids.indexOf(m[2]) < 0) ids.push(m[2]) })
+    done(ids)
+  }
   function privateEntries(root, names, done) { madePrivate = madePrivate.concat(names.map(function(n) { return root + "/" + n })); if (done) done(true) }
   property int retried: 0
   function retry() { retried++ }

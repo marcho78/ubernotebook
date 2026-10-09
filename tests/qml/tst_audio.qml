@@ -366,6 +366,10 @@ Item {
         wait(900)
         compare(JSON.stringify(view.editor.serialize()), before, "their page as it was")
         verify(!Object.keys(files.disk).some(function(p) { return p.indexOf(other + "/") === 0 && String(files.disk[p]).indexOf("audio-2026") >= 0 && String(files.disk[p]).indexOf("louder") >= 0 }), "no louder copy put in their page")
+        // (The louder copy made in the first profile, taken away again; both said.)
+        var made = rec.louders[rec.louders.length - 1].to
+        verify(files.ran.some(function(a) { return a[0] === "/usr/bin/rm" && a[a.length - 1] === made }), "the louder copy taken away: " + made)
+        verify(made.indexOf(root0 + "/") === 0, "it was made in the first profile")
         verify(!Object.keys(files.disk).some(function(p) { return p.indexOf(other + "/") === 0 && String(files.disk[p]).indexOf("Only for the first profile") >= 0 }), "nothing of it in their files")
         compare(view.page.id, theirs)
       } finally {

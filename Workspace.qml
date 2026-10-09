@@ -1496,6 +1496,9 @@ Item {
 
   function exportPageTo(id, base) {
     var all = Workspace.withDescendants(index, id).filter(function(pid) { return !Workspace.inTrash(ws.index, pid) || pid === id })
+    // (Its files from the profile it's exported from, whatever's opened
+    // meanwhile.)
+    var from = Workspace.assetsDir(files.rootPath)
     readPages(all, function(pages) {
       if (!pages.length) return
       var names = {}
@@ -1517,16 +1520,30 @@ Item {
       var assets = Workspace.assetsOf(pages)
       files.mkdirs([dir].concat(sketches.length ? [dir + "/sketches"] : [], assets.length ? [dir + "/assets"] : []), function(ok) {
         if (!ok) return
+        // (Said done only once every file's written and its files copied:
+        // the files helper writes a few at a time. One that couldn't be:
+        // said, not "Exported".)
+        var left = pages.length + sketches.length + 1
+        var lost = 0
+        var missing = false
+        function one(ok2) {
+          if (!ok2) lost++
+          if (--left > 0) return
+          if (lost) { ws.failed("The export in " + dir.replace(files.home, "~") + " isn't whole: " + lost + (lost === 1 ? " file" : " files") + " couldn't be written"); return }
+          files.exported(dir)
+          files.openPath(dir)
+          if (missing) ws.failed("Exported, but some of its pages' files weren't there to copy")
+        }
         pages.forEach(function(p) {
           files.writeFile(dir + "/" + names[p.id] + ".md", Markdown.fromDocPage(p, function(pid) {
             var e = ws.index.pages[pid]
             return e ? { title: e.title || "Untitled", icon: e.icon, file: names[pid] ? encodeURI(names[pid] + ".md") : "" } : null
-          }, { sketchFile: function(bid) { return "sketches/" + bid + ".svg" } }))
+          }, { sketchFile: function(bid) { return "sketches/" + bid + ".svg" } }), one)
         })
-        sketches.forEach(function(k) { files.writeFile(dir + "/sketches/" + k.id + ".svg", Sketch.toSvg(k.sketch, "A sketch on " + (k.title || "Untitled"))) })
-        files.copyAssets(Workspace.assetsDir(files.rootPath), assets.map(function(s) { return s.slice(7) }), dir + "/assets", function() {
-          files.exported(dir)
-          files.openPath(dir)
+        sketches.forEach(function(k) { files.writeFile(dir + "/sketches/" + k.id + ".svg", Sketch.toSvg(k.sketch, "A sketch on " + (k.title || "Untitled")), one) })
+        files.copyAssets(from, assets.map(function(s) { return s.slice(7) }), dir + "/assets", function(copied) {
+          missing = copied === false
+          one(true)
         })
       })
     })

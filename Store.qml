@@ -679,6 +679,16 @@ Item {
   // What Uber Notebook keeps in a notes folder (a profile in your home
   // folder itself: these made yours alone, not the home folder).
   readonly property var ownEntries: ["Pages", ".trash", "library.json", "Exports", "Markdown"]
+  // The notebooks' folders in a notes folder (each one with its
+  // notebook.json, named by its id): done([id]). (A profile in your home
+  // folder itself: made yours alone with what's above, never anything
+  // else there.)
+  readonly property string notebookFoldersScript: "for f in \"$1\"/*/notebook.json; do [ -f \"$f\" ] || continue; d=${f%/notebook.json}; printf '%s\\n' \"${d##*/}\"; done"
+  function notebookFoldersIn(root, done) {
+    exec(["/usr/bin/bash", "-c", notebookFoldersScript, "uber-notebook-notebooks", String(root)], function(ok, out) {
+      done(ok ? String(out || "").split("\n").filter(function(n) { return Library.isId(n) }) : [])
+    }, { okCodes: [0, 1], timeoutMs: 8000, maxBytes: 256 * 1024 })
+  }
   // `mkdir -p` making every folder it makes yours alone (700): notes are
   // never readable by other accounts on the computer.
   function privateMkdir(paths) {
@@ -1548,6 +1558,9 @@ Item {
   }
 
   function exportNotebookTo(id, base) {
+    // (Its pictures from the profile it's exported from, whatever's opened
+    // meanwhile.)
+    var from = rootPath
     openNotebook(id, function(nb) {
       if (!nb) return
       var stamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm")
@@ -1556,16 +1569,24 @@ Item {
       store.mkdirs([dir], function(ok) {
         if (!ok) return
         var used = {}
+        // (Said done only once every page is written and its pictures
+        // copied: the files helper writes a few at a time.)
+        var left = nb.pages.length + 1
+        var lost = 0
+        function one(ok2) {
+          if (!ok2) lost++
+          if (--left > 0) return
+          if (lost) { store.failed("The export in " + dir.replace(home, "~") + " isn't whole: " + lost + (lost === 1 ? " page" : " pages") + " couldn't be written"); return }
+          store.exported(dir)
+          Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", dir])
+        }
         nb.pages.forEach(function(page, i) {
           var file = ("00" + (i + 1)).slice(-3) + " " + Markdown.fileName(page, i)
           if (used[file]) file = file.replace(/\.md$/, " " + i + ".md")
           used[file] = true
-          store.writeFile(dir + "/" + file, Markdown.fromPage(page, ""))
+          store.writeFile(dir + "/" + file, Markdown.fromPage(page, ""), one)
         })
-        store.exec(["/usr/bin/cp", "-r", "--", store.rootPath + "/" + id + "/assets", dir + "/assets"], function() {
-          store.exported(dir)
-          Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", dir])
-        }, { okCodes: [0, 1], timeoutMs: 60000 })
+        store.exec(["/usr/bin/cp", "-r", "--", from + "/" + id + "/assets", dir + "/assets"], function() { one(true) }, { okCodes: [0, 1], timeoutMs: 60000 })
       })
     })
   }

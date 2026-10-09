@@ -6,6 +6,8 @@
 //             changes nothing (a share)
 //   "refuses" a chmod refused, "Operation not supported" (a phone, through
 //             gvfs)
+//   "notmine" modes kept, but every folder's owner another account (a share
+//             that takes every account for the same one)
 // helperOn(drive, args, input) -> { code, out, err }.
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
@@ -13,9 +15,15 @@ const { spawnSync } = require("node:child_process");
 const helper = path.join(__dirname, "..", "bin", "uber-notebook-files");
 
 const PRELUDE = [
-  "import errno, os, runpy, sys",
+  "import errno, os, runpy, stat, sys",
   "drive = sys.argv[1]",
-  "real_open, real_mkdir, real_fchmod = os.open, os.mkdir, os.fchmod",
+  "real_open, real_mkdir, real_fchmod, real_fstat = os.open, os.mkdir, os.fchmod, os.fstat",
+  "def fstat(fd):",
+  "    st = real_fstat(fd)",
+  "    if drive == 'notmine' and stat.S_ISDIR(st.st_mode):",
+  "        t = list(st[:10]); t[4] = st.st_uid + 1",
+  "        return os.stat_result(t)",
+  "    return st",
   "def fchmod(fd, mode):",
   "    if drive == 'refuses':",
   "        raise OSError(errno.ENOTSUP, 'Operation not supported')",
@@ -28,7 +36,7 @@ const PRELUDE = [
   "    real_mkdir(path, mode, dir_fd=dir_fd)",
   "    if drive == 'exfat':",
   "        os.chmod(path, 0o755, dir_fd=dir_fd)",
-  "os.fchmod, os.open, os.mkdir = fchmod, open_, mkdir",
+  "os.fchmod, os.open, os.mkdir, os.fstat = fchmod, open_, mkdir, fstat",
   // (Still taking dir_fd, as shutil.rmtree looks for.)
   "os.supports_dir_fd.update((open_, mkdir))",
   "sys.argv = sys.argv[2:]",

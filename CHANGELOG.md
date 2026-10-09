@@ -23,13 +23,14 @@ The first version.
   through, with the note; a refused backups folder or Markdown copy is said
   in the window and with a notification, not only in Settings; the notice
   over a refused profile has *Try again*; a profile's folder that's gone (a
-  drive not mounted) isn't made again in its place. Recordings and
+  drive not mounted) isn't made again in its place, nor when it's picked
+  again; a backup is never put back in a folder that isn't yours. Recordings and
   dictation on their way are in your runtime folder, never `/tmp`. A page's
   export copies only the files its pages use. Nothing done for one profile
   lands in another: no profile is opened while an audio note records ("Stop
   the recording first"); a video's still, an email's attachment, dictation,
-  a transcript or a louder copy finishing after a switch stays with its
-  own; a quick note made right after a switch waits for that profile, and
+  a transcript or a louder copy finishing after a switch is never put in
+  the next profile (it's said, to do again in its own); a quick note made right after a switch waits for that profile, and
   the quick-note card never loses its words; `quick` and `importNotes`
   answer whether they did it; each profile keeps its own Inbox. Exports of
   many pages save a few files at a time.

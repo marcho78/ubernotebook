@@ -37,8 +37,11 @@ QtObject {
       var path = pm.pathOf(p.folder)
       if (!h || !path || seen[path]) return
       seen[path] = true
-      if (path === h) files.privateEntries(h, files.ownEntries)
-      else files.makePrivate(path)
+      if (path !== h) { files.makePrivate(path); return }
+      // (In your home folder itself: what Uber Notebook keeps there, its
+      // notebooks' folders too, never anything else.)
+      if (typeof files.notebookFoldersIn === "function") files.notebookFoldersIn(h, function(ids) { files.privateEntries(h, files.ownEntries.concat(ids)) })
+      else files.privateEntries(h, files.ownEntries)
     })
   }
   // The open one's folder, once the notebooks have it open (Store.rootPath):
@@ -174,7 +177,10 @@ QtObject {
     var busy = current && current.id === id ? refuse() : ""
     if (busy) return busy
     var f = Settings.cleanFolder(String(folder))
-    var changes = { profiles: shown.map(function(p) { if (p.id === id) { p.folder = f; p.fresh = true } return p }) }
+    // (A folder you picked is made when it's opened, as a new profile's is;
+    // the one it had, picked again, isn't: it was there before, so one
+    // that's gone (a drive not mounted) isn't made again in its place.)
+    var changes = { profiles: shown.map(function(p) { if (p.id === id) { if (p.folder !== f) p.fresh = true; p.folder = f } return p }) }
     // (The folder it has, picked again for the one open: looked at again if
     // it couldn't be used, a drive mounted since.)
     var again = current !== null && current.id === id && f === (service.settings.folder || "")
