@@ -179,7 +179,8 @@ QtObject {
     // (A file in a profile's notes, any of them, or in the backups: asked
     // about each time, Allow once only, whatever you've said Always to.)
     var kept = keptFolders()
-    function ours(p) { return Permissions.inAny(kept, p) }
+    learnRealPaths()
+    function ours(p) { return inKept(kept, Permissions.allowedFileRoot(list, who, p), p) }
     var entries = paths.map(function(p) { return { path: p, root: (!ours(p) && Permissions.allowedFileRoot(list, who, p)) || "/" } })
     var yes = Scope.withApproved(scope, entries)
     var need = paths.filter(function(p) { return ours(p) || !Permissions.allowedFile(list, who, p) })
@@ -229,6 +230,45 @@ QtObject {
     }
     if (backups && backups.folder) out.push(String(backups.folder))
     return out.filter(function(f) { return /^\/./.test(f) })
+  }
+  // Whether the file at `p` is in one of them (`kept`): as it's spelt, or
+  // where it really is, for a file below a folder you've said Always to
+  // (`root`; read from it through no link, so it's that folder's real path
+  // and the rest). Not known yet: it is, and you're asked.
+  function inKept(kept, root, p) {
+    if (Permissions.inAny(kept, p)) return true
+    if (!root) return false
+    var real = kept.concat([root]).map(function(f) { return String(realPaths[f] || "") })
+    if (real.some(function(r) { return !/^\//.test(r) })) return true
+    return Permissions.inAny(kept.concat(real.slice(0, kept.length)), real[kept.length] + p.slice(root.length))
+  }
+  // Those folders, and the ones you've said Always to, where they really
+  // are (links resolved), learned when they change: { folder: real path }.
+  property var realPaths: ({})
+  property string realPathsFor: ""
+  function learnRealPaths() {
+    var list = settings && Array.isArray(settings.agentPermissions) ? settings.agentPermissions : []
+    var want = keptFolders().concat(list.filter(function(r) { return r && r.action === "files" }).map(function(r) { return String(r.target || "") }))
+      .filter(function(f, i, all) { return /^\/[^\u0000-\u001f\u007f]+$/.test(f) && all.indexOf(f) === i })
+    var key = want.join("\n")
+    if (key === realPathsFor || !files || typeof files.exec !== "function") return
+    realPathsFor = key
+    if (!want.length) { realPaths = {}; return }
+    files.exec(["/usr/bin/realpath", "-m", "--"].concat(want), function(ok, out) {
+      if (realPathsFor !== key) return
+      var lines = String(out || "").split("\n")
+      var map = {}
+      if (ok) want.forEach(function(f, i) { if (/^\//.test(lines[i] || "")) map[f] = lines[i] })
+      realPaths = map
+    }, { timeoutMs: 5000, maxBytes: 256 * 1024 })
+  }
+  onSettingsChanged: Qt.callLater(learnRealPaths)
+  onBackupsChanged: Qt.callLater(learnRealPaths)
+  onProfilesChanged: Qt.callLater(learnRealPaths)
+  property Connections rootWatch: Connections {
+    target: api.files
+    ignoreUnknownSignals: true
+    function onRootPathChanged() { Qt.callLater(api.learnRealPaths) }
   }
 
   function answer(o) { return JSON.stringify(o) }

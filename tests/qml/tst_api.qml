@@ -1489,7 +1489,29 @@ Item {
         askUi.asks[0].run([])
         compare(ran, 1, "run once you say yes")
         compare(Scope.within(callers[0], theirs[0]), "/", "that file alone, every step of it through no link")
+        // The same folders by another way there (a link above them, or above
+        // the folder you said Always to): asked all the same.
+        files.links = { "/tmp/Docs": "/tmp/Store", "/tmp/L": "/tmp" }
+        api.settings = { agentPermissions: [
+          { agent: "grok", action: "files", target: "/tmp/Store" },
+          { agent: "grok", action: "files", target: "/tmp/L/Docs" }] }
+        askUi.asks = []
+        ran = 0
+        api.askForFiles(scope, ["/tmp/Store/invoice.png"], run)
+        compare([ran, askUi.asks.length].join("|"), "1|0", "beside them: at once")
+        ran = 0
+        var aliases = ["/tmp/Store/Other/Pages/a.png", "/tmp/Store/Backups/b.png", "/tmp/L/Docs/Other/c.png"]
+        aliases.forEach(function(p) { api.askForFiles(scope, [p], run) })
+        compare(ran, 0, "none taken without asking")
+        compare(askUi.asks.map(function(r) { return r.always }).join("|"), "||", "Allow once only")
+        // Where they are not known yet: asked.
+        files.links = {}
+        api.realPaths = {}
+        askUi.asks = []
+        api.askForFiles(scope, ["/tmp/Store/invoice2.png"], run)
+        compare(askUi.asks.length, 1)
       } finally {
+        files.links = {}
         api.ui = ui
         api.profiles = null
         api.backups = null

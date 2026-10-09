@@ -57,6 +57,7 @@ QtObject {
 
   function reset() {
     ran = []
+    links = ({})
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
     printed = []
@@ -219,6 +220,19 @@ QtObject {
     execNow(argv, done, options)
   }
   function execNow(argv, done, options) {
+    // realpath -m: each path with the links in `links` (a folder: where it
+    // really is) followed.
+    if (argv[0] === "/usr/bin/realpath") {
+      done(true, argv.slice(3).map(function(p) {
+        for (var n = 0; n < 40; n++) {
+          var was = p
+          for (var l in links) if (p === l || p.indexOf(l + "/") === 0) { p = links[l] + p.slice(l.length); break }
+          if (p === was) break
+        }
+        return p
+      }).join("\n") + "\n")
+      return
+    }
     if (argv[0] === "/usr/bin/bash" && argv[3] === "uber-notebook-export-tools") { done(true, exportTools); return }
     // The Markdown copy's changes (bin/uber-notebook-files mirror-apply):
     // each made only to a file still as it wrote it (its fingerprint), else
@@ -538,6 +552,8 @@ QtObject {
   // asked for i-th answer.
   property bool holdAgentPath: false
   property var heldAgentPaths: []
+  // Folders that are links, for realpath: { link: where it really is }.
+  property var links: ({})
   function releaseAgentPath(i) { var h = heldAgentPaths[i]; if (h) h.done(h.name === missingAgent ? "" : "/usr/bin/" + h.name) }
   function setDefaultAgent(name, done) { agent = name; done(true) }
   function defaultAgent(done) { done(agent) }
