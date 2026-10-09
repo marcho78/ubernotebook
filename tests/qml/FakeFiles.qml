@@ -84,6 +84,7 @@ QtObject {
     missingAgent = ""
     holdAgentPath = false
     heldAgentPaths = []
+    nextPaste = ""
     disk = ({})
     index = ({})
     written = ({})
@@ -573,7 +574,14 @@ QtObject {
 
   function isImagePath(path) { return Library.isImagePath(path) }
   function assetName(path) { return Library.assetName(path, new Date()) }
-  function pasteInto(dest, done) { done("") }
+  // A picture pasted from the clipboard: nextPaste ("" for none); with
+  // holdReads, when answerReads() is.
+  property string nextPaste: ""
+  function pasteInto(dest, done) {
+    var got = nextPaste
+    if (holdReads) { heldReads.push(function() { done(got) }); return }
+    done(got)
+  }
   function copyText(text) { copied = String(text) }
   // A picture copied in (Store.qml: copy-picture): never over a file;
   // what it was asked, `within` too, for tests.
@@ -643,7 +651,11 @@ QtObject {
   property var links: ({})
   function releaseAgentPath(i) { var h = heldAgentPaths[i]; if (h) h.done(h.name === missingAgent ? "" : "/usr/bin/" + h.name) }
   function setDefaultAgent(name, done) { agent = name; done(true) }
-  function defaultAgent(done) { done(agent) }
+  // (With holdReads, the agent's name waits for answerReads(), as a slow one would.)
+  function defaultAgent(done) {
+    if (holdReads) { heldReads.push(function() { done(files.agent) }); return }
+    done(agent)
+  }
   function launchAgent(prompt) { launched = launched.concat([String(prompt)]) }
   // The models an agent can work with: from the lists in `disk`, as Store.qml reads them.
   function agentModels(agent, done) {

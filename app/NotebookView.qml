@@ -88,8 +88,14 @@ Item {
   property real inkWidth: 2.2
 
   // Opens a notebook (already read from disk, with its pages) at a page.
+  // (The profile its notebook is from: never saved into another's, whose
+  // notebooks may have the same ids.)
+  property var shownGeneration: undefined
+  property string shownRoot: ""
   function show(notebook, index) {
     commit()
+    shownGeneration = store ? store.generation : undefined
+    shownRoot = store ? store.rootPath : ""
     nb = notebook
     var at = typeof index === "number" ? index : -1
     if (at < 0 && notebook.lastPage) {
@@ -137,6 +143,7 @@ Item {
   function commit() {
     saveTimer.stop()
     if (!pageDirty || !page || !nb) return
+    if (!store || store.rootPath !== shownRoot || store.generation !== shownGeneration) { pageDirty = false; return }
     pageDirty = false
     var p = page
     p.blocks = sheet.editor.serialize()
@@ -1020,29 +1027,43 @@ Item {
 
   // ---- pictures -------------------------------------------------------------------------------
 
+  // fn, for a picture copied in: nothing if another profile's opened (or
+  // is opening), or another notebook or page is open by then.
+  function onThisPage(fn) {
+    var gen = store ? store.generation : -1
+    var root = store ? store.rootPath : ""
+    var nbId = nb ? nb.id : ""
+    var pageId = page ? page.id : ""
+    return function() {
+      if (!store || store.switching === true || gen !== store.generation || root !== store.rootPath) return
+      if (!view.nb || view.nb.id !== nbId || !view.page || view.page.id !== pageId) return
+      return fn.apply(null, arguments)
+    }
+  }
+
   function dropPictures(urls) {
     var after = sheet.editor.focusUid
     for (var i = 0; i < urls.length && i < 12; i++) {
       var path = decodeURIComponent(String(urls[i]).replace(/^file:\/\//, ""))
       if (!Library.isImagePath(path)) continue
-      store.importPicture(nb.id, path, function(src) {
+      store.importPicture(nb.id, path, onThisPage(function(src) {
         if (src) sheet.editor.insertPicture(after, src, 0)
-      })
+      }))
     }
   }
 
   function addPicture(path, afterUid) {
     if (!nb || !Library.isImagePath(path)) return
-    store.importPicture(nb.id, path, function(src) {
+    store.importPicture(nb.id, path, onThisPage(function(src) {
       if (src) sheet.editor.insertPicture(afterUid || sheet.editor.focusUid, src, 0)
-    })
+    }))
   }
 
   function pastePicture(afterUid) {
     if (!nb) return
-    store.pastePicture(nb.id, function(src) {
+    store.pastePicture(nb.id, onThisPage(function(src) {
       if (src) sheet.editor.insertPicture(afterUid, src, 0)
-    })
+    }))
   }
 
   // A picture onto the clipboard, to paste anywhere.

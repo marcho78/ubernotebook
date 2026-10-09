@@ -77,6 +77,49 @@ Item {
       }
     }
 
+    // A picture copied in as another profile opens: not put on a page of
+    // that one (a restored one's notebooks have the same ids).
+    function test_2d_a_picture_as_another_profile_opens() {
+      openFirst()
+      var count = view.editor.model.count
+      try {
+        fakeStore.nextPicture = "assets/pasted.png"
+        fakeStore.holdSearch = true
+        view.pastePicture(view.editor.uidAt(0))
+        view.addPicture("/tmp/a.png", view.editor.uidAt(0))
+        compare(fakeStore.heldSearches.length, 2)
+        fakeStore.switching = true
+        fakeStore.answerSearches()
+        wait(50)
+        compare(view.editor.model.count, count, "no picture put in")
+      } finally {
+        fakeStore.holdSearch = false
+        fakeStore.answerSearches()
+        fakeStore.switching = false
+        fakeStore.nextPicture = ""
+      }
+    }
+
+    // A notebook's page changed, then another profile opened before it's
+    // saved: never saved into that one (a restored one's notebooks have
+    // the same ids).
+    function test_2e_never_saved_into_another_profile() {
+      openFirst()
+      var root0 = fakeStore.rootPath
+      var item = view.editor.items[view.editor.uidAt(0)]
+      view.editor.focusBlock(item.uid, -1)
+      try {
+        keyClick("#")
+        verify(view.pageDirty)
+        fakeStore.rootPath = "/tmp/another-profile"
+        view.commit()
+        verify(!/Before we go#/.test(stored(view.page.id).blocks[0].html), stored(view.page.id).blocks[0].html)
+        verify(!view.pageDirty)
+      } finally {
+        fakeStore.rootPath = root0
+      }
+    }
+
     // A middle click pastes what's selected (the primary selection), read
     // through the view's forwarding to the store, not the clipboard.
     function test_2b_middle_click_pastes_whats_selected() {

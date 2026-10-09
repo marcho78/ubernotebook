@@ -258,6 +258,13 @@ FocusScope {
     var folder = workspace ? workspace.folder : ""
     return function() { if (view.workspace && gen === view.workspace.generation && folder === view.workspace.folder) return fn.apply(null, arguments) }
   }
+  // fn, for what comes back to the page open now: nothing if another
+  // profile's opened (or is opening), or another page is open by then.
+  function onThisPage(fn) {
+    var here = inThisFolder(function(args) { return fn.apply(null, args) })
+    var pageId = page ? page.id : ""
+    return function() { if (!view.switching && view.page && view.page.id === pageId) return here(arguments) }
+  }
   // Another profile opening (from the moment it's picked till its notes
   // are open, or it's said they can't be): the page as it is saved at
   // once, where it was; what's recorded, written out or made louder
@@ -1119,6 +1126,9 @@ FocusScope {
     agentTalk = null
     agentPending = null
     agentPanel.visible = false
+    // (Anything opened over the page since the switch began: closed too.)
+    Overlays.closeAll(view, [])
+    icsPop.events = []
     // (The meetings started in the folder before are its pages': not
     // looked for here.)
     meetingPending = null
@@ -2496,7 +2506,9 @@ FocusScope {
   function importMeeting(uid) {
     if (!meetings) return
     var item = editor.items[uid]
-    meetings.list(function(list) {
+    // (Another profile or page open by then: its list not shown there.)
+    meetings.list(onThisPage(function(list) {
+      if (editor.indexOf(uid) < 0) return
       if (list.length === 0) { view.toast("voxtype hasn't recorded a meeting yet"); return }
       meetingPick.uid = uid
       meetingPick.choices = list
@@ -2506,18 +2518,20 @@ FocusScope {
         meetingPick.y = 70
       }
       meetingPick.open()
-    })
+    }))
   }
 
   // The agent: the meeting summarized, under it (Claude Code, Grok and Codex
   // here, in the panel; the others in a terminal).
   function summarizeMeeting(uid) {
     if (!page || !workspace) return
-    workspace.files.defaultAgent(function(agent) {
+    // (Another profile or page open by then: no agent started there.)
+    workspace.files.defaultAgent(onThisPage(function(agent) {
+      if (editor.indexOf(uid) < 0) return
       view.askAgentWith(agent,
         "Summarize this meeting (the meeting block: who said what). Right after the meeting block, add a short summary of what it was about, the decisions made, and the action items as to-dos (who does what, by when, when it was said). Keep the meeting block as it is.",
         { scope: "blocks", blocks: [uid], words: "", line: "" }, "Summarize this meeting")
-    })
+    }))
   }
 
   // A meeting's buttons.
@@ -3567,7 +3581,7 @@ FocusScope {
           onDrawingCopyRequested: function(kind, source, look) { view.copyDrawing(kind, source, look) }
           onDrawingSaveRequested: function(kind, source, look) { view.saveDrawing(kind, source, look) }
           onPictureSaveRequested: function(src) { view.savePicture(src, "") }
-          onPastePicture: function(afterUid) { view.workspace.pastePicture(function(src) { if (src) editor.insertPicture(afterUid, src, 0) }) }
+          onPastePicture: function(afterUid) { view.workspace.pastePicture(view.onThisPage(function(src) { if (src) editor.insertPicture(afterUid, src, 0) })) }
           onLinkRequested: linkPop.openAt(bubble)
           onMindMapColorsRequested: function(uid, anchor) { view.openIdeaColors(uid, anchor) }
           onTableMenuRequested: function(uid, kind, index, anchor) { tableMenu.openFor(uid, kind, index, anchor, view) }
@@ -4859,7 +4873,7 @@ FocusScope {
             var title = modelData.title
             if (!view.page) return
             var pageId = view.page.id
-            view.updateMeeting(pageId, uid, function(m) { m.id = id; m.title = title; return m }, function() { view.fetchMeeting(pageId, uid, id) })
+            view.updateMeeting(pageId, uid, function(m) { m.id = id; m.title = title; return m }, function(ok) { if (ok) view.fetchMeeting(pageId, uid, id) })
           }
         }
       }

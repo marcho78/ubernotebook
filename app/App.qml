@@ -523,6 +523,9 @@ FocusScope {
       // (A notebook still being opened from the profile before: never opened
       // now, and others can be.)
       root.opening = false
+      // (Anything opened over the notes since the switch began: closed too.)
+      Overlays.closeAll(root, [settingsPanel, releaseNotes])
+      view.pageDirty = false
       if (root.mode !== "notebook") return
       view.pageDirty = false
       root.mode = "shelf"

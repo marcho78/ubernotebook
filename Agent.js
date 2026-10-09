@@ -594,6 +594,23 @@ function cleanChats(raw) {
   list.slice(0, MAX_CHATS).forEach(function(e) { out[e.id] = e.chat })
   return out
 }
+// The conversations as they're kept for `home` (the Pages folder they're
+// read in): ones written in another (a profile put back from a backup, a
+// folder copied, or kept before they said where) go on as new sessions in
+// new folders, told what was said, never the other profile's sessions.
+function chatsFor(raw, home) {
+  var chats = cleanChats(raw)
+  if (home && raw && typeof raw === "object" && raw.home === home) return chats
+  var out = {}
+  Object.keys(chats).forEach(function(id) {
+    var c = chats[id]
+    c.session = ""
+    c.folder = ""
+    out[id] = c
+  })
+  return out
+}
+
 // What the page's AI button says of its conversation.
 function chatTip(chat) {
   if (!chat) return ""

@@ -699,6 +699,29 @@ Item {
       verify(api.read(t1.id).indexOf("an here") >= 0, "the #tag out of the text, as in the window: " + api.read(t1.id))
     }
 
+    // A notebook read in one profile: never given in another, whose
+    // notebooks may have the same ids (one restored from a backup).
+    function test_21c_a_notebook_read_isnt_given_in_another_profile() {
+      fresh()
+      api.notebookReads = ({})
+      var root0 = files.rootPath
+      var pid = "20261001-090000-aaaa"
+      files.index = ({ "journal-ab12": { title: "Journal", modified: "2026-10-01T09:00:00.000Z", pages: [pid] } })
+      function page(words) { return JSON.stringify({ version: 1, id: pid, title: "Thursday", created: "2026-10-01T09:00:00.000Z", modified: "2026-10-01T09:00:00.000Z", blocks: [{ type: "p", html: words }] }) }
+      files.disk[root0 + "/journal-ab12/pages/" + pid + ".json"] = page("Only for the profile before.")
+      verify(api.readNotebook("journal-ab12", pid).indexOf("Only for the profile before.") >= 0)
+      try {
+        files.rootPath = "/tmp/other-api-notes"
+        files.disk["/tmp/other-api-notes/journal-ab12/pages/" + pid + ".json"] = page("This profile's own.")
+        var md = api.readNotebook("journal-ab12", pid)
+        verify(md.indexOf("Only for the profile before.") < 0, md)
+        verify(md.indexOf("This profile's own.") >= 0, md)
+      } finally {
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     // Notebooks: listed, read, added to.
     function test_21_notebooks() {
       fresh()

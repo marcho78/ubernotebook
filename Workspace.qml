@@ -472,7 +472,12 @@ Item {
     var ids = Workspace.pagesTagged(index, from)
     var changed = 0
     var i = 0
+    // (Another profile opened before it's done: stopped, never going on in
+    // that one's pages (a restored one's have the same ids) or tag colors.)
+    var gen = generation
+    var folder0 = folder
     function next() {
+      if (gen !== ws.generation || folder0 !== ws.folder) { if (done) done(changed); return }
       if (i >= ids.length) {
         var colors = index.tagColors || {}
         if (colors[from] !== undefined) {
@@ -728,10 +733,17 @@ Item {
 
   // The calendar as an .ics file, where exports go: done(its path, or "").
   function exportCalendar(done) {
+    // (This profile's calendar, as it is now; another profile opened before
+    // it's written: not written at all.)
+    var gen = generation
+    var text = Calendar.toIcs(calendar, new Date())
+    if (!calendarLoaded || files.switching === true) { if (done) done(""); return }
     function to(base) {
+      if (gen !== ws.generation || files.switching === true) { if (done) done(""); return }
       var path = base + "/Uber Notebook calendar " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".ics"
       files.mkdirs([base], function() {
-        files.writeFile(path, Calendar.toIcs(calendar, new Date()), function(ok) {
+        if (gen !== ws.generation || files.switching === true) { if (done) done(""); return }
+        files.writeFile(path, text, function(ok) {
           if (ok && typeof files.exported === "function") files.exported(path)
           if (done) done(ok ? path : "")
         })
@@ -759,7 +771,8 @@ Item {
     files.readFiles([path], function(got, read, failed) {
       if (gen !== ws.generation) return
       ws.keepUnreadable(path, failed)
-      ws.chats = ws.cleaned(path, got[path], Agent.cleanChats)
+      var home = ws.folder
+      ws.chats = ws.cleaned(path, got[path], function(raw) { return Agent.chatsFor(raw, home) })
       ws.chatsLoaded = true
       ws.chatsRevision++
     })
@@ -767,7 +780,9 @@ Item {
   function writeChats() {
     if (!folder || !chatsLoaded) return
     if (unreadable[chatsPath()]) { notSaved(chatsPath()); return }
-    var text = JSON.stringify({ version: 1, chats: chats }, null, 1) + "\n"
+    // (Where they were written: read anywhere else, their sessions aren't
+    // gone on with, Agent.chatsFor.)
+    var text = JSON.stringify({ version: 1, home: folder, chats: chats }, null, 1) + "\n"
     var path = chatsPath()
     var gen = generation
     withFolder(function() { if (gen === ws.generation) ws.write(path, text) })
@@ -862,10 +877,17 @@ Item {
 
   // Everyone as a .vcf file, where exports go: done(its path, or "").
   function exportContacts(done) {
+    // (This profile's people, as they are now; another profile opened
+    // before they're written: not written at all.)
+    var gen = generation
+    var text = Contacts.toVcard(ws.contacts)
+    if (!contactsLoaded || files.switching === true) { if (done) done(""); return }
     function to(base) {
+      if (gen !== ws.generation || files.switching === true) { if (done) done(""); return }
       var path = base + "/Uber Notebook contacts " + Qt.formatDateTime(new Date(), "yyyy-MM-dd HHmm") + ".vcf"
       files.mkdirs([base], function() {
-        files.writeFile(path, Contacts.toVcard(ws.contacts), function(ok) {
+        if (gen !== ws.generation || files.switching === true) { if (done) done(""); return }
+        files.writeFile(path, text, function(ok) {
           if (ok && typeof files.exported === "function") files.exported(path)
           if (done) done(ok ? path : "")
         })

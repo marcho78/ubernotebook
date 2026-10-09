@@ -7,6 +7,7 @@ import "../../Html.js" as Html
 import "../../Mindmap.js" as Mindmap
 import "../../Colors.js" as Colors
 import "../../Calendar.js" as Calendar
+import "../../Tags.js" as Tags
 
 // Pages end to end: the view, the real workspace store, and files in memory.
 Item {
@@ -317,6 +318,84 @@ Item {
         files.answerReads()
         files.switching = false
         view.picturePicker.close()
+      }
+    }
+
+    // A picture pasted, or a contacts or calendar export, as another
+    // profile opens: never put on the next one's page, nor that one's
+    // people or events written under the one before's name.
+    function test_6f_pasted_or_exported_as_another_profile_opens() {
+      fresh()
+      var count = view.editor.model.count
+      var uid = view.editor.uidAt(0)
+      try {
+        files.nextPaste = "assets/pasted.png"
+        files.holdReads = true
+        view.editor.pastePicture(uid)
+        files.switching = true
+        files.answerReads()
+        wait(50)
+        compare(view.editor.model.count, count, "no picture put in")
+        verify(view.editor.serialize().every(function(b) { return b.type !== "image" }))
+        files.holdReads = false
+        files.switching = false
+        // Exports: asked where, then another profile: nothing written.
+        tryVerify(function() { return ws.calendarLoaded && ws.contactsLoaded }, 2000)
+        var asked = []
+        files.exportBase = function(done) { asked.push(done) }
+        var got = []
+        ws.exportCalendar(function(p) { got.push(p) })
+        ws.exportContacts(function(p) { got.push(p) })
+        compare(asked.length, 2)
+        files.switching = true
+        asked.forEach(function(done) { done("/tmp/picked-exports") })
+        compare(JSON.stringify(got), JSON.stringify(["", ""]), "not exported")
+        verify(!Object.keys(files.disk).some(function(p) { return p.indexOf("/tmp/picked-exports/") === 0 }), "nothing written there")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+        files.nextPaste = ""
+        files.exportBase = null
+      }
+    }
+
+    // A tag renamed as another profile opens: stopped, never going on in
+    // that one's pages (a restored one's have the same ids). A popup
+    // opened as it switched: closed once the folder's left.
+    function test_6g_a_tag_renamed_as_another_profile_opens() {
+      fresh()
+      var a = ws.createPage({ parent: "", title: "A", blocks: [{ type: "p", html: "one " + Tags.html("trip"), indent: 0 }] })
+      var b = ws.createPage({ parent: "", title: "B", blocks: [{ type: "p", html: "two " + Tags.html("trip"), indent: 0 }] })
+      wait(200)
+      compare(Workspace.pagesTagged(ws.index, "trip").length, 2)
+      var root0 = files.rootPath
+      var other = "/tmp/other-tag-notes"
+      Object.keys(files.disk).forEach(function(p) { if (p.indexOf(root0 + "/") === 0) files.disk[other + p.slice(root0.length)] = files.disk[p] })
+      ws.written = ({})
+      try {
+        files.holdReads = true
+        var changed = null
+        ws.changeTag("trip", "travel", function(n) { changed = n })
+        compare(files.heldReads.length > 0, true, "under way")
+        files.rootPath = other
+        files.holdReads = false
+        files.answerReads()
+        tryCompare(ws, "ready", true, 3000)
+        wait(300)
+        var theirs = [a.id, b.id].map(function(id) { return String(files.disk[Workspace.pageFile(other, id)] || "") })
+        verify(theirs.every(function(t) { return t.indexOf("travel") < 0 }), "not renamed in theirs")
+        // A popup opened as it switched: closed once the folder's left.
+        files.switching = true
+        view.openHistory()
+        files.rootPath = root0
+        tryVerify(function() { for (var i = 0; i < view.data.length; i++) { var o = view.data[i]; if (o && o.modal !== undefined && o.visible === true) return false } return true }, 1000, "closed")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
       }
     }
 

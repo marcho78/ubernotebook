@@ -584,6 +584,18 @@ check("conversations kept with their pages: checked, kept short, the last talked
   assert.equal(Agent.chatTip(c.p1), "Your conversation with Claude Code (2 messages)");
   assert.equal(Agent.chatTip(null), "");
   assert.deepEqual(plain(Agent.cleanChats(null)), {});
+  // Read in the folder they were written in: gone on with. Anywhere else
+  // (a profile put back from a backup, a folder copied, or kept before they
+  // said where): the words kept, a new session in a new folder.
+  const home = "/home/u/Documents/Uber Notebook/Pages";
+  const one = { version: 1, home, chats: { p1: { agent: "claude", session: "0b8f1c2e-3a4d-4e5f-8a9b-0c1d2e3f4a5b", folder: "c-0123456789ab", page: "p1", updated: "2026-10-03T10:00:00Z", turns: [{ request: "Hi", answer: "Hello", status: "done" }] } } };
+  assert.equal(Agent.chatsFor(one, home).p1.session, "0b8f1c2e-3a4d-4e5f-8a9b-0c1d2e3f4a5b");
+  assert.equal(Agent.chatsFor(one, home).p1.folder, "c-0123456789ab");
+  for (const elsewhere of [Agent.chatsFor(one, "/home/u/Restored/Pages"), Agent.chatsFor({ version: 1, chats: one.chats }, home), Agent.chatsFor(one, "")]) {
+    assert.equal(elsewhere.p1.session, "");
+    assert.equal(elsewhere.p1.folder, "");
+    assert.equal(elsewhere.p1.turns[0].answer, "Hello", "the words kept");
+  }
   assert.deepEqual(plain(Agent.cleanChats({ chats: [1, 2] })), {});
   const many = { chats: {} };
   for (let i = 0; i < Agent.MAX_CHATS + 5; i++) many.chats["p" + i] = { agent: "claude", updated: "2026-10-04T08:00:00.000Z", turns: [turn(i)] };

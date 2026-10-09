@@ -80,13 +80,27 @@ Popup {
   Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, panel.theme && panel.theme.dark ? 0.5 : 0.3) }
 
   onClosed: if (testing) recorder.cancel()
+  // (The Markdown copy's folder is the open profile's: filled again when
+  // another opens while Settings is open, and never saved into another
+  // than the one it was filled for.)
+  property string mirrorFor: ""
+  function fillMirror() {
+    mirrorField.text = s.mirrorFolder || ""
+    mirrorFor = String(s.profile || "")
+  }
+  function setMirror(text) { if (mirrorFor === String(s.profile || "")) set("mirrorFolder", text) }
+  Connections {
+    target: panel.service
+    ignoreUnknownSignals: true
+    function onSettingsChanged() { if (panel.visible && String(panel.s.profile || "") !== panel.mirrorFor) panel.fillMirror() }
+  }
   onOpened: {
     heard = ""
     if (recorder) recorder.listSources()
     toggleField.text = s.shortcut || ""
     quickField.text = s.quickShortcut || ""
     addingProfile = false
-    mirrorField.text = s.mirrorFolder || ""
+    fillMirror()
     restoring = null
     restored = []
     if (backups) backups.refresh()
@@ -970,8 +984,8 @@ Popup {
                 theme: panel.theme
                 width: 200
                 placeholder: "Default (Markdown)"
-                onAccepted: panel.set("mirrorFolder", text)
-                input.onActiveFocusChanged: if (!input.activeFocus) panel.set("mirrorFolder", text)
+                onAccepted: panel.setMirror(text)
+                input.onActiveFocusChanged: if (!input.activeFocus) panel.setMirror(text)
               }
               IconButton { theme: panel.theme; icon: panel.theme.icons.folder; tip: "Open the copy"; onClicked: panel.service.openMirror() }
             }

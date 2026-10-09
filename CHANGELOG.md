@@ -35,9 +35,12 @@ The first version.
   saved the moment another profile starts opening (an edit then, at once),
   everything open over the notes (a page's history, an .ics file's events,
   an event, a picker, a question, an Undo) closes, and nothing is recorded,
-  dictated, written out or made louder till it's open; a file picked, or a
-  meeting's transcript, arriving after the switch isn't put in the next
-  profile; the people, calendar and alerts of the one before aren't shown
+  dictated, written out or made louder till it's open; a file picked, a
+  picture copied in, a meeting's transcript or list, a tag renamed on many
+  pages, an export or a notebook read for a command, arriving or going on
+  after the switch, isn't put in the next profile; a notebook's page is
+  never saved into another profile's; a conversation in a restored profile
+  starts a new session (told what was said); the people, calendar and alerts of the one before aren't shown
   or sent there; a search's results are gone at once, and one on its way
   finds nothing; `set folder` and `set profile` do as Settings does
   (`set profiles` is refused); a quick note made right after a switch waits for that profile, and

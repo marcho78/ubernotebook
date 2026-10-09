@@ -575,6 +575,37 @@ Item {
       }
     }
 
+    // Settings open as another profile opens (a command, an agent): the
+    // Markdown copy's folder shown is the new one's, and the one before's
+    // is never saved into it.
+    function test_6h_settings_open_as_another_profile_opens() {
+      fresh()
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      service.setSetting("mirror", true)
+      service.setSetting("mirrorFolder", "~/Vault/Personal")
+      verify(profiles.add("Work", "~/Work", false) === "")
+      var work = profiles.list.filter(function(p) { return p.name === "Work" })[0]
+      var panel = app.settingsPopup
+      panel.openAt("writing")
+      tryVerify(function() { return panel.opened }, 1000)
+      var field = null
+      tryVerify(function() { field = find(panel.contentItem, function(it) { return it.placeholder === "Default (Markdown)" }); return field !== null }, 1000)
+      compare(field.text, "~/Vault/Personal")
+      try {
+        compare(profiles.use(work.id), "")
+        compare(field.text, "", "the new one's")
+        field.accepted()
+        compare(service.settings.mirrorFolder || "", "", "the one before's never saved into it")
+        // Filled for one profile, then another open: not saved into it.
+        panel.mirrorFor = "someone else"
+        field.text = "~/Elsewhere"
+        field.accepted()
+        compare(service.settings.mirrorFolder || "", "")
+      } finally {
+        panel.close()
+      }
+    }
+
     // A notebook search of the profile before: what it found (titles, words)
     // gone the moment another profile starts opening; one on its way then
     // gives nothing.

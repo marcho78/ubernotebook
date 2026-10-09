@@ -1835,15 +1835,22 @@ QtObject {
   // they're read (the command says to ask again).
   property var notebookReads: ({})
   function notebookPages(id) {
-    var kept = Object.prototype.hasOwnProperty.call(notebookReads, id) ? notebookReads[id] : null
+    // (Each read the open profile's: one of the profile before, whose
+    // notebooks may have the same ids, is never given; nor kept, if it
+    // comes after another's opened.)
+    var root = files.rootPath
+    var gen = files.generation
+    function ours(r) { return r && r.root === root && r.gen === gen }
+    var kept = Object.prototype.hasOwnProperty.call(notebookReads, id) && ours(notebookReads[id]) ? notebookReads[id] : null
     var now = Date.now()
     if (kept && kept.pages && now - kept.at < 120000) return kept.pages
     if (kept && !kept.pages && now - kept.at < 60000) return null
     var next = {}
-    for (var k in notebookReads) if (now - notebookReads[k].at < 120000) next[k] = notebookReads[k]
-    next[id] = { at: now, pages: null }
+    for (var k in notebookReads) if (ours(notebookReads[k]) && now - notebookReads[k].at < 120000) next[k] = notebookReads[k]
+    next[id] = { at: now, pages: null, root: root, gen: gen }
     notebookReads = next
     files.readGlob(Library.pagesDir(files.rootPath, id), "*.json", function(got) {
+      if (files.rootPath !== root || files.generation !== gen || files.switching === true) return
       var pages = {}
       for (var path in got) {
         var pid = path.slice(path.lastIndexOf("/") + 1, -5)
@@ -1852,7 +1859,7 @@ QtObject {
       }
       var after = {}
       for (var n in api.notebookReads) after[n] = api.notebookReads[n]
-      after[id] = { at: Date.now(), pages: pages }
+      after[id] = { at: Date.now(), pages: pages, root: root, gen: gen }
       api.notebookReads = after
     }, 64 * 1024 * 1024)
     kept = notebookReads[id]

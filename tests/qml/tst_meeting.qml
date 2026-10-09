@@ -127,6 +127,35 @@ Item {
       }
     }
 
+    // A meeting's list, or the agent to summarize one, coming back as
+    // another profile opens: no list shown, no agent started there.
+    function test_0b_a_list_or_a_summary_as_another_profile_opens() {
+      fresh()
+      var m = slashMeeting()
+      var past = mt.past
+      try {
+        mt.past = [{ id: "m-1", title: "Weekly sync", date: "Oct 2", duration: "2 min" }]
+        view.importMeeting(m.uid)
+        files.switching = true
+        wait(100)
+        compare(findAll(win(), function(it) { return it.text === "Weekly sync" }, []).length, 0, "its list not shown")
+        files.switching = false
+        files.holdReads = true
+        var runs = view.agentRun
+        view.summarizeMeeting(m.uid)
+        files.switching = true
+        files.answerReads()
+        wait(50)
+        compare(view.agentRun, runs, "no agent started")
+        compare(files.launched.length, 0)
+      } finally {
+        mt.past = past
+        files.holdReads = false
+        files.answerReads()
+        files.switching = false
+      }
+    }
+
     function test_1_started_paused_stopped_written_out() {
       fresh()
       var sync = ws.createPage({ parent: "", title: "Weekly sync" })

@@ -37,6 +37,7 @@ QtObject {
     switching = false
     holdSearch = false
     heldSearches = []
+    nextPicture = ""
     readClipboard = null
     failSaves = false
     data = ({})
@@ -156,8 +157,15 @@ QtObject {
     done(out)
   }
 
-  function importPicture(id, path, done) { done("") }
-  function pastePicture(id, done) { done("") }
+  // A picture copied in: nextPicture ("" for none); with holdSearch, when
+  // answerSearches() is (a slow copy).
+  property string nextPicture: ""
+  function importPicture(id, path, done) { pastePicture(id, done) }
+  function pastePicture(id, done) {
+    var got = nextPicture
+    if (holdSearch) { heldSearches.push(function() { done(got) }); return }
+    done(got)
+  }
   function assetUrl(id, src) { return "" }
   function copyText(text) { console.log("copy:", text.slice(0, 200)) }
   function openUrl(url) { console.log("open:", url) }

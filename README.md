@@ -897,6 +897,11 @@ starts it the way it starts every agent from a menu, with its approval
 prompts off, so it can also do whatever else your agent can on your
 computer. Either way, Uber Notebook's commands keep your notes safe from it
 (nothing deleted for good, no locked page changed, every change undoable).
+The panel's agent stops when you open another profile; one in a terminal
+doesn't know you did, and its commands (like any script's) go to the
+profile that's open, so let it finish before you switch. A conversation in a
+profile put back from a backup goes on as a new session, told what was said,
+never the original profile's.
 
 **The skill.** While Uber Notebook runs, it links its skill (`skills/uber-notebook`) into
 the folders agents read skills from, the ones Omarchy links its own into:
