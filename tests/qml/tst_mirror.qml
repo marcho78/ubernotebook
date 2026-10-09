@@ -56,7 +56,6 @@ Item {
       mirror.manifest = null
       mirror.manifestFor = ""
       mirror.madePrivate = ({})
-      mirror.privatePending = ""
       mirror.notPrivate = false
       mirror.pageCache = ({})
       mirror.notebookCache = ({})
@@ -252,8 +251,10 @@ Item {
     // those (their pages may have the same ids), and a copy that had begun
     // stops, writing nothing.
     // Its own files and folders from before made yours alone (the helper's
-    // make-private: Pages/, Notebooks/, sketches/, its list; never the folder
-    // you chose): tried again until it goes, and said while it hasn't.
+    // make-private: Pages/, Notebooks/, sketches/, assets/, its list; never
+    // the folder you chose), the folder checked, before anything's written: a
+    // folder that can't keep it private gets nothing, and it's said; tried
+    // again until it goes.
     function test_5d_its_own_made_private() {
       fresh()
       function asked() {
@@ -263,13 +264,16 @@ Item {
       }
       files.makePrivateLeft = 2
       mirror.on = true
-      tryVerify(function() { return mirror.status === "Up to date" && asked().length === 1 }, 2000)
+      tryVerify(function() { return asked().length === 1 && !mirror.busy && mirror.status.indexOf("Not copying") === 0 }, 2000, mirror.status)
+      compare(copied().length, 0, "nothing written there")
+      verify(mirror.status.indexOf("can't keep the copy private") >= 0, mirror.status)
       compare(asked()[0].folder, "/tmp/copy")
-      compare(asked()[0].names.slice(0, 3), ["Pages", "Notebooks", "sketches"])
+      compare(asked()[0].names.slice(0, 4), ["Pages", "Notebooks", "sketches", "assets"], "Pages' pictures are in assets/")
       verify(asked()[0].names.indexOf(Mirror.MANIFEST) >= 0)
-      tryVerify(function() { return mirror.notPrivate }, 1000, "said")
+      verify(mirror.notPrivate, "said in Settings too")
       files.makePrivateLeft = 0
       syncNow()
+      verify(copied().length > 0, "copied once it can be")
       tryVerify(function() { return asked().length === 2 && !mirror.notPrivate }, 1000, "tried again, and it went")
       syncNow()
       wait(100)

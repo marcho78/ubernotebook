@@ -92,11 +92,24 @@ Item {
     status = "Copying\u2026"
     var gen = ++generation
     var dir = folder
-    makeOwnPrivate(dir)
     // (Where it copies from, as it was when it started: a copy that's begun
     // and another profile's open meanwhile, it stops.)
     var from = { root: notesRoot, pages: workspace.folder }
     function stale() { return gen !== mirror.generation || mirror.movedOn(dir, from) }
+    // (Its own from before made yours alone, and the folder checked, before
+    // anything's written: a drive that can't keep files private gets none
+    // of your notes, and it's said.)
+    makeOwnPrivate(dir, function(isPrivate) {
+      if (stale()) return finish(gen)
+      if (!isPrivate) {
+        mirror.problem = "that folder can't keep the copy private: another account on this computer could read it there. Pick another folder"
+        mirror.status = "Not copying: " + mirror.problem
+        return finish(gen)
+      }
+      mirror.copyInto(dir, gen, from, stale)
+    })
+  }
+  function copyInto(dir, gen, from, stale) {
     loadManifest(dir, function() {
       if (stale()) return finish(gen)
       store.exec(["/usr/bin/bash", "-c", listScript, "uber-notebook-mirror-list", dir], function(ok, output) {
@@ -136,30 +149,33 @@ Item {
     })
   }
   // The copy's own files and folders from before (Pages/, Notebooks/ with
-  // their pictures, sketches/, and its list) made yours alone, once a folder
+  // their pictures, sketches/, assets/ (Pages' pictures), and its list) made yours alone, once a folder
   // a session, as it writes them now; tried again on the next copy until it
   // goes. The folder you chose, and anything else in it, are left as they
   // are. `notPrivate`: some couldn't be (Settings says so).
   property var madePrivate: ({})
   property bool notPrivate: false
-  property string privatePending: ""
-  function makeOwnPrivate(dir) {
-    if (madePrivate[dir] || privatePending === dir || !store || typeof store.helper !== "function") return
-    privatePending = dir
-    var names = ["Pages", "Notebooks", "sketches", Mirror.MANIFEST, Mirror.LEGACY_MANIFEST]
+  function makeOwnPrivate(dir, done) {
+    if (madePrivate[dir]) { done(true); return }
+    if (!store || typeof store.helper !== "function") { done(false); return }
+    var names = ["Pages", "Notebooks", "sketches", "assets", Mirror.MANIFEST, Mirror.LEGACY_MANIFEST]
+    // (The folder made first if it isn't there yet: yours alone.)
+    store.mkdirs([dir], function(made) {
+    if (!made) { done(false); return }
     store.helper(["make-private", dir], function(ok, out) {
       var r = null
       try { r = JSON.parse(String(out || "").trim().split("\n").pop()) } catch (e) { r = null }
-      var good = ok && r && r.ok === true && r.left === 0
-      if (mirror.privatePending === dir) mirror.privatePending = ""
-      if (dir !== mirror.folder) return
-      mirror.notPrivate = !good
-      if (!good) return
-      var done = {}
-      for (var k in mirror.madePrivate) done[k] = true
-      done[dir] = true
-      mirror.madePrivate = done
+      var good = ok && r !== null && r.ok === true && r.left === 0 && r.keeps === true
+      if (dir === mirror.folder) mirror.notPrivate = !good
+      if (good) {
+        var made = {}
+        for (var k in mirror.madePrivate) made[k] = true
+        made[dir] = true
+        mirror.madePrivate = made
+      }
+      done(good)
     }, { input: JSON.stringify(names), timeoutMs: 120000, maxBytes: 4096 })
+    })
   }
 
   // Every page of Pages not in the trash: those changed since they were last

@@ -27,9 +27,12 @@ The first version.
   readable by others is never left so. A profile's notes folder and the
   backups' folder from before are made 700 as they're opened (a profile in
   your home folder: its own files and folders, not your home folder); the
-  Markdown copy's own files, pictures and folders from before too. What
-  can't be made private is said. Without `XDG_RUNTIME_DIR`, its working
-  files go in a folder of its own in your cache, never `/tmp`.
+  Markdown copy's own files, pictures and folders from before too. On a
+  drive that can't keep files private (an exFAT stick, some shares), your
+  notes, backups and Markdown copy aren't kept, and you're told (a profile
+  there isn't opened; a strip says so); a file you save there yourself still
+  is, and you're told. Without `XDG_RUNTIME_DIR`, its working files go in a
+  folder of its own in your cache, never `/tmp`.
 - **Your notes and backups are asked about each time.** *Always from* a
   folder (say `~/Documents`, for an invoice) also let the panel's agent take
   any file in the profiles' notes folders and the backups folder in it

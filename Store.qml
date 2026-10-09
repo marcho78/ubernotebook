@@ -531,8 +531,10 @@ Item {
     // files helper too, a new file yours alone put in its place, never one
     // left readable by others with your words in it.)
     if (!rel && !stopping && /^\/./.test(path)) {
-      helper(["save", path], function(ok, out) { finish(ok, ok ? "" : String(out || "").trim().split("\n").pop()) },
-        { input: String(text), timeoutMs: 60000, maxBytes: 8192 })
+      helper(["save", path], function(ok, out) {
+        finish(ok, ok ? "" : String(out || "").trim().split("\n").pop())
+        if (ok && /^open$/m.test(String(out || ""))) store.failed(store.openDriveNote(path))
+      }, { input: String(text), timeoutMs: 60000, maxBytes: 8192 })
       return
     }
     if (!rel) { asBefore(); return }
@@ -699,6 +701,10 @@ Item {
 
   // ---- the library -------------------------------------------------------------------------
 
+  // A notes folder that couldn't be made yours alone (a drive that can't
+  // keep files private, a folder that isn't yours): not opened; the window
+  // says so, with where to pick another. "" when the one open is fine.
+  property string notPrivateFolder: ""
   function locate() {
     if (!home || !active) return
     ready = false
@@ -706,21 +712,27 @@ Item {
     exec(["/usr/bin/test", "-d", home + "/Documents"], function(ok) {
       if (gen !== store.generation) return
       var next = Settings.resolveFolder(store.folder, store.home, ok)
-      if (store.rootPath && next !== store.rootPath) store.leaveRoot()
-      store.rootPath = next
-      store.mkdirs([store.rootPath], function(made) {
+      // (Made, made yours alone and checked before anything of it's opened:
+      // your notes aren't kept where another account could read them.)
+      store.mkdirsAsBefore([next], function(made) {
         if (!made || gen !== store.generation) return
-        var root = store.rootPath
         function opened(isPrivate) {
           if (gen !== store.generation) return
-          // (Said, not hidden: a drive that can't keep files private, a
-          // folder that isn't yours.)
-          if (!isPrivate) store.failed("Your notes in " + root.replace(store.home, "~") + " couldn't be made yours alone: another account on this computer may be able to read them")
-          store.notesRoot = root
+          if (store.rootPath && next !== store.rootPath) store.leaveRoot()
+          if (!isPrivate) {
+            store.rootPath = ""
+            store.notesRoot = ""
+            store.notPrivateFolder = next
+            store.failed("Your notes can't be kept in " + next.replace(store.home, "~") + ": another account on this computer could read them there. Pick another folder for this profile")
+            return
+          }
+          store.notPrivateFolder = ""
+          store.rootPath = next
+          store.notesRoot = next
           store.loadLibrary()
         }
-        if (root === store.home) store.privateEntries(root, store.ownEntries, opened)
-        else store.makePrivate(root, opened)
+        if (next === store.home) store.privateEntries(next, store.ownEntries, opened)
+        else store.makePrivate(next, opened)
       })
     })
   }
@@ -1313,7 +1325,13 @@ Item {
   function placeFile(from, to, replace, done) {
     helper(["place", from, to, replace ? "replace" : "keep"], function(ok, out) {
       if (done) done(ok, ok ? "" : String(out || "").trim().split("\n").pop())
+      if (ok && /^open$/m.test(String(out || ""))) store.failed(store.openDriveNote(to))
     }, { timeoutMs: 120000, maxBytes: 8192 })
+  }
+  // A file you saved where you chose, on a drive that can't keep files
+  // private (an exFAT stick, some shares): saved, as you asked, and said.
+  function openDriveNote(path) {
+    return "Saved to " + String(path).replace(home, "~") + ", but that drive can't keep files private: another account on this computer may read it"
   }
 
   // A link from a page, a release's notes or an email: only to the web or

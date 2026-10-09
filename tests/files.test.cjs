@@ -729,7 +729,8 @@ try {
     for (const p of [path.join(v, "Pages", "A.md"), path.join(v, "Notebooks", "Trip", "assets", "pic.png"), path.join(v, "mine", "x.md"), path.join(out, "o.md")]) fs.chmodSync(p, 0o644);
     const r = spawnSync("/usr/bin/python3", ["-I", "-S", helper, "make-private", v], { input: JSON.stringify(["Pages", "Notebooks", "sketches", "../x", "/etc"]), encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
-    assert.deepEqual(JSON.parse(r.stdout), { ok: true, changed: 6, left: 0 }, "Pages, A.md, Notebooks, Trip, assets, pic.png");
+    assert.deepEqual(JSON.parse(r.stdout), { ok: true, changed: 6, left: 0, keeps: true }, "Pages, A.md, Notebooks, Trip, assets, pic.png; the drive keeps files private");
+    assert.ok(!fs.readdirSync(v).some((n) => n.startsWith(".uber-notebook-probe")), "its probe taken away");
     assert.equal(mode(path.join(v, "Pages", "A.md")), 0o600);
     assert.equal(mode(path.join(v, "Notebooks", "Trip", "assets", "pic.png")), 0o600, "its pictures too");
     assert.equal(mode(path.join(v, "Notebooks", "Trip", "assets")), 0o700, "its folders too");

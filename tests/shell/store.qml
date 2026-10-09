@@ -15,6 +15,9 @@ ShellRoot {
   function say(name, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + name + (extra ? " :: " + extra : "")) }
 
   UN.Store { id: store; active: false }
+  // (A profile's notes folder looked for: one that can't be made yours alone
+  // isn't opened; one that can is, made so.)
+  UN.Store { id: store2; active: false; welcome: false }
 
   property string dir: ""
   Component.onCompleted: {
@@ -274,10 +277,32 @@ ShellRoot {
                 say("private: a save over a 644 file is 600", wrote === true && l[0] === "600" && l[2] === "BEGIN:VCALENDAR secret", l.join(" | "))
                 say("private: a copy over a 644 file is 600; never over one when it mustn't be", kept === false && placed === true && l[1] === "600" && l[3] === "PDF", "kept " + kept + " placed " + placed + " " + l.join(" | "))
                 say("private: a folder that can't be made yours alone is said", sharePrivate === false, String(sharePrivate))
-                store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                root.blockedChecks(d)
               })
             })
           })
+        })
+      })
+    })
+  }
+  function blockedChecks(d) {
+    function until(test, done) {
+      var t = Qt.createQmlObject('import QtQuick; Timer { interval: 100; repeat: true; running: true }', root)
+      var n = 0
+      t.triggered.connect(function() { if (!test() && ++n < 50) return; t.stop(); done() })
+    }
+    store2.folder = "/usr/share"
+    store2.active = true
+    store2.locate()
+    until(function() { return store2.notPrivateFolder !== "" }, function() {
+      say("private: a notes folder that can't be made yours alone isn't opened, and it's said", store2.notPrivateFolder === "/usr/share" && store2.rootPath === "" && store2.notesRoot === "", store2.notPrivateFolder + " | " + store2.rootPath)
+      store2.folder = d + "/n3"
+      store2.locate()
+      until(function() { return store2.rootPath === d + "/n3" }, function() {
+        store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/n3"], function(ok, out) {
+          say("private: one that can be is opened, made 700", store2.notPrivateFolder === "" && store2.notesRoot === d + "/n3" && String(out).trim() === "700", String(out).trim() + " | " + store2.notPrivateFolder)
+          store2.active = false
+          store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
         })
       })
     })

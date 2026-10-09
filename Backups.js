@@ -206,6 +206,10 @@ var BACKUP_SCRIPT = [
   "dir=$1; stem=$2; suffix=$3; shift 3",
   "/usr/bin/mkdir -p -- \"$dir\" || exit 3",
   "/usr/bin/chmod go-rwx -- \"$dir\" || exit 3",
+  // (A drive that can't keep files private (exFAT, some shares): no backup
+  // of your notes is written there; said.)
+  "m=$(/usr/bin/stat -L -c %a -- \"$dir\") || exit 3",
+  "[ $(( 8#$m & 077 )) -eq 0 ] || { echo \"That folder can't keep your backups private: another account on this computer could read them there. Pick another folder for backups\" >&2; exit 4; }",
   "tmp=$(/usr/bin/mktemp -d) || exit 3",
   "part=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",
   "gz=$(/usr/bin/mktemp -p \"$dir\" \".$stem.part-XXXXXXXX\") || exit 3",

@@ -111,7 +111,7 @@ FocusScope {
   Shelf {
     id: shelf
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height
+    anchors.topMargin: demoStrip.height + privateStrip.height
     theme: themeObject
     store: root.store
     service: root.service
@@ -170,12 +170,54 @@ FocusScope {
     }
   }
 
+  // ---- notes that can't be kept private ----------------------------------------------------
+  // A profile's notes folder on a drive that can't keep files private (an
+  // exFAT stick, some network shares), or a folder that isn't yours: not
+  // opened (Store.notPrivateFolder), said here as long as it is, with where
+  // to pick another folder.
+  Rectangle {
+    id: privateStrip
+    objectName: "privateStrip"
+    readonly property string blocked: root.service !== null && root.service.store !== undefined && root.service.store !== null
+      && typeof root.service.store.notPrivateFolder === "string" ? root.service.store.notPrivateFolder : ""
+    readonly property bool shown: blocked !== ""
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: demoStrip.bottom
+    height: shown ? 40 : 0
+    visible: shown
+    z: 40
+    color: themeObject.sidebar
+    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: themeObject.line }
+    Row {
+      anchors.centerIn: parent
+      spacing: 14
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "Your notes in " + privateStrip.blocked.replace(/^\/home\/[^\/]+/, "~") + " can't be kept private there: another account on this computer could read them."
+        font.family: themeObject.uiFont
+        font.pixelSize: 13
+        color: themeObject.muted
+        elide: Text.ElideMiddle
+        width: Math.min(implicitWidth, root.width - 220)
+      }
+      TextButton {
+        objectName: "privateStripProfiles"
+        anchors.verticalCenter: parent.verticalCenter
+        theme: themeObject
+        text: "Pick another folder"
+        onClicked: root.openSettings("profiles")
+      }
+    }
+  }
+
   // ---- the open notebook -----------------------------------------------------------------
 
   NotebookView {
     id: view
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height
+    anchors.topMargin: demoStrip.height + privateStrip.height
     theme: themeObject
     store: root.store
     settings: root.settings
@@ -197,7 +239,7 @@ FocusScope {
   DocView {
     id: docs
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height
+    anchors.topMargin: demoStrip.height + privateStrip.height
     theme: themeObject
     workspace: root.workspace
     service: root.service

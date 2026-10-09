@@ -460,7 +460,7 @@ QtObject {
     // privateHosts names it), then fetched from there into a file.
     // (The files helper's make-private: `makePrivateLeft` files it couldn't change.)
     if (argv[3] === filesHelper && argv[4] === "make-private") {
-      done(true, JSON.stringify({ ok: true, changed: 0, left: makePrivateLeft }) + "\n")
+      done(true, JSON.stringify({ ok: true, changed: 0, left: makePrivateLeft, keeps: makePrivateLeft === 0 }) + "\n")
       return
     }
     // (The files helper's place: a copy where you said.)
