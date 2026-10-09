@@ -173,8 +173,7 @@ Item {
     function test_3_what_the_settings_leave_out() {
       fresh({ sounds: false, sidebarHidden: ["search", "calendar", "library", "people", "trash", "import"] })
       compare(named("searchRow"), null)
-      compare(named("newPageButton"), null)
-      verify(named("newPageRow") !== null, "New page, a row of its own without search")
+      verify(named("newPageButton") !== null, "New page, there without search too")
       compare(named("calendarTile"), null)
       compare(named("peopleTile"), null)
       compare(named("trashButton"), null)
@@ -265,7 +264,11 @@ Item {
       var p = makePage("Old", "")
       view.trashPage(p.id)
       tryVerify(function() { return find(named("trashButton"), function(it) { return it.text === "1" }, []).length === 1 }, 1000, "1 in the trash")
-      // New page, beside search.
+      // New page: a row of its own, wide, above search, saying what it is.
+      var np = named("newPageButton")
+      verify(np.width > named("searchRow").width - 2, "as wide as search")
+      verify(np.mapToItem(root, 0, 0).y + np.height <= named("searchRow").mapToItem(root, 0, 0).y, "above it")
+      verify(find(np, function(it) { return it.text === "New page" }, []).length === 1, "it says so")
       var before = Object.keys(ws.index.pages).length
       mouseClick(named("newPageButton"))
       tryVerify(function() { return Object.keys(ws.index.pages).length === before + 1 }, 2000, "a new page")

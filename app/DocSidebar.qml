@@ -730,81 +730,87 @@ Rectangle {
       width: parent.width
       onManageRequested: bar.view.settingsRequested()
     }
-    // Search, and a new page (without search, a row of its own).
-    Item {
+    // A new page: the thing done most here, a row of its own, the main
+    // button (in the page's ink).
+    Rectangle {
+      id: newPageButton
+      objectName: "newPageButton"
+      width: parent.width
+      height: 34
+      radius: 8
+      color: newTap.pressed ? Qt.alpha(bar.theme.text, 0.75) : newHover.hovered ? Qt.alpha(bar.theme.text, 0.86) : bar.theme.text
+      Icon {
+        x: 12
+        anchors.verticalCenter: parent.verticalCenter
+        theme: bar.theme
+        text: bar.theme.icons.newPage
+        size: 16
+        color: bar.theme.background
+      }
+      Text {
+        x: 38
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "New page"
+        font.family: bar.theme.uiFont
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+        color: bar.theme.background
+      }
+      Text {
+        anchors.right: parent.right
+        anchors.rightMargin: 10
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "Ctrl+N"
+        font.family: bar.theme.uiFont
+        font.pixelSize: 11
+        color: Qt.alpha(bar.theme.background, 0.7)
+      }
+      HoverHandler { id: newHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler { id: newTap; onTapped: bar.view.newPage("") }
+    }
+    // Search.
+    Rectangle {
+      id: searchBox
+      objectName: "searchRow"
+      visible: bar.shows("search")
       width: parent.width
       height: 32
-      Rectangle {
-        id: searchBox
-        objectName: "searchRow"
-        visible: bar.shows("search")
-        width: parent.width - newPageButton.width - 6
-        height: parent.height
-        radius: 8
-        color: searchHover.hovered ? bar.theme.hover : "transparent"
-        border.width: 1
-        border.color: bar.theme.line
-        Icon {
-          x: 10
-          anchors.verticalCenter: parent.verticalCenter
-          theme: bar.theme
-          text: bar.theme.icons.search
-          size: 15
-          color: bar.theme.muted
-        }
-        Text {
-          x: 32
-          anchors.verticalCenter: parent.verticalCenter
-          textFormat: Text.PlainText
-          text: "Search"
-          font.family: bar.theme.uiFont
-          font.pixelSize: 13
-          color: bar.theme.muted
-        }
-        Text {
-          anchors.right: parent.right
-          anchors.rightMargin: 10
-          anchors.verticalCenter: parent.verticalCenter
-          textFormat: Text.PlainText
-          text: "Ctrl+P"
-          font.family: bar.theme.uiFont
-          font.pixelSize: 11
-          color: bar.theme.faint
-        }
-        HoverHandler { id: searchHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: bar.view.openFind() }
-        TapHandler { acceptedButtons: Qt.RightButton; onTapped: bar.openItemMenu("search", searchBox) }
+      radius: 8
+      color: searchHover.hovered ? bar.theme.hover : "transparent"
+      border.width: 1
+      border.color: bar.theme.line
+      Icon {
+        x: 10
+        anchors.verticalCenter: parent.verticalCenter
+        theme: bar.theme
+        text: bar.theme.icons.search
+        size: 15
+        color: bar.theme.muted
       }
-      Rectangle {
-        id: newPageButton
-        objectName: "newPageButton"
-        visible: bar.shows("search")
+      Text {
+        x: 32
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "Search"
+        font.family: bar.theme.uiFont
+        font.pixelSize: 13
+        color: bar.theme.muted
+      }
+      Text {
         anchors.right: parent.right
-        width: 32
-        height: 32
-        radius: 8
-        color: newHover.hovered ? bar.theme.hover : "transparent"
-        border.width: 1
-        border.color: bar.theme.line
-        Icon {
-          anchors.centerIn: parent
-          theme: bar.theme
-          text: bar.theme.icons.newPage
-          size: 16
-          color: newHover.hovered ? bar.theme.text : bar.theme.muted
-        }
-        HoverHandler { id: newHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { onTapped: bar.view.newPage("") }
-        Tip { shown: newHover.hovered; text: "New page  Ctrl+N" }
+        anchors.rightMargin: 10
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: "Ctrl+P"
+        font.family: bar.theme.uiFont
+        font.pixelSize: 11
+        color: bar.theme.faint
       }
-      Row2 {
-        objectName: "newPageRow"
-        visible: !bar.shows("search")
-        icon: bar.theme.icons.newPage
-        text: "New page"
-        hint: "Ctrl+N"
-        onClicked: bar.view.newPage("")
-      }
+      HoverHandler { id: searchHover; cursorShape: Qt.PointingHandCursor }
+      TapHandler { onTapped: bar.view.openFind() }
+      TapHandler { acceptedButtons: Qt.RightButton; onTapped: bar.openItemMenu("search", searchBox) }
     }
     // The calendar, the library and people.
     Row {
