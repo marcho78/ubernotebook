@@ -453,8 +453,14 @@ Item {
     ignoreUnknownSignals: true
     function onSwitchingChanged() { if (cv.workspace.files.switching) { cv.dragOcc = null; cv.dragDay = null; cv.weekDrag = null } }
   }
+  Connections {
+    target: cv.workspace
+    ignoreUnknownSignals: true
+    function onFolderChanged() { cv.dragOcc = null; cv.dragDay = null; cv.weekDrag = null }
+  }
+  readonly property bool switching: !!(workspace && workspace.files && workspace.files.switching === true)
   property point dragPoint: Qt.point(0, 0)
-  function startMonthDrag(o, item) { dragOcc = o; dragDay = null }
+  function startMonthDrag(o, item) { if (switching) return; dragOcc = o; dragDay = null }
   function monthDragTo(p) {
     dragPoint = p
     var q = cv.mapToItem(monthGrid, p.x, p.y)
@@ -863,6 +869,7 @@ Item {
                   property real grab: 0
                   onActiveChanged: {
                     if (active) {
+                      if (cv.switching) return
                       grab = centroid.pressPosition.y
                       cv.weekDrag = { occ: block.o, kind: "move", day: dayCol.index, minutes: Math.round(block.fromMin), length: Math.round((block.o.end - block.o.start) / 60000) }
                     } else cv.weekDragFinish()
@@ -886,7 +893,7 @@ Item {
                     target: null
                     dragThreshold: 2
                     onActiveChanged: {
-                      if (active) cv.weekDrag = { occ: block.o, kind: "end", day: dayCol.index, minutes: Math.round(block.fromMin), length: Math.round((block.o.end - block.o.start) / 60000) }
+                      if (active) { if (!cv.switching) cv.weekDrag = { occ: block.o, kind: "end", day: dayCol.index, minutes: Math.round(block.fromMin), length: Math.round((block.o.end - block.o.start) / 60000) } }
                       else cv.weekDragFinish()
                     }
                     onCentroidChanged: {

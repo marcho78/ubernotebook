@@ -115,10 +115,21 @@ Item {
         pv().query = "Dana Whitfield"
         compare(cards.text, "Dana Whitfield")
         pv().selected = "c-someone"
+        // A person being written (New person: a name typed).
+        pv().layoutMode = pv().savedLayout
+        pv().newPerson()
+        var name = null
+        tryVerify(function() { name = find(win(), function(it) { return it.objectName === "formName" }); return name !== null }, 1000)
+        name.input.forceActiveFocus()
+        type("Dr Jane Roe")
+        compare(name.input.text, "Dr Jane Roe")
         files.rootPath = "/tmp/other-people-view"
         compare(pv().query, "", "what was looked for, gone")
         compare(cards.text, "", "in the cards' search too")
         compare(pv().selected, "", "who was picked, too")
+        tryCompare(ws, "ready", true, 2000)
+        pv().newPerson()
+        compare(name.input.text, "", "the new person's form: nothing of the one before")
       } finally {
         pv().layoutMode = pv().savedLayout
         files.rootPath = root0

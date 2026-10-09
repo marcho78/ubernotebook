@@ -276,6 +276,9 @@ FocusScope {
   // it would close (what's typed in it kept where it was), never put into
   // the next one.)
   function closeForSwitch() {
+    // (The page made for the agent: settled while its profile's still the
+    // one open (taken away if it's still blank, unless the agent's at it).)
+    if (agentPage) settleAgentPage(agentRun !== null)
     Overlays.closeAll(view, [])
     icsPop.events = []
     commit()
@@ -1130,6 +1133,7 @@ FocusScope {
     agentPending = null
     agentPanel.visible = false
     agentRunPrompt = ""
+    agentPage = null
     // (Anything opened over the page since the switch began: closed too.)
     Overlays.closeAll(view, [])
     icsPop.events = []

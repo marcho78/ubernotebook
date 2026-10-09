@@ -109,6 +109,7 @@ Rectangle {
   property var drop: null
 
   function startDrag(row) {
+    if (view.switching) return
     dragId = row.id
     dragLabel = (row.icon || "\u{1f4c4}") + "  " + (row.title || "Untitled")
     drop = null

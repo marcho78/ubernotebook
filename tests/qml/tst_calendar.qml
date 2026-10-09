@@ -121,6 +121,16 @@ Item {
         compare(cv().dragOcc, null)
         compare(cv().dragDay, null)
         compare(cv().weekDrag, null)
+        cv().startMonthDrag({ key: "k2", id: "e-2", start: new Date(), allDay: true }, null)
+        compare(cv().dragOcc, null, "not begun as another opens")
+        files.switching = false
+        cv().startMonthDrag({ key: "k3", id: "e-3", start: new Date(), allDay: true }, null)
+        verify(cv().dragOcc !== null)
+        var root0 = files.rootPath
+        files.rootPath = "/tmp/other-calendar-notes"
+        compare(cv().dragOcc, null, "over once the folder's left")
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
       } finally {
         files.switching = false
       }

@@ -89,6 +89,19 @@ Item {
         verify(!view.agentPanel.visible, "its panel not shown")
         verify(said.some(function(t) { return /still stopping/.test(t) }), JSON.stringify(said))
         view.toast.disconnect(heard)
+        view.agentRun = null
+        // The page made for it, still blank, as another profile starts
+        // opening: taken away there and then, in its own profile; never
+        // looked for (by its id) in the next.
+        var blank = ws.createPage({ parent: "", title: "" })
+        view.agentPage = { id: blank.id, from: view.page.id }
+        files.switching = true
+        compare(view.agentPage, null)
+        verify(!ws.index.pages[blank.id] || ws.index.pages[blank.id].trashed, "taken away in its own")
+        files.switching = false
+        view.agentPage = { id: blank.id, from: "" }
+        files.rootPath = root0
+        compare(view.agentPage, null, "not carried to the next")
       } finally {
         view.agentRun = null
         view.agentPanel.visible = false

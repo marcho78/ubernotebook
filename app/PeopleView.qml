@@ -372,7 +372,10 @@ Item {
     id: ff
     property string label: ""
     property alias input: fin
-    property string text: ""
+    // (What's shown is what it's given: a new person, another one, or none
+    // (another profile opened) always shows theirs, never what was typed
+    // for the one before.)
+    property alias text: fin.text
     property string placeholder: ""
     property string error: ""
     signal edited(string value)
@@ -400,7 +403,6 @@ Item {
         width: parent.width - 22
         clip: true
         selectByMouse: true
-        text: ff.text
         font.family: pv.theme.uiFont
         font.pixelSize: 14
         color: pv.theme.text
