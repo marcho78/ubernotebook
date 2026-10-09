@@ -5,9 +5,9 @@
 // Markdown copy) on it, and puts the next one's back.
 //
 // Kept in the settings (Defaults.js): `profiles` [{ id, name, folder, demo,
-// saved }] and `profile`, the open one's id; the open one's own settings are
-// the settings themselves (folder, inbox...), and its `saved` is what they
-// were when it was last left.
+// saved, fresh }] and `profile`, the open one's id; the open one's own
+// settings are the settings themselves (folder, inbox...), and its `saved`
+// is what they were when it was last left.
 //
 // Shared by Profiles.qml and tests/profiles.test.cjs, so keep it plain
 // JavaScript with no QML or Node APIs.
@@ -77,9 +77,12 @@ function suggestFolder(list, name) {
   return !list || !list.length ? "~/Documents/Uber Notebook" : "~/Documents/Uber Notebook" + (n ? " " + n : "")
 }
 
-// A new profile: { id, name, folder, demo: false, saved: {} }.
+// A new profile: { id, name, folder, demo: false, saved: {}, fresh: true }.
+// `fresh`: its folder not opened yet, so it's made if it isn't there (and
+// not after: one opened before that's gone is a drive not mounted, never
+// filled in; Store.makeNotesFolder). Off once it's open (Profiles.qml).
 function make(list, name, folder, random) {
-  return { id: newId(list, random), name: line(name, 60), folder: Settings.cleanFolder(String(folder || "")) || "", demo: false, saved: {} }
+  return { id: newId(list, random), name: line(name, 60), folder: Settings.cleanFolder(String(folder || "")) || "", demo: false, saved: {}, fresh: true }
 }
 
 // The list with the open profile's own settings put on it (its folder, and
@@ -111,6 +114,8 @@ function switchTo(list, settings, id) {
 // were found) are a profile, "Personal", its own settings what they are now.
 function fromBefore(folder, random) {
   var p = make([], "Personal", folder, random)
+  // (Its folder's been opened: not made again.)
+  delete p.fresh
   return { profiles: [p], profile: p.id, folder: p.folder }
 }
 

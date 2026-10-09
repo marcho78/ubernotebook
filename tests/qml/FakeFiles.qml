@@ -64,6 +64,8 @@ QtObject {
     makePrivateLeft = 0
     switching = false
     probeId = "1:1"
+    probeFails = ""
+    mkdirsFail = false
     links = ({})
     exportTools = "/usr/lib/chromium/chromium\n/usr/lib/libreoffice/program/soffice\nunshare\n"
     failExportHtml = ""
@@ -118,7 +120,9 @@ QtObject {
   // Where exports go (Store.qml's exportBase): null is the Exports folder.
   property var exportBase: null
 
-  function mkdirs(paths, done) { if (done) done(true) }
+  // (Folders made, unless a test says they can't be: a stick that isn't plugged in.)
+  property bool mkdirsFail: false
+  function mkdirs(paths, done) { if (done) done(!mkdirsFail) }
   // Folders made yours alone (Store.makePrivate; privateEntries: each
   // "<root>/<name>"), in order; the notes folder looked at again (retry).
   property var madePrivate: []
@@ -216,6 +220,7 @@ QtObject {
   // Another profile being opened (Store.qml): commands wait (Api.unready).
   property bool switching: false
   property string probeId: "1:1"
+  property string probeFails: ""
   // The archive helper (Store.qml), as its commands' first words.
   readonly property string filesHelper: "/plugin/bin/uber-notebook-files"
   function helper(args, done, options) { exec(["/usr/bin/python3", "-I", "-S", filesHelper].concat(args), done, options) }
@@ -482,7 +487,9 @@ QtObject {
     // privateHosts names it), then fetched from there into a file.
     // (The files helper's probe: the drive keeps files private unless
     // `makePrivateLeft`; `probeId` which folder it is.)
+    // (`probeFails`: it fails, with that said.)
     if (argv[3] === filesHelper && argv[4] === "probe") {
+      if (probeFails) { done(false, probeFails + "\n"); return }
       done(true, JSON.stringify({ keeps: makePrivateLeft === 0, id: probeId }) + "\n")
       return
     }

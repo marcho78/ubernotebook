@@ -98,13 +98,16 @@ Item {
     function stale() { return gen !== mirror.generation || mirror.movedOn(dir, from) }
     // (Its own from before made yours alone, and the folder checked, before
     // anything's written: a drive that can't keep files private gets none
-    // of your notes, and it's said.)
-    makeOwnPrivate(dir, function(isPrivate) {
+    // of your notes, and it's said, outside Settings too. One that couldn't
+    // be made or looked at (a stick that isn't plugged in): only that, and
+    // tried again with the next copy.)
+    makeOwnPrivate(dir, function(isPrivate, refused) {
       if (stale()) return finish(gen)
       if (!isPrivate) {
-        mirror.problem = "that folder can't keep the copy private: another account on this computer could read it there. Pick another folder"
+        mirror.problem = refused ? "that folder can't keep the copy private: another account on this computer could read it there. Pick another folder"
+          : "that folder couldn't be made or looked at (a drive that isn't there?)"
         mirror.status = "Not copying: " + mirror.problem
-        mirror.sayStopped(dir)
+        if (refused) mirror.sayStopped(dir)
         return finish(gen)
       }
       mirror.copyInto(dir, gen, from, stale)
@@ -169,22 +172,26 @@ Item {
   // a session, as it writes them now; tried again on the next copy until it
   // goes. The folder you chose, and anything else in it, are left as they
   // are. `notPrivate`: some couldn't be (Settings says so).
+  // done(good, refused): `refused`, the drive said it can't keep them
+  // private (or that the folder isn't yours); not when it couldn't be made
+  // or looked at (a drive that's gone, the helper not answering).
   property var madePrivate: ({})
   property bool notPrivate: false
   function makeOwnPrivate(dir, done) {
-    if (!store || typeof store.helper !== "function") { done(false); return }
+    if (!store || typeof store.helper !== "function") { done(false, false); return }
     var names = ["Pages", "Notebooks", "sketches", "assets", Mirror.MANIFEST, Mirror.LEGACY_MANIFEST]
-    function said(good) { if (dir === mirror.folder) mirror.notPrivate = !good; done(good) }
+    function said(good, refused) { if (dir === mirror.folder) mirror.notPrivate = refused === true; done(good, refused === true) }
     function parsed(out) { try { return JSON.parse(String(out || "").trim().split("\n").pop()) } catch (e) { return null } }
+    function notYours(out) { return /not a folder of yours/.test(String(out || "")) }
     // (The folder made first if it isn't there yet: yours alone.)
     store.mkdirs([dir], function(made) {
-      if (!made) { said(false); return }
+      if (!made) { said(false, false); return }
       // (Every copy: the drive looked at, cheaply (another drive mounted
       // there since is another id); its own made yours alone once a drive.)
       store.helper(["probe", dir], function(okP, outP) {
         var p = okP ? parsed(outP) : null
-        if (!p || p.keeps !== true || typeof p.id !== "string") { said(false); return }
-        if (mirror.madePrivate[dir] === p.id) { said(true); return }
+        if (!p || p.keeps !== true || typeof p.id !== "string") { said(false, (p !== null && p.keeps === false) || (!okP && notYours(outP))); return }
+        if (mirror.madePrivate[dir] === p.id) { said(true, false); return }
         store.helper(["make-private", dir], function(ok, out) {
           var r = ok ? parsed(out) : null
           var good = r !== null && r.ok === true && r.left === 0 && r.keeps === true
@@ -194,7 +201,7 @@ Item {
             made2[dir] = p.id
             mirror.madePrivate = made2
           }
-          said(good)
+          said(good, !good && ((r !== null && r.ok === true && (r.keeps === false || r.left > 0)) || (!ok && notYours(out))))
         }, { input: JSON.stringify(names), timeoutMs: 120000, maxBytes: 4096 })
       }, { timeoutMs: 20000, maxBytes: 4096 })
     })

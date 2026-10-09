@@ -195,6 +195,9 @@ Item {
     welcome: profilesItem.current !== null && profilesItem.current.demo === true
     // (The demo's folder is made in it, and it too if it isn't there yet.)
     dataFolder: Settings.resolveFolder(profilesItem.dataFolder, root.home, true)
+    // (A new profile's folder is made if it isn't there; one opened before
+    // isn't made again.)
+    newProfile: profilesItem.current !== null && profilesItem.current.fresh === true
     exportFolder: function(done) { root.exportFolder(done) }
   }
 

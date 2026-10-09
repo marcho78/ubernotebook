@@ -41,6 +41,19 @@ QtObject {
       else files.makePrivate(path)
     })
   }
+  // The open one's folder, once the notebooks have it open (Store.rootPath):
+  // a new profile's isn't new any more (`fresh` off), so it's never made
+  // again if it's gone (a drive not mounted).
+  readonly property string openFolder: files && typeof files.rootPath === "string" ? files.rootPath : ""
+  onOpenFolderChanged: if (openFolder) Qt.callLater(pm.opened)
+  function opened() {
+    var c = current
+    var h = home()
+    if (!c || c.fresh !== true || !openFolder || !h) return
+    var f = service.settings.folder || ""
+    if (Settings.resolveFolder(f, h, true) !== openFolder && Settings.resolveFolder(f, h, false) !== openFolder) return
+    apply({ profiles: shown.map(function(p) { if (p.id === c.id) delete p.fresh; return p }) })
+  }
   // None yet: the window asks for the first (or the demo).
   readonly property bool firstRun: settled && current === null
   // The welcome screen asked for again (the demo's strip, the profile
@@ -87,6 +100,7 @@ QtObject {
         if (paths[1] !== paths[0] && had[1]) {
           made.profiles[0].name = set.replace(/\/+$/, "").split("/").pop() || "Notes"
           var personal = Profiles.make(made.profiles, "Personal", places[1])
+          delete personal.fresh
           ;[["inbox", 1], ["lastPage", 2], ["lastNotebook", 3]].forEach(function(k) {
             var mine = rows[1] && rows[1][k[1]], theirs = rows[0] && rows[0][k[1]]
             if (mine && !theirs) { personal.saved[k[0]] = s[k[0]]; made[k[0]] = "" }
@@ -129,12 +143,14 @@ QtObject {
     return ""
   }
 
-  // Its notes looked for in another folder (nothing is moved).
+  // Its notes looked for in another folder (nothing is moved). (A folder
+  // you picked: made if it isn't there, when it's opened, as a new
+  // profile's is.)
   function setFolder(id, folder) {
     var problem = Profiles.folderProblem(shown, folder, id, home())
     if (problem) return problem
     var f = Settings.cleanFolder(String(folder))
-    var changes = { profiles: shown.map(function(p) { if (p.id === id) p.folder = f; return p }) }
+    var changes = { profiles: shown.map(function(p) { if (p.id === id) { p.folder = f; p.fresh = true } return p }) }
     // (The folder it has, picked again for the one open: looked at again if
     // it couldn't be used, a drive mounted since.)
     var again = current !== null && current.id === id && f === (service.settings.folder || "")
@@ -193,7 +209,7 @@ QtObject {
     var base = Settings.resolveFolder(dataFolder, home(), true)
     var fresh = dataFolder + "/demo-" + Date.now().toString(36)
     if (typeof service.saveOpen === "function") service.saveOpen()
-    var list2 = shown.map(function(p) { if (p.id === pm.demo.id) { p.folder = fresh; p.saved = {} } return p })
+    var list2 = shown.map(function(p) { if (p.id === pm.demo.id) { p.folder = fresh; p.saved = {}; p.fresh = true } return p })
     // (Open, its own settings start again; else the open one keeps its.)
     var demoOpen = current !== null && current.id === demo.id
     var changes = Profiles.switchTo(list2, demoOpen ? { profile: "" } : service.settings, demo.id)

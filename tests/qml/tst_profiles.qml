@@ -236,6 +236,34 @@ Item {
       compare(service.settings.folder, "~/Documents/Elsewhere")
     }
 
+    // A new profile's folder is made when it's first opened; once it's
+    // open, it isn't new any more (one opened before that's gone is a drive
+    // not mounted: never made again, Store.makeNotesFolder). One added and
+    // not opened stays new; a folder picked for one is made as a new one's.
+    // Notes from before profiles were opened before.
+    function test_3e_new_till_opened() {
+      fresh()
+      verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
+      tryVerify(function() { return profiles.current !== null && profiles.current.fresh === undefined }, 1000, "opened: not new any more")
+      verify(profiles.add("Side", "~/Side", false) === "")
+      wait(50)
+      function side() { return profiles.list.filter(function(p) { return p.name === "Side" })[0] }
+      compare(side().fresh, true, "not opened: still new")
+      compare(profiles.use(side().id), "")
+      tryVerify(function() { return profiles.current.name === "Side" && profiles.current.fresh === undefined }, 1000, "opened")
+      var personal = profiles.list.filter(function(p) { return p.name === "Personal" })[0]
+      compare(personal.fresh, undefined)
+      compare(profiles.setFolder(personal.id, "~/Documents/Elsewhere"), "")
+      wait(50)
+      compare(profiles.list.filter(function(p) { return p.name === "Personal" })[0].fresh, true, "a folder picked: made when it's opened")
+      // (Not opened yet: not new any more only once it's that folder that's open.)
+      compare(profiles.current.name, "Side")
+      // From before profiles: opened before.
+      fresh({ sounds: false, profile: "p-a", folder: "~/Before", profiles: [{ id: "p-a", name: "Personal", folder: "~/Before" }] })
+      wait(50)
+      compare(profiles.current.fresh, undefined)
+    }
+
     // In the demo: a strip says so, with the welcome screen a click away (and
     // in the profile menu); closed again (Back to the demo, Esc); gone once
     // there's a profile of your own.
@@ -278,6 +306,8 @@ Item {
       fresh()
       verify(profiles.add("Personal", "~/Documents/Uber Notebook", true) === "")
       verify(profiles.add("Side", "~/Side", false) === "")
+      // (Opened: not new any more, the list as it is from now.)
+      tryVerify(function() { return profiles.current.fresh === undefined }, 1000)
       app.openSettings("profiles")
       var rows = []
       tryVerify(function() { rows = findAll(win(), function(it) { return it.objectName === "settingsProfile" }, []); return rows.length === 2 }, 1000)

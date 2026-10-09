@@ -309,6 +309,43 @@ Item {
       compare(asked("make-private").length, 2)
     }
 
+    // A copy folder that couldn't be made (a stick that isn't plugged in),
+    // or a drive the helper couldn't look at: only that, never said to be
+    // a drive that can't keep it private, nor sent as a notification. One
+    // that isn't yours is.
+    function test_5e_not_made_is_not_not_private() {
+      fresh()
+      files.mkdirsFail = true
+      mirror.on = true
+      tryVerify(function() { return !mirror.busy && mirror.status.indexOf("Not copying") === 0 }, 2000, mirror.status)
+      compare(copied().length, 0, "nothing written")
+      verify(mirror.status.indexOf("couldn't be made or looked at") >= 0, mirror.status)
+      verify(mirror.status.indexOf("private") < 0, mirror.status)
+      verify(!mirror.notPrivate, "not said in Settings to be a drive that can't keep it private")
+      compare(shim.said.length, 0, JSON.stringify(shim.said))
+      compare(files.notified.length, 0)
+      // The helper couldn't look at it (an error, a timeout): the same.
+      files.mkdirsFail = false
+      files.probeFails = "[Errno 5] Input/output error"
+      mirror.sync()
+      tryVerify(function() { return !mirror.busy && mirror.status.indexOf("couldn't be made or looked at") >= 0 }, 2000, mirror.status)
+      verify(!mirror.notPrivate)
+      compare(shim.said.length, 0, JSON.stringify(shim.said))
+      compare(files.notified.length, 0)
+      // A folder that isn't yours: refused, and said.
+      files.probeFails = "not a folder of yours"
+      mirror.sync()
+      tryVerify(function() { return !mirror.busy && mirror.status.indexOf("can't keep the copy private") >= 0 }, 2000, mirror.status)
+      verify(mirror.notPrivate)
+      compare(shim.said.length, 1, JSON.stringify(shim.said))
+      compare(files.notified.length, 1)
+      // Once it can be: copied.
+      files.probeFails = ""
+      syncNow()
+      verify(copied().length > 0)
+      verify(!mirror.notPrivate)
+    }
+
     function test_6_another_profile_meanwhile() {
       fresh()
       mirror.on = true

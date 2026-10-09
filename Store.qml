@@ -738,10 +738,10 @@ Item {
 
   // A notes folder that couldn't be used: one that couldn't be made yours
   // alone (a drive that can't keep files private, a folder that isn't
-  // yours: "private"), or made at all (a drive that's gone, a folder it's
-  // in that isn't there: "made"). Not opened, nothing of the one before
-  // shown or written to; the window says so, with where to pick another,
-  // or to try again. "" when the one open is fine.
+  // yours: "private"), or made at all, or not there any more (a drive
+  // that's gone or isn't mounted: "made"). Not opened, nothing of the one
+  // before shown or written to; the window says so, with where to pick
+  // another, or to try again. "" when the one open is fine.
   property string blockedFolder: ""
   property string blockedWhy: ""
   // That folder looked at again (picked again, the window's Try again): a
@@ -751,19 +751,26 @@ Item {
   }
   // Uber Notebook's own data folder (the demo's notes are in it).
   property string dataFolder: ""
-  // The notes folder made, if it isn't there yet: only the folder itself,
-  // in a folder that's there. One it's in that isn't (a drive mounted in a
-  // folder of yours, not mounted now) is never made, so nothing's put
-  // where that drive goes, hidden when it's back. Its parents are made too
-  // only in Uber Notebook's own data folder, or your Documents folder (as
-  // a first profile there has it). done(ok).
-  readonly property string notesMkdirScript: "umask 077; d=$1; [ -d \"$d\" ] && exit 0; [ \"$2\" = parents ] && exec /usr/bin/mkdir -p -- \"$d\"; "
-    + "[ -d \"$(/usr/bin/dirname -- \"$d\")\" ] || { echo \"the folder it's in isn't there\" >&2; exit 1; }; /usr/bin/mkdir -- \"$d\" || [ -d \"$d\" ]"
+  // The open profile is new: its folder hasn't been opened yet (Profiles,
+  // `fresh`).
+  property bool newProfile: false
+  // The notes folder made, if it isn't there yet: only a new profile's
+  // (and the folders it's in), or one in Uber Notebook's own data folder
+  // (the demo's). One that was opened before and isn't there now is never
+  // made again (a drive mounted in a folder of yours, ~/GDrive/Notes, not
+  // mounted now: its mount point is an empty folder of yours), so nothing's
+  // put where that drive goes, hidden once it's back; it's blocked
+  // ("made"), and tried again (Try again) once it's there. (A drive mounted
+  // at the notes folder itself isn't told apart: not mounted, it's an
+  // empty folder, opened as one.) done(ok).
+  readonly property string notesMkdirScript: "umask 077; [ -d \"$1\" ] && exit 0; [ \"$2\" = new ] && exec /usr/bin/mkdir -p -- \"$1\"; echo gone; exit 1"
   function makeNotesFolder(path, done) {
-    var parent = path.replace(/\/[^\/]*$/, "") || "/"
-    var parents = (dataFolder !== "" && path.indexOf(dataFolder + "/") === 0) || parent === home + "/Documents"
-    exec(["/usr/bin/bash", "-c", notesMkdirScript, "uber-notebook-mkdir", path, parents ? "parents" : "one"], function(ok, output) {
-      if (!ok) failed("Couldn't make " + path.replace(home, "~") + ": " + String(output || "").trim())
+    var made = newProfile || (dataFolder !== "" && path.indexOf(dataFolder + "/") === 0)
+    exec(["/usr/bin/bash", "-c", notesMkdirScript, "uber-notebook-mkdir", path, made ? "new" : "there"], function(ok, output) {
+      var out = String(output || "").trim()
+      var shown = path.replace(home, "~")
+      if (!ok) failed(out === "gone" ? "Your notes folder " + shown + " isn't there (a drive that isn't mounted?). It isn't made again, so nothing's put where that drive goes: Try again once it's there, or pick another folder"
+        : "Couldn't make " + shown + ": " + out)
       done(ok)
     })
   }

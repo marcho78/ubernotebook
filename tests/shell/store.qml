@@ -333,7 +333,8 @@ ShellRoot {
   }
   function blockedChecks(d) {
     var until = root.until
-    // A profile open, a notebook in it.
+    // A profile open, a notebook in it (new profiles: their folders made).
+    store2.newProfile = true
     store2.folder = d + "/n3"
     store2.active = true
     store2.locate()
@@ -378,12 +379,13 @@ ShellRoot {
       })
     })
   }
-  // A notes folder in a folder that isn't there (a drive mounted in a
-  // folder of yours, not mounted now): never made, nor that folder, so
-  // nothing's put where that drive goes; said ("made"). Looked at again
-  // once it's there (Try again, the folder picked again): opened. Uber
-  // Notebook's own data folder (the demo's) and your Documents folder are
-  // made as they're needed.
+  // A profile's notes folder that was opened before and isn't there now
+  // (a drive mounted in a folder of yours, not mounted now: its mount
+  // point an empty folder of yours, or not there at all): never made, nor
+  // the folder it's in, so nothing's put where that drive goes; said
+  // ("made"). Looked at again once it's there (Try again, the folder
+  // picked again): opened. A new profile's is made, and the folders it's
+  // in; so is one in Uber Notebook's own data folder (the demo's).
   function unmountedChecks(d) {
     var until = root.until
     function later(ms, fn) {
@@ -391,31 +393,46 @@ ShellRoot {
       t.triggered.connect(fn)
     }
     var gone = d + "/mnt/Notes"
+    store2.newProfile = false
     store2.folder = gone
     until(function() { return store2.blockedWhy === "made" && store2.blockedFolder === gone }, function() {
       store.exec(["/usr/bin/test", "-e", d + "/mnt"], function(there) {
         say("private: a notes folder in a folder that isn't there isn't made, nor that folder, and it's said",
           store2.blockedFolder === gone && store2.blockedWhy === "made" && store2.rootPath === "" && there === false, store2.blockedFolder + " " + store2.blockedWhy + " there " + there)
+        // (Its mount point there, empty, the drive not mounted: the same.)
         store.exec(["/usr/bin/mkdir", "-p", "--", d + "/mnt"], function() {
+          var gen0 = store2.generation
           store2.retry()
-          until(function() { return store2.ready && store2.rootPath === gone }, function() {
-            say("private: tried again once its folder is there: opened", store2.blockedFolder === "" && store2.rootPath === gone && store2.ready, store2.rootPath + " | " + store2.blockedFolder)
-            // (One that's open: looking again does nothing.)
-            var gen = store2.generation
-            store2.retry()
-            later(600, function() {
-              say("private: trying again an open one does nothing", store2.generation === gen && store2.ready, "generation " + gen + " -> " + store2.generation)
-              store2.dataFolder = d + "/data"
-              store2.folder = d + "/data/demo"
-              until(function() { return store2.ready && store2.rootPath === d + "/data/demo" }, function() {
-                say("private: Uber Notebook's own data folder made as it's needed (the demo's in it)", store2.blockedFolder === "" && store2.rootPath === d + "/data/demo", store2.rootPath + " | " + store2.blockedFolder)
-                store.exec(["/usr/bin/mkdir", "-p", "--", d + "/home"], function() {
-                  store2.home = d + "/home"
-                  store2.folder = d + "/home/Documents/Uber Notebook Work"
-                  until(function() { return store2.ready && store2.rootPath === d + "/home/Documents/Uber Notebook Work" }, function() {
-                    say("private: your Documents folder made as it's needed (a profile's folder in it)", store2.blockedFolder === "" && store2.rootPath === d + "/home/Documents/Uber Notebook Work", store2.rootPath + " | " + store2.blockedFolder)
-                    store2.active = false
-                    store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+          // (Looked at again, done: a while after.)
+          later(1500, function() {
+            store.exec(["/usr/bin/test", "-e", gone], function(made) {
+              say("private: an existing profile's notes folder in a mount point that isn't mounted (an empty folder of yours) isn't made, and it's said",
+                store2.generation > gen0 && store2.blockedFolder === gone && store2.blockedWhy === "made" && store2.rootPath === "" && made === false,
+                "generation " + gen0 + " -> " + store2.generation + " " + store2.blockedFolder + " " + store2.blockedWhy + " made " + made)
+              // The drive mounted: its notes folder there.
+              store.exec(["/usr/bin/mkdir", "-p", "--", gone], function() {
+                store2.retry()
+                until(function() { return store2.ready && store2.rootPath === gone }, function() {
+                  say("private: tried again once it's there: opened", store2.blockedFolder === "" && store2.rootPath === gone && store2.ready, store2.rootPath + " | " + store2.blockedFolder)
+                  // (One that's open: looking again does nothing.)
+                  var gen = store2.generation
+                  store2.retry()
+                  later(600, function() {
+                    say("private: trying again an open one does nothing", store2.generation === gen && store2.ready, "generation " + gen + " -> " + store2.generation)
+                    store2.dataFolder = d + "/data"
+                    store2.folder = d + "/data/demo"
+                    until(function() { return store2.ready && store2.rootPath === d + "/data/demo" }, function() {
+                      say("private: Uber Notebook's own data folder made as it's needed (the demo's in it)", store2.blockedFolder === "" && store2.rootPath === d + "/data/demo", store2.rootPath + " | " + store2.blockedFolder)
+                      store2.newProfile = true
+                      store2.folder = d + "/new/Work/Notes"
+                      until(function() { return store2.ready && store2.rootPath === d + "/new/Work/Notes" }, function() {
+                        store.exec(["/usr/bin/stat", "-c", "%a", "--", d + "/new/Work/Notes"], function(ok, out) {
+                          say("private: a new profile's notes folder made, and the folders it's in, 700", store2.blockedFolder === "" && String(out).trim() === "700", store2.rootPath + " | " + store2.blockedFolder + " " + String(out).trim())
+                          store2.active = false
+                          store.exec(["/usr/bin/rm", "-rf", "--", d], function() { console.log("DONE"); Qt.quit() })
+                        })
+                      })
+                    })
                   })
                 })
               })

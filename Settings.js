@@ -107,7 +107,10 @@ function cleanProfiles(value, schema) {
       if (checked.ok) saved[k] = checked.value
     })
     seen[p.id] = true
-    out.push({ id: p.id, name: name, folder: folder, demo: p.demo === true, saved: saved })
+    var kept = { id: p.id, name: name, folder: folder, demo: p.demo === true, saved: saved }
+    // (Its folder not opened yet: Profiles.make.)
+    if (p.fresh === true) kept.fresh = true
+    out.push(kept)
   })
   return out
 }

@@ -21,12 +21,16 @@ check("what the settings keep of them", () => {
     { id: "BAD ID", name: "x", folder: "~/y" },
     { id: "p-b", name: "", folder: "~/z" },
     { id: "p-c", name: "Work", folder: "relative/path" },
-    { id: "p-d", name: "Demo", folder: "/home/me/.local/share/uber-notebook/demo", demo: true }
+    { id: "p-d", name: "Demo", folder: "/home/me/.local/share/uber-notebook/demo", demo: true },
+    { id: "p-e", name: "New", folder: "~/New", fresh: true },
+    { id: "p-f", name: "Odd", folder: "~/Odd", fresh: "yes" }
   ], profile: "p-a" }, D.SCHEMA));
   assert.deepEqual(kept.profiles, [
     { id: "p-a", name: "Personal", folder: "~/Documents/Uber Notebook", demo: false, saved: { inbox: "0f8e", mirror: true } },
-    { id: "p-d", name: "Demo", folder: "/home/me/.local/share/uber-notebook/demo", demo: true, saved: {} }
-  ]);
+    { id: "p-d", name: "Demo", folder: "/home/me/.local/share/uber-notebook/demo", demo: true, saved: {} },
+    { id: "p-e", name: "New", folder: "~/New", demo: false, saved: {}, fresh: true },
+    { id: "p-f", name: "Odd", folder: "~/Odd", demo: false, saved: {} }
+  ], "fresh kept only as true (its folder not opened yet)");
   assert.equal(kept.profile, "p-a");
   assert.deepEqual(plain(S.merge(D.DEFAULTS, { profiles: "nope" }, D.SCHEMA)).profiles, [], "not a list: none");
   assert.deepEqual(plain(S.overrides(D.DEFAULTS, S.merge(D.DEFAULTS, {}, D.SCHEMA))), {}, "none kept when there are none");
@@ -78,11 +82,12 @@ check("notes from before profiles, a new one, the demo", () => {
   assert.equal(before.profiles[0].folder, "~/Documents/Uber Notebook");
   assert.equal(before.profile, before.profiles[0].id);
   assert.equal(before.folder, "~/Documents/Uber Notebook");
+  assert.equal(before.profiles[0].fresh, undefined, "its folder's been opened: never made again");
   const made = plain(P.make(list, "  Studio  ", "~/Studio/", random));
-  assert.deepEqual([made.name, made.folder, made.demo], ["Studio", "~/Studio", false]);
+  assert.deepEqual([made.name, made.folder, made.demo, made.fresh], ["Studio", "~/Studio", false, true], "a new one's folder is made when it's opened");
   assert.ok(/^p-[a-z0-9]+$/.test(made.id) && !list.some((p) => p.id === made.id));
   const demo = plain(P.demo(list, "~/.local/share/uber-notebook/demo", random));
-  assert.deepEqual([demo.name, demo.demo], ["Demo", true]);
+  assert.deepEqual([demo.name, demo.demo, demo.fresh], ["Demo", true, true]);
 });
 
 console.log(`profiles: ${passed} checks passed`);
