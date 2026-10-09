@@ -1173,5 +1173,29 @@ Item {
       files.streamEnd(0, "")
       compare(view.agentRun, null)
     }
+
+    // Stop is stop: what it asked goes, and what it says while it stops
+    // (done, a question) goes nowhere; it ends stopped.
+    function test_17_stop_is_stop() {
+      fresh()
+      files.agent = "claude"
+      view.openAgent("page")
+      tryVerify(function() { return view.agentBox.opened && view.agentBox.known }, 1000)
+      view.agentBox.send("Look it up")
+      tryVerify(function() { return files.streamed.length === 1 }, 1000)
+      var run = files.streamed[0]
+      var ask = function(id) { return JSON.stringify({ type: "control_request", request_id: id, request: { subtype: "can_use_tool", tool_name: "WebFetch", input: { url: "https://e.org/" + id } } }) }
+      run.onLine(ask("r1"))
+      tryVerify(function() { return view.agentAsks.length === 1 }, 1000, "asked")
+      view.stopAgent()
+      compare(view.agentAsks.length, 0, "its question goes with it")
+      run.onLine(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Done anyway.", duration_ms: 10, permission_denials: [] }))
+      run.onLine(ask("r2"))
+      compare(view.agentAsks.length, 0, "not asked again")
+      compare(view.agentPanel.status, "working", "not done: stopping")
+      tryCompare(view, "agentRun", null, 1000)
+      compare(view.agentPanel.status, "stopped", "it ends stopped")
+      verify(run.sent.every(function(m) { return m.indexOf("r1") < 0 && m.indexOf("r2") < 0 }), "nothing it asked was answered")
+    }
   }
 }

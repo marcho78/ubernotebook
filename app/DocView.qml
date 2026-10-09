@@ -1744,6 +1744,27 @@ FocusScope {
     // (For a terminal instead: the whole of it, for a reply.)
     agentRunPrompt = opts.reply && !opts.fresh ? recapPrompt(request, undefined, true) : (opts.terminalPrompt || prompt)
     saveChat()
+    // This request: what's done for it (its folder, its program found, its
+    // process and its end) checks it's still the one running, so one stopped
+    // never starts after all, and its end never ends one sent after it.
+    var job = { stream: null, stopped: false }
+    function current() { return view.agentRun === job && !job.stopped }
+    function finish(code, text) {
+      if (view.agentRun !== job) return
+      view.agentRun = null
+      view.agentScopeEnd()
+      agentPanel.end(code, text)
+      view.saveChat()
+    }
+    // Stop: its process, if it has one (its end says so, as ever), else
+    // before it's begun.
+    job.stop = function() {
+      if (job.stopped) return
+      job.stopped = true
+      // (Its questions go with it, unanswered: nothing it asks is let through.)
+      if (job.stream && job.stream.stop) { view.dropAgentAsks(job.stream); job.stream.stop(); return }
+      finish(-1, "")
+    }
     var retried = false
     // (Its program and folder, once found.)
     var where = null
@@ -1758,9 +1779,9 @@ FocusScope {
       var first = Agent.input(agent, text)
       var run = null
       run = files.stream(argv, function(line) {
-        // (What a request no longer running says goes nowhere: not into the
-        // panel, nor its questions, nor answered.)
-        if (view.agentRun !== job || job.stream !== run) return
+        // (What a request stopped, or no longer the one running, says goes
+        // nowhere: not into the panel, nor its questions, nor answered.)
+        if (!current() || job.stream !== run) return
         Agent.fromLine(agent, line).forEach(function(ev) {
           if (ev.kind === "ask") { view.agentAsked(agent, ev, run); return }
           if (ev.kind === "control") { if (run && run.send) run.send(Agent.unsupportedFor(agent, ev.id)); return }
@@ -1794,26 +1815,6 @@ FocusScope {
       }, { cwd: dir, input: first !== "", env: Agent.env(agent), maxLine: Agent.streamLimits(where).maxLine, maxBytes: Agent.streamLimits(where).maxBytes, maxErrors: Agent.streamLimits(where).maxErrors })
       job.stream = run
       if (first && run && run.send) run.send(first)
-    }
-    // This request: what's done for it (its folder, its program found, its
-    // process and its end) checks it's still the one running, so one stopped
-    // never starts after all, and its end never ends one sent after it.
-    var job = { stream: null, stopped: false }
-    function current() { return view.agentRun === job && !job.stopped }
-    function finish(code, text) {
-      if (view.agentRun !== job) return
-      view.agentRun = null
-      view.agentScopeEnd()
-      agentPanel.end(code, text)
-      view.saveChat()
-    }
-    // Stop: its process, if it has one (its end says so, as ever), else
-    // before it's begun.
-    job.stop = function() {
-      if (job.stopped) return
-      job.stopped = true
-      if (job.stream && job.stream.stop) { job.stream.stop(); return }
-      finish(-1, "")
     }
     agentRun = job
     agentScope(agent, dir)
