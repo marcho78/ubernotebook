@@ -1044,15 +1044,18 @@ Item {
     var name = p.slice(p.lastIndexOf("/") + 1)
     if (!p || !name || !folder) { done(null); return }
     var asset = Files.assetName(name, new Date())
-    var dest = Workspace.assetsDir(files.rootPath) + "/" + asset
-    files.mkdirs([Workspace.assetsDir(files.rootPath)], function() {
-      ws.copyIn(p, Workspace.assetsDir(files.rootPath), asset, ws.fileMax, within, function(ok, size) {
+    // (Into the assets of the folder it was asked for in, its still beside
+    // it: never into another one opened while it copies.)
+    var dir = Workspace.assetsDir(files.rootPath)
+    var dest = dir + "/" + asset
+    files.mkdirs([dir], function() {
+      ws.copyIn(p, dir, asset, ws.fileMax, within, function(ok, size) {
         if (!ok) { done(null); return }
         var f = { src: "assets/" + asset, name: name, size: size, kind: Files.kindOf(name), poster: "" }
         if (f.kind !== "video") { done(f); return }
         // A video's still: a frame from a second in (or its first).
         var still = asset.replace(/\.[A-Za-z0-9]+$/, "") + "-still.jpg"
-        files.exec(["/usr/bin/bash", "-c", ws.stillScript, "uber-notebook-still", dest, Workspace.assetsDir(files.rootPath) + "/" + still], function(ok2) {
+        files.exec(["/usr/bin/bash", "-c", ws.stillScript, "uber-notebook-still", dest, dir + "/" + still], function(ok2) {
           if (ok2) f.poster = "assets/" + still
           done(f)
         }, { timeoutMs: 30000, maxBytes: 4096 })
@@ -1115,14 +1118,17 @@ Item {
   // An email's attachment written out into Pages/assets (from its base64,
   // through a file beside it, then decoded): done("assets/<name>"), or done("").
   readonly property string unpackScript: "/usr/bin/base64 -d -- \"$1\" > \"$2\"; s=$?; /usr/bin/rm -f -- \"$1\"; exit $s"
-  // (`at`: which of its attachments, in the order the block lists them.)
+  // (`at`: which of its attachments, in the order the block lists them.
+  // Written beside its email; nothing, if another folder's opened while
+  // it's read.)
   function emailAttachment(src, at, name, done) {
+    var gen = generation
+    var dir = Workspace.assetsDir(files.rootPath)
     readEmail(src, function(m) {
-      var a = m ? m.attachments[at] : null
+      var a = m && gen === ws.generation ? m.attachments[at] : null
       if (!a) { done(""); return }
       var data = Email.attachmentBase64(m, a.index)
       var out = Files.assetName(name || a.name, new Date()).replace(/^file-/, "mail-")
-      var dir = Workspace.assetsDir(files.rootPath)
       var tmp = dir + "/.unpack-" + Math.random().toString(36).slice(2, 10) + ".b64"
       files.writeFile(tmp, data, function(ok) {
         if (!ok) { done(""); return }

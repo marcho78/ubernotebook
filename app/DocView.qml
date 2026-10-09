@@ -285,14 +285,14 @@ FocusScope {
     }
     if (a.src) { openAsset(a.src, a.name); return }
     var pageId = page ? page.id : ""
-    workspace.emailAttachment(d.src, at, a.name, function(src) {
+    workspace.emailAttachment(d.src, at, a.name, inThisFolder(function(src) {
       if (!src) { view.toast("That attachment couldn't be opened"); return }
       view.openAsset(src, a.name)
       if (view.page && view.page.id === pageId && editor.indexOf(uid) >= 0) {
         var now = editor.dataOf(uid)
         if (now.attachments && now.attachments[at]) { now.attachments[at].src = src; editor.setData(uid, now) }
       }
-    })
+    }))
   }
 
   // A link to a page, to another page (one step to undo).
@@ -2289,9 +2289,14 @@ FocusScope {
     if (!recorder) { toast("Dictation isn't here: Uber Notebook runs without the shell"); return }
     if (dictating) { if (recorder.phase === "recording") recorder.stop(); return }
     if (!page || locked || tagShown !== "") { toast(locked ? "This page is locked: unlock it to dictate into it" : "Open a page to dictate into it"); return }
+    var gen = workspace.generation
+    var folder = workspace.folder
     var problem = recorder.start("dictation", "page", "", function(ok, r) {
       if (!ok) { if (!r.canceled) view.toast(r.problem || "Nothing was written down"); return }
-      if (view.page && !view.locked && view.tagShown === "" && editor.dictated(r.text)) return
+      // (Another profile's notes open by the time it's written down: never
+      // put on a page of theirs; copied instead.)
+      var here = view.workspace && gen === view.workspace.generation && folder === view.workspace.folder
+      if (here && view.page && !view.locked && view.tagShown === "" && editor.dictated(r.text)) return
       view.workspace.files.copyText(r.text)
       view.toast("Copied what you said: paste it where you want it")
     })

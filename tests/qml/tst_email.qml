@@ -228,6 +228,39 @@ Item {
       files.noApp = null
     }
 
+    // An attachment still being read when another profile's notes are
+    // opened: nothing of it written out in theirs, opened, or said there.
+    function test_1c_an_attachment_as_another_profile_opens() {
+      fresh()
+      var root0 = files.rootPath
+      var other = "/tmp/other-email-notes"
+      files.disk["/tmp/in/Launch.eml"] = root.eml()
+      var e = view.editor
+      e.insertBlocksAt(0, [{ type: "email", indent: 0, data: {} }])
+      var uid = e.uidAt(0)
+      view.addEmailTo(view.page.id, uid, "/tmp/in/Launch.eml")
+      tryVerify(function() { return dataAt(0).attachments && dataAt(0).attachments.length === 1 }, 2000)
+      root.lastToast = ""
+      files.holdReads = true
+      try {
+        view.openEmailAttachment(uid, 0)
+        verify(files.heldReads.length > 0, "the email being read")
+        files.rootPath = other
+        files.holdReads = false
+        tryVerify(function() { files.answerReads(); return ws.ready && view.page !== null }, 3000, "the other open")
+        wait(100)
+        var there = Object.keys(files.disk).filter(function(p) { return p.indexOf(other + "/") === 0 && /\/(mail-|\.unpack-)/.test(p) })
+        compare(there, [], "nothing written out in the other")
+        compare(files.opened, [], "nothing opened")
+        compare(root.lastToast, "")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     function test_2_not_an_email() {
       fresh()
       files.disk["/tmp/in/notes.eml"] = "just some words, no headers"

@@ -265,8 +265,9 @@ QtObject {
   function exec(argv, done, options) {
     ran = ran.concat([argv.slice()])
     inputs = inputs.concat([String(options && options.input || "")])
-    // (holdReads: a zip unpacked when answerReads() is.)
+    // (holdReads: a zip unpacked, or a file copied in, when answerReads() is.)
     if (holdReads && argv[3] === filesHelper && argv[4] === "unzip") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
+    if (holdReads && argv[3] === "uber-notebook-import-file") { heldReads.push(function() { files.execNow(argv, done, options) }); return }
     execNow(argv, done, options)
   }
   function execNow(argv, done, options) {

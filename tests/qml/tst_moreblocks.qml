@@ -172,6 +172,40 @@ Item {
       verify(view.editor.serialize().some(function(b) { return b.type === "file" && b.data.src === "" }))
     }
 
+    // A video still copying in when another profile's notes are opened: its
+    // still made beside it, in the folder it was copied into; nothing of it
+    // in the other's.
+    function test_2b_a_video_copied_in_as_another_profile_opens() {
+      fresh()
+      var root0 = files.rootPath
+      var other = "/tmp/other-video-notes"
+      files.disk["/home/me/Private video.mp4"] = "video"
+      service.nextFile = ""
+      slash("video")
+      var uid = view.editor.uidAt(at("video"))
+      files.holdReads = true
+      try {
+        view.addFileTo(view.page.id, uid, "/home/me/Private video.mp4")
+        tryVerify(function() { return files.heldReads.length > 0 }, 1000, "copying")
+        files.rootPath = other
+        tryVerify(function() { files.answerReads(); return files.ran.some(function(a) { return a[3] === "uber-notebook-still" }) }, 2000, "its still made")
+        var still = files.ran.filter(function(a) { return a[3] === "uber-notebook-still" })[0]
+        var copied = files.ran.filter(function(a) { return a[3] === "uber-notebook-import-file" })[0]
+        verify(copied[5].indexOf(root0 + "/Pages/assets/") === 0, copied[5])
+        verify(still[5].indexOf(root0 + "/Pages/assets/") === 0, "beside the video: " + still[5])
+        verify(/private-video-still\.jpg$/.test(still[5]), still[5])
+        files.holdReads = false
+        tryVerify(function() { files.answerReads(); return ws.ready && view.page !== null }, 3000, "the other open")
+        wait(100)
+        verify(!Object.keys(files.disk).some(function(p) { return p.indexOf(other + "/") === 0 && /private/.test(p) }), "nothing of it in the other")
+      } finally {
+        files.holdReads = false
+        files.answerReads()
+        files.rootPath = root0
+        tryCompare(ws, "ready", true, 2000)
+      }
+    }
+
     function test_3_a_bookmark() {
       fresh()
       files.fetchPages = { "https://example.com/post": '<html><head><title>Fallback</title><meta property="og:title" content="A good post &amp; more"><meta name="description" content="What it&#39;s about."><meta property="og:image" content="/pic.png"><meta property="og:site_name" content="Example"></head><body></body></html>' }
