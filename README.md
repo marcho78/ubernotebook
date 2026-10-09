@@ -1386,8 +1386,23 @@ at all).
 omarchy plugin remove marcho78.uber-notebook
 ```
 
-The shortcuts and rules leave Hyprland with it, its launcher entry goes, and
-its settings go with its `shell.json` entry. Your notebooks stay in `~/Documents/Uber Notebook`.
+Omarchy turns Uber Notebook off first: it writes anything waiting, takes its
+shortcuts and window rules out of Hyprland, removes its launcher entry and
+agent skill, and its settings go with its `shell.json` entry. Then its folder
+is deleted.
+
+Your notes are never touched. What stays:
+
+* each profile's notes, in the folder you gave it (`~/Documents/Uber Notebook`
+  to start with). Run `omarchy-shell uber-notebook profiles` before
+  uninstalling to see where they all are
+* backups, in `~/Documents/Uber Notebook Backups` (or the folder set in
+  Settings → Backups)
+* the demo, in `~/.local/share/uber-notebook`
+* voxtype's meeting mode, if you turned it on:
+  `voxtype config set meeting.enabled false` turns it off
+
+To remove everything for good, delete those folders after uninstalling.
 
 ## License
 
