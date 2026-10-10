@@ -1584,7 +1584,7 @@ Popup {
           title: "Your notes"
           Line {
             label: "On your computer"
-            note: "Every notebook is a folder of plain JSON files; pictures are copied in beside them. Nothing leaves your computer but the update check, which only asks GitHub for the newest version."
+            note: "Your notes are plain files on your computer, yours alone: each page and notebook a JSON file, pictures copied in beside them. Uber Notebook goes online only to ask GitHub for a newer version and to read a link's page for a bookmark; an agent you ask works through its own account and is given what it needs of the page."
           }
         }
       }

@@ -389,7 +389,7 @@ var SECTIONS = [
      [
       "Ctrl+C / Ctrl+X",
       "Copy / cut the picked blocks",
-      "Ctrl+Shift+C and Ctrl+Shift+X do the same, because Shift isn't checked. That means Ctrl+Shift+X cuts the blocks instead of striking them through (see Ctrl+Shift+X)."
+      "Ctrl+Shift+C copies them too. Ctrl+Shift+X strikes their words through; it doesn't cut."
      ],
      [
       "Ctrl+V / Ctrl+Shift+V or Shift+Insert",
@@ -3244,7 +3244,7 @@ var SECTIONS = [
      ],
      [
       "Settings → About → Your notes",
-      "Explains where your notes live: every notebook is a folder of plain JSON files, with pictures copied in beside them. Nothing leaves your computer except the update check.",
+      "Where your notes live: plain files on your computer, yours alone (each page and notebook a JSON file, pictures copied in beside them). Uber Notebook goes online only to ask GitHub for a newer version and to read a link's page for a bookmark; an agent you ask works through its own account and is given what it needs of the page.",
       ""
      ],
      [

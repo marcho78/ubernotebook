@@ -2740,7 +2740,8 @@ FocusScope {
       // (The window's own keys, none of which changes the page, go on to
       // it: a new page, Search, your agent, the sidebar, Settings, Help,
       // the calendar, back and forward.)
-      var windowKey = (ctrl && !alt && !shift && [Qt.Key_N, Qt.Key_P, Qt.Key_J, Qt.Key_Backslash, Qt.Key_Comma, Qt.Key_Slash, Qt.Key_Question].indexOf(key) >= 0)
+      var windowKey = (ctrl && !alt && !shift && [Qt.Key_N, Qt.Key_P, Qt.Key_J, Qt.Key_Backslash, Qt.Key_Comma].indexOf(key) >= 0)
+        || (ctrl && !alt && (key === Qt.Key_Slash || key === Qt.Key_Question))
         || (ctrl && shift && !alt && key === Qt.Key_C) || (!ctrl && !alt && !shift && key === Qt.Key_F1) || (alt && !ctrl && (key === Qt.Key_Left || key === Qt.Key_Right))
       if (folding) { e.accepted = true; toggleFold(item.uid); return }
       if (windowKey) return
@@ -3809,6 +3810,9 @@ FocusScope {
       return
     }
     if (selectedList.length === 0) { e.accepted = false; return }
+    // (Help, Ctrl+/ or F1: the window's, whatever's picked.)
+    var ctrlHeld = (e.modifiers & Qt.ControlModifier) !== 0, altHeld = (e.modifiers & Qt.AltModifier) !== 0, shiftHeld = (e.modifiers & Qt.ShiftModifier) !== 0
+    if ((ctrlHeld && !altHeld && (e.key === Qt.Key_Slash || e.key === Qt.Key_Question)) || (e.key === Qt.Key_F1 && !ctrlHeld && !altHeld && !shiftHeld)) { e.accepted = false; return }
     // A locked page: only moving around and copying.
     if (readOnly && !((e.modifiers & Qt.ControlModifier) && (e.key === Qt.Key_C || e.key === Qt.Key_A))
         && [Qt.Key_Up, Qt.Key_Down, Qt.Key_Escape, Qt.Key_Return, Qt.Key_Enter].indexOf(e.key) < 0) { e.accepted = true; return }

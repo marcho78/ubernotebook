@@ -88,6 +88,14 @@ check("every Ctrl key the views handle is in it", () => {
   assert.deepEqual([...new Set(missing)], [], "keys not in Help");
 });
 
+check("what it says is so: Ctrl+Shift+X never cuts; not only the update check goes online", () => {
+  for (const x of rows) {
+    const t = x.r.join(" ");
+    if (/Ctrl\+Shift\+X/.test(t)) assert.ok(!/Ctrl\+Shift\+X (cuts|does the same)|cuts the blocks instead/i.test(t), t);
+    assert.ok(!/Nothing leaves your computer/i.test(t), t);
+  }
+});
+
 check("Help's own keys are in it, and New page", () => {
   assert.ok(/Ctrl\+\//.test(all), "Ctrl+/");
   assert.ok(/F1/.test(all), "F1");
