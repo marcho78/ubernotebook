@@ -3816,6 +3816,8 @@ FocusScope {
     // (Help, Ctrl+/ or F1: the window's, whatever's picked.)
     var ctrlHeld = (e.modifiers & Qt.ControlModifier) !== 0, altHeld = (e.modifiers & Qt.AltModifier) !== 0, shiftHeld = (e.modifiers & Qt.ShiftModifier) !== 0
     if ((ctrlHeld && !altHeld && (e.key === Qt.Key_Slash || e.key === Qt.Key_Question)) || (e.key === Qt.Key_F1 && !ctrlHeld && !altHeld && !shiftHeld)) { e.accepted = false; return }
+    // (Back and forward, Alt+←/→: the window's, whatever's picked.)
+    if (altHeld && !ctrlHeld && !shiftHeld && (e.key === Qt.Key_Left || e.key === Qt.Key_Right)) { e.accepted = false; return }
     // A locked page: only moving around and copying (with Alt, ↑/↓ would
     // move the blocks: not that).
     if (readOnly && (altHeld || (!((e.modifiers & Qt.ControlModifier) && (e.key === Qt.Key_C || e.key === Qt.Key_A))

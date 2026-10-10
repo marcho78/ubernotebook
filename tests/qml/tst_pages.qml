@@ -696,6 +696,18 @@ Item {
       keyClick(Qt.Key_Down, Qt.AltModifier | Qt.ShiftModifier)
       e.moveBlocks([e.uidAt(0)], 1)
       compare(JSON.stringify(e.serialize()), before, "no block moved")
+      // Back and forward (Alt+←/→) with blocks picked on it still go.
+      var lockedId = view.page.id
+      var other = ws.index.pages[lockedId].children[0]
+      view.open(other)
+      tryCompare(view.page, "id", other, 2000)
+      view.open(lockedId)
+      tryCompare(view.page, "id", lockedId, 2000)
+      e.selectBlocks(e.uidAt(0), e.uidAt(1))
+      keyClick(Qt.Key_Left, Qt.AltModifier)
+      tryVerify(function() { return view.page && view.page.id === other }, 2000, "back, from blocks picked on a locked page")
+      view.open(lockedId)
+      tryCompare(view.page, "id", lockedId, 2000)
       view.setFormat("locked", false)
       e.focusBlock(last, 0)
       keyClick("x")
