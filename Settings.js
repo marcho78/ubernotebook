@@ -89,6 +89,16 @@ function cleanFolder(value) {
   return path
 }
 
+// A setting's value as a command gives it (always text: `set clock 24`):
+// read as its kind of setting is (Defaults.js SCHEMA.types), so "24" stays
+// the text a clock takes, and "true" is true only for an on/off one.
+function commandValue(value, type) {
+  var v = String(value)
+  if (type === "bool" && (v === "true" || v === "false")) return v === "true"
+  if (type === "int" && /^-?\d{1,6}$/.test(v)) return Number(v)
+  return v
+}
+
 // Profiles as they may be used: at most 30, each with an id, a name (a
 // line), a folder, whether it's the demo, and its own settings kept while
 // another is open (`saved`: the keys of PROFILE_KEYS, each as it may be).

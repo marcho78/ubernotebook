@@ -672,6 +672,14 @@ Item {
       e.clickBelow()
       view.turnIntoPage(e.uidAt(1))
       compare(JSON.stringify(e.serialize()), before, "nothing changes it")
+      // Nor its title, with lines pasted there (a title and a page).
+      var title = view.pageTitleText()
+      clip.text = "# Another title\n\n- one\n- two"
+      clip.selectAll()
+      clip.copy()
+      verify(!view.pasteIntoTitle(), "not pasted")
+      compare(view.pageTitleText(), title)
+      compare(JSON.stringify(e.serialize()), before)
       view.setFormat("locked", false)
       e.focusBlock(last, 0)
       keyClick("x")

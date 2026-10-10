@@ -1406,6 +1406,8 @@ FocusScope {
   // Pasting several lines into the title: the first is the title, the rest
   // (Markdown or not) the start of the page.
   function pasteIntoTitle() {
+    // (A locked page: nothing pasted into it, its title nor its page.)
+    if (locked) return false
     var text = editor.clipboardText()
     if (text.indexOf("\n") < 0) return false
     var lines = text.replace(/\r/g, "").split("\n")

@@ -55,6 +55,19 @@ check("reminders say what they're for, unless turned off", () => {
   assert.equal(Settings.merge(defaults, { reminderWords: false }, schema).reminderWords, false);
 });
 
+// A command's value (always text) read as its kind of setting is: the
+// clock takes "24", not 24; an on/off one true or false; a number a number.
+check("set from a command: each value as its setting takes it", () => {
+  const t = schema.types;
+  assert.equal(Settings.commandValue("24", t.clock), "24");
+  assert.equal(Settings.merge(defaults, { clock: Settings.commandValue("24", t.clock) }, schema).clock, "24");
+  assert.equal(Settings.commandValue("true", t.sounds), true);
+  assert.equal(Settings.commandValue("false", t.reminderWords), false);
+  assert.equal(Settings.commandValue("120", t.zoom), 120);
+  assert.equal(Settings.commandValue("grid", t.paper), "grid");
+  assert.equal(Settings.commandValue("true", t.paper), "true", "text stays text");
+});
+
 check("folders", () => {
   assert.equal(Settings.cleanFolder(""), "");
   assert.equal(Settings.cleanFolder("/home/u/Notes//x/"), "/home/u/Notes/x");

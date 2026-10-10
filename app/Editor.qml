@@ -2776,7 +2776,8 @@ FocusScope {
     if (ctrl && !alt && key === Qt.Key_Y) { e.accepted = true; redo(); return }
     if ((ctrl && !alt && !shift && key === Qt.Key_V) || (shift && key === Qt.Key_Insert)) { e.accepted = true; paste(item, false); return }
     if (ctrl && shift && !alt && key === Qt.Key_V) { e.accepted = true; paste(item, true); return }
-    if (ctrl && !alt && (key === Qt.Key_C || key === Qt.Key_X) && hasSel) {
+    // (Ctrl+Shift+X is strikethrough, below: not a cut.)
+    if (ctrl && !alt && (key === Qt.Key_C || (key === Qt.Key_X && !shift)) && hasSel) {
       lastCopied = Html.plainText(innerOf(edit, edit.selectionStart, edit.selectionEnd))
       copiedBlocks = null
       return
@@ -3817,7 +3818,7 @@ FocusScope {
     if (ctrl && !alt && key === Qt.Key_Z) { if (shift) redo(); else undo(); return }
     if (ctrl && !alt && key === Qt.Key_Y) { redo(); return }
     if (ctrl && !alt && key === Qt.Key_A) { selectBlocks(uidAt(0), uidAt(blocksModel.count - 1)); return }
-    if (ctrl && !alt && (key === Qt.Key_C || key === Qt.Key_X)) { copyBlocks(list, key === Qt.Key_X); return }
+    if (ctrl && !alt && (key === Qt.Key_C || (key === Qt.Key_X && !shift))) { copyBlocks(list, key === Qt.Key_X); return }
     if ((ctrl && !alt && key === Qt.Key_V) || (shift && key === Qt.Key_Insert)) { pasteAfter(selectedList[selectedList.length - 1], shift); return }
     if (ctrl && !shift && !alt && key === Qt.Key_B) { formatInline("bold"); return }
     if (ctrl && !shift && !alt && key === Qt.Key_I) { formatInline("italic"); return }

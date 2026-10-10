@@ -154,6 +154,22 @@ Item {
       verify(!/font-weight/.test(blocks()[0].html), "toggled off")
     }
 
+    // Ctrl+Shift+X: strikethrough on the words picked; never a cut, of the
+    // words or of blocks picked.
+    function test_09b_strikethrough_never_cuts() {
+      page(["hello world", "second"])
+      var e = item(0).edit
+      focusAt(0, 0)
+      e.select(0, 5)
+      keyClick(Qt.Key_X, Qt.ControlModifier | Qt.ShiftModifier)
+      verify(/line-through[^>]*>hello</.test(blocks()[0].html), blocks()[0].html)
+      verify(Html.plainText(blocks()[0].html) === "hello world", "nothing cut")
+      editor.selectBlocks(editor.uidAt(0), editor.uidAt(1))
+      keyClick(Qt.Key_X, Qt.ControlModifier | Qt.ShiftModifier)
+      compare(blocks().length, 2, "blocks picked: not cut")
+      compare(Html.plainText(blocks()[1].html), "second")
+    }
+
     function test_10_bold_for_what_you_type_next() {
       page(["ab"])
       focusAt(0, -1)

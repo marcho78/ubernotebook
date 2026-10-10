@@ -768,10 +768,7 @@ Item {
           // (No profile yet: the folder the first one is made of.)
           var busy = (key === "folder" || key === "profile") && value !== String(root.settings[key]) ? profilesItem.refuse() : ""
           if (busy) return busy
-          var parsed = value
-          if (value === "true" || value === "false") parsed = value === "true"
-          else if (/^-?\d{1,6}$/.test(value)) parsed = Number(value)
-          root.setSetting(key, parsed)
+          root.setSetting(key, Settings.commandValue(value, root.schema.types[key]))
           return JSON.stringify(root.settings[key])
         }
         function reset(): void { if (!commands.agent) root.resetSettings() }

@@ -391,7 +391,7 @@ takes them along.
 | Markdown as you type | `**bold**`, `*italic*`, `` `code` ``, `~~struck~~`; at the start of a line `# `, `- `, `1. `, `[] `, `> ` (a toggle), `" ` (a quote), ```` ``` ```` |
 | Text, headings, to-do, bulleted, numbered, toggle, code | **Ctrl+Alt+0**…**3**, **4**, **5**, **6**, **7**, **8** |
 | Move a block up or down | **Alt+Shift+↑/↓** |
-| A new page | **Ctrl+N**, the button beside *Search* at the top of the sidebar, or **+** beside a page there for one inside it |
+| A new page | **Ctrl+N**, **New page** at the top of the sidebar (above *Search*), or **+** beside a page there for one inside it |
 | A page inside this page | `/page` |
 | An email | `/email` (or drop an `.eml` on a page): a saved email, kept in `Pages/assets`, shown as a card: its subject, who it's from and to, when, its first lines and its attachments. **Show email** reads it in full: From, To, Cc and Date, then the message (an HTML email with its formatting and links, but no scripts, styles or pictures from the web, which would tell the sender you opened it). Click an attachment to open it in its app (it's saved beside the email the first time); a calendar file (`.ics`, a booking's or an invitation's) shows its events here instead, with *Add to calendar* (those already on it aren't added twice), and a contact card (`.vcf`) puts its people in People (*Undo* on the message takes them out); ↗ opens the `.eml` in your mail app. A file whose only app is a web browser (or that has none, like an `.eml` with no mail app set up) isn't handed to it, which would download it and take you away from Uber Notebook: a message says so, and it stays in `Pages/assets`. Its colors are Pages' or your own. In the Library, under **Emails**, with who it's from and to and the page it's on; found by subject, sender or recipient. `.eml` is the standard format every mail app saves (Thunderbird, Apple Mail, Outlook, Gmail's *Download message*); Outlook's own `.msg` isn't read |
 | A person in a line | **@** and a name: the people in *People* who match come first (with *New contact* for a name that isn't there yet). It's drawn as `@Sam Rivera`; click it for their card: their numbers and emails (a click copies one, ✉ opens your mail app) and *Open in People* |
@@ -667,7 +667,7 @@ release notes, contact).
 | `audioTranscribe` | `true` | write out an audio note (with voxtype) as soon as it's recorded; `false`: only with *Write it out* |
 | `audioInput` | `""` | the microphone audio notes and dictation record from: a PipeWire source's name (`pactl list sources short`); empty is the default one |
 | `audioBoost` | `true` | even out your voice once it's recorded (and before it's written out), so a quiet microphone comes out loud and clear without turning up the hiss |
-| `quickTo` | `notebook` | where a quick note goes: `notebook` (the Quick notes notebook) or `pages` (a page in the Pages Inbox, its text read as Markdown). The note's foot says which, and a click there changes it |
+| `quickTo` | `pages` | where a quick note goes: `pages` (a page in the Pages Inbox, its text read as Markdown) or `notebook` (the Quick notes notebook). The note's foot says which, and a click there changes it |
 | `barIcon` | `true` | show the notebook in the top bar |
 | `folder` | `""` | where the notebooks live (`""` is `~/Documents/Uber Notebook`); `/path` or `~/path` |
 | `floating` | `true` | float in the middle of the screen (`false`: tile) |
