@@ -259,6 +259,17 @@ check("a window made again while the service runs on (plugins reloaded): not sto
   assert.match(nb, /if \(typeof service\.turnOn !== "function" && service\.store && typeof service\.store\.unlinkSkill === "function" && service\.skillDir\)\n\s+service\.store\.unlinkSkill\(service\.skillDir, null\)\n\s+service\.attachUi\(root\)/);
 });
 
+check("the reminder toast's Turn on: the setting itself, as any service takes it", () => {
+  const fs = require("node:fs");
+  const dv = fs.readFileSync(path.join(root, "app/DocView.qml"), "utf8");
+  const set = dv.slice(dv.indexOf("onReminderSet:"), dv.indexOf("onLinkOpened:"));
+  // (A 1.1.1 service, still running after an update, has setSetting and
+  // reminderWords, not turnOn or setupAsks.)
+  assert.match(set, /view\.service\.setSetting\("reminderWords", true\)/);
+  assert.ok(!/turnOn/.test(set), "not turnOn, which an old service hasn't");
+  assert.match(set, /Array\.isArray\(view\.service\.setupAsks\)/, "an old service, with no setupAsks: still asked");
+});
+
 check("turning one on or off settles it; nothing else does", () => {
   const now = Settings.merge(defaults, {}, schema);
   assert.deepEqual(plain(Settings.settleSetup(now, { agentSkill: true })), { agentSkill: true, setupSettled: ["skill"] });

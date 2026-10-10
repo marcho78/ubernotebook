@@ -3621,8 +3621,10 @@ FocusScope {
             if (view.settings.reminderWords === true || view.reminderHintShown) return
             if (view.service && Array.isArray(view.service.setupAsks) && view.service.setupAsks.indexOf("reminders") < 0) return
             view.reminderHintShown = true
+            // (The setting itself, which a service from before 1.1.2, still
+            // running after an update, knows too.)
             view.toastAction("Reminder set for " + label + ". Show its details in the notification?", "Turn on", function() {
-              if (view.service && typeof view.service.turnOn === "function") view.service.turnOn("reminders")
+              if (view.service && typeof view.service.setSetting === "function") view.service.setSetting("reminderWords", true)
             })
           }
           onLinkOpened: function(url) { view.workspace.files.openUrl(url) }

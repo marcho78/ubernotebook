@@ -3013,6 +3013,11 @@ var SECTIONS = [
       "Only Claude Code and Grok have this toggle, not Codex"
      ],
      [
+      "Settings → AI → Use with any AI → Enable Uber Notebook skill",
+      "Links the skill into Claude Code's, Codex's and other agents' skill folders while Uber Notebook runs, so they know its commands",
+      "Off by default"
+     ],
+     [
       "Settings → AI → Use with any AI",
       "The uber-notebook skill: Copy, Save a copy..., or Show (opens its folder).",
       ""
@@ -3031,11 +3036,6 @@ var SECTIONS = [
       "Settings → Audio → Voice",
       "Write out audio notes (with voxtype) as soon as they're recorded. Meetings: turn on voxtype's meeting mode",
       "Needs voxtype"
-     ],
-     [
-      "Settings → AI → Use with any AI → Enable Uber Notebook skill",
-      "Links the skill into Claude Code's, Codex's and other agents' skill folders while Uber Notebook runs, so they know its commands",
-      "Off by default"
      ],
      [
       "Settings → Notifications → Show reminder details in notifications",
@@ -3163,6 +3163,11 @@ var SECTIONS = [
       "Agents can't change this list (the panel agent can't use set). `set agentPermissions <anything>` and `reset` both clear the whole list."
      ],
      [
+      "Settings → AI → Use with any AI → Enable Uber Notebook skill (or: set agentSkill true|false)",
+      "agentSkill (default false): Uber Notebook's skill linked into agents' skill folders while it runs. Off, its own links are removed.",
+      ""
+     ],
+     [
       "Settings → AI → Use with any AI → Copy / Save a copy… / Show",
       "Copies the skill (SKILL.md) to the clipboard, saves a copy where you choose, or shows its folder. `omarchy-shell uber-notebook skill` prints it.",
       ""
@@ -3225,11 +3230,6 @@ var SECTIONS = [
      [
       "Settings → Backups → Restore → Restore… / Choose a file…",
       "Shows what's in a backup first, then restores each profile in it as a new profile in a new folder. Nothing you have now is changed. Open it opens a profile that was just restored.",
-      ""
-     ],
-     [
-      "Settings → AI → Use with any AI → Enable Uber Notebook skill (or: set agentSkill true|false)",
-      "agentSkill (default false): Uber Notebook's skill linked into agents' skill folders while it runs. Off, its own links are removed.",
       ""
      ],
      [
