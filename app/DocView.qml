@@ -3615,9 +3615,11 @@ FocusScope {
           onTextCopied: function(text) { view.workspace.files.copyText(text); view.toast("Copied") }
           // (A reminder set while its details stay out of notifications:
           // asked whether to show them, with a button that does, once a
-          // session.)
+          // session; never once you've turned them on or off yourself, or
+          // dismissed the strip over Pages: Service.setupAsks.)
           onReminderSet: function(label) {
             if (view.settings.reminderWords === true || view.reminderHintShown) return
+            if (view.service && Array.isArray(view.service.setupAsks) && view.service.setupAsks.indexOf("reminders") < 0) return
             view.reminderHintShown = true
             view.toastAction("Reminder set for " + label + ". Show its details in the notification?", "Turn on", function() {
               if (view.service && typeof view.service.turnOn === "function") view.service.turnOn("reminders")

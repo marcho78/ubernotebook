@@ -124,26 +124,32 @@ Item {
       wait(100)
     }
 
-    // Privacy: the skill and a reminder's details in its notification, off
-    // to start with; each on when you turn it on, and not asked about again.
-    function test_0_privacy() {
+    // The skill (AI) and a reminder's details in its notification
+    // (Notifications), off to start with; each on when you turn it on, and
+    // not asked about again.
+    function test_0_the_skill_and_reminder_details() {
       fresh()
       // (Not asked about yet.)
       service.setSettings({ setupSettled: [] })
-      app.settingsPopup.openAt("privacy")
+      app.settingsPopup.openAt("notifications")
       tryVerify(function() { return app.settingsPopup.opened }, 1000)
       var toggle = null
       tryVerify(function() { toggle = named(win(), "reminderWordsToggle"); return toggle !== null }, 1000)
-      var skill = named(win(), "agentSkillToggle")
-      verify(skill !== null, "the skill's toggle")
+      compare(named(win(), "agentSkillToggle"), null, "the skill: not in Notifications")
       compare(toggle.checked, false, "off to start with")
-      compare(skill.checked, false, "off to start with")
       compare(service.settings.reminderWords, false)
       compare(service.settings.agentSkill, false)
       compare(service.setupAsks, ["skill", "reminders"])
       toggle.toggled(true)
       compare(service.settings.reminderWords, true, "on when turned on")
       compare(service.setupAsks, ["skill"], "and not asked about")
+      // The skill: in AI, with its Copy, Save a copy and Show.
+      app.settingsPopup.section = "ai"
+      var skill = null
+      tryVerify(function() { skill = named(win(), "agentSkillToggle"); return skill !== null }, 1000)
+      verify(named(win(), "aiSkillCopy") !== null, "beside the skill's own buttons")
+      compare(named(win(), "reminderWordsToggle"), null, "reminder details: not in AI")
+      compare(skill.checked, false, "off to start with")
       skill.toggled(true)
       compare(service.settings.agentSkill, true, "on when turned on")
       compare(skill.checked, true)
@@ -151,10 +157,12 @@ Item {
       skill.toggled(false)
       compare(service.settings.agentSkill, false)
       compare(service.setupAsks, [], "turned off by you: not asked")
-      // (Not in Writing any more.)
+      // (Not in Writing any more, and no Privacy section.)
       app.settingsPopup.section = "writing"
       wait(50)
-      compare(named(win(), "reminderWordsToggle"), null, "only in Privacy")
+      compare(named(win(), "reminderWordsToggle"), null, "only in Notifications")
+      compare(named(win(), "settingsSection_privacy"), null, "no Privacy section")
+      verify(named(win(), "settingsSection_notifications") !== null, "a Notifications section")
       service.user = ({ sounds: false })
       if (app.settingsPopup.opened) keyClick(Qt.Key_Escape)
       tryVerify(function() { return !app.settingsPopup.opened }, 1000)

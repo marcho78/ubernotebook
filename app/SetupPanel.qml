@@ -3,9 +3,9 @@ import QtQuick.Controls
 import QtQuick.Effects
 
 // What to turn on: the Uber Notebook skill, and reminder details in
-// notifications. Both off till you turn them on, here or in Settings →
-// Privacy. Opens by itself once (App.qml: settings.setupShown), and from the
-// strip over Pages; closed, however, it's been shown.
+// notifications. Both off till you turn them on, here or in Settings (AI,
+// and Notifications). Opens by itself once (App.qml: settings.setupShown),
+// and from the strip over Pages; closed, however, it's been shown.
 Popup {
   id: panel
   objectName: "setupPanel"

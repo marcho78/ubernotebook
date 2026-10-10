@@ -472,6 +472,8 @@ Item {
       function heard(t, label, action) { said.push(t); acts.push({ label: label, action: action }) }
       view.toastAction.connect(heard)
       view.reminderHintShown = false
+      // (Not decided yet: the strip still asks about reminder details.)
+      service.setSettings({ setupSettled: [] })
       var e = view.editor
       try {
         e.insertBlocksAt(0, [{ type: "p", html: "", indent: 0 }])
@@ -502,10 +504,19 @@ Item {
         keyClick(Qt.Key_Return)
         compare(said.filter(function(t) { return /Show its details/.test(t) }).length, 1, "not with its details on")
         // Turn on: turns them on.
-        service.user = ({ sounds: false })
+        service.user = ({ sounds: false, setupSettled: [] })
         compare(service.settings.reminderWords, false)
         acts[0].action()
         compare(service.settings.reminderWords, true, "Turn on turns them on")
+        // Turned off by you (or the strip dismissed): not asked again.
+        service.setSetting("reminderWords", false)
+        view.reminderHintShown = false
+        keyClick(Qt.Key_Space); keyClick("@")
+        for (var m = 0; m < "in 5 hours".length; m++) keyClick("in 5 hours".charAt(m) === " " ? Qt.Key_Space : "in 5 hours".charAt(m))
+        tryVerify(function() { return e.mentionItems.length === 2 }, 1000)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Return)
+        compare(said.filter(function(t) { return /Show its details/.test(t) }).length, 1, "turned off by you: not asked")
       } finally {
         view.toastAction.disconnect(heard)
         service.user = ({ sounds: false })

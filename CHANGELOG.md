@@ -9,7 +9,7 @@ numbers follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **The Uber Notebook skill is yours to turn on.** It's off until you turn
-  on Settings → Privacy → *Enable Uber Notebook skill*. On, Claude Code,
+  on Settings → AI → *Enable Uber Notebook skill*. On, Claude Code,
   Codex and other agents find it in their skill folders, as before; off,
   Uber Notebook takes its own links out. The agent panel, and agents
   started from Uber Notebook, are given the skill either way. If you had
@@ -17,10 +17,10 @@ numbers follow [Semantic Versioning](https://semver.org/).
 - **Choose what to turn on.** The first time Uber Notebook opens (and once
   after this update) it asks about the skill and reminder details in
   notifications. While one's off, a strip over Pages has *Turn on* and
-  *Dismiss*.
-- **Reminder details** moved to Settings → Privacy → *Show reminder details
-  in notifications*. Setting a reminder while they're off asks whether to
-  show them, with *Turn on*.
+  *Dismiss*, till you turn it on or off yourself or dismiss it.
+- **Reminder details** moved to Settings → Notifications → *Show reminder
+  details in notifications*. Setting a reminder while they're off asks
+  whether to show them, with *Turn on*, till you've decided.
 - **Updating restarts the shell.** The command Uber Notebook gives you is
   now `omarchy plugin update marcho78.uber-notebook && omarchy restart
   shell`: part of Uber Notebook stays as it was through an update till the

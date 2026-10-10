@@ -398,7 +398,7 @@ takes them along.
 | A person in a line | **@** and a name: the people in *People* who match come first (with *New contact* for a name that isn't there yet). It's drawn as `@Sam Rivera`; click it for their card: their numbers and emails (a click copies one, ✉ opens your mail app) and *Open in People* |
 | An email in a line | An email typed (then a space) or pasted becomes a link by itself: to your mail app, or, when it's someone's in *People*, to them (their card on a click) |
 | A date in a line | **@** and a date: `@tomorrow`, `@fri 3pm`, `@in 2 hours`, `@oct 3`, `@2026-12-24` |
-| A reminder | **@** and a date, then *Remind me*: an Omarchy notification then, saying a reminder is due (with **Settings → Privacy → Show reminder details in notifications** on, the page's title and what the line says); click it to open the page |
+| A reminder | **@** and a date, then *Remind me*: an Omarchy notification then, saying a reminder is due (with **Settings → Notifications → Show reminder details in notifications** on, the page's title and what the line says); click it to open the page |
 | A tag | **#** and a name, anywhere in a line: `#errand`, `#project/uber-notebook` (letters, digits, `-`, `_` and `/`; not only digits). The **#** menu offers the tags you have (and a new one with what's typed); a space or a stop after a name makes it a tag too. A tag is drawn in its color; click it (or it in the sidebar's *Tags*, or find it with **Ctrl+P** and `#`) for every block with it, page by page: tick to-dos there, click a block to go to it on its page. At the top of that view: the tag's color (Pages' colors, or **Custom…**, the color picker), renaming it on every page (renamed to a tag you have, the two are one), and taking it off every page (each page keeps the version before in its *Page history*) |
 | Color-code tags | A tag's **⋯** in the sidebar (or a right-click on it): *Color*, *Rename…*, *Take it off every page*; or the palette at the top of its blocks. A tag inside another (`#work/acme`) takes the color of the one it's in (`#work`) until it has its own, and comes after it in the sidebar. *A–Z* at the top of the sidebar's *Tags* sorts them by color instead (Pages' colors in order, then yours, then gray). The **#** menu shows each tag in its color |
 | A link to a page, as a block | `/link`, then pick the page. Under the pointer, *Change* beside it picks another page (one step **Ctrl+Z** takes back); a link whose page is gone says so, and *Link to a page* fixes it |
@@ -648,10 +648,10 @@ in `Defaults.js`. Settings (the ⚙ in the sidebar or on the shelf, or
 **Ctrl+,**) has a section for each part of Uber Notebook: General (shortcuts, the
 window, scrolling), Appearance (colors, what the sidebar shows, motion and sound), Writing
 (checklists, exports, the Markdown copy), AI (your agent, and the model and
-effort Claude Code, Grok and Codex work with), Audio (the microphone,
-dictation, meetings), Profiles, Backups, Privacy (the Uber Notebook skill, and
-reminder details in notifications) and About (the version, updates, release
-notes, contact).
+effort Claude Code, Grok and Codex work with, and the Uber Notebook skill),
+Audio (the microphone, dictation, meetings), Profiles, Backups, Notifications
+(reminder details in them) and About (the version, updates, release notes,
+contact).
 
 | Setting | Default | Values |
 |---|---|---|
@@ -677,8 +677,8 @@ notes, contact).
 | `floating` | `true` | float in the middle of the screen (`false`: tile) |
 | `width`, `height` | `1320`, `900` | the floating window's size |
 | `strikeDone` | `true` | cross off checked items |
-| `reminderWords` | `false` | a reminder's words and an event's title in its notification (Settings → **Privacy** → *Show reminder details in notifications*; off: it says only that one is due, and where to turn this on) |
-| `agentSkill` | `false` | Uber Notebook's skill linked into agents' skill folders while it runs (Settings → **Privacy** → *Enable Uber Notebook skill*; see [For AI agents and scripts](#for-ai-agents-and-scripts)); off, its own links are taken out |
+| `reminderWords` | `false` | a reminder's words and an event's title in its notification (Settings → **Notifications** → *Show reminder details in notifications*; off: it says only that one is due, and where to turn this on) |
+| `agentSkill` | `false` | Uber Notebook's skill linked into agents' skill folders while it runs (Settings → **AI** → *Enable Uber Notebook skill*; see [For AI agents and scripts](#for-ai-agents-and-scripts)); off, its own links are taken out |
 | `setupShown`, `setupSettled` | `false`, `[]` | whether the panel that asks about those two has opened by itself (it does once), and what the strip over Pages no longer asks about (`skill`, `reminders`: turned on or off by you, or the strip dismissed) |
 | `sounds` | `true` | a soft paper sound when a page turns and a notebook opens |
 | `scrollSpeed` | `"normal"` | how fast a page scrolls with a trackpad or a wheel: `slower`, `normal`, `faster` (a trackpad's quick strokes go further, as on a MacBook) |
@@ -909,7 +909,7 @@ profile that's open, so let it finish before you switch. A conversation in a
 profile put back from a backup goes on as a new session, told what was said,
 never the original profile's.
 
-**The skill.** Off until you turn it on: **Settings → Privacy → Enable Uber
+**The skill.** Off until you turn it on: **Settings → AI → Enable Uber
 Notebook skill** (the first time Uber Notebook opens, it asks, and a strip over
 Pages has *Turn on* while it's off, till you dismiss it). On, while Uber
 Notebook runs, it links its skill (`skills/uber-notebook`) into the folders
@@ -1163,7 +1163,7 @@ title stays with its block. Omarchy's own notifications then keep any
 notification's words for a moment on a command line as they save it,
 whatever app it's from, so a reminder or an event's alert says only that
 one is due (and where to turn its details on), a click opening it, until you
-turn on **Settings → Privacy → Show reminder details in notifications**. A command line still shows where things are:
+turn on **Settings → Notifications → Show reminder details in notifications**. A command line still shows where things are:
 a file's path (one you open, save or export is named there, its name from
 its page's title too, as in any app), page ids, fixed words. The commands
 agents run (`omarchy-shell uber-notebook-agent ...`) go through the Omarchy

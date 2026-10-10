@@ -10,7 +10,7 @@ import "../Dates.js" as Dates
 import "../Sidebar.js" as Sidebar
 
 // Uber Notebook's settings, in sections (the list at the left): General,
-// Appearance, Writing, AI, Audio, Profiles, Backups, Privacy and About.
+// Appearance, Writing, AI, Audio, Profiles, Backups, Notifications and About.
 // They apply as you change them and are kept on Uber Notebook's entry in
 // ~/.config/omarchy/shell.json.
 Popup {
@@ -48,7 +48,7 @@ Popup {
     { id: "audio", label: "Audio", icon: icons.mic || "", note: "The microphone, dictation, and meetings." },
     { id: "profiles", label: "Profiles", icon: icons.people || "", note: "Notes kept apart, each profile in a folder of its own." },
     { id: "backups", label: "Backups", icon: icons.archive || "", note: "Your profiles in one file each, to keep safe or move, and put back." },
-    { id: "privacy", label: "Privacy", icon: icons.lock || "", note: "The Uber Notebook skill, and what notifications show." },
+    { id: "notifications", label: "Notifications", icon: icons.bell || "", note: "What reminders' and events' notifications show." },
     { id: "about", label: "About", icon: icons.info || "", note: "The version you have, updates, and who makes Uber Notebook." }
   ]
   readonly property var current: sections.filter(function(x) { return x.id === panel.section })[0] || sections[0]
@@ -1092,14 +1092,20 @@ Popup {
           }
         }
         // The skill, for any AI (Service.copySkill...): Claude Code, Codex, pi
-        // and Hermes find it themselves once it's on (Privacy); anything
+        // and Hermes find it themselves once it's on (off till you turn it
+        // on: the panel that asks, SetupPanel.qml, has it too); anything
         // else, given it.
         Group {
           id: skillGroup
           visible: panel.section === "ai"
           title: "Use with any AI"
-          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. With Enable Uber Notebook skill on (Privacy), Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
+          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. With it enabled, Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
           property string said: ""
+          Line {
+            label: "Enable Uber Notebook skill"
+            note: "For Claude Code, Codex and other agents."
+            Toggle { objectName: "agentSkillToggle"; theme: panel.theme; checked: panel.s.agentSkill === true; onToggled: function(on) { panel.set("agentSkill", on) } }
+          }
           Line {
             objectName: "aiSkill"
             label: "The skill"
@@ -1502,17 +1508,12 @@ Popup {
           }
         }
 
-        // ======== Privacy ========
+        // ======== Notifications ========
 
-        // Off till you turn them on (the panel that asks, SetupPanel.qml,
-        // has the same two).
+        // Off till you turn it on (the panel that asks, SetupPanel.qml, has
+        // it too).
         Group {
-          visible: panel.section === "privacy"
-          Line {
-            label: "Enable Uber Notebook skill"
-            note: "For Claude Code, Codex and other agents."
-            Toggle { objectName: "agentSkillToggle"; theme: panel.theme; checked: panel.s.agentSkill === true; onToggled: function(on) { panel.set("agentSkill", on) } }
-          }
+          visible: panel.section === "notifications"
           Line {
             label: "Show reminder details in notifications"
             Toggle { objectName: "reminderWordsToggle"; theme: panel.theme; checked: panel.s.reminderWords === true; onToggled: function(on) { panel.set("reminderWords", on) } }

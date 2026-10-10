@@ -36,7 +36,7 @@ Item {
   property bool hyprIntegration: true
   property bool launcherEntry: true
   // The uber-notebook skill (skills/uber-notebook), linked into agents' skill folders
-  // while Uber Notebook runs, once you turn it on (Settings → Privacy: the
+  // while Uber Notebook runs, once you turn it on (Settings → AI: the
   // agentSkill setting), so whichever agent you use knows its commands. (The
   // development harness never links it, nor takes a link out.)
   property bool skillLinks: true
