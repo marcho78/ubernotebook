@@ -1567,8 +1567,10 @@ Item {
   function notification(title, text, pageId, day) {
     var isDay = /^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))
     var isPage = /^[0-9a-f-]{36}$/.test(String(pageId || ""))
-    if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open it. Settings → Writing → Show what reminders say puts its words here." }
-    else if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it in your calendar. Settings → Writing → Show what reminders say puts its title here." }
+    // (An event's alert has its day, and its notes page if it has one: an
+    // event's, whatever it opens.)
+    if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it. Settings → Writing → Show what reminders say puts its title here." }
+    else if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open it. Settings → Writing → Show what reminders say puts its words here." }
     var click = isPage ? ["/usr/bin/omarchy-shell", "uber-notebook", "open", pageId] : isDay ? ["/usr/bin/omarchy-shell", "uber-notebook", "calendar", day] : []
     return { summary: String(title || "Reminder").slice(0, 120), body: String(text || "").slice(0, 300), glyph: "\u{f009e}", exec: click }
   }

@@ -245,6 +245,8 @@ ShellRoot {
     var r1 = store.notification("Health", "Call Dr. Patel about the results", pid, "")
     var e1 = store.notification("Lawyer", "Tue 3 pm · Main St", "", "2026-10-09")
     var own = store.notification("Not saved yet", "A change couldn't be saved", "", "")
+    // (An event with a notes page: an event's alert, its notes page opened.)
+    var e2 = store.notification("Lawyer", "Tue 3 pm · Main St", pid, "2026-10-09")
     store.reminderWords = true
     var r2 = store.notification("Health", "Call Dr. Patel about the results", pid, "")
     store.reminderWords = byDefault
@@ -253,7 +255,8 @@ ShellRoot {
     say("private: turned off, a reminder's and an event's words aren't in a notification",
       r1.summary === "A reminder is due" && JSON.stringify(r1).indexOf("Patel") < 0 && JSON.stringify(r1).indexOf("Health") < 0 && r1.exec.join(" ") === "/usr/bin/omarchy-shell uber-notebook open " + pid
       && e1.summary === "An event is starting" && JSON.stringify(e1).indexOf("Lawyer") < 0 && e1.exec[3] === "2026-10-09"
-      && own.summary === "Not saved yet" && r2.summary === "Health" && r2.body.indexOf("Patel") >= 0,
+      && own.summary === "Not saved yet" && r2.summary === "Health" && r2.body.indexOf("Patel") >= 0
+      && e2.summary === "An event is starting" && JSON.stringify(e2).indexOf("Lawyer") < 0 && JSON.stringify(e2).indexOf("Main St") < 0 && e2.exec.join(" ") === "/usr/bin/omarchy-shell uber-notebook open " + pid,
       JSON.stringify([r1.summary, e1.summary, own.summary, r2.summary]))
     var notes = d + "/notes"
     function modes(paths, done) {
