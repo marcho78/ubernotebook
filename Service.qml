@@ -64,7 +64,7 @@ Item {
   // manifest.json says): the version, and the homepage updates are asked of.
   property var ownManifest: null
   readonly property var about: manifest && manifest.version ? manifest : ownManifest
-  readonly property string version: about && about.version ? about.version : "1.0.0"
+  readonly property string version: about && about.version ? about.version : "1.1.0"
 
   // ---- settings ----------------------------------------------------------------------
   //

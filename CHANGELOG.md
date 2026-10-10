@@ -4,9 +4,10 @@ Every notable change to Uber Notebook is listed here, newest first. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version
 numbers follow [Semantic Versioning](https://semver.org/).
 
-## 1.0.0 - 2026-10-08
+## 1.1.0 - 2026-10-09
 
-The first version.
+Help, a New page button you can find, your notes kept private and each
+profile's kept to itself, and fixes, after the marketplace's review.
 
 ### Added
 
@@ -30,7 +31,7 @@ The first version.
 - `omarchy-shell uber-notebook set clock 24` works: a value is read as its
   setting takes it.
 
-### Changed
+### Security
 
 - **Reminders can keep their words to themselves; every profile kept
   private; nothing of one profile in another.** A wide review of the privacy
@@ -97,6 +98,13 @@ The first version.
   there isn't opened; a strip says so); a file you save there yourself still
   is, and you're told. Without `XDG_RUNTIME_DIR`, its working files go in a
   folder of its own in your cache, never `/tmp`.
+
+## 1.0.0 - 2026-10-08
+
+The first version.
+
+### Changed
+
 - **Your notes and backups are asked about each time.** *Always from* a
   folder (say `~/Documents`, for an invoice) also let the panel's agent take
   any file in the profiles' notes folders and the backups folder in it
