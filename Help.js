@@ -957,7 +957,7 @@ var SECTIONS = [
      [
       "@ then a date, then pick 'Remind me …'",
       "Sets a reminder, written as '⏰ Fri 9 Oct 3:00 pm'. At that time (or 9 am that day if no time was given) an Omarchy notification says a reminder is due; a click opens the page. With Settings → Writing → Show what reminders say on, it shows the page's title and what the line says.",
-      "It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
+      "The first time in a session you set one with its words kept out, a message says where to turn them on. It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
      ],
      [
       "[[",

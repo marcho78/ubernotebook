@@ -25,6 +25,8 @@ Item {
   SignalSpy { id: opened; target: editor; signalName: "pageOpened" }
   TextEdit { id: clip; visible: false; textFormat: TextEdit.PlainText }
 
+  SignalSpy { id: set; target: editor; signalName: "reminderSet" }
+
   TestCase {
     name: "Pages editor"
     when: windowShown
@@ -338,6 +340,8 @@ Item {
       var html = blocks()[0].html
       verify(html.indexOf("uber-notebook://remind/") >= 0, html)
       verify(texts().indexOf("\u23f0 ") >= 0, "a reminder shows a clock")
+      compare(set.count, 1, "said: a reminder set")
+      verify(/\d/.test(set.signalArguments[0][0]) && set.signalArguments[0][0].indexOf("\u23f0") < 0, set.signalArguments[0][0])
     }
 
     function test_16_links_to_pages() {

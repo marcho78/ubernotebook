@@ -15,7 +15,8 @@ numbers follow [Semantic Versioning](https://semver.org/).
   notifications keep a notification's words for a moment on a command line
   as they save it, where another account on the computer could read them:
   turn it on only on a computer you don't share. A choice you made already
-  is kept.
+  is kept. The first time in a session you set a reminder while it's off,
+  a message in the window says so too.
 
 ## 1.1.0 - 2026-10-09
 

@@ -161,6 +161,8 @@ FocusScope {
   // "/agent" typed on a block: ask your agent (Pages).
   signal agentRequested(string uid)
   signal textCopied(string text)
+  // A reminder put on a line ("⏰ Fri 9 Oct 3:00 pm"): its words, as shown.
+  signal reminderSet(string label)
 
   implicitHeight: doc ? docHeight : column.height
 
@@ -2481,6 +2483,7 @@ FocusScope {
     replaceRange(item, m.at, end, "<a href=\"" + Html.escapeAttr(href) + "\">" + Html.escapeText(text) + "</a> ")
     endOp()
     focusBlock(item.uid, m.at + text.length + 1)
+    if (entry.kind === "date" && entry.remind) reminderSet(text.replace(/^\u23f0 /, ""))
   }
 
   // Plain text typed in at the cursor of a block, as one step.

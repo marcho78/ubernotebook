@@ -462,6 +462,48 @@ Item {
       }
     }
 
+    // A reminder set while its words stay out of notifications: said where
+    // to put them in, once; not with them on.
+    function test_6l_a_reminder_set_says_where_its_words_are() {
+      fresh()
+      var said = []
+      function heard(t) { said.push(t) }
+      view.toast.connect(heard)
+      view.reminderHintShown = false
+      var e = view.editor
+      try {
+        e.insertBlocksAt(0, [{ type: "p", html: "", indent: 0 }])
+        e.focusBlock(e.uidAt(0), 0)
+        keyClick("c"); keyClick(Qt.Key_Space); keyClick("@")
+        for (var i = 0; i < "in 2 hours".length; i++) keyClick("in 2 hours".charAt(i) === " " ? Qt.Key_Space : "in 2 hours".charAt(i))
+        tryVerify(function() { return e.mentionItems.length === 2 && e.mentionItems[1].remind }, 1000)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Return)
+        var hint = said.filter(function(t) { return /Show what reminders say/.test(t) })
+        compare(hint.length, 1, JSON.stringify(said))
+        verify(/^Reminder set for .*\d/.test(hint[0]), hint[0])
+        // Again: not said twice.
+        keyClick(Qt.Key_Space); keyClick("@")
+        for (var j = 0; j < "in 3 hours".length; j++) keyClick("in 3 hours".charAt(j) === " " ? Qt.Key_Space : "in 3 hours".charAt(j))
+        tryVerify(function() { return e.mentionItems.length === 2 }, 1000)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Return)
+        compare(said.filter(function(t) { return /Show what reminders say/.test(t) }).length, 1, "once")
+        // With its words on: nothing said.
+        view.reminderHintShown = false
+        service.setSetting("reminderWords", true)
+        keyClick(Qt.Key_Space); keyClick("@")
+        for (var k = 0; k < "in 4 hours".length; k++) keyClick("in 4 hours".charAt(k) === " " ? Qt.Key_Space : "in 4 hours".charAt(k))
+        tryVerify(function() { return e.mentionItems.length === 2 }, 1000)
+        keyClick(Qt.Key_Down)
+        keyClick(Qt.Key_Return)
+        compare(said.filter(function(t) { return /Show what reminders say/.test(t) }).length, 1, "not with its words on")
+      } finally {
+        view.toast.disconnect(heard)
+        service.user = ({ sounds: false })
+      }
+    }
+
     // Find on a page: what was looked for goes with the profile.
     function test_6j_find_words_go_with_the_profile() {
       fresh()

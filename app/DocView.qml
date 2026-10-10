@@ -1646,6 +1646,8 @@ FocusScope {
   // is asked it, for a terminal instead.
   property var agentRun: null
   property string agentRunPrompt: ""
+  // Said once a session: a reminder's notification keeps its words out.
+  property bool reminderHintShown: false
   // The page's conversation with your agent, kept (Workspace's chats), or null.
   readonly property var pageChat: { var r = workspace ? workspace.chatsRevision : 0; return page && workspace ? workspace.chatFor(page.id) : null }
   // The conversation in the panel: { agent, id (its session: one made for
@@ -3609,6 +3611,13 @@ FocusScope {
             langPop.open()
           }
           onTextCopied: function(text) { view.workspace.files.copyText(text); view.toast("Copied") }
+          // (A reminder set while its words stay out of notifications: said
+          // where to put them in, once a session.)
+          onReminderSet: function(label) {
+            if (view.settings.reminderWords === true || view.reminderHintShown) return
+            view.reminderHintShown = true
+            view.toast("Reminder set for " + label + ". Its notification won't show its words: Settings → Writing → Show what reminders say")
+          }
           onLinkOpened: function(url) { view.workspace.files.openUrl(url) }
           onPictureOpened: function(src) { view.showPagePicture(src) }
           onPictureCopyRequested: function(src) { view.copyPicture(src) }
