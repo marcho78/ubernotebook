@@ -199,9 +199,48 @@ Item {
       tryVerify(function() { return strip().visible }, 1000)
     }
 
+    // Turned off by you without ever being on (Settings, `set`): settled,
+    // not asked about again.
+    function test_5b_turned_off_by_you() {
+      fresh({ setupShown: true })
+      tryVerify(function() { return strip().visible }, 1000)
+      service.setSetting("agentSkill", false)
+      compare(service.settings.agentSkill, false)
+      tryCompare(named(win(), "setupStripText"), "text", "See reminder details in notifications.", 1000)
+      service.setSetting("reminderWords", false)
+      tryVerify(function() { return !strip().visible }, 1000, "both settled")
+    }
+
+    // A narrow window: the strip's words on two lines, nothing cut off.
+    function test_5c_narrow() {
+      fresh({ setupShown: true })
+      tryVerify(function() { return strip().visible }, 1000)
+      root.width = 760
+      try {
+        var t = named(win(), "setupStripText")
+        tryVerify(function() { return t.lineCount >= 2 && !t.truncated }, 1000, "two lines")
+        verify(strip().height >= t.height + 12, "as tall as its words")
+        compare(app.docView.anchors.topMargin, strip().height, "Pages under it")
+        var b = named(win(), "setupStripDismiss")
+        // (A Row lays its items out a moment later.)
+        tryVerify(function() { var p = b.mapToItem(root, 0, 0); return p.x >= 0 && p.x + b.width <= root.width - 8 }, 1000,
+          "its buttons in the window: " + b.mapToItem(root, 0, 0).x + " " + b.width)
+      } finally {
+        root.width = 1320
+      }
+    }
+
     // A message with a button of its own: its label, and what it does.
     function test_6_a_message_with_a_button() {
       fresh({ setupShown: true })
+      // (From Pages: a reminder set, asking.)
+      var asked = 0
+      app.docView.toastAction("Reminder set for Fri 9 Oct. Show its details in the notification?", "Turn on", function() { asked++ })
+      var c = null
+      tryVerify(function() { c = named(win(), "toastUndo"); return c !== null }, 1000)
+      compare(c.children[0].text, "Turn on")
+      click(c)
+      compare(asked, 1, "from Pages, done")
       var done = 0
       app.toastWithAction("Reminder set for Fri 9 Oct, 9:53 am. Show its details in the notification?", "Turn on", function() { done++ })
       var b = null

@@ -19,25 +19,35 @@ ShellRoot {
 
   Component.onCompleted: {
     store.exec(["/usr/bin/bash", "-c", "h=$(/usr/bin/mktemp -d) || exit 1; "
-      + "/usr/bin/mkdir -p \"$h/.claude/skills\" \"$h/.agents/skills\" \"$h/.codex/skills\" \"$h/plugins/marcho78.uber-notebook/skills/uber-notebook\"; "
+      + "/usr/bin/mkdir -p \"$h/.claude/skills\" \"$h/.agents/skills\" \"$h/.codex/skills\" \"$h/.hermes/skills\" \"$h/plugins/marcho78.uber-notebook/skills/uber-notebook\" \"$h/older/marcho78.uber-notebook/skills/uber-notebook\"; "
+      + "/usr/bin/ln -s \"$h/older/marcho78.uber-notebook/skills/uber-notebook\" \"$h/.hermes/skills/uber-notebook\"; "
       + "/usr/bin/ln -s \"$h/old/marcho78.uber-notebook/skills/uber-notebook\" \"$h/.agents/skills/uber-notebook\"; "
       + "/usr/bin/ln -s \"$h/someone-else\" \"$h/.codex/skills/uber-notebook\"; printf '%s' \"$h\""], function(ok, out) {
       var h = String(out).trim()
       if (!ok || !h) { console.log("FAIL setup"); Qt.quit(); return }
       store.home = h
+      store.skillLock = h + "/skills.lock"
       var target = h + "/plugins/marcho78.uber-notebook/skills/uber-notebook"
-      var links = "for d in claude agents codex; do /usr/bin/readlink -- \"$1/.$d/skills/uber-notebook\" || echo none; done"
+      var older = h + "/older/marcho78.uber-notebook/skills/uber-notebook"
+      var links = "for d in claude agents codex hermes; do /usr/bin/readlink -- \"$1/.$d/skills/uber-notebook\" || echo none; done"
       store.setSkillLinks(true, target)
       root.after(800, function() {
         store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok2, out2) {
           var l = String(out2).trim().split("\n")
           say("its skill linked when turned on; one from an install before, gone, pointed here; anyone else's left",
-            l[0] === target && l[1] === target && l[2] === h + "/someone-else", l.join(" | "))
+            l[0] === target && l[1] === target && l[2] === h + "/someone-else" && l[3] === older, l.join(" | "))
           store.setSkillLinks(false, target)
           root.after(800, function() {
           store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok4, out4) {
           var o = String(out4).trim().split("\n")
-          say("turned off, its own links taken out; anyone else's left", o[0] === "none" && o[1] === "none" && o[2] === h + "/someone-else", o.join(" | "))
+          say("turned off, its own links taken out (an install before's too); anyone else's left", o[0] === "none" && o[1] === "none" && o[2] === h + "/someone-else" && o[3] === "none", o.join(" | "))
+          // On and off at once: not linked, as it was left.
+          store.setSkillLinks(true, target)
+          store.setSkillLinks(false, target)
+          root.after(1200, function() {
+          store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok8, out8) {
+          var n = String(out8).trim().split("\n")
+          say("on and off quickly: not linked", n[0] === "none" && n[1] === "none" && n[3] === "none", n.join(" | "))
           // On, off and on again at once: linked, as it was left.
           store.setSkillLinks(true, target)
           store.setSkillLinks(false, target)
@@ -45,15 +55,38 @@ ShellRoot {
           root.after(1200, function() {
           store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok5, out5) {
           var q = String(out5).trim().split("\n")
-          say("on, off and on quickly: linked", q[0] === target && q[1] === target && q[2] === h + "/someone-else", q.join(" | "))
+          say("on, off and on quickly: linked", q[0] === target && q[1] === target && q[2] === h + "/someone-else" && q[3] === target, q.join(" | "))
           // As it stops, the helper run from its text, its file not read.
           var text = store.readNow(store.filesHelper, 512 * 1024) || ""
           store.unlinkSkill(target, ["/usr/bin/python3", "-I", "-S", "-c", text])
           root.after(1500, function() {
-            store.exec(["/usr/bin/bash", "-c", "for d in claude agents codex; do [ -L \"$1/.$d/skills/uber-notebook\" ] && echo there || echo gone; done", "x", h], function(ok3, out3) {
+            store.exec(["/usr/bin/bash", "-c", "for d in claude agents codex hermes; do [ -L \"$1/.$d/skills/uber-notebook\" ] && echo there || echo gone; done", "x", h], function(ok3, out3) {
               var g = String(out3).trim().split("\n")
-              say("as it stops, its links taken out by the helper's text; anyone else's left", text.length > 1000 && g[0] === "gone" && g[1] === "gone" && g[2] === "there", g.join(" | "))
-              store.exec(["/usr/bin/rm", "-rf", "--", h], function() { console.log("DONE"); Qt.quit() })
+              say("as it stops, its links taken out by the helper's text; anyone else's left", text.length > 1000 && g[0] === "gone" && g[1] === "gone" && g[2] === "there" && g[3] === "gone", g.join(" | "))
+              // A link still being made as it stops (the lock held, the link
+              // made at the end): taken out after it's made, not before.
+              store.exec(["/usr/bin/bash", "-c", "(/usr/bin/flock \"$1\" /usr/bin/bash -c '/usr/bin/sleep 1; /usr/bin/ln -sT -- \"$1\" \"$2\"' x \"$2\" \"$3\") >/dev/null 2>&1 & /usr/bin/sleep 0.2", "x", store.skillLock, target, h + "/.claude/skills/uber-notebook"], function() {
+                store.unlinkSkill(target, ["/usr/bin/python3", "-I", "-S", "-c", text])
+              }, { keepChildren: true })
+              root.after(400, function() {
+                root.after(2500, function() {
+                  store.exec(["/usr/bin/bash", "-c", "[ -L \"$1/.claude/skills/uber-notebook\" ] && echo there || echo gone", "x", h], function(ok7, out7) {
+                    say("a link made as it stops: taken out after", String(out7).trim() === "gone", String(out7).trim())
+              // Stopping: never linked again.
+              store.skillsStopped = true
+              store.setSkillLinks(true, target)
+              root.after(800, function() {
+                store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok6, out6) {
+                  var z = String(out6).trim().split("\n")
+                  say("stopping: not linked", z[0] === "none" && z[1] === "none" && z[3] === "none", z.join(" | "))
+                  store.exec(["/usr/bin/rm", "-rf", "--", h], function() { console.log("DONE"); Qt.quit() })
+                })
+              })
+          })
+          })
+                  })
+                })
+              })
             })
           })
           })

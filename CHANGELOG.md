@@ -21,6 +21,17 @@ numbers follow [Semantic Versioning](https://semver.org/).
 - **Reminder details** moved to Settings → Privacy → *Show reminder details
   in notifications*. Setting a reminder while they're off asks whether to
   show them, with *Turn on*.
+- **Updating restarts the shell.** The command Uber Notebook gives you is
+  now `omarchy plugin update marcho78.uber-notebook && omarchy restart
+  shell`: part of Uber Notebook stays as it was through an update till the
+  shell starts again. Updating to this version from 1.1.1, run
+  `omarchy restart shell` after it.
+
+### Fixed
+
+- After a plugin was installed, updated or turned on, Uber Notebook went on
+  as if the shell were stopping: your notes were written without its files
+  helper, and new files weren't made yours alone. Not any more.
 
 ## 1.1.1 - 2026-10-09
 

@@ -630,8 +630,10 @@ a newer version, the foot of Pages' sidebar and the shelf's corner say so
 (*Version 1.1.0 is available*), with a dot by About in Settings; a click
 shows its release notes, here in Uber Notebook (no pictures or HTML from them,
 nothing fetched), with the command that installs it, to copy:
-`omarchy plugin update marcho78.uber-notebook`. Run it in a terminal: it shows
-what changes and asks before it applies them. Uber Notebook never installs
+`omarchy plugin update marcho78.uber-notebook && omarchy restart shell`. Run it
+in a terminal: it shows what changes and asks before it applies them, then
+restarts the Omarchy shell, which Uber Notebook runs in, so all of the new
+version runs. Uber Notebook never installs
 anything itself. *Release notes* in About shows what's in the version you
 have, from `CHANGELOG.md`.
 
@@ -1053,7 +1055,7 @@ anything.
 **No root, nothing installed or built, nothing that updates itself.** It never
 asks for root, and runs no package manager and no updater. When there's a newer version it
 says so, with the command that installs it (`omarchy plugin update
-marcho78.uber-notebook`), for you to run in a terminal, where it shows what
+marcho78.uber-notebook && omarchy restart shell`), for you to run in a terminal, where it shows what
 changes and asks first.
 
 **The network, for three things.** A web bookmark you add: its page (http or
@@ -1097,7 +1099,7 @@ cut between two pieces would come out wrong.
 | `/usr/bin/mkdir`, `/usr/bin/cp`, `/usr/bin/mv`, `/usr/bin/rm` | make folders (its temporary ones new, never one that's there); pictures into an export or the Markdown copy (new files only); move things to `.trash`; take away only files Uber Notebook made (a copy that went wrong, a recording once it's written out, its temporary folders) |
 | `/usr/bin/python3 -I -S bin/uber-notebook-files` | the files helper: read and write your notes (below, kept running while Uber Notebook runs); copy a picture in (only a plain file that's a picture Qt can show, at most 50 MB and 16384 px a side, as a new file; an agent's only from its own folder, through no link); copy in any other file an agent gives (the same way: only from its folder, through no link, at most 8 GB, as a new file); put a page's pictures in a document made of it and check it (below); make the Markdown copy's changes (below); unpack a zip you import, look into a backup and put one back, make and take out its launcher entry and its skill's links, read a file an agent names (below); look up a link's host (its name on its input) and send a notification (a reminder, an event's alert: over the session bus itself, its words on its input); make the Markdown copy's own files and folders from before yours alone; save a file you chose, or copy one there (an export, a picture: a new file yours alone, put in its place, checked) |
 | `/usr/lib/chromium/chromium` (or Chrome's or Brave's own program), `/usr/lib/libreoffice/program/soffice`, `/usr/bin/unshare` | a page made a PDF (Chromium, headless) or a Word file (LibreOffice, headless), each only a plain program owned by root that no one else can change (never the `chromium` launcher, which reads your flags and extensions), with a profile of its own, and no network at all (below) |
-| `/usr/bin/ln`, `/usr/bin/readlink` | link its skill into agents' skill folders (`ln -sT`, only where nothing has that name); after you turn meeting mode on, until voxtype has restarted, when voxtype's daemon started (your own processes in `/proc`, read only, with `/usr/bin/stat`) |
+| `/usr/bin/ln`, `/usr/bin/readlink`, `/usr/bin/flock` | once you turn the skill on, link it into agents' skill folders (`ln -sT`, only where nothing has that name), and take its own links out again (`rm -f`, only a link to its skill) when you turn it off, under a lock (`flock`, in `$XDG_RUNTIME_DIR`) the files helper waits for as it takes them out when Uber Notebook stops; after you turn meeting mode on, until voxtype has restarted, when voxtype's daemon started (your own processes in `/proc`, read only, with `/usr/bin/stat`) |
 | `/usr/bin/wl-copy`, `/usr/bin/wl-paste` | copy (the text on its input, never as an argument); paste: the clipboard's text and HTML (at most 4 MB each), what's selected for a middle click, a picture |
 | `/usr/bin/uwsm-app` with `xdg-open` | open a link (http, https, mailto), or one of Uber Notebook's own folders and files |
 | `/usr/bin/hyprctl` | read Hyprland's bindings; register and remove the shortcuts and rules |

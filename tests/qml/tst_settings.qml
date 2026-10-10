@@ -294,7 +294,7 @@ Item {
         tryVerify(function() { return notes.opened }, 1000)
         compare(named(notes.contentItem, "releaseNotesUpdate"), null, "no Update now")
         click(named(notes.contentItem, "releaseNotesCopy"))
-        compare(files.copied, "omarchy plugin update marcho78.uber-notebook")
+        compare(files.copied, "omarchy plugin update marcho78.uber-notebook && omarchy restart shell")
         click(named(notes.contentItem, "releaseNotesGitHub"))
         verify(files.opened.indexOf("https://github.com/marcho78/ubernotebook/releases/tag/v1.1.0") >= 0)
         keyClick(Qt.Key_Escape)

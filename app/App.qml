@@ -191,19 +191,21 @@ FocusScope {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.top: demoStrip.bottom
-    height: shown ? 40 : 0
+    // (Taller when its words take two lines, in a narrow window.)
+    height: shown ? Math.max(40, setupRow.height + 12) : 0
     visible: shown
     z: 40
     color: themeObject.sidebar
     Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: themeObject.line }
     Row {
+      id: setupRow
       anchors.centerIn: parent
       spacing: 14
       Text {
         objectName: "setupStripText"
         anchors.verticalCenter: parent.verticalCenter
         width: Math.min(implicitWidth, setupStrip.width - 32 - setupTurnOn.width - setupDismiss.width - 28)
-        elide: Text.ElideRight
+        wrapMode: Text.WordWrap
         textFormat: Text.PlainText
         text: setupStrip.asks.length > 1 ? "Use the Uber Notebook skill in Claude Code and Codex, and see reminder details in notifications."
           : setupStrip.asks[0] === "skill" ? "Use the Uber Notebook skill in Claude Code and Codex."

@@ -29,7 +29,13 @@ Item {
     return !!service
   }
 
-  onServiceChanged: if (service) service.attachUi(root)
+  // (A window made again while the service runs on, as plugins are
+  // reloaded: the shell isn't stopping, whatever the window before said as
+  // it went.)
+  onServiceChanged: if (service) {
+    if (service.store) service.store.stopping = false
+    service.attachUi(root)
+  }
   onShellChanged: resolveService()
   Component.onCompleted: if (!resolveService()) serviceLookup.start()
   // Going away (the shell stopping, Uber Notebook turned off): the page you're on

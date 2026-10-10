@@ -239,6 +239,22 @@ check("the skill is linked only when it's on", () => {
   const calls = [...svc.matchAll(/setSkillLinks\(([^)]*)\)/g)].map((m) => m[1]);
   assert.deepEqual(calls, ["root.skillOn, root.skillDir"], "only as the setting says");
   assert.equal(defaults.agentSkill, false);
+  // Every change goes through settleSetup; a reset keeps the panel shown.
+  const set = svc.slice(svc.indexOf("function setSettings("), svc.indexOf("function resetSettings("));
+  assert.match(set, /changes = Settings\.settleSetup\(settings, changes\)\n\s+var next = Settings\.clone\(user\)/);
+  const reset = svc.slice(svc.indexOf("function resetSettings("), svc.indexOf("id: persistTimer"));
+  assert.match(reset, /\["profiles", "profile", "folder", "setupShown"\]/);
+  // Stopping: no link after, and the stop's own flag (not the window's `stopping`).
+  assert.match(svc, /storeItem\.skillsStopped = true\n\s+storeItem\.unlinkSkill\(skillDir, stopRunner\(\)\)/);
+  assert.match(store, /if \(skillsStopped && on === true\) return/);
+});
+
+check("a window made again while the service runs on (plugins reloaded): not stopping", () => {
+  const fs = require("node:fs");
+  const nb = fs.readFileSync(path.join(root, "Notebook.qml"), "utf8");
+  // (Its going sets it, so the page is written first; the next one coming clears it.)
+  assert.match(nb, /Component\.onDestruction: \{[^}]*service\.store\.stopping = true/);
+  assert.match(nb, /onServiceChanged: if \(service\) \{\n\s+if \(service\.store\) service\.store\.stopping = false\n\s+service\.attachUi\(root\)/);
 });
 
 check("turning one on or off settles it; nothing else does", () => {

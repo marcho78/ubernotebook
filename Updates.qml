@@ -33,7 +33,9 @@ Item {
   property var checkedAt: null
   // A git checkout, so `omarchy plugin update` can update it.
   property bool managed: false
-  readonly property string updateCommand: "omarchy plugin update " + pluginId
+  // (Then the shell restarted: Uber Notebook's service stays loaded through
+  // an update, as it was, till the shell starts again.)
+  readonly property string updateCommand: "omarchy plugin update " + pluginId + " && omarchy restart shell"
 
   readonly property string curlScript: "/usr/bin/curl -q -sS -L --proto =https --proto-redir =https --max-time 15 --max-filesize 2000000 -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' -A 'Uber Notebook' -w '\\n%{http_code}' -- \"$1\""
 

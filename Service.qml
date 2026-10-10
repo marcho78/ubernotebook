@@ -436,7 +436,10 @@ Item {
     if (launcherEntry && launcherText) Quickshell.execDetached(stopRunner().concat(["remove-owned", desktopFile, launcherText]))
     // (Taken out whether it's on or not: one made a moment ago, as it was
     // turned off, may not have been yet.)
-    if (skillLinks) storeItem.unlinkSkill(skillDir, stopRunner())
+    if (skillLinks) {
+      storeItem.skillsStopped = true
+      storeItem.unlinkSkill(skillDir, stopRunner())
+    }
     // Writes from here on finish before the shell goes on stopping.
     storeItem.stopping = true
     if (ui && typeof ui.saveNow === "function") ui.saveNow()

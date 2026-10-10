@@ -168,6 +168,13 @@ try {
     fs.writeFileSync(path.join(d, "file"), "x");
     assert.equal(helperRun(["unlink-link", path.join(d, "file"), "/plugin/skills/uber-notebook"]).out.trim(), "kept", "nor a file");
     assert.equal(fs.readFileSync(path.join(d, "file"), "utf8"), "x");
+    // Its skill in another place (an install before): its own too.
+    const here = "/home/x/.config/omarchy/plugins/marcho78.uber-notebook/skills/uber-notebook";
+    fs.symlinkSync("/old/place/marcho78.uber-notebook/skills/uber-notebook", path.join(d, "older"));
+    assert.equal(helperRun(["unlink-link", path.join(d, "older"), "/plugin/skills/uber-notebook"]).out.trim(), "kept", "only for its skill");
+    assert.equal(helperRun(["unlink-link", path.join(d, "older"), here]).out.trim(), "removed", "an install before");
+    fs.symlinkSync("/old/place/other-plugin/skills/uber-notebook", path.join(d, "other"));
+    assert.equal(helperRun(["unlink-link", path.join(d, "other"), here]).out.trim(), "kept", "anyone else's");
     assert.deepEqual(fs.readdirSync(d).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
 

@@ -446,30 +446,39 @@ Item {
   // The uber-notebook skill, linked into the folders agents read skills from (the
   // ones Omarchy links its own skills into) once you turn it on, so whichever
   // agent you use knows Uber Notebook's commands. A link is only made where
-  // nothing has that name, and only Uber Notebook's own links (to `target`)
-  // are taken out.
+  // nothing has that name, and only Uber Notebook's own links are taken out
+  // (to `target`, or to its skill in another place: an install before).
   readonly property var skillFolders: [".agents/skills", ".claude/skills", ".codex/skills", ".hermes/skills", ".pi/agent/skills"]
-  readonly property string skillScript: "mode=$1; target=$2; shift 2; for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
+  // (Under a lock, `skillLock`, the one taking them out as it stops waits
+  // for: a link being made then is made before it's taken out, never after.)
+  readonly property string skillScript: "mode=$1; target=$2; lock=$3; shift 3; { exec 9>>\"$lock\"; } 2>/dev/null && /usr/bin/flock -w 10 9; "
+    + "for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
     + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; "
     // (A link to its skill in another place, gone (an install before, moved
     // away): made to point here. Anything else there is left.)
     + "elif [ -L \"$link\" ] && [ ! -e \"$link\" ]; then case \"$(/usr/bin/readlink -- \"$link\")\" in */marcho78.uber-notebook/skills/uber-notebook) /usr/bin/ln -sfnT -- \"$target\" \"$link\";; esac; fi; "
-    + "elif [ -L \"$link\" ] && [ \"$(/usr/bin/readlink -- \"$link\")\" = \"$target\" ]; then /usr/bin/rm -f -- \"$link\"; fi; done; exit 0"
+    + "elif [ -L \"$link\" ]; then case \"$(/usr/bin/readlink -- \"$link\")\" in \"$target\"|*/marcho78.uber-notebook/skills/uber-notebook) /usr/bin/rm -f -- \"$link\";; esac; fi; done; exit 0"
 
   function skillDirs() { return skillFolders.map(function(f) { return store.home + "/" + f }) }
+  property string skillLock: { var r = Quickshell.env("XDG_RUNTIME_DIR"); return (r && r.indexOf("/") === 0 ? r : store.home + "/.cache") + "/uber-notebook-skills.lock" }
   // Linked (`on`), or Uber Notebook's own links taken out: one at a time, the
   // last asked for done last, so turning it on and off quickly ends as it was
   // left.
   property bool skillBusy: false
   property var skillNext: null
+  // Uber Notebook stopping (Service.qml, as it goes): never linked again,
+  // it's taking them out. (Not `stopping`: the window sets that as it's
+  // reloaded, while this goes on running.)
+  property bool skillsStopped: false
   function setSkillLinks(on, target) {
+    if (skillsStopped && on === true) return
     skillNext = { on: on === true, target: String(target || "") }
     if (skillBusy) return
     var w = skillNext
     skillNext = null
     if (!w.target) return
     skillBusy = true
-    exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", w.on ? "link" : "unlink", w.target].concat(skillDirs()), function() {
+    exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", w.on ? "link" : "unlink", w.target, skillLock].concat(skillDirs()), function() {
       store.skillBusy = false
       if (store.skillNext) store.setSkillLinks(store.skillNext.on, store.skillNext.target)
     }, { timeoutMs: 5000 })
@@ -481,7 +490,7 @@ Item {
   function unlinkSkill(target, runner) {
     var run = runner && runner.length ? runner : ["/usr/bin/python3", "-I", "-S", filesHelper]
     skillDirs().forEach(function(dir) {
-      Quickshell.execDetached(run.concat(["unlink-link", dir + "/uber-notebook", target]))
+      Quickshell.execDetached(run.concat(["unlink-link", dir + "/uber-notebook", target, skillLock]))
     })
   }
 
