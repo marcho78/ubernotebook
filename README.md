@@ -398,7 +398,7 @@ takes them along.
 | A person in a line | **@** and a name: the people in *People* who match come first (with *New contact* for a name that isn't there yet). It's drawn as `@Sam Rivera`; click it for their card: their numbers and emails (a click copies one, ✉ opens your mail app) and *Open in People* |
 | An email in a line | An email typed (then a space) or pasted becomes a link by itself: to your mail app, or, when it's someone's in *People*, to them (their card on a click) |
 | A date in a line | **@** and a date: `@tomorrow`, `@fri 3pm`, `@in 2 hours`, `@oct 3`, `@2026-12-24` |
-| A reminder | **@** and a date, then *Remind me*: an Omarchy notification then, with its words (only that a reminder is due if Settings → Writing → *Show what reminders say* is off); click it to open the page |
+| A reminder | **@** and a date, then *Remind me*: an Omarchy notification then, saying a reminder is due and where to see its words (Settings → Writing → *Show what reminders say* puts them in it); click it to open the page |
 | A tag | **#** and a name, anywhere in a line: `#errand`, `#project/uber-notebook` (letters, digits, `-`, `_` and `/`; not only digits). The **#** menu offers the tags you have (and a new one with what's typed); a space or a stop after a name makes it a tag too. A tag is drawn in its color; click it (or it in the sidebar's *Tags*, or find it with **Ctrl+P** and `#`) for every block with it, page by page: tick to-dos there, click a block to go to it on its page. At the top of that view: the tag's color (Pages' colors, or **Custom…**, the color picker), renaming it on every page (renamed to a tag you have, the two are one), and taking it off every page (each page keeps the version before in its *Page history*) |
 | Color-code tags | A tag's **⋯** in the sidebar (or a right-click on it): *Color*, *Rename…*, *Take it off every page*; or the palette at the top of its blocks. A tag inside another (`#work/acme`) takes the color of the one it's in (`#work`) until it has its own, and comes after it in the sidebar. *A–Z* at the top of the sidebar's *Tags* sorts them by color instead (Pages' colors in order, then yours, then gray). The **#** menu shows each tag in its color |
 | A link to a page, as a block | `/link`, then pick the page. Under the pointer, *Change* beside it picks another page (one step **Ctrl+Z** takes back); a link whose page is gone says so, and *Link to a page* fixes it |
@@ -674,7 +674,7 @@ release notes, contact).
 | `floating` | `true` | float in the middle of the screen (`false`: tile) |
 | `width`, `height` | `1320`, `900` | the floating window's size |
 | `strikeDone` | `true` | cross off checked items |
-| `reminderWords` | `true` | a reminder's words and an event's title in its notification (off: it says only that one is due; Omarchy's notifications keep each one's words for a moment on a command line, where another account could read them: turn it off on a computer you share) |
+| `reminderWords` | `false` | a reminder's words and an event's title in its notification (off: it says only that one is due, and where to turn this on; Omarchy's notifications keep each one's words for a moment on a command line, where another account could read them: turn it on only on a computer you don't share) |
 | `sounds` | `true` | a soft paper sound when a page turns and a notebook opens |
 | `scrollSpeed` | `"normal"` | how fast a page scrolls with a trackpad or a wheel: `slower`, `normal`, `faster` (a trackpad's quick strokes go further, as on a MacBook) |
 | `reduceMotion` | `false` | fade instead of turning pages and swinging covers |
@@ -1149,12 +1149,12 @@ link's host is looked up and its page fetched with the link on their input;
 Claude Code's, Grok's and Codex's requests go on their input; an agent
 opened in a terminal starts with a line naming a file of its own (600) its
 request is in; a backup's list of profiles goes on its input; a meeting's
-title stays with its block. (Omarchy's own notifications then keep any
+title stays with its block. Omarchy's own notifications then keep any
 notification's words for a moment on a command line as they save it,
-whatever app it's from: on a computer you share with other accounts, turn
-off Settings → Writing → *Show what reminders say*, and a reminder or an
-event's alert says only that one is due; a click opens it.) A command line
-still shows where things are:
+whatever app it's from, so a reminder or an event's alert says only that
+one is due (and where to turn its words on), a click opening it; on a
+computer you don't share, Settings → Writing → *Show what reminders say*
+puts its words in it. A command line still shows where things are:
 a file's path (one you open, save or export is named there, its name from
 its page's title too, as in any app), page ids, fixed words. The commands
 agents run (`omarchy-shell uber-notebook-agent ...`) go through the Omarchy

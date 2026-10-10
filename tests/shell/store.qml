@@ -237,7 +237,8 @@ ShellRoot {
     // A reminder's or an event's own words only when Settings says so; a
     // notification of its own (not a reminder's) as it is; a click opens it.
     var pid = "0b6f8f9e-1111-4222-8333-944455556666"
-    // (Unless Settings says otherwise: their words.)
+    // (Unless Settings says otherwise: only that it's due, and where to
+    // turn its words on.)
     var byDefault = store.reminderWords
     var r0 = store.notification("Health", "Call Dr. Patel about the results", pid, "")
     store.reminderWords = false
@@ -247,7 +248,8 @@ ShellRoot {
     store.reminderWords = true
     var r2 = store.notification("Health", "Call Dr. Patel about the results", pid, "")
     store.reminderWords = byDefault
-    say("private: a reminder says what it's for by default", byDefault === true && r0.summary === "Health" && r0.body.indexOf("Patel") >= 0, JSON.stringify(r0))
+    say("private: by default a reminder says only that it's due, and where to turn its words on", byDefault === false && r0.summary === "A reminder is due" && JSON.stringify(r0).indexOf("Patel") < 0 && JSON.stringify(r0).indexOf("Health") < 0
+      && r0.body.indexOf("Settings → Writing → Show what reminders say") >= 0 && e1.body.indexOf("Show what reminders say") >= 0, JSON.stringify([r0, e1.body]))
     say("private: turned off, a reminder's and an event's words aren't in a notification",
       r1.summary === "A reminder is due" && JSON.stringify(r1).indexOf("Patel") < 0 && JSON.stringify(r1).indexOf("Health") < 0 && r1.exec.join(" ") === "/usr/bin/omarchy-shell uber-notebook open " + pid
       && e1.summary === "An event is starting" && JSON.stringify(e1).indexOf("Lawyer") < 0 && e1.exec[3] === "2026-10-09"

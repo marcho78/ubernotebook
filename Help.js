@@ -40,7 +40,7 @@ var SECTIONS = [
      ],
      [
       "@",
-      "A person, a date, or a reminder: type @ and a time (@in 10 min, @fri 3pm), then pick ⏰ Remind me.",
+      "A person, a date, or a reminder: type @ and a time (@in 10 min, @fri 3pm), then pick ⏰ Remind me. To see a reminder's words in its notification, turn on Settings → Writing → Show what reminders say.",
       "See Dates and reminders."
      ],
      [
@@ -956,8 +956,8 @@ var SECTIONS = [
      ],
      [
       "@ then a date, then pick 'Remind me …'",
-      "Sets a reminder, written as '⏰ Fri 9 Oct 3:00 pm'. At that time (or 9 am that day if no time was given) an Omarchy notification shows the page's title and what the line says. Clicking it opens the page.",
-      "It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. With Settings 'Show what reminders say' off, it says only 'A reminder is due'. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
+      "Sets a reminder, written as '⏰ Fri 9 Oct 3:00 pm'. At that time (or 9 am that day if no time was given) an Omarchy notification says a reminder is due; a click opens the page. With Settings → Writing → Show what reminders say on, it shows the page's title and what the line says.",
+      "It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
      ],
      [
       "[[",
@@ -2402,7 +2402,7 @@ var SECTIONS = [
      [
       "Event editor → Alert",
       "None, At the start, 5, 10 or 30 min, 1 hour, or A day before. Sends an Omarchy notification; clicking it opens the event's notes page, or the calendar on that day",
-      "Settings → Writing → Times → Show what reminders say controls whether it includes the event's title"
+      "It says only that an event is starting (and where to turn its title on), till Settings → Writing → Times → Show what reminders say is on."
      ],
      [
       "Event editor → Notes for it / Open notes",
@@ -2989,8 +2989,8 @@ var SECTIONS = [
      ],
      [
       "Settings → Writing → Times → Show what reminders say",
-      "When off, notifications only say that a reminder or event is due (turn it off on a shared computer)",
-      "On by default."
+      "On, a reminder's words and an event's title are in its notification; off, it says only that one is due, and where to turn this on.",
+      "Off by default: turn it on only on a computer you don't share."
      ],
      [
       "Settings → Writing → Exports",
@@ -3119,8 +3119,8 @@ var SECTIONS = [
      ],
      [
       "Settings → Writing → Times → Show what reminders say (or: set reminderWords true|false)",
-      "reminderWords (default true): a reminder's words and an event's title appear in its notification. When off, the notification only says that a reminder is due or an event is starting.",
-      "Omarchy's notifications briefly put these words on a command line that other accounts on the computer can read, so turn this off on a shared computer."
+      "reminderWords (default false): a reminder's words and an event's title in its notification. Off, it says only that a reminder is due or an event is starting, and where to turn this on; a click opens it.",
+      "Omarchy's notifications keep a notification's words for a moment where another account on this computer could read them: turn it on only on a computer you don't share."
      ],
      [
       "Settings → Writing → Exports → Exports go to: Ask where / Exports folder (or: set exportTo ask|folder)",

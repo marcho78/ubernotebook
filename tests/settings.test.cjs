@@ -47,12 +47,12 @@ check("merging validates", () => {
   });
 });
 
-// A reminder's words in its notification: on unless you turn it off, and
-// off stays off.
-check("reminders say what they're for, unless turned off", () => {
-  assert.equal(defaults.reminderWords, true);
-  assert.equal(Settings.merge(defaults, {}, schema).reminderWords, true);
-  assert.equal(Settings.merge(defaults, { reminderWords: false }, schema).reminderWords, false);
+// A reminder's words in its notification: off till you turn them on, and
+// on stays on.
+check("reminders keep their words to themselves, unless turned on", () => {
+  assert.equal(defaults.reminderWords, false);
+  assert.equal(Settings.merge(defaults, {}, schema).reminderWords, false);
+  assert.equal(Settings.merge(defaults, { reminderWords: true }, schema).reminderWords, true);
 });
 
 // A command's value (always text) read as its kind of setting is: the

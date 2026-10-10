@@ -4,6 +4,19 @@ Every notable change to Uber Notebook is listed here, newest first. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version
 numbers follow [Semantic Versioning](https://semver.org/).
 
+## 1.1.1 - 2026-10-09
+
+### Changed
+
+- **Reminders keep their words to themselves, till you say.** A reminder's
+  or an event alert's notification says only that one is due, and where to
+  see its words: Settings → Writing → *Show what reminders say* (off to
+  start with) puts them in it. A click opens it, as before. Omarchy's own
+  notifications keep a notification's words for a moment on a command line
+  as they save it, where another account on the computer could read them:
+  turn it on only on a computer you don't share. A choice you made already
+  is kept.
+
 ## 1.1.0 - 2026-10-09
 
 Help, a New page button you can find, your notes kept private and each

@@ -1555,19 +1555,20 @@ Item {
   // over the session bus, its words on the helper's input: never on a
   // command line, where every account on the computer can read them (as
   // omarchy-notification-send would put them, through busctl).
-  // A reminder's or an event alert's own words (a page's, or a day's), as
-  // Settings has it (reminderWords, on unless you turn it off). Omarchy's
-  // notifications keep each one's words for a moment on a command line (as
-  // they save it), where another account on the computer could read them:
-  // off, it says only that one is due, and a click opens it.
-  property bool reminderWords: true
+  // A reminder's or an event alert's own words (a page's, or a day's): only
+  // when Settings says so (reminderWords, off till you turn it on).
+  // Omarchy's notifications keep each one's words for a moment on a command
+  // line (as they save it), where another account on the computer could
+  // read them: off, it says only that one is due, where to turn its words
+  // on, and a click opens it.
+  property bool reminderWords: false
   // What a notification says, and what a click on it opens: { summary,
   // body, glyph, exec }.
   function notification(title, text, pageId, day) {
     var isDay = /^\d{4}-\d{2}-\d{2}$/.test(String(day || ""))
     var isPage = /^[0-9a-f-]{36}$/.test(String(pageId || ""))
-    if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open its page" }
-    else if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it in your calendar" }
+    if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open it. Settings → Writing → Show what reminders say puts its words here." }
+    else if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it in your calendar. Settings → Writing → Show what reminders say puts its title here." }
     var click = isPage ? ["/usr/bin/omarchy-shell", "uber-notebook", "open", pageId] : isDay ? ["/usr/bin/omarchy-shell", "uber-notebook", "calendar", day] : []
     return { summary: String(title || "Reminder").slice(0, 120), body: String(text || "").slice(0, 300), glyph: "\u{f009e}", exec: click }
   }
