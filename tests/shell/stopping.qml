@@ -4,12 +4,13 @@ import Quickshell.Io
 // (tests/run writes the plugin folder here, as a file: URL.)
 import "@PLUGIN@" as UN
 
-// Uber Notebook taking itself out as it stops, when its folder may be gone
-// already (`omarchy plugin remove` moves it away as soon as it's unloaded):
-// its skill's links, made at start (one from an install before, gone,
-// pointed here; anyone else's left), taken out by the files helper run from
-// its text, kept as it started, not from its file. In a home of its own
-// (never yours). Prints PASS/FAIL lines, then DONE.
+// Uber Notebook's skill links: made when it's turned on (one from an install
+// before, gone, pointed here; anyone else's left); its own taken out when
+// it's turned off; turned on, off and on quickly, linked. Then Uber Notebook
+// taking itself out as it stops, when its folder may be gone already
+// (`omarchy plugin remove` moves it away as soon as it's unloaded): by the
+// files helper run from its text, kept as it started, not from its file. In
+// a home of its own (never yours). Prints PASS/FAIL lines, then DONE.
 ShellRoot {
   id: root
   function say(name, ok, extra) { console.log((ok ? "PASS " : "FAIL ") + name + (extra ? " :: " + extra : "")) }
@@ -25,12 +26,26 @@ ShellRoot {
       if (!ok || !h) { console.log("FAIL setup"); Qt.quit(); return }
       store.home = h
       var target = h + "/plugins/marcho78.uber-notebook/skills/uber-notebook"
-      store.linkSkill(target)
+      var links = "for d in claude agents codex; do /usr/bin/readlink -- \"$1/.$d/skills/uber-notebook\" || echo none; done"
+      store.setSkillLinks(true, target)
       root.after(800, function() {
-        store.exec(["/usr/bin/bash", "-c", "for d in claude agents codex; do /usr/bin/readlink -- \"$1/.$d/skills/uber-notebook\" || echo none; done", "x", h], function(ok2, out2) {
+        store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok2, out2) {
           var l = String(out2).trim().split("\n")
-          say("its skill linked at start; one from an install before, gone, pointed here; anyone else's left",
+          say("its skill linked when turned on; one from an install before, gone, pointed here; anyone else's left",
             l[0] === target && l[1] === target && l[2] === h + "/someone-else", l.join(" | "))
+          store.setSkillLinks(false, target)
+          root.after(800, function() {
+          store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok4, out4) {
+          var o = String(out4).trim().split("\n")
+          say("turned off, its own links taken out; anyone else's left", o[0] === "none" && o[1] === "none" && o[2] === h + "/someone-else", o.join(" | "))
+          // On, off and on again at once: linked, as it was left.
+          store.setSkillLinks(true, target)
+          store.setSkillLinks(false, target)
+          store.setSkillLinks(true, target)
+          root.after(1200, function() {
+          store.exec(["/usr/bin/bash", "-c", links, "x", h], function(ok5, out5) {
+          var q = String(out5).trim().split("\n")
+          say("on, off and on quickly: linked", q[0] === target && q[1] === target && q[2] === h + "/someone-else", q.join(" | "))
           // As it stops, the helper run from its text, its file not read.
           var text = store.readNow(store.filesHelper, 512 * 1024) || ""
           store.unlinkSkill(target, ["/usr/bin/python3", "-I", "-S", "-c", text])
@@ -40,6 +55,10 @@ ShellRoot {
               say("as it stops, its links taken out by the helper's text; anyone else's left", text.length > 1000 && g[0] === "gone" && g[1] === "gone" && g[2] === "there", g.join(" | "))
               store.exec(["/usr/bin/rm", "-rf", "--", h], function() { console.log("DONE"); Qt.quit() })
             })
+          })
+          })
+          })
+          })
           })
         })
       })

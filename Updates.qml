@@ -14,7 +14,7 @@ Item {
 
   // Store.qml: programs to run (exec), files to read (readNow).
   property var files: null
-  property string current: "1.1.1"
+  property string current: "1.1.2"
   property string homepage: ""
   property string pluginDir: ""
   property string pluginId: ""

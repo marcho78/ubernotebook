@@ -7,7 +7,15 @@ QtObject {
   id: fake
   property var store: null
   property var user: ({})
-  readonly property var settings: Settings.merge(Defaults.DEFAULTS, user, Defaults.SCHEMA)
+  // (Under `user`: the skill and reminder details asked about already, so
+  // neither the panel nor the strip is over a test's page; tst_setup's
+  // sets it to ({}).)
+  property var asked: ({ setupShown: true, setupSettled: ["skill", "reminders"] })
+  readonly property var settings: {
+    var u = JSON.parse(JSON.stringify(asked || {}))
+    for (var k in user) u[k] = user[k]
+    return Settings.merge(Defaults.DEFAULTS, u, Defaults.SCHEMA)
+  }
   property string rootPath: "/tmp/uber-notebook-dev"
   property string version: "1.0.0"
   property string skillDir: "/tmp/uber-notebook-dev-plugin/skills/uber-notebook"
@@ -25,15 +33,23 @@ QtObject {
   function openMirror() {}
 
   function setSetting(key, value) {
-    var next = JSON.parse(JSON.stringify(user))
-    next[key] = value
-    user = next
+    var changes = {}
+    changes[key] = value
+    setSettings(changes)
   }
   function setSettings(changes) {
+    // (As Service.qml: an opt-in turned on or off, not asked about again.)
+    changes = Settings.settleSetup(settings, changes)
     var next = JSON.parse(JSON.stringify(user))
     for (var k in changes) next[k] = changes[k]
     user = next
   }
+  // The skill and reminder details (Service.qml): what the strip asks about,
+  // one turned on, the strip dismissed, the panel shown.
+  readonly property var setupAsks: Settings.setupAsks(settings)
+  function turnOn(name) { var key = Settings.optInKey(name); if (key) setSetting(key, true) }
+  function dismissSetup() { setSetting("setupSettled", ["skill", "reminders"]) }
+  function setupSeen() { if (settings.setupShown !== true) setSetting("setupShown", true) }
   property string home: "/tmp"
   // Profiles (Profiles.qml), when a test has them (else none: no switch, no first run).
   property var profiles: null

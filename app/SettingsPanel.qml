@@ -10,8 +10,8 @@ import "../Dates.js" as Dates
 import "../Sidebar.js" as Sidebar
 
 // Uber Notebook's settings, in sections (the list at the left): General,
-// Appearance, Writing, Audio, Profiles, Backups and About. They apply as
-// you change them and are kept on Uber Notebook's entry in
+// Appearance, Writing, AI, Audio, Profiles, Backups, Privacy and About.
+// They apply as you change them and are kept on Uber Notebook's entry in
 // ~/.config/omarchy/shell.json.
 Popup {
   id: panel
@@ -48,6 +48,7 @@ Popup {
     { id: "audio", label: "Audio", icon: icons.mic || "", note: "The microphone, dictation, and meetings." },
     { id: "profiles", label: "Profiles", icon: icons.people || "", note: "Notes kept apart, each profile in a folder of its own." },
     { id: "backups", label: "Backups", icon: icons.archive || "", note: "Your profiles in one file each, to keep safe or move, and put back." },
+    { id: "privacy", label: "Privacy", icon: icons.lock || "", note: "The Uber Notebook skill, and what notifications show." },
     { id: "about", label: "About", icon: icons.info || "", note: "The version you have, updates, and who makes Uber Notebook." }
   ]
   readonly property var current: sections.filter(function(x) { return x.id === panel.section })[0] || sections[0]
@@ -939,13 +940,6 @@ Popup {
               onPicked: function(v) { panel.set("clock", v) }
             }
           }
-          Line {
-            label: "Show what reminders say"
-            note: panel.s.reminderWords === true
-              ? "A reminder's words and an event's title are in its notification. Omarchy's notifications keep them for a moment where another account on this computer could read them: turn this off on a computer you share."
-              : "Notifications say only that a reminder is due or an event is starting, and where to turn this on; a click opens it. On a computer only you use, turn it on to see their words."
-            Toggle { objectName: "reminderWordsToggle"; theme: panel.theme; checked: panel.s.reminderWords === true; onToggled: function(on) { panel.set("reminderWords", on) } }
-          }
         }
 
         Group {
@@ -1098,12 +1092,13 @@ Popup {
           }
         }
         // The skill, for any AI (Service.copySkill...): Claude Code, Codex, pi
-        // and Hermes find it themselves; anything else, given it.
+        // and Hermes find it themselves once it's on (Privacy); anything
+        // else, given it.
         Group {
           id: skillGroup
           visible: panel.section === "ai"
           title: "Use with any AI"
-          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
+          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. With Enable Uber Notebook skill on (Privacy), Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
           property string said: ""
           Line {
             objectName: "aiSkill"
@@ -1504,6 +1499,23 @@ Popup {
               text: "Choose a file…"
               onClicked: panel.chooseBackup()
             }
+          }
+        }
+
+        // ======== Privacy ========
+
+        // Off till you turn them on (the panel that asks, SetupPanel.qml,
+        // has the same two).
+        Group {
+          visible: panel.section === "privacy"
+          Line {
+            label: "Enable Uber Notebook skill"
+            note: "For Claude Code, Codex and other agents."
+            Toggle { objectName: "agentSkillToggle"; theme: panel.theme; checked: panel.s.agentSkill === true; onToggled: function(on) { panel.set("agentSkill", on) } }
+          }
+          Line {
+            label: "Show reminder details in notifications"
+            Toggle { objectName: "reminderWordsToggle"; theme: panel.theme; checked: panel.s.reminderWords === true; onToggled: function(on) { panel.set("reminderWords", on) } }
           }
         }
 

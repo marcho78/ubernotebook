@@ -198,6 +198,44 @@ function merge(defaults, user, schema) {
   return settings
 }
 
+// The settings that stay off till you turn them on, and what the strip over
+// Pages (and setupSettled) calls each.
+var OPT_INS = { agentSkill: "skill", reminderWords: "reminders" }
+
+// What the strip still asks about: each one that's off, unless you've
+// turned it on or off yourself or dismissed the strip. ["skill", "reminders"],
+// in that order, or fewer.
+function setupAsks(settings) {
+  var s = isPlainObject(settings) ? settings : {}
+  var settled = Array.isArray(s.setupSettled) ? s.setupSettled : []
+  return Object.keys(OPT_INS).filter(function(key) {
+    return s[key] !== true && settled.indexOf(OPT_INS[key]) < 0
+  }).map(function(key) { return OPT_INS[key] })
+}
+// The setting a name in it stands for ("skill": "agentSkill").
+function optInKey(name) {
+  var keys = Object.keys(OPT_INS).filter(function(key) { return OPT_INS[key] === name })
+  return keys.length ? keys[0] : ""
+}
+
+// Changes about to be made, with setupSettled added to when one of them
+// turns an opt-in on or off (that's yours, decided: the strip doesn't ask
+// again). `settings`: as they are now.
+function settleSetup(settings, changes) {
+  if (!isPlainObject(changes)) return changes
+  var names = Object.keys(OPT_INS).filter(function(key) {
+    return Object.prototype.hasOwnProperty.call(changes, key) && typeof changes[key] === "boolean"
+  }).map(function(key) { return OPT_INS[key] })
+  if (!names.length) return changes
+  var base = Object.prototype.hasOwnProperty.call(changes, "setupSettled") ? changes.setupSettled
+    : isPlainObject(settings) ? settings.setupSettled : []
+  var settled = Array.isArray(base) ? base.slice() : []
+  names.forEach(function(n) { if (settled.indexOf(n) < 0) settled.push(n) })
+  var out = clone(changes)
+  out.setupSettled = settled
+  return out
+}
+
 // Only what differs from the defaults, so plugin updates can improve them.
 function overrides(defaults, settings) {
   var out = {}

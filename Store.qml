@@ -444,9 +444,10 @@ Item {
   }
 
   // The uber-notebook skill, linked into the folders agents read skills from (the
-  // ones Omarchy links its own skills into), so whichever agent you use knows
-  // Uber Notebook's commands. A link is only made where nothing has that name,
-  // and only Uber Notebook's own links (to `target`) are taken out.
+  // ones Omarchy links its own skills into) once you turn it on, so whichever
+  // agent you use knows Uber Notebook's commands. A link is only made where
+  // nothing has that name, and only Uber Notebook's own links (to `target`)
+  // are taken out.
   readonly property var skillFolders: [".agents/skills", ".claude/skills", ".codex/skills", ".hermes/skills", ".pi/agent/skills"]
   readonly property string skillScript: "mode=$1; target=$2; shift 2; for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
     + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; "
@@ -456,8 +457,22 @@ Item {
     + "elif [ -L \"$link\" ] && [ \"$(/usr/bin/readlink -- \"$link\")\" = \"$target\" ]; then /usr/bin/rm -f -- \"$link\"; fi; done; exit 0"
 
   function skillDirs() { return skillFolders.map(function(f) { return store.home + "/" + f }) }
-  function linkSkill(target) {
-    exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", "link", target].concat(skillDirs()), null, { timeoutMs: 5000 })
+  // Linked (`on`), or Uber Notebook's own links taken out: one at a time, the
+  // last asked for done last, so turning it on and off quickly ends as it was
+  // left.
+  property bool skillBusy: false
+  property var skillNext: null
+  function setSkillLinks(on, target) {
+    skillNext = { on: on === true, target: String(target || "") }
+    if (skillBusy) return
+    var w = skillNext
+    skillNext = null
+    if (!w.target) return
+    skillBusy = true
+    exec(["/usr/bin/bash", "-c", skillScript, "uber-notebook-skills", w.on ? "link" : "unlink", w.target].concat(skillDirs()), function() {
+      store.skillBusy = false
+      if (store.skillNext) store.setSkillLinks(store.skillNext.on, store.skillNext.target)
+    }, { timeoutMs: 5000 })
   }
   // (Each link taken out only if it's still Uber Notebook's: read where it's
   // kept, then taken out there; by the archive helper, as Uber Notebook stops:
@@ -1569,8 +1584,8 @@ Item {
     var isPage = /^[0-9a-f-]{36}$/.test(String(pageId || ""))
     // (An event's alert has its day, and its notes page if it has one: an
     // event's, whatever it opens.)
-    if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it. Settings → Writing → Show what reminders say puts its title here." }
-    else if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open it. Settings → Writing → Show what reminders say puts its words here." }
+    if (!reminderWords && isDay) { title = "An event is starting"; text = "Click to see it. Turn on reminder details in Settings → Privacy." }
+    else if (!reminderWords && isPage) { title = "A reminder is due"; text = "Click to open it. Turn on reminder details in Settings → Privacy." }
     var click = isPage ? ["/usr/bin/omarchy-shell", "uber-notebook", "open", pageId] : isDay ? ["/usr/bin/omarchy-shell", "uber-notebook", "calendar", day] : []
     return { summary: String(title || "Reminder").slice(0, 120), body: String(text || "").slice(0, 300), glyph: "\u{f009e}", exec: click }
   }

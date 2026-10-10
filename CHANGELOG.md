@@ -4,6 +4,24 @@ Every notable change to Uber Notebook is listed here, newest first. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and version
 numbers follow [Semantic Versioning](https://semver.org/).
 
+## 1.1.2 - 2026-10-09
+
+### Changed
+
+- **The Uber Notebook skill is yours to turn on.** It's off until you turn
+  on Settings → Privacy → *Enable Uber Notebook skill*. On, Claude Code,
+  Codex and other agents find it in their skill folders, as before; off,
+  Uber Notebook takes its own links out. The agent panel, and agents
+  started from Uber Notebook, are given the skill either way. If you had
+  it before, turn it on again.
+- **Choose what to turn on.** The first time Uber Notebook opens (and once
+  after this update) it asks about the skill and reminder details in
+  notifications. While one's off, a strip over Pages has *Turn on* and
+  *Dismiss*.
+- **Reminder details** moved to Settings → Privacy → *Show reminder details
+  in notifications*. Setting a reminder while they're off asks whether to
+  show them, with *Turn on*.
+
 ## 1.1.1 - 2026-10-09
 
 ### Changed

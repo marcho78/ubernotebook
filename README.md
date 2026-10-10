@@ -398,7 +398,7 @@ takes them along.
 | A person in a line | **@** and a name: the people in *People* who match come first (with *New contact* for a name that isn't there yet). It's drawn as `@Sam Rivera`; click it for their card: their numbers and emails (a click copies one, ✉ opens your mail app) and *Open in People* |
 | An email in a line | An email typed (then a space) or pasted becomes a link by itself: to your mail app, or, when it's someone's in *People*, to them (their card on a click) |
 | A date in a line | **@** and a date: `@tomorrow`, `@fri 3pm`, `@in 2 hours`, `@oct 3`, `@2026-12-24` |
-| A reminder | **@** and a date, then *Remind me*: an Omarchy notification then, saying a reminder is due and where to see its words (Settings → Writing → *Show what reminders say* puts them in it); click it to open the page |
+| A reminder | **@** and a date, then *Remind me*: an Omarchy notification then, saying a reminder is due (with **Settings → Privacy → Show reminder details in notifications** on, the page's title and what the line says); click it to open the page |
 | A tag | **#** and a name, anywhere in a line: `#errand`, `#project/uber-notebook` (letters, digits, `-`, `_` and `/`; not only digits). The **#** menu offers the tags you have (and a new one with what's typed); a space or a stop after a name makes it a tag too. A tag is drawn in its color; click it (or it in the sidebar's *Tags*, or find it with **Ctrl+P** and `#`) for every block with it, page by page: tick to-dos there, click a block to go to it on its page. At the top of that view: the tag's color (Pages' colors, or **Custom…**, the color picker), renaming it on every page (renamed to a tag you have, the two are one), and taking it off every page (each page keeps the version before in its *Page history*) |
 | Color-code tags | A tag's **⋯** in the sidebar (or a right-click on it): *Color*, *Rename…*, *Take it off every page*; or the palette at the top of its blocks. A tag inside another (`#work/acme`) takes the color of the one it's in (`#work`) until it has its own, and comes after it in the sidebar. *A–Z* at the top of the sidebar's *Tags* sorts them by color instead (Pages' colors in order, then yours, then gray). The **#** menu shows each tag in its color |
 | A link to a page, as a block | `/link`, then pick the page. Under the pointer, *Change* beside it picks another page (one step **Ctrl+Z** takes back); a link whose page is gone says so, and *Link to a page* fixes it |
@@ -647,8 +647,9 @@ in `Defaults.js`. Settings (the ⚙ in the sidebar or on the shelf, or
 window, scrolling), Appearance (colors, what the sidebar shows, motion and sound), Writing
 (checklists, exports, the Markdown copy), AI (your agent, and the model and
 effort Claude Code, Grok and Codex work with), Audio (the microphone,
-dictation, meetings), Profiles, Backups and About (the version, updates,
-release notes, contact).
+dictation, meetings), Profiles, Backups, Privacy (the Uber Notebook skill, and
+reminder details in notifications) and About (the version, updates, release
+notes, contact).
 
 | Setting | Default | Values |
 |---|---|---|
@@ -674,7 +675,9 @@ release notes, contact).
 | `floating` | `true` | float in the middle of the screen (`false`: tile) |
 | `width`, `height` | `1320`, `900` | the floating window's size |
 | `strikeDone` | `true` | cross off checked items |
-| `reminderWords` | `false` | a reminder's words and an event's title in its notification (off: it says only that one is due, and where to turn this on; Omarchy's notifications keep each one's words for a moment on a command line, where another account could read them: turn it on only on a computer you don't share) |
+| `reminderWords` | `false` | a reminder's words and an event's title in its notification (Settings → **Privacy** → *Show reminder details in notifications*; off: it says only that one is due, and where to turn this on) |
+| `agentSkill` | `false` | Uber Notebook's skill linked into agents' skill folders while it runs (Settings → **Privacy** → *Enable Uber Notebook skill*; see [For AI agents and scripts](#for-ai-agents-and-scripts)); off, its own links are taken out |
+| `setupShown`, `setupSettled` | `false`, `[]` | whether the panel that asks about those two has opened by itself (it does once), and what the strip over Pages no longer asks about (`skill`, `reminders`: turned on or off by you, or the strip dismissed) |
 | `sounds` | `true` | a soft paper sound when a page turns and a notebook opens |
 | `scrollSpeed` | `"normal"` | how fast a page scrolls with a trackpad or a wheel: `slower`, `normal`, `faster` (a trackpad's quick strokes go further, as on a MacBook) |
 | `reduceMotion` | `false` | fade instead of turning pages and swinging covers |
@@ -904,12 +907,17 @@ profile that's open, so let it finish before you switch. A conversation in a
 profile put back from a backup goes on as a new session, told what was said,
 never the original profile's.
 
-**The skill.** While Uber Notebook runs, it links its skill (`skills/uber-notebook`) into
-the folders agents read skills from, the ones Omarchy links its own into:
+**The skill.** Off until you turn it on: **Settings → Privacy → Enable Uber
+Notebook skill** (the first time Uber Notebook opens, it asks, and a strip over
+Pages has *Turn on* while it's off, till you dismiss it). On, while Uber
+Notebook runs, it links its skill (`skills/uber-notebook`) into the folders
+agents read skills from, the ones Omarchy links its own into:
 `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills`
 and `~/.pi/agent/skills`, where those folders exist and nothing called
-`uber-notebook` is there already. It takes its links out again when it stops.
-Agents that don't read skills get the file's path in the prompt. For any
+`uber-notebook` is there already, so Claude Code, Codex and other agents know
+its commands wherever you use them. It takes its links out again when it stops,
+or when you turn it off. The panel's agent, and agents started from Uber
+Notebook, get the file's path in their prompt either way. For any
 other AI that can run commands on this computer, **Settings → AI → Use with
 any AI** copies the skill, saves a copy where you say, or shows its file;
 `omarchy-shell uber-notebook skill` prints it.
@@ -1152,9 +1160,8 @@ request is in; a backup's list of profiles goes on its input; a meeting's
 title stays with its block. Omarchy's own notifications then keep any
 notification's words for a moment on a command line as they save it,
 whatever app it's from, so a reminder or an event's alert says only that
-one is due (and where to turn its words on), a click opening it; on a
-computer you don't share, Settings → Writing → *Show what reminders say*
-puts its words in it. A command line still shows where things are:
+one is due (and where to turn its details on), a click opening it, until you
+turn on **Settings → Privacy → Show reminder details in notifications**. A command line still shows where things are:
 a file's path (one you open, save or export is named there, its name from
 its page's title too, as in any app), page ids, fixed words. The commands
 agents run (`omarchy-shell uber-notebook-agent ...`) go through the Omarchy
@@ -1326,10 +1333,11 @@ runs them, with their approval prompts off).
 **Files.** Uber Notebook writes inside its notes folder, and, outside it, only:
 its launcher entry, `~/.local/share/applications/marcho78-uber-notebook.desktop`
 (made only where there's nothing of that name; taken out as it stops, only if
-it's exactly what was made); a link named `uber-notebook` to its skill in each
-of `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.hermes/skills`
-and `~/.pi/agent/skills` that exists (never over anything already called that;
-taken out only if it still links to its skill); `~/.config/omarchy/defaults/agent`
+it's exactly what was made); once you turn the skill on, a link named
+`uber-notebook` to its skill in each of `~/.agents/skills`, `~/.claude/skills`,
+`~/.codex/skills`, `~/.hermes/skills` and `~/.pi/agent/skills` that exists
+(never over anything already called that; taken out only if it still links to
+its skill, when it stops or you turn it off); `~/.config/omarchy/defaults/agent`
 when you choose your agent; voxtype's `meeting.enabled` when you turn meeting
 mode on; the Markdown copy, in the folder you choose (never over, or taking
 away, a file you edited there: each change is made by the files helper only

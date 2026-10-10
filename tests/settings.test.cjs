@@ -207,4 +207,56 @@ check("a list of names (what the sidebar leaves out, and folds)", () => {
   assert.deepEqual(plain(Settings.overrides(defaults, Settings.merge(defaults, { sidebarHidden: [] }, schema))), {}, "the default isn't kept");
 });
 
+check("the skill and reminder details: off till you turn them on; what the strip asks about", () => {
+  assert.equal(defaults.agentSkill, false, "the skill: off");
+  assert.equal(defaults.reminderWords, false, "reminder details: off");
+  assert.equal(defaults.setupShown, false, "the panel: not shown yet");
+  assert.deepEqual(plain(defaults.setupSettled), []);
+  assert.equal(Settings.merge(defaults, { agentSkill: true }, schema).agentSkill, true);
+  assert.equal(Settings.merge(defaults, { agentSkill: "yes" }, schema).agentSkill, false, "only true turns it on");
+  assert.equal(Settings.commandValue("true", schema.types.agentSkill), true, "set agentSkill true");
+  const asks = (u) => plain(Settings.setupAsks(Settings.merge(defaults, u, schema)));
+  assert.deepEqual(asks({}), ["skill", "reminders"], "both off: both");
+  assert.deepEqual(asks({ agentSkill: true }), ["reminders"]);
+  assert.deepEqual(asks({ reminderWords: true }), ["skill"]);
+  assert.deepEqual(asks({ agentSkill: true, reminderWords: true }), [], "both on: none");
+  assert.deepEqual(asks({ setupSettled: ["skill", "reminders"] }), [], "dismissed: none");
+  assert.deepEqual(asks({ setupSettled: ["reminders"] }), ["skill"], "one settled: the other");
+  assert.deepEqual(asks({ setupSettled: "skill,reminders" }), [], "as `set` gives it");
+  assert.deepEqual(plain(Settings.setupAsks(null)), ["skill", "reminders"]);
+  assert.equal(Settings.optInKey("skill"), "agentSkill");
+  assert.equal(Settings.optInKey("reminders"), "reminderWords");
+  assert.equal(Settings.optInKey("folder"), "", "nothing else");
+});
+
+check("the skill is linked only when it's on", () => {
+  const fs = require("node:fs");
+  const svc = fs.readFileSync(path.join(root, "Service.qml"), "utf8");
+  const store = fs.readFileSync(path.join(root, "Store.qml"), "utf8");
+  assert.ok(!/linkSkill\(/.test(svc.replace(/unlinkSkill\(/g, "")), "nothing links it at start");
+  assert.ok(!/function linkSkill\(/.test(store), "no other way to link it");
+  assert.match(svc, /readonly property bool skillOn: settings\.agentSkill === true\n/);
+  const calls = [...svc.matchAll(/setSkillLinks\(([^)]*)\)/g)].map((m) => m[1]);
+  assert.deepEqual(calls, ["root.skillOn, root.skillDir"], "only as the setting says");
+  assert.equal(defaults.agentSkill, false);
+});
+
+check("turning one on or off settles it; nothing else does", () => {
+  const now = Settings.merge(defaults, {}, schema);
+  assert.deepEqual(plain(Settings.settleSetup(now, { agentSkill: true })), { agentSkill: true, setupSettled: ["skill"] });
+  assert.deepEqual(plain(Settings.settleSetup(now, { reminderWords: false })), { reminderWords: false, setupSettled: ["reminders"] }, "off, yours too");
+  assert.deepEqual(plain(Settings.settleSetup(now, { paper: "grid" })), { paper: "grid" }, "anything else: as it was");
+  assert.deepEqual(plain(Settings.settleSetup(now, { agentSkill: "true" })), { agentSkill: "true" }, "not a yes or no: not settled");
+  const some = Settings.merge(defaults, { setupSettled: ["reminders"] }, schema);
+  assert.deepEqual(plain(Settings.settleSetup(some, { agentSkill: true, reminderWords: true })).setupSettled, ["reminders", "skill"], "kept, each once");
+  assert.deepEqual(plain(Settings.settleSetup(now, { agentSkill: true, setupSettled: ["reminders"] })).setupSettled, ["reminders", "skill"], "with a list given too");
+  const changes = { agentSkill: true };
+  Settings.settleSetup(now, changes);
+  assert.deepEqual(changes, { agentSkill: true }, "the changes asked for: left as they were");
+  // Through merge: what's kept is valid.
+  const merged = plain(Settings.merge(defaults, Settings.settleSetup(now, { agentSkill: true }), schema));
+  assert.deepEqual(merged.setupSettled, ["skill"]);
+  assert.deepEqual(plain(Settings.setupAsks(merged)), ["reminders"]);
+});
+
 console.log(`settings: ${passed} checks passed`);

@@ -36,8 +36,10 @@ Item {
   property bool hyprIntegration: true
   property bool launcherEntry: true
   // The uber-notebook skill (skills/uber-notebook), linked into agents' skill folders
-  // while Uber Notebook runs, so whichever agent you use knows its commands.
-  property bool agentSkill: true
+  // while Uber Notebook runs, once you turn it on (Settings → Privacy: the
+  // agentSkill setting), so whichever agent you use knows its commands. (The
+  // development harness never links it, nor takes a link out.)
+  property bool skillLinks: true
   readonly property string skillDir: pluginDir + "/skills/uber-notebook"
   readonly property string skillPath: skillDir + "/SKILL.md"
   // The skill, for any AI that can run commands on this computer: its text
@@ -56,6 +58,30 @@ Item {
     }, "document")
   }
   function showSkill() { Quickshell.execDetached(["/usr/bin/uwsm-app", "--", "/usr/bin/xdg-open", skillDir]) }
+  // Its links as the setting says: made while it's on; Uber Notebook's own
+  // taken out when it's off (one left by a run that didn't stop as it
+  // should, too). A moment after it changes, or Uber Notebook starts, so
+  // what shell.json says is in first.
+  readonly property bool skillOn: settings.agentSkill === true
+  onSkillOnChanged: if (skillLinks) skillTimer.restart()
+  Timer { id: skillTimer; interval: 600; onTriggered: storeItem.setSkillLinks(root.skillOn, root.skillDir) }
+
+  // ---- the skill and reminder details: off till you turn them on ----------------------
+  //
+  // A panel asks about them once (app/SetupPanel.qml), and a strip over Pages
+  // while one's off, till you turn it on or off yourself or dismiss it.
+
+  // What the strip still asks about: "skill", "reminders" (Settings.setupAsks).
+  readonly property var setupAsks: Settings.setupAsks(settings)
+  // One of them turned on, by its name there.
+  function turnOn(name) {
+    var key = Settings.optInKey(name)
+    if (key) setSetting(key, true)
+  }
+  // The strip dismissed: it asks about none of them again.
+  function dismissSetup() { setSetting("setupSettled", Object.keys(Settings.OPT_INS).map(function(k) { return Settings.OPT_INS[k] })) }
+  // The panel's been shown: it doesn't open by itself again.
+  function setupSeen() { if (settings.setupShown !== true) setSetting("setupShown", true) }
 
   readonly property string pluginId: "marcho78.uber-notebook"
   readonly property string pluginDir: decodeURIComponent(Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "").replace(/\/$/, ""))
@@ -64,7 +90,7 @@ Item {
   // manifest.json says): the version, and the homepage updates are asked of.
   property var ownManifest: null
   readonly property var about: manifest && manifest.version ? manifest : ownManifest
-  readonly property string version: about && about.version ? about.version : "1.1.1"
+  readonly property string version: about && about.version ? about.version : "1.1.2"
 
   // ---- settings ----------------------------------------------------------------------
   //
@@ -155,16 +181,20 @@ Item {
       // (What couldn't be saved, tried again where it was.)
       storeItem.retryUnsaved(null)
     }
+    // (The skill or reminder details turned on or off: yours, decided; the
+    // strip over Pages doesn't ask about it again.)
+    changes = Settings.settleSetup(settings, changes)
     var next = Settings.clone(user)
     for (var key in changes) if (defaults && Object.prototype.hasOwnProperty.call(defaults, key)) next[key] = changes[key]
     user = Settings.overrides(defaults, Settings.merge(defaults, next, schema))
     persistTimer.restart()
   }
 
-  // Every setting as it started, but the profiles and what's each one's own.
+  // Every setting as it started, but the profiles and what's each one's own
+  // (and the setup panel, not opened by itself again).
   function resetSettings() {
     var keep = {}
-    ;["profiles", "profile", "folder"].concat(Settings.PROFILE_KEYS).forEach(function(k) { if (root.user[k] !== undefined) keep[k] = root.user[k] })
+    ;["profiles", "profile", "folder", "setupShown"].concat(Settings.PROFILE_KEYS).forEach(function(k) { if (root.user[k] !== undefined) keep[k] = root.user[k] })
     user = keep
     persistTimer.restart()
   }
@@ -404,7 +434,9 @@ Item {
   Component.onDestruction: {
     // (Only the entry as it was written: one changed or put there since is left.)
     if (launcherEntry && launcherText) Quickshell.execDetached(stopRunner().concat(["remove-owned", desktopFile, launcherText]))
-    if (agentSkill) storeItem.unlinkSkill(skillDir, stopRunner())
+    // (Taken out whether it's on or not: one made a moment ago, as it was
+    // turned off, may not have been yet.)
+    if (skillLinks) storeItem.unlinkSkill(skillDir, stopRunner())
     // Writes from here on finish before the shell goes on stopping.
     storeItem.stopping = true
     if (ui && typeof ui.saveNow === "function") ui.saveNow()
@@ -900,7 +932,7 @@ Item {
     hyprText = storeItem.readNow(pluginDir + "/hypr/uber-notebook.lua", 256 * 1024) || ""
     scheduleRegister()
     if (launcherEntry) launcherTimer.start()
-    if (agentSkill) storeItem.linkSkill(skillDir)
+    if (skillLinks) skillTimer.restart()
     backupsTimer.start()
   }
 

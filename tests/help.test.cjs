@@ -102,6 +102,16 @@ check("Help's own keys are in it, and New page", () => {
   assert.ok(rows.some((x) => x.s === "start" && /New page/.test(x.r[0])));
 });
 
+check("Privacy's settings, as Settings and the panel name them", () => {
+  for (const label of ["Enable Uber Notebook skill", "Show reminder details in notifications"]) {
+    assert.ok(rows.some((x) => x.s === "settings" && x.r[0].indexOf("Settings → Privacy → " + label) === 0), label);
+    assert.ok(read("app/SettingsPanel.qml").indexOf('label: "' + label + '"') >= 0, "Settings: " + label);
+    assert.ok(read("app/SetupPanel.qml").indexOf('label: "' + label + '"') >= 0, "the panel: " + label);
+  }
+  assert.ok(/set agentSkill true\|false/.test(all) && /set reminderWords true\|false/.test(all));
+  assert.ok(!/Show what reminders say|Settings → Writing → Times → Show/.test(all), "not where it was");
+});
+
 check("found: every word, any case; nothing for no words", () => {
   assert.equal(Help.find("").length, 0);
   assert.equal(Help.find("   ").length, 0);

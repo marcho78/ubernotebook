@@ -40,7 +40,7 @@ var SECTIONS = [
      ],
      [
       "@",
-      "A person, a date, or a reminder: type @ and a time (@in 10 min, @fri 3pm), then pick ⏰ Remind me. To see a reminder's words in its notification, turn on Settings → Writing → Show what reminders say.",
+      "A person, a date, or a reminder: type @ and a time (@in 10 min, @fri 3pm), then pick ⏰ Remind me. To see a reminder's details in its notification, turn on Settings → Privacy → Show reminder details in notifications.",
       "See Dates and reminders."
      ],
      [
@@ -72,6 +72,11 @@ var SECTIONS = [
       "Ctrl+/ or F1",
       "This Help, from anywhere in Uber Notebook.",
       "Ctrl+? where / needs Shift."
+     ],
+     [
+      "Choose what to turn on",
+      "Opens once, the first time: the Uber Notebook skill for Claude Code, Codex and other agents, and reminder details in notifications. Both are off till you turn them on.",
+      "While one's off, a strip over Pages has Turn on and Dismiss. Both are in Settings → Privacy too."
      ]
     ]
    }
@@ -956,8 +961,8 @@ var SECTIONS = [
      ],
      [
       "@ then a date, then pick 'Remind me …'",
-      "Sets a reminder, written as '⏰ Fri 9 Oct 3:00 pm'. At that time (or 9 am that day if no time was given) an Omarchy notification says a reminder is due; a click opens the page. With Settings → Writing → Show what reminders say on, it shows the page's title and what the line says.",
-      "The first time in a session you set one with its words kept out, a message says where to turn them on. It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
+      "Sets a reminder, written as '⏰ Fri 9 Oct 3:00 pm'. At that time (or 9 am that day if no time was given) an Omarchy notification says a reminder is due; a click opens the page. With Settings → Privacy → Show reminder details in notifications on, it shows the page's title and what the line says.",
+      "The first time in a session you set one with its details kept out, a message asks whether to show them; its Turn on does. It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
      ],
      [
       "[[",
@@ -2402,7 +2407,7 @@ var SECTIONS = [
      [
       "Event editor → Alert",
       "None, At the start, 5, 10 or 30 min, 1 hour, or A day before. Sends an Omarchy notification; clicking it opens the event's notes page, or the calendar on that day",
-      "It says only that an event is starting (and where to turn its title on), till Settings → Writing → Times → Show what reminders say is on."
+      "It says only that an event is starting (and where to turn its title on), till Settings → Privacy → Show reminder details in notifications is on."
      ],
      [
       "Event editor → Notes for it / Open notes",
@@ -2593,9 +2598,9 @@ var SECTIONS = [
       "Only https links are read for the agent. Other links stay link-only until you refresh the card."
      ],
      [
-      "(automatic) Uber Notebook's skill in your agents' skill folders",
-      "While Uber Notebook runs, its skill is linked as uber-notebook into ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, ~/.hermes/skills and ~/.pi/agent/skills, so agents know the commands. The links are removed when it stops.",
-      "A link is only made where the folder exists and nothing called uber-notebook is already there. Only its own links are removed."
+      "Settings → Privacy → Enable Uber Notebook skill",
+      "On, while Uber Notebook runs, its skill is linked as uber-notebook into ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, ~/.hermes/skills and ~/.pi/agent/skills, so Claude Code, Codex and other agents know the commands, wherever you use them. Off (the default), its own links are removed. They're removed when it stops, too.",
+      "A link is only made where the folder exists and nothing called uber-notebook is already there. Only its own links are removed. The panel agent, and agents started from Uber Notebook, are given the skill either way."
      ]
     ]
    }
@@ -2988,11 +2993,6 @@ var SECTIONS = [
       ""
      ],
      [
-      "Settings → Writing → Times → Show what reminders say",
-      "On, a reminder's words and an event's title are in its notification; off, it says only that one is due, and where to turn this on.",
-      "Off by default: turn it on only on a computer you don't share."
-     ],
-     [
       "Settings → Writing → Exports",
       "Exports go to: Ask where (a folder picker each time) or the Exports folder",
       ""
@@ -3031,6 +3031,16 @@ var SECTIONS = [
       "Settings → Audio → Voice",
       "Write out audio notes (with voxtype) as soon as they're recorded. Meetings: turn on voxtype's meeting mode",
       "Needs voxtype"
+     ],
+     [
+      "Settings → Privacy → Enable Uber Notebook skill",
+      "Links the skill into Claude Code's, Codex's and other agents' skill folders while Uber Notebook runs, so they know its commands",
+      "Off by default"
+     ],
+     [
+      "Settings → Privacy → Show reminder details in notifications",
+      "On, a reminder's words and an event's title are in its notification; off, it says only that one is due, and where to turn this on",
+      "Off by default"
      ],
      [
       "Settings → About → Updates",
@@ -3116,11 +3126,6 @@ var SECTIONS = [
       "Settings → Writing → Times → Clock: 1:30 pm / 13:30",
       "clock (default \"12\"): shows times on a 12-hour or 24-hour clock in the calendar, events, reminders and dated items. You can type times either way.",
       "Or: set clock 12 / set clock 24."
-     ],
-     [
-      "Settings → Writing → Times → Show what reminders say (or: set reminderWords true|false)",
-      "reminderWords (default false): a reminder's words and an event's title in its notification. Off, it says only that a reminder is due or an event is starting, and where to turn this on; a click opens it.",
-      "Omarchy's notifications keep a notification's words for a moment where another account on this computer could read them: turn it on only on a computer you don't share."
      ],
      [
       "Settings → Writing → Exports → Exports go to: Ask where / Exports folder (or: set exportTo ask|folder)",
@@ -3220,6 +3225,16 @@ var SECTIONS = [
      [
       "Settings → Backups → Restore → Restore… / Choose a file…",
       "Shows what's in a backup first, then restores each profile in it as a new profile in a new folder. Nothing you have now is changed. Open it opens a profile that was just restored.",
+      ""
+     ],
+     [
+      "Settings → Privacy → Enable Uber Notebook skill (or: set agentSkill true|false)",
+      "agentSkill (default false): Uber Notebook's skill linked into agents' skill folders while it runs. Off, its own links are removed.",
+      ""
+     ],
+     [
+      "Settings → Privacy → Show reminder details in notifications (or: set reminderWords true|false)",
+      "reminderWords (default false): a reminder's words and an event's title in its notification. Off, it says only that a reminder is due or an event is starting, and where to turn this on; a click opens it.",
       ""
      ],
      [

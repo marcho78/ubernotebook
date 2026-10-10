@@ -47,6 +47,8 @@ FocusScope {
   signal toast(string text)
   // A message with a way to take back what it says was done.
   signal toastUndo(string text, var undo)
+  // A message with something to do about it: a button (`label`) that does `action`.
+  signal toastAction(string text, string label, var action)
   // A picture from the desktop's file picker: done(path) ("" for none).
   signal pictureRequested(var done)
   signal confirmRequested(string title, string text, string action, var confirmed)
@@ -1646,7 +1648,7 @@ FocusScope {
   // is asked it, for a terminal instead.
   property var agentRun: null
   property string agentRunPrompt: ""
-  // Said once a session: a reminder's notification keeps its words out.
+  // Asked once a session: a reminder's details in its notification.
   property bool reminderHintShown: false
   // The page's conversation with your agent, kept (Workspace's chats), or null.
   readonly property var pageChat: { var r = workspace ? workspace.chatsRevision : 0; return page && workspace ? workspace.chatFor(page.id) : null }
@@ -3611,12 +3613,15 @@ FocusScope {
             langPop.open()
           }
           onTextCopied: function(text) { view.workspace.files.copyText(text); view.toast("Copied") }
-          // (A reminder set while its words stay out of notifications: said
-          // where to put them in, once a session.)
+          // (A reminder set while its details stay out of notifications:
+          // asked whether to show them, with a button that does, once a
+          // session.)
           onReminderSet: function(label) {
             if (view.settings.reminderWords === true || view.reminderHintShown) return
             view.reminderHintShown = true
-            view.toast("Reminder set for " + label + ". Its notification won't show its words: Settings → Writing → Show what reminders say")
+            view.toastAction("Reminder set for " + label + ". Show its details in the notification?", "Turn on", function() {
+              if (view.service && typeof view.service.turnOn === "function") view.service.turnOn("reminders")
+            })
           }
           onLinkOpened: function(url) { view.workspace.files.openUrl(url) }
           onPictureOpened: function(src) { view.showPagePicture(src) }

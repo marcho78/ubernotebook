@@ -124,18 +124,37 @@ Item {
       wait(100)
     }
 
-    // A reminder's words in its notification: off to start with (another
-    // account could read them as Omarchy saves it); on when you turn it on.
-    function test_0_what_reminders_say() {
+    // Privacy: the skill and a reminder's details in its notification, off
+    // to start with; each on when you turn it on, and not asked about again.
+    function test_0_privacy() {
       fresh()
-      app.settingsPopup.openAt("writing")
+      // (Not asked about yet.)
+      service.setSettings({ setupSettled: [] })
+      app.settingsPopup.openAt("privacy")
       tryVerify(function() { return app.settingsPopup.opened }, 1000)
       var toggle = null
       tryVerify(function() { toggle = named(win(), "reminderWordsToggle"); return toggle !== null }, 1000)
+      var skill = named(win(), "agentSkillToggle")
+      verify(skill !== null, "the skill's toggle")
       compare(toggle.checked, false, "off to start with")
+      compare(skill.checked, false, "off to start with")
       compare(service.settings.reminderWords, false)
+      compare(service.settings.agentSkill, false)
+      compare(service.setupAsks, ["skill", "reminders"])
       toggle.toggled(true)
       compare(service.settings.reminderWords, true, "on when turned on")
+      compare(service.setupAsks, ["skill"], "and not asked about")
+      skill.toggled(true)
+      compare(service.settings.agentSkill, true, "on when turned on")
+      compare(skill.checked, true)
+      // Off again: yours, so not asked about again.
+      skill.toggled(false)
+      compare(service.settings.agentSkill, false)
+      compare(service.setupAsks, [], "turned off by you: not asked")
+      // (Not in Writing any more.)
+      app.settingsPopup.section = "writing"
+      wait(50)
+      compare(named(win(), "reminderWordsToggle"), null, "only in Privacy")
       service.user = ({ sounds: false })
       if (app.settingsPopup.opened) keyClick(Qt.Key_Escape)
       tryVerify(function() { return !app.settingsPopup.opened }, 1000)

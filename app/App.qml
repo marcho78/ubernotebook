@@ -35,10 +35,15 @@ FocusScope {
   readonly property alias settingsPopup: settingsPanel
   readonly property alias releaseNotesPopup: releaseNotes
   readonly property alias helpPopup: helpPanel
+  readonly property alias setupPopup: setupPanel
+  readonly property alias setupBar: setupStrip
   property string mode: "shelf"
   // "pages" or "notebooks" (the shelf and the desk).
   property string space: "pages"
-  Component.onCompleted: space = settings.space === "notebooks" ? "notebooks" : "pages"
+  Component.onCompleted: {
+    space = settings.space === "notebooks" ? "notebooks" : "pages"
+    if (setupDue) setupTimer.restart()
+  }
 
   // Pages, or back to the notebooks.
   function showSpace(next) {
@@ -172,6 +177,80 @@ FocusScope {
     }
   }
 
+  // ---- the skill and reminder details, while one's off ------------------------------------
+  // Over Pages, in every profile, till each is turned on (or off) by you or
+  // the strip's dismissed (Settings.setupAsks). Turn on: the one that's off
+  // turned on; both, the panel that has them (SetupPanel.qml).
+  Rectangle {
+    id: setupStrip
+    objectName: "setupStrip"
+    readonly property var profiles: root.service !== null && root.service.profiles !== undefined ? root.service.profiles : null
+    readonly property var asks: root.service !== null && Array.isArray(root.service.setupAsks) ? root.service.setupAsks : []
+    readonly property bool shown: root.space === "pages" && asks.length > 0 && profiles !== null
+      && profiles.current !== null && profiles.current !== undefined && profiles.firstRun !== true && profiles.startShown !== true
+    anchors.left: parent.left
+    anchors.right: parent.right
+    anchors.top: demoStrip.bottom
+    height: shown ? 40 : 0
+    visible: shown
+    z: 40
+    color: themeObject.sidebar
+    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: themeObject.line }
+    Row {
+      anchors.centerIn: parent
+      spacing: 14
+      Text {
+        objectName: "setupStripText"
+        anchors.verticalCenter: parent.verticalCenter
+        width: Math.min(implicitWidth, setupStrip.width - 32 - setupTurnOn.width - setupDismiss.width - 28)
+        elide: Text.ElideRight
+        textFormat: Text.PlainText
+        text: setupStrip.asks.length > 1 ? "Use the Uber Notebook skill in Claude Code and Codex, and see reminder details in notifications."
+          : setupStrip.asks[0] === "skill" ? "Use the Uber Notebook skill in Claude Code and Codex."
+          : "See reminder details in notifications."
+        font.family: themeObject.uiFont
+        font.pixelSize: 13
+        color: themeObject.text
+      }
+      TextButton {
+        id: setupTurnOn
+        objectName: "setupStripTurnOn"
+        anchors.verticalCenter: parent.verticalCenter
+        theme: themeObject
+        primary: true
+        text: "Turn on"
+        onClicked: {
+          if (setupStrip.asks.length > 1) setupPanel.open()
+          else if (setupStrip.asks.length === 1) root.service.turnOn(setupStrip.asks[0])
+        }
+      }
+      TextButton {
+        id: setupDismiss
+        objectName: "setupStripDismiss"
+        anchors.verticalCenter: parent.verticalCenter
+        theme: themeObject
+        text: "Dismiss"
+        onClicked: root.service.dismissSetup()
+      }
+    }
+  }
+
+  // The panel, once by itself: when there's a profile open (the first one
+  // made, or the first start after an update that asks).
+  readonly property bool setupDue: service !== null && settings.setupShown === false && service.profiles !== undefined && service.profiles !== null
+    && service.profiles.settled === true && service.profiles.current !== null && service.profiles.firstRun !== true && service.profiles.startShown !== true
+  onSetupDueChanged: if (setupDue) setupTimer.restart()
+  Timer {
+    id: setupTimer
+    interval: 500
+    onTriggered: {
+      if (!root.setupDue || setupPanel.opened) return
+      // (Another profile opening: once it's open.)
+      if (root.store && root.store.switching === true) { setupTimer.restart(); return }
+      setupPanel.open()
+    }
+  }
+
   // ---- notes that can't be kept, or reached --------------------------------------------------
   // A profile's notes folder on a drive that can't keep files private (an
   // exFAT stick, some network shares), a folder that isn't yours, or one
@@ -256,7 +335,7 @@ FocusScope {
   DocView {
     id: docs
     anchors.fill: parent
-    anchors.topMargin: demoStrip.height
+    anchors.topMargin: demoStrip.height + setupStrip.height
     theme: themeObject
     workspace: root.workspace
     service: root.service
@@ -271,6 +350,7 @@ FocusScope {
     onReleaseNotesRequested: releaseNotes.show()
     onToast: function(text) { root.toast(text) }
     onToastUndo: function(text, undo) { root.toastWithUndo(text, undo) }
+    onToastAction: function(text, label, action) { root.toastWithAction(text, label, action) }
     onPictureRequested: function(done) { if (root.service) root.service.pickPicture(done); else done("") }
     onConfirmRequested: function(title, text, action, confirmed) { confirm.ask(title, text, action, confirmed) }
     onImportRequested: function(folder) {
@@ -520,7 +600,7 @@ FocusScope {
       // (What's open over the notes anywhere, the profile before's: closed.
       // Settings stays open: the switch may be made there; Help has nothing
       // of any profile's.)
-      Overlays.closeAll(root, [settingsPanel, releaseNotes, helpPanel])
+      Overlays.closeAll(root, [settingsPanel, releaseNotes, helpPanel, setupPanel])
     }
     function onRootPathChanged() {
       // (A notebook still being opened from the profile before: never opened
@@ -528,7 +608,7 @@ FocusScope {
       root.opening = false
       // (Anything opened over the notes since the switch began: closed too,
       // and an Undo offered since, gone.)
-      Overlays.closeAll(root, [settingsPanel, releaseNotes, helpPanel])
+      Overlays.closeAll(root, [settingsPanel, releaseNotes, helpPanel, setupPanel])
       if (root.toastUndoAction) { root.toastUndoAction = null; toastTimer.stop(); toastBox.opacity = 0 }
       view.pageDirty = false
       if (root.mode !== "notebook") return
@@ -542,6 +622,7 @@ FocusScope {
   SettingsPanel { id: settingsPanel; theme: themeObject; service: root.service; parent: root; onReleaseNotesRequested: function(own) { releaseNotes.show(own) } }
   ReleaseNotes { id: releaseNotes; theme: themeObject; service: root.service; parent: root }
   HelpPanel { id: helpPanel; theme: themeObject; parent: root }
+  SetupPanel { id: setupPanel; theme: themeObject; service: root.service; parent: root }
 
   // A picture from a file, chosen with the desktop's file picker.
   function pickPicture(afterUid) {
@@ -586,12 +667,18 @@ FocusScope {
 
   // A message with Undo, a while longer.
   property var toastUndoAction: null
+  property string toastActionLabel: "Undo"
   function toastWithUndo(text, undo) {
     // (Another profile opening: what was done is said, but it isn't undone
     // from here: it would be undone in the next one.)
     if (root.store && root.store.switching === true) { toast(text); return }
+    toastWithAction(text, "Undo", undo)
+  }
+  // A message with a button of its own (`label`), a while longer.
+  function toastWithAction(text, label, action) {
     toastText.text = text
-    toastUndoAction = undo
+    toastActionLabel = label
+    toastUndoAction = action
     toastBox.opacity = 1
     toastTimer.interval = 6000
     toastTimer.restart()
@@ -637,7 +724,7 @@ FocusScope {
         id: undoText
         anchors.centerIn: parent
         textFormat: Text.PlainText
-        text: "Undo"
+        text: root.toastActionLabel
         font.family: themeObject.uiFont
         font.pixelSize: 13
         font.weight: Font.DemiBold

@@ -75,6 +75,17 @@ var DEFAULTS = {
   // keep each one's words for a moment on a command line, where every
   // account on the computer can read them.
   reminderWords: false,
+  // The Uber Notebook skill (skills/uber-notebook) linked into the folders
+  // agents read skills from (~/.claude/skills, ~/.codex/skills...) while
+  // Uber Notebook runs, so Claude Code, Codex and other agents anywhere know
+  // its commands: off till you turn it on. (The agent panel, and agents
+  // started from Uber Notebook, are given it either way.)
+  agentSkill: false,
+  // The panel that asks about the skill and reminder details: opened once by
+  // itself (app/SetupPanel.qml). What the strip over Pages no longer asks about
+  // ("skill", "reminders"): turned on or off by you, or the strip dismissed.
+  setupShown: false,
+  setupSettled: [],
   // How People shows everyone: a list beside the one picked ("list"), or cards.
   peopleLayout: "list",
   // As cards, how People groups everyone: A to Z ("letter") or by company.
@@ -144,6 +155,9 @@ var SCHEMA = {
     strikeDone: "bool",
     clock: "string",
     reminderWords: "bool",
+    agentSkill: "bool",
+    setupShown: "bool",
+    setupSettled: "list",
     lastNotebook: "id",
     zoom: "int",
     space: "string",

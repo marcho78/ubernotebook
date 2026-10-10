@@ -462,13 +462,15 @@ Item {
       }
     }
 
-    // A reminder set while its words stay out of notifications: said where
-    // to put them in, once; not with them on.
-    function test_6l_a_reminder_set_says_where_its_words_are() {
+    // A reminder set while its details stay out of notifications: asked
+    // whether to show them, with Turn on, once; not with them on. Turn on
+    // turns them on.
+    function test_6l_a_reminder_set_asks_to_show_its_details() {
       fresh()
       var said = []
-      function heard(t) { said.push(t) }
-      view.toast.connect(heard)
+      var acts = []
+      function heard(t, label, action) { said.push(t); acts.push({ label: label, action: action }) }
+      view.toastAction.connect(heard)
       view.reminderHintShown = false
       var e = view.editor
       try {
@@ -479,16 +481,17 @@ Item {
         tryVerify(function() { return e.mentionItems.length === 2 && e.mentionItems[1].remind }, 1000)
         keyClick(Qt.Key_Down)
         keyClick(Qt.Key_Return)
-        var hint = said.filter(function(t) { return /Show what reminders say/.test(t) })
+        var hint = said.filter(function(t) { return /Show its details in the notification\?$/.test(t) })
         compare(hint.length, 1, JSON.stringify(said))
-        verify(/^Reminder set for .*\d/.test(hint[0]), hint[0])
+        verify(/^Reminder set for .*\d.*\. Show its details in the notification\?$/.test(hint[0]), hint[0])
+        compare(acts[0].label, "Turn on")
         // Again: not said twice.
         keyClick(Qt.Key_Space); keyClick("@")
         for (var j = 0; j < "in 3 hours".length; j++) keyClick("in 3 hours".charAt(j) === " " ? Qt.Key_Space : "in 3 hours".charAt(j))
         tryVerify(function() { return e.mentionItems.length === 2 }, 1000)
         keyClick(Qt.Key_Down)
         keyClick(Qt.Key_Return)
-        compare(said.filter(function(t) { return /Show what reminders say/.test(t) }).length, 1, "once")
+        compare(said.filter(function(t) { return /Show its details/.test(t) }).length, 1, "once")
         // With its words on: nothing said.
         view.reminderHintShown = false
         service.setSetting("reminderWords", true)
@@ -497,9 +500,14 @@ Item {
         tryVerify(function() { return e.mentionItems.length === 2 }, 1000)
         keyClick(Qt.Key_Down)
         keyClick(Qt.Key_Return)
-        compare(said.filter(function(t) { return /Show what reminders say/.test(t) }).length, 1, "not with its words on")
+        compare(said.filter(function(t) { return /Show its details/.test(t) }).length, 1, "not with its details on")
+        // Turn on: turns them on.
+        service.user = ({ sounds: false })
+        compare(service.settings.reminderWords, false)
+        acts[0].action()
+        compare(service.settings.reminderWords, true, "Turn on turns them on")
       } finally {
-        view.toast.disconnect(heard)
+        view.toastAction.disconnect(heard)
         service.user = ({ sounds: false })
       }
     }
