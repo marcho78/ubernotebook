@@ -46,11 +46,12 @@
 #       place when <target> is its skill (an install before), ("removed",
 #       else "kept"). With <lock>: once the lock linking takes is free, so a
 #       link being made as Uber Notebook stops is taken away after it's made;
-#       with <run> (its run, stopping), that written beside the lock
-#       (<lock>.stopped), under it, so a link that run asked for and hasn't
-#       made yet isn't made; and nothing taken away if another run, still
-#       going, has linked or unlinked since (<lock>.active, not stopped):
-#       those links are its.
+#       with <run> (its run, stopping: when it started, 9 characters that
+#       sort, then a random part), that run marked stopped beside the lock
+#       (<lock>.stopped-<run>), under it, so a link that run asked for and
+#       hasn't made yet isn't made; and nothing taken away if a later run
+#       that hasn't stopped has linked or unlinked since (<lock>.active):
+#       those links are its. (Marks over a week old are cleared away.)
 #   serve <notes folder>
 #       Your notes, read and written for Uber Notebook as long as it runs:
 #       a request a line on its input (JSON: { id, op, ... }), an answer a
@@ -1418,22 +1419,40 @@ def read_mark(path):
     return text if re.fullmatch(r"[a-z0-9]{1,40}", text) else ""
 
 
+def mark_stopped(lock, run):
+    """`run` marked stopped beside the lock (its own mark, never another's);
+    marks over a week old cleared away."""
+    try:
+        os.close(os.open(lock + ".stopped-" + run, os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600))
+    except OSError:
+        pass
+    folder, base = os.path.split(lock)
+    try:
+        names = os.listdir(folder or ".")
+    except OSError:
+        return
+    import time
+    old = time.time() - 7 * 86400
+    for name in names:
+        if not name.startswith(base + ".stopped-") or name == base + ".stopped-" + run:
+            continue
+        try:
+            st = os.lstat(os.path.join(folder, name))
+            if stat.S_ISREG(st.st_mode) and st.st_mtime < old:
+                os.unlink(os.path.join(folder, name))
+        except OSError:
+            pass
+
+
 def cmd_unlink_link(path, target, lock="", run=""):
     if lock:
         skill_lock(lock)
-        if re.fullmatch(r"[a-z0-9]{1,40}", run):
+        if re.fullmatch(r"[a-z0-9]{10,40}", run):
+            mark_stopped(lock, run)
             active = read_mark(lock + ".active")
-            stopped = read_mark(lock + ".stopped")
-            try:
-                fd = os.open(lock + ".stopped", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
-                try:
-                    os.write(fd, (run + "\n").encode("ascii"))
-                finally:
-                    os.close(fd)
-            except OSError:
-                pass
-            # (Another run's, going on: its links, left.)
-            if active and active != run and active != stopped:
+            # (A later run, not stopped, going on: its links, left. One
+            # before this one, or one that's stopped, or this one: taken out.)
+            if active and active != run and active[:9] > run[:9] and not os.path.lexists(lock + ".stopped-" + active):
                 print("kept")
                 return
     dfd, name = parent_of(path)

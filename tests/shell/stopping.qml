@@ -54,6 +54,16 @@ ShellRoot {
   function steps() {
     var h = root.h, target = root.target, older = root.older
     var else_ = h + "/someone-else"
+    // Runs: when each started (9 characters that sort), then a random part.
+    var later = "zzzzzzzzzlater01", crashed = "000000001crashed", fresh = "zzzzzzzzzzfresh1"
+    // The link script, as a run gives it (linked or unlinked), run now.
+    function late(mode, run) { return ["/usr/bin/bash", "-c", store.skillScript, "x", mode, target, store.skillLock, run].concat(store.skillDirs()) }
+    // A run stopping: the helper's cleanup, as that run.
+    function stopAs(run) {
+      store.skillDirs().forEach(function(dir) {
+        store.exec(["/usr/bin/python3", "-I", "-S", "-c", root.text, "unlink-link", dir + "/uber-notebook", target, store.skillLock, run], null)
+      })
+    }
     return [
       function(next) {
         store.setSkillLinks(true, target)
@@ -125,30 +135,51 @@ ShellRoot {
         }, { keepChildren: true })
       },
       // A link asked for before it stopped, under way only after its links
-      // were taken out: nothing linked. Another run's: linked.
+      // were taken out: nothing linked. A later run's: linked.
       function(next) {
-        var late = ["/usr/bin/bash", "-c", store.skillScript, "x", "link", target, store.skillLock]
-        store.exec(late.concat([store.skillToken], store.skillDirs()), function() { read(function(w) {
+        store.exec(late("link", store.skillToken), function() { read(function(w) {
           say("asked for before it stopped, made after: nothing linked", w[0] === "none" && w[1] === "none" && w[3] === "none", w.join(" | "))
-          store.exec(late.concat(["another1run"], store.skillDirs()), function() { read(function(y) {
-            store.exec(["/usr/bin/bash", "-c", "read -r s < \"$1\"; echo \"$s\"", "x", store.skillLock + ".stopped"], function(okm, mark) {
-              say("another run's: linked; the mark is this run's", y[0] === target && y[1] === target && String(mark).trim() === store.skillToken, y.join(" | "))
+          store.exec(late("link", later), function() { read(function(y) {
+            store.exec(["/usr/bin/bash", "-c", "[ -e \"$1\" ] && echo marked", "x", store.skillLock + ".stopped-" + store.skillToken], function(okm, mark) {
+              say("a later run's: linked; this run marked stopped", y[0] === target && y[1] === target && String(mark).trim() === "marked", y.join(" | "))
               next()
             })
           }) })
         }) })
       },
-      // This run's cleanup, late, after another run has linked: that run's
+      // This run's cleanup, late, after a later run has linked: that run's
       // links left. That run stopping: its links out.
       function(next) {
         store.unlinkSkill(target, ["/usr/bin/python3", "-I", "-S", "-c", root.text])
         after(1500, function() { read(function(k) {
-          say("a run before, stopping late: another run's links left", k[0] === target && k[1] === target && k[2] === else_ && k[3] === target, k.join(" | "))
-          store.skillDirs().forEach(function(dir) {
-            store.exec(["/usr/bin/python3", "-I", "-S", "-c", root.text, "unlink-link", dir + "/uber-notebook", target, store.skillLock, "another1run"], null)
-          })
+          say("a run before, stopping late: a later run's links left", k[0] === target && k[1] === target && k[2] === else_ && k[3] === target, k.join(" | "))
+          stopAs(later)
           after(1500, function() { read(function(e) {
             say("that run stopping: its links out", e[0] === "none" && e[1] === "none" && e[2] === else_ && e[3] === "none", e.join(" | "))
+            next()
+          }) })
+        }) })
+      },
+      // That later run stopped, then this run's cleanup late again, then a
+      // link the later run asked for before it stopped: nothing linked.
+      function(next) {
+        store.unlinkSkill(target, ["/usr/bin/python3", "-I", "-S", "-c", root.text])
+        after(1500, function() {
+          store.exec(late("link", later), function() { read(function(r) {
+            say("a stopped run's late link, after another's late cleanup: nothing linked", r[0] === "none" && r[1] === "none" && r[3] === "none", r.join(" | "))
+            next()
+          }) })
+        })
+      },
+      // A run before this one that crashed (said it was the one now, never
+      // stopped), its links there; this run stopping before it ever linked or
+      // unlinked: taken out.
+      function(next) {
+        store.exec(late("link", crashed), function() { read(function(c) {
+          var made = c[0] === target && c[1] === target
+          stopAs(fresh)
+          after(1500, function() { read(function(f) {
+            say("a crashed run's links: taken out by the next run's stop", made && f[0] === "none" && f[1] === "none" && f[3] === "none", c.join(" | ") + " -> " + f.join(" | "))
             next()
           }) })
         }) })

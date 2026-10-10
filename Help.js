@@ -3827,7 +3827,7 @@ var SECTIONS = [
      ],
      [
       "omarchy plugin update marcho78.uber-notebook && omarchy restart shell",
-      "Installs a newer version, then restarts the Omarchy shell so all of it runs. Run it in a terminal; it shows what will change and asks first. Uber Notebook never installs anything itself.",
+      "Installs a newer version, then restarts the Omarchy shell (either way) so all of it runs. Run it in a terminal; it shows what will change and asks first. Uber Notebook never installs anything itself.",
       "This works for a git checkout. Otherwise appVersion says to reinstall from git with `omarchy plugin add <its git URL>` first."
      ],
      [

@@ -175,26 +175,38 @@ try {
     assert.equal(helperRun(["unlink-link", path.join(d, "older"), here]).out.trim(), "removed", "an install before");
     fs.symlinkSync("/old/place/other-plugin/skills/uber-notebook", path.join(d, "other"));
     assert.equal(helperRun(["unlink-link", path.join(d, "other"), here]).out.trim(), "kept", "anyone else's");
-    // Its run, stopping: marked beside the lock (only a plain run id).
+    // Runs: when each started (9 characters that sort), then a random part.
     const lock = path.join(d, "skills.lock");
-    assert.equal(helperRun(["unlink-link", path.join(d, "none"), here, lock, "abc123run"]).out.trim(), "kept");
-    assert.equal(fs.readFileSync(lock + ".stopped", "utf8"), "abc123run\n");
-    assert.equal((fs.statSync(lock + ".stopped").mode & 0o777), 0o600);
+    const A = "000000005abcdefgh", B = "000000009abcdefgh", C = "000000001abcdefgh";
+    const mark = (r) => lock + ".stopped-" + r;
+    const link = (n) => { fs.symlinkSync(here, path.join(d, n)); return path.join(d, n); };
+    // Its run, stopping: marked stopped, its own mark (0600; only a plain run id).
+    assert.equal(helperRun(["unlink-link", path.join(d, "none"), here, lock, A]).out.trim(), "kept");
+    assert.ok(fs.existsSync(mark(A)));
+    assert.equal((fs.statSync(mark(A)).mode & 0o777), 0o600);
     helperRun(["unlink-link", path.join(d, "none"), here, lock, "../x; rm"]);
-    assert.equal(fs.readFileSync(lock + ".stopped", "utf8"), "abc123run\n", "nothing else written");
-    // Another run going on since (it linked or unlinked last, not stopped): its links left.
-    fs.symlinkSync(here, path.join(d, "theirs"));
-    fs.writeFileSync(lock + ".active", "newerrun\n");
-    assert.equal(helperRun(["unlink-link", path.join(d, "theirs"), here, lock, "abc123run"]).out.trim(), "kept", "a later run's");
+    assert.deepEqual(fs.readdirSync(d).filter((n) => n.includes(".stopped-")).sort(), ["skills.lock.stopped-" + A], "nothing else marked");
+    // A later run going on (it linked or unlinked last, not stopped): its links left.
+    fs.writeFileSync(lock + ".active", B + "\n");
+    assert.equal(helperRun(["unlink-link", link("theirs"), here, lock, A]).out.trim(), "kept", "a later run's");
     assert.ok(fs.lstatSync(path.join(d, "theirs")).isSymbolicLink());
-    // That one stopped since: taken out.
-    fs.writeFileSync(lock + ".stopped", "newerrun\n");
-    assert.equal(helperRun(["unlink-link", path.join(d, "theirs"), here, lock, "abc123run"]).out.trim(), "removed", "a run that's stopped");
+    // That one stopped since: taken out; and A's stopping again doesn't unmark it.
+    fs.closeSync(fs.openSync(mark(B), "w"));
+    assert.equal(helperRun(["unlink-link", path.join(d, "theirs"), here, lock, A]).out.trim(), "removed", "a run that's stopped");
+    assert.ok(fs.existsSync(mark(B)) && fs.existsSync(mark(A)), "each run's mark its own");
+    // A run before this one, still "going" (it crashed): taken out.
+    fs.writeFileSync(lock + ".active", C + "\n");
+    assert.equal(helperRun(["unlink-link", link("crashed"), here, lock, A]).out.trim(), "removed", "an earlier run's");
     // This run's own: taken out.
-    fs.symlinkSync(here, path.join(d, "mine2"));
-    fs.writeFileSync(lock + ".active", "abc123run\n");
-    assert.equal(helperRun(["unlink-link", path.join(d, "mine2"), here, lock, "abc123run"]).out.trim(), "removed");
-    fs.unlinkSync(lock); fs.unlinkSync(lock + ".stopped"); fs.unlinkSync(lock + ".active");
+    fs.writeFileSync(lock + ".active", A + "\n");
+    assert.equal(helperRun(["unlink-link", link("mine2"), here, lock, A]).out.trim(), "removed");
+    // Marks over a week old: cleared away; newer ones, kept.
+    fs.closeSync(fs.openSync(mark(C), "w"));
+    const weekAgo = Date.now() / 1000 - 8 * 86400;
+    fs.utimesSync(mark(C), weekAgo, weekAgo);
+    helperRun(["unlink-link", path.join(d, "none"), here, lock, A]);
+    assert.ok(!fs.existsSync(mark(C)) && fs.existsSync(mark(B)), "old marks cleared");
+    for (const n of fs.readdirSync(d)) if (n.startsWith("skills.lock")) fs.unlinkSync(path.join(d, n));
     assert.deepEqual(fs.readdirSync(d).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
 

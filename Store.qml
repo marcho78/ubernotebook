@@ -452,12 +452,13 @@ Item {
   // (Under a lock, `skillLock`, the one taking them out as it stops waits
   // for: a link being made then is made before it's taken out, never after.
   // And one asked for before it stopped but not yet under way does nothing:
-  // as it stops, it writes this run's `skillToken` beside the lock
-  // (.stopped), under it, and the script checks for it there, under it too.
-  // Each run that links or unlinks says it's the one now (.active), so a
-  // run before, as it stops, leaves a later one's links alone.)
+  // as it stops, it marks this run (`skillToken`) stopped beside the lock
+  // (.stopped-<run>, one for each run), under it, and the script looks for
+  // that there, under it too. Each run that links or unlinks says it's the
+  // one now (.active), so a run before, as it stops, leaves the links of a
+  // later one that hasn't stopped alone.)
   readonly property string skillScript: "mode=$1; target=$2; lock=$3; token=$4; shift 4; { exec 9>>\"$lock\"; } 2>/dev/null && /usr/bin/flock -w 10 9; "
-    + "if [ -n \"$token\" ]; then s=; { read -r s < \"$lock.stopped\"; } 2>/dev/null; [ \"$s\" = \"$token\" ] && exit 0; "
+    + "if [ -n \"$token\" ]; then [ -e \"$lock.stopped-$token\" ] && exit 0; "
     + "{ printf '%s\\n' \"$token\" > \"$lock.active\"; } 2>/dev/null; fi; "
     + "for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
     + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; "
@@ -467,8 +468,10 @@ Item {
     + "elif [ -L \"$link\" ]; then case \"$(/usr/bin/readlink -- \"$link\")\" in \"$target\"|*/marcho78.uber-notebook/skills/uber-notebook) /usr/bin/rm -f -- \"$link\";; esac; fi; done; exit 0"
 
   function skillDirs() { return skillFolders.map(function(f) { return store.home + "/" + f }) }
-  // This run's, for the lock's "stopped" mark (made once, as it starts).
-  readonly property string skillToken: Math.random().toString(36).slice(2, 12) + Date.now().toString(36)
+  // This run's, for the marks beside the lock: when it started (9
+  // characters, so a later run's sorts after), then a random part. Made
+  // once, as it starts.
+  readonly property string skillToken: ("000000000" + Date.now().toString(36)).slice(-9) + (Math.random().toString(36) + "00000000").slice(2, 10)
   property string skillLock: { var r = Quickshell.env("XDG_RUNTIME_DIR"); return (r && r.indexOf("/") === 0 ? r : store.home + "/.cache") + "/uber-notebook-skills.lock" }
   // Linked (`on`), or Uber Notebook's own links taken out: one at a time, the
   // last asked for done last, so turning it on and off quickly ends as it was
@@ -492,8 +495,9 @@ Item {
       if (store.skillNext) store.setSkillLinks(store.skillNext.on, store.skillNext.target)
     }, { timeoutMs: 5000 })
   }
-  // (Each link taken out only if it's still Uber Notebook's: read where it's
-  // kept, then taken out there; by the archive helper, as Uber Notebook stops:
+  // Only as this run stops (it marks the run stopped: nothing it asks for
+  // links after). (Each link taken out only if it's still Uber Notebook's:
+  // read where it's kept, then taken out there; by the archive helper:
   // `runner`, the helper run from its text, kept as it started, when its
   // folder may be gone by now.)
   function unlinkSkill(target, runner) {
