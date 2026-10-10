@@ -2737,7 +2737,13 @@ FocusScope {
       var moving = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Escape].indexOf(key) >= 0
       var copying = ctrl && !alt && (key === Qt.Key_C || key === Qt.Key_A || key === Qt.Key_F)
       var folding = ctrl && (key === Qt.Key_Return || key === Qt.Key_Enter) && doc && Workspace.folds(rowBlock(blocksModel.get(indexOf(item.uid))))
+      // (The window's own keys, none of which changes the page, go on to
+      // it: a new page, Search, your agent, the sidebar, Settings, Help,
+      // the calendar, back and forward.)
+      var windowKey = (ctrl && !alt && !shift && [Qt.Key_N, Qt.Key_P, Qt.Key_J, Qt.Key_Backslash, Qt.Key_Comma, Qt.Key_Slash, Qt.Key_Question].indexOf(key) >= 0)
+        || (ctrl && shift && !alt && key === Qt.Key_C) || (!ctrl && !alt && !shift && key === Qt.Key_F1) || (alt && !ctrl && (key === Qt.Key_Left || key === Qt.Key_Right))
       if (folding) { e.accepted = true; toggleFold(item.uid); return }
+      if (windowKey) return
       if (!moving && !copying) { e.accepted = true; return }
     }
 

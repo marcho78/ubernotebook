@@ -1349,12 +1349,21 @@ Rectangle {
           onClicked: bar.view.openTrash()
         }
       }
-      FootButton {
-        objectName: "settingsButton"
+      Row {
         anchors.right: parent.right
-        icon: bar.theme.icons.cog
-        tip: "Settings  Ctrl+,"
-        onClicked: bar.view.settingsRequested()
+        spacing: 2
+        FootButton {
+          objectName: "helpButton"
+          icon: bar.theme.icons.help
+          tip: "Help  Ctrl+/"
+          onClicked: bar.view.helpRequested()
+        }
+        FootButton {
+          objectName: "settingsButton"
+          icon: bar.theme.icons.cog
+          tip: "Settings  Ctrl+,"
+          onClicked: bar.view.settingsRequested()
+        }
       }
     }
     Item { width: 1; height: 2 }

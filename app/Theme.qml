@@ -145,7 +145,7 @@ QtObject {
     paper: "\u{f09ee}", grid: "\u{f02c1}", dots: "\u{f15fc}", trash: "\u{f0a7a}", tag: "\u{f04fc}",
     bookmark: "\u{f00c0}", export: "\u{f0b93}", copy: "\u{f018f}", download: "\u{f01da}", folder: "\u{f0256}", check: "\u{f012c}",
     zoomIn: "\u{f06ed}", zoomOut: "\u{f06ec}", pen: "\u{f03eb}", calendar: "\u{f00f6}", history: "\u{f02da}",
-    volume: "\u{f057e}", keyboard: "\u{f097b}", info: "\u{f02fd}", sticky: "\u{f1782}", drag: "\u{f01dd}",
+    volume: "\u{f057e}", keyboard: "\u{f097b}", info: "\u{f02fd}", help: "\u{f0625}", sticky: "\u{f1782}", drag: "\u{f01dd}",
     open: "\u{f05da}", up: "\u{f005d}", eraser: "\u{f01fe}",
     // Page templates, and the planner blocks.
     page: "\u{f0224}", templates: "\u{f0a1d}", calendarWeek: "\u{f0a33}", calendarMonth: "\u{f0e18}",

@@ -141,6 +141,27 @@ Item {
       tryVerify(function() { return !app.settingsPopup.opened }, 1000)
     }
 
+    // Help: Ctrl+/, F1, or Help at the sidebar's foot; Esc closes it.
+    function test_0b_help_three_ways() {
+      fresh()
+      app.docView.forceActiveFocus()
+      keyClick(Qt.Key_Slash, Qt.ControlModifier)
+      tryVerify(function() { return app.helpPopup.opened }, 1000, "Ctrl+/")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return !app.helpPopup.visible }, 1000)
+      app.docView.forceActiveFocus()
+      keyClick(Qt.Key_F1)
+      tryVerify(function() { return app.helpPopup.opened }, 1000, "F1")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return !app.helpPopup.visible }, 1000)
+      var b = named(win(), "helpButton")
+      verify(b !== null, "at the sidebar's foot")
+      mouseClick(b)
+      tryVerify(function() { return app.helpPopup.opened }, 1000, "its button")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return !app.helpPopup.visible }, 1000)
+    }
+
     function test_1_in_sections() {
       fresh()
       app.openSettings("general")

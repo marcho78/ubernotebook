@@ -34,6 +34,7 @@ FocusScope {
   readonly property alias docView: docs
   readonly property alias settingsPopup: settingsPanel
   readonly property alias releaseNotesPopup: releaseNotes
+  readonly property alias helpPopup: helpPanel
   property string mode: "shelf"
   // "pages" or "notebooks" (the shelf and the desk).
   property string space: "pages"
@@ -264,6 +265,7 @@ FocusScope {
     focus: visible
     onNotebooksRequested: root.showSpace("notebooks")
     onSettingsRequested: settingsPanel.open()
+    onHelpRequested: helpPanel.open()
     onAboutRequested: settingsPanel.openAt("about")
     onSidebarChoicesRequested: settingsPanel.openAt("appearance", "sidebarChoices")
     onReleaseNotesRequested: releaseNotes.show()
@@ -516,8 +518,9 @@ FocusScope {
       // (An Undo offered for the profile before: not done in the next one.)
       if (root.toastUndoAction) { root.toastUndoAction = null; toastTimer.stop(); toastBox.opacity = 0 }
       // (What's open over the notes anywhere, the profile before's: closed.
-      // Settings stays open: the switch may be made there.)
-      Overlays.closeAll(root, [settingsPanel, releaseNotes])
+      // Settings stays open: the switch may be made there; Help has nothing
+      // of any profile's.)
+      Overlays.closeAll(root, [settingsPanel, releaseNotes, helpPanel])
     }
     function onRootPathChanged() {
       // (A notebook still being opened from the profile before: never opened
@@ -525,7 +528,7 @@ FocusScope {
       root.opening = false
       // (Anything opened over the notes since the switch began: closed too,
       // and an Undo offered since, gone.)
-      Overlays.closeAll(root, [settingsPanel, releaseNotes])
+      Overlays.closeAll(root, [settingsPanel, releaseNotes, helpPanel])
       if (root.toastUndoAction) { root.toastUndoAction = null; toastTimer.stop(); toastBox.opacity = 0 }
       view.pageDirty = false
       if (root.mode !== "notebook") return
@@ -538,6 +541,7 @@ FocusScope {
   Confirm { id: confirm; theme: themeObject; parent: root }
   SettingsPanel { id: settingsPanel; theme: themeObject; service: root.service; parent: root; onReleaseNotesRequested: function(own) { releaseNotes.show(own) } }
   ReleaseNotes { id: releaseNotes; theme: themeObject; service: root.service; parent: root }
+  HelpPanel { id: helpPanel; theme: themeObject; parent: root }
 
   // A picture from a file, chosen with the desktop's file picker.
   function pickPicture(afterUid) {
@@ -681,6 +685,8 @@ FocusScope {
     var shift = (e.modifiers & Qt.ShiftModifier) !== 0
     var alt = (e.modifiers & Qt.AltModifier) !== 0
     if (ctrl && !alt && e.key === Qt.Key_Comma) { e.accepted = true; settingsPanel.open(); return }
+    // Help: Ctrl+/ (Ctrl+? where / needs Shift), or F1.
+    if ((ctrl && !alt && (e.key === Qt.Key_Slash || e.key === Qt.Key_Question)) || (!ctrl && !alt && !shift && e.key === Qt.Key_F1)) { e.accepted = true; helpPanel.open(); return }
     if (root.space === "pages") return
     if (ctrl && shift && !alt && e.key === Qt.Key_N) { e.accepted = true; newNotebook(); return }
     if (ctrl && !alt && (e.key === Qt.Key_Equal || e.key === Qt.Key_Plus)) { e.accepted = true; zoomBy(10); return }

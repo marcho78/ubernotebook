@@ -8,6 +8,27 @@ numbers follow [Semantic Versioning](https://semver.org/).
 
 The first version.
 
+### Added
+
+- **Help.** **Ctrl+/** (or **F1**), or **?** at the sidebar's foot: every
+  key and where it works, everything you can type, every block, every
+  feature where you meet it, and the commands from a terminal, with a
+  search over all of it. Only words, as plain text: nothing in it is run
+  or opened. A test keeps it whole: every `/` command, every command from
+  a terminal and every Ctrl key the views handle is in it.
+- **New page, easy to find:** a wide button of its own at the top of the
+  sidebar, above Search (it was a small icon beside it).
+
+### Fixed
+
+- **Ctrl+Shift+X** strikes the selected words through; with blocks picked
+  it had cut them.
+- Lines pasted into a **locked page's title** no longer change it.
+- On a locked page, the window's own keys (**Ctrl+N**, **Ctrl+P**,
+  **Ctrl+J**, **Ctrl+\\**, **Ctrl+,**, Help) work from its text again.
+- `omarchy-shell uber-notebook set clock 24` works: a value is read as its
+  setting takes it.
+
 ### Changed
 
 - **Reminders can keep their words to themselves; every profile kept

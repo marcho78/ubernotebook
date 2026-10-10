@@ -59,6 +59,7 @@ node tests/files.test.cjs
 node tests/export.test.cjs
 node tests/markdownview.test.cjs
 node tests/overlays.test.cjs
+node tests/help.test.cjs
 lua tests/hypr.test.lua
 
 # Running programs (Run.qml, Stream.qml) for real, in a Quickshell started

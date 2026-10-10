@@ -680,6 +680,14 @@ Item {
       verify(!view.pasteIntoTitle(), "not pasted")
       compare(view.pageTitleText(), title)
       compare(JSON.stringify(e.serialize()), before)
+      // The window's own keys still work from its text: Search (Ctrl+P).
+      e.focusBlock(last, 0)
+      keyClick(Qt.Key_P, Qt.ControlModifier)
+      var searchField = null
+      tryVerify(function() { searchField = findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }); return searchField !== null }, 1000, "Search opens on a locked page")
+      keyClick(Qt.Key_Escape)
+      tryVerify(function() { return findItem(root.Window.window.contentItem, function(it) { return it.placeholder === "Search your pages" }) === null }, 1000)
+      compare(JSON.stringify(e.serialize()), before, "and nothing on it changed")
       view.setFormat("locked", false)
       e.focusBlock(last, 0)
       keyClick("x")
