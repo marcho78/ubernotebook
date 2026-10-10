@@ -264,6 +264,12 @@ Item {
       var p = makePage("Old", "")
       view.trashPage(p.id)
       tryVerify(function() { return find(named("trashButton"), function(it) { return it.text === "1" }, []).length === 1 }, 1000, "1 in the trash")
+      // The foot's counts, however big, never under Help and Settings.
+      var tb = named("trashButton"), ab = named("archiveButton"), tpl = named("templatesButton"), hb = named("helpButton")
+      tb.count = 12345; ab.count = 999; tpl.count = 120
+      wait(50)
+      verify(find(tb, function(it) { return it.text === "99+" }, []).length === 1, "99+")
+      verify(named("footLeft").mapToItem(root, 0, 0).x + named("footLeft").width <= hb.mapToItem(root, 0, 0).x, "clear of Help")
       // New page: a row of its own, wide, above search, saying what it is.
       var np = named("newPageButton")
       verify(np.width > named("searchRow").width - 2, "as wide as search")

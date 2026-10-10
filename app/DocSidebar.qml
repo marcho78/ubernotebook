@@ -415,7 +415,8 @@ Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         visible: fb.count > 0
         textFormat: Text.PlainText
-        text: String(fb.count)
+        // (Never wider than three: the foot keeps its room.)
+        text: fb.count > 99 ? "99+" : String(fb.count)
         font.family: bar.theme.uiFont
         font.pixelSize: 11
         color: bar.theme.faint
@@ -1309,8 +1310,12 @@ Rectangle {
     Item {
       width: parent.width
       height: 30
+      // (Never under Help and Settings, whatever the counts.)
       Row {
+        objectName: "footLeft"
         spacing: 2
+        width: Math.min(implicitWidth, parent.width - footRight.width - 6)
+        clip: true
         FootButton {
           id: importButton
           objectName: "importButton"
@@ -1350,6 +1355,7 @@ Rectangle {
         }
       }
       Row {
+        id: footRight
         anchors.right: parent.right
         spacing: 2
         FootButton {

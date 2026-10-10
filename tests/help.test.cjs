@@ -35,7 +35,7 @@ check("its shape: sections, each with groups of rows of three words", () => {
 check("only words for you: no files, line numbers or notes for whoever wrote it", () => {
   for (const x of rows) {
     const t = x.r.join(" ");
-    assert.ok(!/\w+\.(qml|js|py)\b|(^|\s):\d{2,}|README|PROBABLE|\bverify\b/.test(t), x.s + ": " + t.slice(0, 160));
+    assert.ok(!/\w+\.(qml|js|py)\b|(^|\s):\d{2,}|README|PROBABLE|\bverify\b|\bin the code too\b|\bwhich the code\b|\bdraft\b|\bthe editor never\b/i.test(t), x.s + ": " + t.slice(0, 160));
   }
 });
 

@@ -30,7 +30,7 @@ var SECTIONS = [
      ],
      [
       "New page (Ctrl+N)",
-      "A new page, at the top of Pages: the button at the top of the sidebar.",
+      "A new page, at the top level of Pages (at the end of the list): the button at the top of the sidebar.",
       ""
      ],
      [
@@ -55,7 +55,7 @@ var SECTIONS = [
      ],
      [
       "Ctrl+J",
-      "Ask your agent (Claude Code, Grok or Codex) about the page, the blocks or the words you picked.",
+      "Ask your agent about the page, the blocks or the words you picked: Claude Code, Grok and Codex work in a panel on the page; other agents open in a terminal.",
       "See Your agent."
      ],
      [
@@ -159,7 +159,7 @@ var SECTIONS = [
      [
       "Alt+← / Alt+→",
       "Go back / forward through the pages and views you opened (calendar, People, Library, a tag, Templates)",
-      "Pages only. In a notebook, Alt+←/→ turns the page. Also works on a locked page."
+      "Pages only. In a notebook, Alt+←/→ turns the page. Also on a locked page. While the calendar or People's cards have the keyboard, Alt+←/→ move through months or cards there instead: click outside them, or use the sidebar."
      ]
     ]
    },
@@ -278,8 +278,8 @@ var SECTIONS = [
      ],
      [
       "Alt+Enter",
-      "Add a new line below the whole list, toggle or callout you're in",
-      "Pages only."
+      "A new line after the outermost block you're in, below everything inside it, at the page's own level (or its column's): out of a nested list, a toggle or a callout.",
+      "Pages only. On an item of a flat list, the line goes right after that item, not after the whole list."
      ],
      [
       "Shift+Enter",
@@ -324,7 +324,7 @@ var SECTIONS = [
      [
       "Tab / Shift+Tab",
       "Indent / outdent the block. In a code block, Tab types two spaces instead",
-      "In Pages, any block can be indented (it goes inside the one above). In Notebooks, list items and plain text lines can."
+      "In Pages, a block goes inside the block above it at the same level, if that one can hold blocks: text, a list item, a to-do, a toggle, a quote or a callout (a heading only if it's a toggle heading); otherwise Tab does nothing. In Notebooks, list items and plain lines can be indented."
      ],
      [
       "Esc",
@@ -389,7 +389,7 @@ var SECTIONS = [
      [
       "Ctrl+C / Ctrl+X",
       "Copy / cut the picked blocks",
-      "Ctrl+Shift+C copies them too. Ctrl+Shift+X strikes their words through; it doesn't cut."
+      "Ctrl+Shift+C copies them too. Ctrl+Shift+X doesn't cut: it strikes the picked blocks through, like the other formatting keys."
      ],
      [
       "Ctrl+V / Ctrl+Shift+V or Shift+Insert",
@@ -412,7 +412,7 @@ var SECTIONS = [
       ""
      ],
      [
-      "Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Shift+H, Ctrl+\\, Ctrl+Shift+> / <",
+      "Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Shift+X, Ctrl+Shift+H, Ctrl+\\, Ctrl+Shift+> / <",
       "Format every picked block at once",
       "Ctrl+E isn't handled on picked blocks. Code blocks in Pages are skipped."
      ],
@@ -689,7 +689,7 @@ var SECTIONS = [
      [
       "Ctrl+S or Ctrl+Enter / Esc in the form",
       "Save the person / cancel",
-      "Ctrl+Enter is in the code too."
+      ""
      ],
      [
       "Esc on someone's card",
@@ -927,7 +927,7 @@ var SECTIONS = [
      [
       "/",
       "Opens the block menu. Type to filter it. Pick with ↑/↓ and Enter or Tab, or click an item. Esc closes it and leaves the / as text.",
-      "Pages only: in Notebooks the editor never checks for /. It opens at the start of a block or after a space or line break, so 'and/or' doesn't open it. It doesn't open in code blocks, table cells, board cards, mind maps or the page title. It closes on a space right after the /, on two spaces, on a space after nothing matched, past 30 characters, or when the cursor moves before the /. If nothing matches, it says 'Nothing like that."
+      "Pages only (not in Notebooks). It opens at the start of a block or after a space or line break, so 'and/or' doesn't open it. It doesn't open in code blocks, table cells, board cards, mind maps or the page title. It closes on a space right after the /, on two spaces, on a space after nothing matched, past 30 characters, or when the cursor moves before the /. If nothing matches, it says 'Nothing like that."
      ],
      [
       "@",
@@ -957,7 +957,7 @@ var SECTIONS = [
      [
       "@ then a date, then pick 'Remind me …'",
       "Sets a reminder, written as '⏰ Fri 9 Oct 3:00 pm'. At that time (or 9 am that day if no time was given) an Omarchy notification shows the page's title and what the line says. Clicking it opens the page.",
-      "It comes only while the Omarchy shell is running. One missed in the last 12 hours comes when the shell starts. With Settings 'Show what reminders say' off, it says only 'A reminder is due'. Deleting the date from the page cancels it. Dates in templates or in Trash are never reminders."
+      "It comes while the Omarchy shell runs and the reminder's profile is the one open; one missed in the last 12 hours comes when the shell starts or that profile opens again. With Settings 'Show what reminders say' off, it says only 'A reminder is due'. Deleting the date from the page cancels it. Dates in templates or in the Trash are never reminders."
      ],
      [
       "[[",
@@ -977,7 +977,7 @@ var SECTIONS = [
      [
       "#name then a space or . , ; : ! ? ) ] } or a quote",
       "Makes it a tag without picking from the menu. The character you typed after the name stays. #Idea and #idea are the same tag.",
-      "A tag name uses letters, digits, _ - and /, as in #project/uber-notebook. It can be up to 60 characters, can't be only digits (#1 is not a tag), and can't start with / or -. Esc closes the menu and leaves plain text."
+      "A tag name uses letters, digits, _ - and /, as in #project/uber-notebook. It can't be only digits (#1 isn't a tag) and can't start with / or -. Typed, a name of up to 39 characters becomes a tag this way (up to 40 picking 'New tag' in the menu); past 40 the menu closes and the text stays plain. In pasted or imported text a tag can be up to 60 characters. Esc closes the menu and leaves plain text."
      ],
      [
       ": then 2 or more letters of an emoji name (e.g. :roc)",
@@ -1091,7 +1091,7 @@ var SECTIONS = [
      ],
      [
       "Enter at the end of a time slot (Notebooks)",
-      "Starts the next slot an hour on, or the same step as between the last two slots (up to 3 hours). Enter on an empty slot ends the schedule. Enter in the middle of a slot's text adds a new line in that slot.",
+      "At the end of the last slot, the next slot an hour on (or the same step as between the last two, up to 3 hours). At the end of a slot with another after it, Enter moves to that one. Enter on an empty last slot ends the schedule; in the middle of a slot's text, a new line in it.",
       "Notebooks only."
      ]
     ]
@@ -1146,8 +1146,8 @@ var SECTIONS = [
      ],
      [
       "Ctrl+Shift+V",
-      "Pastes as plain text. Every block becomes plain text, and code stays code.",
-      "In Pages, Markdown is read before the formatting is removed, so '**bold**' pastes as 'bold' and '# Title' as 'Title'. Check this before writing it into Help."
+      "Pastes as plain text: every block a plain paragraph; code stays code.",
+      "In Pages, Markdown is read before the formatting goes, so '**bold**' pastes as 'bold', and '# Title' as 'Title' when it's one of several lines (a single line '# Title' stays as written). A table in what's pasted (spreadsheet cells, a web page's table) is dropped this way: use Ctrl+V for tables."
      ],
      [
       "Middle-click in text",
@@ -1166,8 +1166,8 @@ var SECTIONS = [
      ],
      [
       "Ctrl+V of several lines into a page's title",
-      "The first line becomes the title, without a leading #. The rest goes at the top of the page, read as Markdown if it looks like Markdown.",
-      "Pages only. Shift+Insert and Ctrl+Shift+V do the same. A single line pastes normally. So a multi-line paste into a locked page's title may add blocks to it."
+      "The first line becomes the title, without a leading #; the rest goes at the top of the page, read as Markdown if it looks like Markdown.",
+      "Pages only. Shift+Insert and Ctrl+Shift+V do the same; a single line pastes normally. On a locked page nothing is pasted, into the title or the page."
      ],
      [
       "Paste cells into a table cell (Ctrl+V or Ctrl+Shift+V)",
@@ -1340,7 +1340,7 @@ var SECTIONS = [
      [
       "/agenda (also /schedule)",
       "Agenda: “A day's events from the calendar (today, or a day)”.",
-      "The keyword '/today's events' in the old list doesn't exist. /today lists Today first, then Agenda."
+      "/today lists Today first, then Agenda."
      ],
      [
       "/event (also /appointment)",
@@ -1413,9 +1413,9 @@ var SECTIONS = [
       "Writing it out needs voxtype."
      ],
      [
-      "/meeting (also /call, /zoom, /interview, /minutes)",
-      "Meeting: “Record a meeting; voxtype writes out who said what”. Recording starts at once.",
-      "Needs voxtype."
+      "/meeting (also /zoom, /interview, /minutes)",
+      "Meeting: records a meeting, voxtype writing out who said what. Recording starts at once.",
+      "Needs voxtype. /call lists Callout first, so Enter there makes a callout."
      ],
      [
       "/dictate (also /dictation, /speak, /speech)",
@@ -1484,8 +1484,8 @@ var SECTIONS = [
      ],
      [
       "/today (also /now, /time)",
-      "Today: “Today's date”. Inserts the date as plain text, e.g. '9 October 2026'.",
-      "/date lists Calendar before Today. Ctrl+; inserts the date only in Notebooks, and there it includes the weekday. For a date marker in Pages, use @today."
+      "Today: the date as plain text, e.g. '9 October 2026'.",
+      "/date reaches it too (Calendar comes after it). In a notebook, Ctrl+; puts the date in, with its weekday. For a date marker in Pages, use @today."
      ],
      [
       "/inline equation (also /inlinemath, /inline)",
@@ -1519,8 +1519,8 @@ var SECTIONS = [
     "rows": [
      [
       "Hover a block, click + beside it",
-      "Adds a new block below with the / menu open",
-      "On an empty text block, the menu opens in that block."
+      "A new block below, with the / menu open.",
+      "On an empty text block the menu opens in that block (in an empty code, equation or diagram block it just types a /)."
      ],
      [
       "Drag ⋮⋮ beside a block",
@@ -1559,8 +1559,8 @@ var SECTIONS = [
      ],
      [
       "⋮⋮ → Turn into mind map",
-      "Makes the list a mind map: the top item becomes the topic and the items inside it become the ideas",
-      "Not on a locked page."
+      "One block: its text becomes the topic and the blocks inside it the ideas. Several picked: they become the ideas of a topic called 'Mind map'.",
+      "Text blocks only, not on a locked page; not when a page, sketch, recording, agenda, event or file kind of block is among them."
      ],
      [
       "⋮⋮ → Turn into list (on a mind map)",
@@ -1709,7 +1709,7 @@ var SECTIONS = [
      ],
      [
       "/board",
-      "Cards in columns (To do, Doing, Done to start). Click a card to write on it (Enter keeps the text, Esc cancels). Drag a card to another place or column",
+      "Cards in columns (To do, Doing, Done to start). Click a card to write on it (Enter keeps it, Esc puts it back); a card that's a page opens it. Drag a card to another place or column.",
       ""
      ],
      [
@@ -1745,7 +1745,7 @@ var SECTIONS = [
      [
       "/file or /pdf (or drop a file on the page)",
       "Copies the file into Pages/assets. Open opens it in its app. A PDF also shows its pages (Show pages / Hide pages) in a frame you can resize",
-      "Clicking an .ics or .vcf file block adds its events or people instead. A file that only a web browser could open isn't handed to the browser."
+      "Open on an .ics file block shows its events, to put on your calendar; on a .vcf it puts its people in People, with Undo. Notes files dropped (.md, .txt, .html, .docx...) come in as pages, pictures as pictures, not as file blocks. A file only a web browser would open isn't handed to it."
      ],
      [
       "/video (or drop a video)",
@@ -1951,7 +1951,7 @@ var SECTIONS = [
      [
       "Drop files on a page",
       "An .eml becomes an email block. A .vcf adds its people to People. An .ics shows its events so you can add them. Notes (Markdown, HTML, text…) become pages inside this one. Pictures go on the page, or into a gallery they're dropped on. Any other file becomes a file block, or a video block for a video",
-      "Up to 100 files per drop; emails, pictures and other files up to 12 each"
+      "Up to 100 files at once. Emails, pictures and other files are taken only from the first 12 (pictures dropped on a gallery: up to 100)."
      ],
      [
       "Paste Markdown on a page",
@@ -2000,8 +2000,8 @@ var SECTIONS = [
      ],
      [
       "Page ⋯ → Lock the page",
-      "The page can be read and copied but not changed until you unlock it",
-      "Recording, dictating, making it a project and restoring a version are refused on a locked page. Block handles are hidden."
+      "The title and blocks can be read and copied but not changed till you unlock it.",
+      "Recording, dictating, making it a project and putting back a version are refused; block handles hidden. Its icon, cover, font, text size and width can still be changed, and renaming or taking away a tag everywhere changes locked pages too."
      ],
      [
       "Page ⋯ → Add to Favorites / Out of Favorites",
@@ -2030,7 +2030,7 @@ var SECTIONS = [
      ],
      [
       "Page ⋯ → Duplicate",
-      "Copies the page and the pages inside it, places the copy right after it, and opens it",
+      "Copies the page and the pages inside it, and opens the copy. A top-level page's copy goes right after it; a copy of a page inside another goes at the end of that page's pages (right after the original only when that outer page is the one open).",
       ""
      ],
      [
@@ -2066,7 +2066,7 @@ var SECTIONS = [
      [
       "Library tile in the sidebar",
       "Everything on your pages, newest first. Filter by kind: All, Links, Files, Videos, Pictures, Audio, Meetings, Sketches, People, Emails",
-      "Only kinds you have are shown. Long lists end with 'Show more' (:303)."
+      "Only kinds you have are shown. Long lists end with 'Show more'."
      ],
      [
       "Library search box",
@@ -2228,7 +2228,7 @@ var SECTIONS = [
      ],
      [
       "New page button (full width, under the profile), or Ctrl+N",
-      "Makes a new page at the top of Pages and opens it",
+      "A new page at the end of Pages (not inside another page), opened, the cursor in its title.",
       ""
      ],
      [
@@ -2268,7 +2268,7 @@ var SECTIONS = [
      ],
      [
       "+ on the Projects heading, or 'New project' under it when there are none",
-      "Makes a new page that is a project (Active, no due date) at the top and opens it",
+      "A new page that's a project (Active, no due date), opened; listed in Projects in its place (active first, by due date, then by name).",
       ""
      ],
      [
@@ -2397,7 +2397,7 @@ var SECTIONS = [
      [
       "Event editor → Repeats",
       "No, Daily, Weekdays, Weekly, Monthly or Yearly; every N; until a date (or for good)",
-      "On a repeating event, 'Change just this one' makes this occurrence a separate event (:257)"
+      "On a repeating event opened from one of its days, 'Change just this one' makes that day's a separate event."
      ],
      [
       "Event editor → Alert",
@@ -2642,8 +2642,8 @@ var SECTIONS = [
      ],
      [
       "People icon at a page's top right, or /meeting",
-      "Adds a meeting block. voxtype's meeting mode records your microphone and the computer's audio. The top-right icon starts recording right away when meeting mode is on, or jumps to a meeting that's already recording",
-      "The icon only shows when voxtype is installed."
+      "A meeting block: voxtype's meeting mode records your microphone and the computer's sound. With meeting mode on, the icon and /meeting start recording at once. While a meeting records, the icon goes to the page it was started on (if started in Uber Notebook since it last started); otherwise it puts that meeting on this page.",
+      "The icon shows only when voxtype is installed."
      ],
      [
       "Meeting → Turn on meeting mode",
@@ -2758,7 +2758,7 @@ var SECTIONS = [
      ],
      [
       "‹ › arrows at the top, or Ctrl+PgUp / Ctrl+PgDn",
-      "Previous or next page. On the last page, the next arrow makes a new page",
+      "The page before or after. On the last page, the next arrow makes a new page, unless that one's still blank (no title, no text).",
       ""
      ],
      [
@@ -2773,7 +2773,7 @@ var SECTIONS = [
      ],
      [
       "+ at the top right, or Ctrl+T",
-      "Adds a new page from a template (planners, habits, journal, lists…)",
+      "A page from a template (planners, habits, journal, lists...) after this one, or on this page if it's still blank.",
       ""
      ],
      [
@@ -2782,7 +2782,7 @@ var SECTIONS = [
       ""
      ],
      [
-      "Pen in the bottom bar, or Ctrl+Shift+D (in a notebook)",
+      "Draw (the pen at the right of the bottom bar), or Ctrl+Shift+D (in a notebook)",
       "Draw over the page: P for pen, M for highlighter, E for eraser. Esc or Done goes back to writing. The trash button clears the page's drawings",
       ""
      ],
@@ -2793,8 +2793,8 @@ var SECTIONS = [
      ],
      [
       "Ctrl+= / Ctrl+- / Ctrl+0",
-      "Bigger, smaller, back to normal size",
-      "Notebooks only (on the shelf and in an open notebook); Pages ignores these keys"
+      "The open notebook bigger or smaller (60 to 200%, by 10), or back to its size.",
+      "Notebooks only. On the shelf they set the size the next notebook opens at; the shelf itself doesn't change. Pages doesn't take these keys."
      ]
     ]
    }
@@ -2876,7 +2876,7 @@ var SECTIONS = [
      ],
      [
       "Settings → Backups → Back up automatically (Off, Daily, Weekly) and Keep (3, 5, 10, 20, 50)",
-      "Backs up every profile while Uber Notebook runs. The oldest automatic backups go to the trash; backups you make yourself are never cleared",
+      "Backs up every profile but the demo, while Uber Notebook runs. The oldest automatic backups go to the trash; backups you make yourself are never cleared.",
       ""
      ],
      [
@@ -2887,7 +2887,7 @@ var SECTIONS = [
      [
       "Settings → Backups → Restore… (a listed backup) or Choose a file…",
       "Shows what's in the backup, then restores each profile as a new profile in a new folder. Nothing you already have is changed. 'Open it' opens a restored profile",
-      "Also 'Restore a backup…' on the first-run screen"
+      "Also 'Restore a backup…' on the first-run screen: it puts back the file picked at once, without showing what's in it first, and opens the first profile put back."
      ]
     ]
    },
@@ -3014,7 +3014,7 @@ var SECTIONS = [
      ],
      [
       "Settings → AI → Use with any AI",
-      "The uber-notebook skill: Copy, Save a copy…, or Show its file",
+      "The uber-notebook skill: Copy, Save a copy..., or Show (opens its folder).",
       ""
      ],
      [
@@ -3199,8 +3199,8 @@ var SECTIONS = [
      ],
      [
       "Settings → Backups → Back up now → Back up / Back up all",
-      "Back up saves the open profile in one .tar.gz. Back up all saves every profile except the demo, together in one .tar.gz.",
-      "The earlier draft said \"one .tar.gz each\"; the code writes a single file for all profiles (the label is \"All profiles\"). A profile with nothing written yet isn't backed up."
+      "Back up saves the open profile in one .tar.gz; Back up all saves every profile but the demo, together in one .tar.gz.",
+      "A profile with nothing written yet isn't backed up."
      ],
      [
       "Settings → Backups → Automatic backups → Back up automatically (or: set backupEvery off|daily|weekly)",
@@ -3270,7 +3270,7 @@ var SECTIONS = [
      [
       "Ctrl+= / Ctrl+- / Ctrl+0 in Notebooks (or: set zoom <60-200>)",
       "zoom (default 100): how large an open paper notebook is drawn, in percent. Ctrl+= and Ctrl+- change it in steps of 10, and Ctrl+0 puts it back to 100.",
-      "Corrected: it doesn't make everything bigger. Only NotebookView uses it, and the keys are ignored in Pages. The keys work on the shelf and in an open notebook."
+      "Only an open paper notebook is drawn bigger or smaller. The keys work on the shelf and in an open notebook, not in Pages."
      ],
      [
       "New notebook dialog (cover, material, binding, paper, paper color, spacing, pen) (or: set pen|paper|paperColor|spacing|cover|material|binding <value>)",
@@ -3313,7 +3313,7 @@ var SECTIONS = [
      [
       "omarchy-shell uber-notebook <command> [arguments]",
       "Runs one of Uber Notebook's commands in the running app, over the Omarchy shell's IPC. Arguments go by position; use \"\" to leave one empty. Most commands answer in JSON ({ ok: false, error } when they can't). read, version, readNotebook, releaseNotes and skill answer in Markdown.",
-      "Content goes in as a Markdown file, given by its full path (/... or ~/...). It must be a plain file, not a link, of at most 2 MB (importContacts takes up to 32 MB, importCalendar up to 16 MB). The first time a file is named, the answer can be \"run the same command again in a moment\". toggle, show, hide, search, shelf, pages, calendar, open, settings and reset answer nothing. set answers in plain text when it refuses. Until a profile exists, most commands answer \"Uber Notebook has no profile yet: make one with addProfile\". new.md` and `addToNotebook <id> note.md` use relative paths, which the code refuses."
+      "Content goes in as a Markdown file, by its full path (/... or ~/...): a relative path (note.md, ./new.md) is refused. It must be a plain file, not a link, of at most 2 MB (importContacts up to 32 MB, importCalendar up to 16 MB). The first time a file is named, the answer can be \"run the same command again in a moment\". toggle, show, hide, search, shelf, pages, calendar, open, settings and reset answer nothing; set answers in plain text when it refuses. Until a profile exists, most commands answer \"Uber Notebook has no profile yet: make one with addProfile\"."
      ],
      [
       "omarchy-shell uber-notebook help",
@@ -3383,7 +3383,7 @@ var SECTIONS = [
      [
       "omarchy-shell uber-notebook set <key> <value>",
       "Changes one setting and answers with its new value as JSON. The value is read as that setting takes it: true or false for an on/off one, a number for a number, words for the rest (set clock 24, set paper grid). folder and profile go through Profiles, as Settings does them; profiles can't be set whole.",
-      "Not for the panel's agent. omarchy-shell uber-notebook reset puts every setting back, but your profiles and what's each one's own."
+      "Not for the panel's agent. A value the setting doesn't take isn't refused: the setting goes back to its default, and the answer shows it (set sounds no turns sounds on: use true or false). omarchy-shell uber-notebook reset puts every setting back, but your profiles and what's each one's own."
      ],
      [
       "omarchy-shell uber-notebook reset",
@@ -3563,7 +3563,7 @@ var SECTIONS = [
      [
       "omarchy-shell uber-notebook preferences",
       "Lists every user setting with its key, value, kind, choices and range. Change one with set <key> <value>.",
-      "Leaves out the internal keys profiles, profile, folder, lastNotebook, lastPage, inbox, recentColors and space, though set still accepts them."
+      "Leaves out the internal keys profiles, profile, folder, lastNotebook, lastPage, inbox, recentColors and space. set takes all of them but profiles, which is refused (use the profile commands)."
      ],
      [
       "omarchy-shell uber-notebook rename <id> <title>",
@@ -3727,7 +3727,7 @@ var SECTIONS = [
      ],
      [
       "omarchy-shell uber-notebook addProfile <name> <folder> <open>",
-      "Creates a new profile with its notes in folder and opens it if open is true. A folder of \"\" uses ~/Documents/Uber Notebook <name>. The profile starts empty, with the templates.",
+      "A new profile, its notes in folder, opened unless open is false, no, off or 0 (an empty \"\" opens it too). A folder of \"\" is ~/Documents/Uber Notebook <name>. It starts empty, with the templates.",
       "The name must be new (up to 60 characters). The folder must be a full or ~/ path and can't be the same as, inside, or around another profile's folder. If this is the first profile, \"\" means ~/Documents/Uber Notebook. Opening is refused while an audio note records. Only 30 profiles are kept, and add doesn't check the count: a 31st is reported as ok but dropped. The panel agent can't use it."
      ],
      [

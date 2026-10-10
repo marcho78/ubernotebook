@@ -23,7 +23,8 @@ The first version.
 
 - **Ctrl+Shift+X** strikes the selected words through; with blocks picked
   it had cut them.
-- Lines pasted into a **locked page's title** no longer change it.
+- Lines pasted into a **locked page's title** no longer change it, and
+  **Alt+Shift+↑/↓** no longer moves a locked page's blocks.
 - On a locked page, the window's own keys (**Ctrl+N**, **Ctrl+P**,
   **Ctrl+J**, **Ctrl+\\**, **Ctrl+,**, Help) work from its text again.
 - `omarchy-shell uber-notebook set clock 24` works: a value is read as its

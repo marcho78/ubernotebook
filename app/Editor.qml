@@ -2734,7 +2734,8 @@ FocusScope {
 
     // A locked page: moving around, copying and folding, nothing that changes it.
     if (readOnly) {
-      var moving = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Escape].indexOf(key) >= 0
+      // (With Alt, ↑/↓ move blocks: not moving around.)
+      var moving = !alt && [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right, Qt.Key_Home, Qt.Key_End, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Escape].indexOf(key) >= 0
       var copying = ctrl && !alt && (key === Qt.Key_C || key === Qt.Key_A || key === Qt.Key_F)
       var folding = ctrl && (key === Qt.Key_Return || key === Qt.Key_Enter) && doc && Workspace.folds(rowBlock(blocksModel.get(indexOf(item.uid))))
       // (The window's own keys, none of which changes the page, go on to
@@ -3324,6 +3325,8 @@ FocusScope {
   }
 
   function moveBlocks(uids, delta) {
+    // (A locked page: nothing on it moves.)
+    if (readOnly) return
     if (doc) { moveDoc(uids, delta); return }
     var indices = uids.map(indexOf).filter(function(i) { return i >= 0 }).sort(function(a, b) { return a - b })
     if (indices.length === 0) return
@@ -3813,9 +3816,10 @@ FocusScope {
     // (Help, Ctrl+/ or F1: the window's, whatever's picked.)
     var ctrlHeld = (e.modifiers & Qt.ControlModifier) !== 0, altHeld = (e.modifiers & Qt.AltModifier) !== 0, shiftHeld = (e.modifiers & Qt.ShiftModifier) !== 0
     if ((ctrlHeld && !altHeld && (e.key === Qt.Key_Slash || e.key === Qt.Key_Question)) || (e.key === Qt.Key_F1 && !ctrlHeld && !altHeld && !shiftHeld)) { e.accepted = false; return }
-    // A locked page: only moving around and copying.
-    if (readOnly && !((e.modifiers & Qt.ControlModifier) && (e.key === Qt.Key_C || e.key === Qt.Key_A))
-        && [Qt.Key_Up, Qt.Key_Down, Qt.Key_Escape, Qt.Key_Return, Qt.Key_Enter].indexOf(e.key) < 0) { e.accepted = true; return }
+    // A locked page: only moving around and copying (with Alt, ↑/↓ would
+    // move the blocks: not that).
+    if (readOnly && (altHeld || (!((e.modifiers & Qt.ControlModifier) && (e.key === Qt.Key_C || e.key === Qt.Key_A))
+        && [Qt.Key_Up, Qt.Key_Down, Qt.Key_Escape, Qt.Key_Return, Qt.Key_Enter].indexOf(e.key) < 0))) { e.accepted = true; return }
     var ctrl = (e.modifiers & Qt.ControlModifier) !== 0
     var shift = (e.modifiers & Qt.ShiftModifier) !== 0
     var alt = (e.modifiers & Qt.AltModifier) !== 0
