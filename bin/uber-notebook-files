@@ -40,12 +40,15 @@
 #   remove-owned <file> <text>
 #       That file taken away only if it's still exactly that text, a plain
 #       file ("removed"); anything else there is left ("kept").
-#   unlink-link <link> <target> [<lock>]
+#   unlink-link <link> <target> [<lock> [<run>]]
 #       A link of Uber Notebook's own (its skill, in an agent's folder) taken
 #       away only if it's a link to <target>, or to its skill in another
 #       place when <target> is its skill (an install before), ("removed",
 #       else "kept"). With <lock>: once the lock linking takes is free, so a
-#       link being made as Uber Notebook stops is taken away after it's made.
+#       link being made as Uber Notebook stops is taken away after it's made;
+#       with <run> (its run, stopping), that written beside the lock
+#       (<lock>.stopped), under it, so a link that run asked for and hasn't
+#       made yet isn't made.
 #   serve <notes folder>
 #       Your notes, read and written for Uber Notebook as long as it runs:
 #       a request a line on its input (JSON: { id, op, ... }), an answer a
@@ -1398,9 +1401,18 @@ def skill_lock(path):
             return fd
 
 
-def cmd_unlink_link(path, target, lock=""):
+def cmd_unlink_link(path, target, lock="", run=""):
     if lock:
         skill_lock(lock)
+        if re.fullmatch(r"[a-z0-9]{1,40}", run):
+            try:
+                fd = os.open(lock + ".stopped", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+                try:
+                    os.write(fd, (run + "\n").encode("ascii"))
+                finally:
+                    os.close(fd)
+            except OSError:
+                pass
     dfd, name = parent_of(path)
     try:
         aside = take_aside(dfd, name)
@@ -2218,7 +2230,7 @@ def main(argv):
             cmd_create_owned(argv[2], argv[3])
         elif len(argv) == 4 and argv[1] == "remove-owned":
             cmd_remove_owned(argv[2], argv[3])
-        elif len(argv) in (4, 5) and argv[1] == "unlink-link":
+        elif len(argv) in (4, 5, 6) and argv[1] == "unlink-link":
             cmd_unlink_link(*argv[2:])
         elif len(argv) == 3 and argv[1] == "inspect-backup":
             cmd_inspect(argv[2])

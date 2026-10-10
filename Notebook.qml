@@ -34,6 +34,11 @@ Item {
   // it went.)
   onServiceChanged: if (service) {
     if (service.store) service.store.stopping = false
+    // (The service from before 1.1.2, still running after an update till
+    // the shell restarts, linked its skill whether you'd said so or not:
+    // those links taken out now.)
+    if (typeof service.turnOn !== "function" && service.store && typeof service.store.unlinkSkill === "function" && service.skillDir)
+      service.store.unlinkSkill(service.skillDir, null)
     service.attachUi(root)
   }
   onShellChanged: resolveService()

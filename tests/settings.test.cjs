@@ -254,7 +254,9 @@ check("a window made again while the service runs on (plugins reloaded): not sto
   const nb = fs.readFileSync(path.join(root, "Notebook.qml"), "utf8");
   // (Its going sets it, so the page is written first; the next one coming clears it.)
   assert.match(nb, /Component\.onDestruction: \{[^}]*service\.store\.stopping = true/);
-  assert.match(nb, /onServiceChanged: if \(service\) \{\n\s+if \(service\.store\) service\.store\.stopping = false\n\s+service\.attachUi\(root\)/);
+  assert.match(nb, /onServiceChanged: if \(service\) \{\n\s+if \(service\.store\) service\.store\.stopping = false\n/);
+  // (A service from before 1.1.2, still running after an update: its links out.)
+  assert.match(nb, /if \(typeof service\.turnOn !== "function" && service\.store && typeof service\.store\.unlinkSkill === "function" && service\.skillDir\)\n\s+service\.store\.unlinkSkill\(service\.skillDir, null\)\n\s+service\.attachUi\(root\)/);
 });
 
 check("turning one on or off settles it; nothing else does", () => {

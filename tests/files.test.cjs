@@ -175,6 +175,14 @@ try {
     assert.equal(helperRun(["unlink-link", path.join(d, "older"), here]).out.trim(), "removed", "an install before");
     fs.symlinkSync("/old/place/other-plugin/skills/uber-notebook", path.join(d, "other"));
     assert.equal(helperRun(["unlink-link", path.join(d, "other"), here]).out.trim(), "kept", "anyone else's");
+    // Its run, stopping: marked beside the lock (only a plain run id).
+    const lock = path.join(d, "skills.lock");
+    assert.equal(helperRun(["unlink-link", path.join(d, "none"), here, lock, "abc123run"]).out.trim(), "kept");
+    assert.equal(fs.readFileSync(lock + ".stopped", "utf8"), "abc123run\n");
+    assert.equal((fs.statSync(lock + ".stopped").mode & 0o777), 0o600);
+    helperRun(["unlink-link", path.join(d, "none"), here, lock, "../x; rm"]);
+    assert.equal(fs.readFileSync(lock + ".stopped", "utf8"), "abc123run\n", "nothing else written");
+    fs.unlinkSync(lock); fs.unlinkSync(lock + ".stopped");
     assert.deepEqual(fs.readdirSync(d).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
 

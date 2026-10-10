@@ -133,21 +133,23 @@ Popup {
         anchors.bottomMargin: 16
         spacing: 8
         // The command, to copy and run in a terminal.
+        // (All of it: on two lines where it doesn't fit on one.)
         Rectangle {
           visible: rn.updates !== null && rn.updates.available && !rn.own
           anchors.verticalCenter: parent.verticalCenter
-          width: Math.min(300, commandText.implicitWidth + 24)
-          height: 32
+          width: Math.max(160, Math.min(commandText.implicitWidth + 24, foot.width - 56 - copyButton.width - gitHubButton.width - closeButton.width - 32))
+          height: Math.max(32, commandText.height + 14)
           radius: 8
           color: Qt.alpha(rn.theme.text, 0.05)
           border.width: 1
           border.color: rn.theme.line
           Text {
             id: commandText
+            objectName: "releaseNotesCommand"
             x: 12
             width: parent.width - 24
             anchors.verticalCenter: parent.verticalCenter
-            elide: Text.ElideMiddle
+            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
             textFormat: Text.PlainText
             text: rn.updates ? rn.updates.updateCommand : ""
             font.family: rn.theme.monoFont
@@ -156,6 +158,7 @@ Popup {
           }
         }
         TextButton {
+          id: copyButton
           objectName: "releaseNotesCopy"
           visible: rn.updates !== null && rn.updates.available && !rn.own
           anchors.verticalCenter: parent.verticalCenter
@@ -165,6 +168,7 @@ Popup {
           onClicked: { if (rn.service && rn.service.store) rn.service.store.copyText(rn.updates.updateCommand); rn.copied = true }
         }
         TextButton {
+          id: gitHubButton
           objectName: "releaseNotesGitHub"
           visible: rn.shown.url !== ""
           anchors.verticalCenter: parent.verticalCenter
@@ -175,6 +179,7 @@ Popup {
         }
       }
       TextButton {
+        id: closeButton
         anchors.right: parent.right
         anchors.rightMargin: 28
         anchors.verticalCenter: footRow.verticalCenter
