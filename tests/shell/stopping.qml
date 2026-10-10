@@ -133,8 +133,23 @@ ShellRoot {
           store.exec(late.concat(["another1run"], store.skillDirs()), function() { read(function(y) {
             store.exec(["/usr/bin/bash", "-c", "read -r s < \"$1\"; echo \"$s\"", "x", store.skillLock + ".stopped"], function(okm, mark) {
               say("another run's: linked; the mark is this run's", y[0] === target && y[1] === target && String(mark).trim() === store.skillToken, y.join(" | "))
-              store.exec(["/usr/bin/bash", "-c", "for d in claude agents hermes; do /usr/bin/rm -f -- \"$1/.$d/skills/uber-notebook\"; done", "x", h], function() { next() })
+              next()
             })
+          }) })
+        }) })
+      },
+      // This run's cleanup, late, after another run has linked: that run's
+      // links left. That run stopping: its links out.
+      function(next) {
+        store.unlinkSkill(target, ["/usr/bin/python3", "-I", "-S", "-c", root.text])
+        after(1500, function() { read(function(k) {
+          say("a run before, stopping late: another run's links left", k[0] === target && k[1] === target && k[2] === else_ && k[3] === target, k.join(" | "))
+          store.skillDirs().forEach(function(dir) {
+            store.exec(["/usr/bin/python3", "-I", "-S", "-c", root.text, "unlink-link", dir + "/uber-notebook", target, store.skillLock, "another1run"], null)
+          })
+          after(1500, function() { read(function(e) {
+            say("that run stopping: its links out", e[0] === "none" && e[1] === "none" && e[2] === else_ && e[3] === "none", e.join(" | "))
+            next()
           }) })
         }) })
       },

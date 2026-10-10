@@ -48,7 +48,9 @@
 #       link being made as Uber Notebook stops is taken away after it's made;
 #       with <run> (its run, stopping), that written beside the lock
 #       (<lock>.stopped), under it, so a link that run asked for and hasn't
-#       made yet isn't made.
+#       made yet isn't made; and nothing taken away if another run, still
+#       going, has linked or unlinked since (<lock>.active, not stopped):
+#       those links are its.
 #   serve <notes folder>
 #       Your notes, read and written for Uber Notebook as long as it runs:
 #       a request a line on its input (JSON: { id, op, ... }), an answer a
@@ -1401,10 +1403,27 @@ def skill_lock(path):
             return fd
 
 
+def read_mark(path):
+    """A run's id written beside the skill lock, or "" (none, or not one)."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError:
+        return ""
+    try:
+        text = os.read(fd, 64).decode("ascii", "replace").strip()
+    except OSError:
+        return ""
+    finally:
+        os.close(fd)
+    return text if re.fullmatch(r"[a-z0-9]{1,40}", text) else ""
+
+
 def cmd_unlink_link(path, target, lock="", run=""):
     if lock:
         skill_lock(lock)
         if re.fullmatch(r"[a-z0-9]{1,40}", run):
+            active = read_mark(lock + ".active")
+            stopped = read_mark(lock + ".stopped")
             try:
                 fd = os.open(lock + ".stopped", os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
                 try:
@@ -1413,6 +1432,10 @@ def cmd_unlink_link(path, target, lock="", run=""):
                     os.close(fd)
             except OSError:
                 pass
+            # (Another run's, going on: its links, left.)
+            if active and active != run and active != stopped:
+                print("kept")
+                return
     dfd, name = parent_of(path)
     try:
         aside = take_aside(dfd, name)

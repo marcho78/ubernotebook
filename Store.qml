@@ -451,11 +451,14 @@ Item {
   readonly property var skillFolders: [".agents/skills", ".claude/skills", ".codex/skills", ".hermes/skills", ".pi/agent/skills"]
   // (Under a lock, `skillLock`, the one taking them out as it stops waits
   // for: a link being made then is made before it's taken out, never after.
-  // And one asked for before it stopped but not yet under way links
-  // nothing: as it stops, it writes this run's `skillToken` beside the lock,
-  // under it, and the script checks for it there, under it too.)
+  // And one asked for before it stopped but not yet under way does nothing:
+  // as it stops, it writes this run's `skillToken` beside the lock
+  // (.stopped), under it, and the script checks for it there, under it too.
+  // Each run that links or unlinks says it's the one now (.active), so a
+  // run before, as it stops, leaves a later one's links alone.)
   readonly property string skillScript: "mode=$1; target=$2; lock=$3; token=$4; shift 4; { exec 9>>\"$lock\"; } 2>/dev/null && /usr/bin/flock -w 10 9; "
-    + "if [ \"$mode\" = link ] && [ -n \"$token\" ]; then s=; { read -r s < \"$lock.stopped\"; } 2>/dev/null; [ \"$s\" = \"$token\" ] && exit 0; fi; "
+    + "if [ -n \"$token\" ]; then s=; { read -r s < \"$lock.stopped\"; } 2>/dev/null; [ \"$s\" = \"$token\" ] && exit 0; "
+    + "{ printf '%s\\n' \"$token\" > \"$lock.active\"; } 2>/dev/null; fi; "
     + "for dir in \"$@\"; do link=\"$dir/uber-notebook\"; "
     + "if [ \"$mode\" = link ]; then if [ -d \"$dir\" ] && [ ! -e \"$link\" ] && [ ! -L \"$link\" ]; then /usr/bin/ln -sT -- \"$target\" \"$link\"; "
     // (A link to its skill in another place, gone (an install before, moved

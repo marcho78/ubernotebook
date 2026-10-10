@@ -182,7 +182,19 @@ try {
     assert.equal((fs.statSync(lock + ".stopped").mode & 0o777), 0o600);
     helperRun(["unlink-link", path.join(d, "none"), here, lock, "../x; rm"]);
     assert.equal(fs.readFileSync(lock + ".stopped", "utf8"), "abc123run\n", "nothing else written");
-    fs.unlinkSync(lock); fs.unlinkSync(lock + ".stopped");
+    // Another run going on since (it linked or unlinked last, not stopped): its links left.
+    fs.symlinkSync(here, path.join(d, "theirs"));
+    fs.writeFileSync(lock + ".active", "newerrun\n");
+    assert.equal(helperRun(["unlink-link", path.join(d, "theirs"), here, lock, "abc123run"]).out.trim(), "kept", "a later run's");
+    assert.ok(fs.lstatSync(path.join(d, "theirs")).isSymbolicLink());
+    // That one stopped since: taken out.
+    fs.writeFileSync(lock + ".stopped", "newerrun\n");
+    assert.equal(helperRun(["unlink-link", path.join(d, "theirs"), here, lock, "abc123run"]).out.trim(), "removed", "a run that's stopped");
+    // This run's own: taken out.
+    fs.symlinkSync(here, path.join(d, "mine2"));
+    fs.writeFileSync(lock + ".active", "abc123run\n");
+    assert.equal(helperRun(["unlink-link", path.join(d, "mine2"), here, lock, "abc123run"]).out.trim(), "removed");
+    fs.unlinkSync(lock); fs.unlinkSync(lock + ".stopped"); fs.unlinkSync(lock + ".active");
     assert.deepEqual(fs.readdirSync(d).filter((n) => n.startsWith(".uber-notebook")), [], "nothing left aside");
   });
 
