@@ -143,11 +143,19 @@ Item {
       toggle.toggled(true)
       compare(service.settings.reminderWords, true, "on when turned on")
       compare(service.setupAsks, ["skill"], "and not asked about")
-      // The skill: in AI, with its Copy, Save a copy and Show.
+      // The skill: first in AI, above everything else there.
       app.settingsPopup.section = "ai"
       var skill = null
       tryVerify(function() { skill = named(win(), "agentSkillToggle"); return skill !== null }, 1000)
-      verify(named(win(), "aiSkillCopy") !== null, "beside the skill's own buttons")
+      var body = named(win(), "settingsFlick").contentItem
+      var ai = findAll(body, function(it) { return it.objectName === "aiSkill" || it.text === "Your agent" || it.text === "Use with any AI" }, [])
+      compare(ai.length, 3, "the rest of AI there: " + ai.map(function(it) { return it.objectName || it.text }).join(", "))
+      // (A Column lays its items out a moment later.)
+      function first() {
+        var top = skill.mapToItem(body, 0, 0).y
+        return ai.every(function(it) { return top < it.mapToItem(body, 0, 0).y })
+      }
+      tryVerify(first, 1000, "above the rest of AI")
       compare(named(win(), "reminderWordsToggle"), null, "reminder details: not in AI")
       compare(skill.checked, false, "off to start with")
       skill.toggled(true)

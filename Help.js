@@ -2598,7 +2598,7 @@ var SECTIONS = [
       "Only https links are read for the agent. Other links stay link-only until you refresh the card."
      ],
      [
-      "Settings → AI → Use with any AI → Enable Uber Notebook skill",
+      "Settings → AI → Enable Uber Notebook skill",
       "On, while Uber Notebook runs, its skill is linked as uber-notebook into ~/.agents/skills, ~/.claude/skills, ~/.codex/skills, ~/.hermes/skills and ~/.pi/agent/skills, so Claude Code, Codex and other agents know the commands, wherever you use them. Off (the default), its own links are removed. They're removed when it stops, too.",
       "A link is only made where the folder exists and nothing called uber-notebook is already there. Only its own links are removed. The panel agent, and agents started from Uber Notebook, are given the skill either way."
      ]
@@ -2998,6 +2998,11 @@ var SECTIONS = [
       ""
      ],
      [
+      "Settings → AI → Enable Uber Notebook skill",
+      "Links the skill into Claude Code's, Codex's and other agents' skill folders while Uber Notebook runs, so they know its commands",
+      "Off by default"
+     ],
+     [
       "Settings → AI → Your agent",
       "Choose your agent (it also becomes Omarchy's default). Claude Code, Grok and Codex work in the panel; others work in a terminal",
       ""
@@ -3011,11 +3016,6 @@ var SECTIONS = [
       "Settings → AI → Commands",
       "Lets Claude Code or Grok run any command without asking (off by default)",
       "Only Claude Code and Grok have this toggle, not Codex"
-     ],
-     [
-      "Settings → AI → Use with any AI → Enable Uber Notebook skill",
-      "Links the skill into Claude Code's, Codex's and other agents' skill folders while Uber Notebook runs, so they know its commands",
-      "Off by default"
      ],
      [
       "Settings → AI → Use with any AI",
@@ -3143,6 +3143,11 @@ var SECTIONS = [
       "Each profile has its own. It must be an absolute or ~/ path with no ... Copying refuses your home folder, the notes folder itself, and Uber Notebook's own folders inside it."
      ],
      [
+      "Settings → AI → Enable Uber Notebook skill (or: set agentSkill true|false)",
+      "agentSkill (default false): Uber Notebook's skill linked into agents' skill folders while it runs. Off, its own links are removed.",
+      ""
+     ],
+     [
       "Settings → AI → Your agent → Agent",
       "Chooses your agent. This is Omarchy's default agent, written to ~/.config/omarchy/defaults/agent. Claude Code, Grok and Codex work in the panel; the others open in a terminal.",
       ""
@@ -3161,11 +3166,6 @@ var SECTIONS = [
       "Settings → AI → What agents may do without asking → Remove",
       "agentPermissions (default []): what you've allowed with Always: sites to contact, web search, connector tools, trashing pages, running any command, and folders to take files from. Remove takes one away.",
       "Agents can't change this list (the panel agent can't use set). `set agentPermissions <anything>` and `reset` both clear the whole list."
-     ],
-     [
-      "Settings → AI → Use with any AI → Enable Uber Notebook skill (or: set agentSkill true|false)",
-      "agentSkill (default false): Uber Notebook's skill linked into agents' skill folders while it runs. Off, its own links are removed.",
-      ""
      ],
      [
       "Settings → AI → Use with any AI → Copy / Save a copy… / Show",

@@ -988,6 +988,18 @@ Popup {
 
         // ======== AI ========
 
+        // The skill, first: off till you turn it on (the panel that asks,
+        // SetupPanel.qml, has it too). On, Claude Code, Codex, pi and Hermes
+        // find it themselves (Service.skillOn).
+        Group {
+          visible: panel.section === "ai"
+          Line {
+            label: "Enable Uber Notebook skill"
+            note: "For Claude Code, Codex and other agents."
+            Toggle { objectName: "agentSkillToggle"; theme: panel.theme; checked: panel.s.agentSkill === true; onToggled: function(on) { panel.set("agentSkill", on) } }
+          }
+        }
+
         Group {
           visible: panel.section === "ai"
           title: "Your agent"
@@ -1092,20 +1104,14 @@ Popup {
           }
         }
         // The skill, for any AI (Service.copySkill...): Claude Code, Codex, pi
-        // and Hermes find it themselves once it's on (off till you turn it
-        // on: the panel that asks, SetupPanel.qml, has it too); anything
+        // and Hermes find it themselves once it's on (at the top); anything
         // else, given it.
         Group {
           id: skillGroup
           visible: panel.section === "ai"
           title: "Use with any AI"
-          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. With it enabled, Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
+          note: "Uber Notebook's skill tells an AI how to find, read and change your notes with omarchy-shell uber-notebook commands. With Enable Uber Notebook skill on (at the top), Claude Code, Codex, pi and Hermes find it by themselves; give it to any other AI that can run commands on this computer (omarchy-shell uber-notebook skill prints it too)."
           property string said: ""
-          Line {
-            label: "Enable Uber Notebook skill"
-            note: "For Claude Code, Codex and other agents."
-            Toggle { objectName: "agentSkillToggle"; theme: panel.theme; checked: panel.s.agentSkill === true; onToggled: function(on) { panel.set("agentSkill", on) } }
-          }
           Line {
             objectName: "aiSkill"
             label: "The skill"

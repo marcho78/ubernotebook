@@ -103,7 +103,7 @@ check("Help's own keys are in it, and New page", () => {
 });
 
 check("the skill and reminder details, where Settings and the panel name them", () => {
-  const where = { "Enable Uber Notebook skill": "Settings → AI → Use with any AI → ", "Show reminder details in notifications": "Settings → Notifications → " };
+  const where = { "Enable Uber Notebook skill": "Settings → AI → ", "Show reminder details in notifications": "Settings → Notifications → " };
   for (const label of Object.keys(where)) {
     assert.ok(rows.some((x) => x.s === "settings" && x.r[0].indexOf(where[label] + label) === 0), label);
     assert.ok(read("app/SettingsPanel.qml").indexOf('label: "' + label + '"') >= 0, "Settings: " + label);
